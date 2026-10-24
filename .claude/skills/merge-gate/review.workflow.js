@@ -254,12 +254,9 @@ ${JSON.stringify(FIXED, null, 1)}`,
   const repeats = []
   for (const [root, group] of groups) {
     // A reopen wins over a repeat, and an id that isn't a settled finding is no repeat at all.
-    if (!group.reopens && group.repeatOf) {
-      for (const c of group.members) repeats.push({ ...c, reason: 'repeat', why: [`repeats ${group.repeatOf}`] })
-      continue
-    }
     const kept = { ...candidates[root], found_by: [...new Set(group.members.flatMap((c) => c.found_by))] }
-    unique.push(group.reopens ? { ...kept, reopens: group.reopens } : kept)
+    if (!group.reopens && group.repeatOf) repeats.push({ ...kept, reason: 'repeat', why: [`repeats ${group.repeatOf}`] })
+    else unique.push(group.reopens ? { ...kept, reopens: group.reopens } : kept)
   }
   return { unique, repeats }
 }
