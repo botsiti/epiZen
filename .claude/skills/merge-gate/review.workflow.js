@@ -91,7 +91,8 @@ const NEEDS_BAT = {
 
 const short = (sha) => (sha || '').slice(0, 7)
 const FIXED = (A.previous || []).filter((p) => p.status === 'fixed')
-const SETTLED = (A.previous || []).filter((p) => p.status !== 'fixed')
+// A reopened finding is superseded by the one that reopened it, which carries its status now.
+const SETTLED = (A.previous || []).filter((p) => p.status !== 'fixed' && p.status !== 'reopened')
 
 // An agent that dies returns null. Ask once more before counting it as missing; a review with
 // a missing reviewer or voter is reported as incomplete and never posted.
@@ -230,6 +231,7 @@ ${JSON.stringify(FIXED, null, 1)}`,
   const byIndex = new Map(res.items.map((item) => [item.index, item]))
   // A finding that was fixed can come back; only settled ones count as repeats.
   const fixedIds = new Set(FIXED.map((p) => p.id))
+  const settledIds = new Set(SETTLED.map((p) => p.id))
   const rootOf = (i, seen) => {
     const d = byIndex.get(i) && byIndex.get(i).duplicate_of
     if (d === null || d === undefined || d < 0 || d >= i || seen.has(d)) return i
@@ -242,7 +244,8 @@ ${JSON.stringify(FIXED, null, 1)}`,
   candidates.forEach((c, i) => {
     const item = byIndex.get(i) || {}
     const reopens = [item.reopens, item.repeat_of].find((id) => id && fixedIds.has(id)) || null
-    if (item.repeat_of && !fixedIds.has(item.repeat_of)) {
+    // A reopen wins over a repeat, and an id that isn't a settled finding is no repeat at all.
+    if (!reopens && item.repeat_of && settledIds.has(item.repeat_of)) {
       repeats.push({ ...c, reason: 'repeat', why: [`repeats ${item.repeat_of}`] })
       return
     }
