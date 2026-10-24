@@ -906,12 +906,12 @@ function status(args) {
 
 // ── risk ─────────────────────────────────────────────────────────────────────
 
-function risk(args) {
+async function risk(args) {
   const pr = prNumber(args);
   const state = loadState(pr);
   const ledger = loadLedger(pr, state.title);
 
-  const pathTriggers = riskTriggers(state);
+  const pathTriggers = await riskTriggers(state);
   ledger.riskTriggers = { head: state.head, pathTriggers };
   writeJson(ledgerFile(pr), ledger);
 
@@ -968,7 +968,7 @@ function risk(args) {
 }
 
 // Every changed path that keeps the PR from being low or medium, with the reason.
-function riskTriggers(state) {
+async function riskTriggers(state) {
   const triggers = [];
   // Two names APFS folds to the same one are one file on macOS, so either can overwrite the other.
   const spellings = new Map();
@@ -990,10 +990,10 @@ function riskTriggers(state) {
     }
     return null;
   };
-  const problems = new Map();
-  const dependencyProblem = (kind) => {
-    if (!problems.has(kind)) problems.set(kind, kind === 'npm' ? npmProblem(state) : cargoProblem(state));
-    return problems.get(kind);
+  const touches = (names) => state.files.some((f) => names.includes(f.path) || names.includes(f.from));
+  const problems = {
+    npm: touches(NPM_FILES) ? await npmProblem(state) : null,
+    cargo: touches(CARGO_FILES) ? cargoProblem(state) : null,
   };
 
   for (const file of state.files) {
@@ -1012,7 +1012,7 @@ function riskTriggers(state) {
       else if (/[\x00-\x1f\x7f-\x9f]/.test(p) || (!folded.startsWith('demo-vault/') && !/^[\x20-\x7e]+$/.test(folded))) {
         high(p, 'a name with characters outside plain ASCII');
       } else if (NPM_FILES.includes(p) || CARGO_FILES.includes(p)) {
-        const problem = dependencyProblem(NPM_FILES.includes(p) ? 'npm' : 'cargo');
+        const problem = problems[NPM_FILES.includes(p) ? 'npm' : 'cargo'];
         if (problem) high(p, `dependencies in a way that doesn't check out: ${problem}`);
       } else if (NEVER_LOW.test(folded) || !LOW_RISK_PATHS.some(([pattern]) => pattern.test(folded))) {
         high(p, 'a path outside the low-risk list');
@@ -1025,10 +1025,16 @@ function riskTriggers(state) {
 const showAt = (state, ref, file) => tryRun('git', ['-C', state.root, 'show', `${ref}:${file}`]);
 const sortedEntries = (object) => JSON.stringify(Object.entries(object ?? {}).sort(([a], [b]) => a.localeCompare(b)));
 
-// package.json may change only in its dependency lists; package-lock.json must agree with it;
-// and every package must come from the npm registry, at the tarball for its own name and
-// version, so a lockfile can't point eslint at another package or another host.
-function npmProblem(state) {
+const NPM_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/i;
+const SEMVER = /^\d+\.\d+\.\d+(-[0-9a-z.-]+)?(\+[0-9a-z.-]+)?$/i;
+
+// package.json may change only in its dependency lists, and package-lock.json must agree with it.
+// The lockfile is the PR's own, so it vouches for nothing: every entry must be a plain
+// node_modules path with a real name and version, and every entry that is new or differs from
+// main's is checked against the npm registry itself, which must list that name and version with
+// the same tarball, integrity, dependencies and bin. Bundled entries, which npm installs on the
+// lockfile's word, are never low.
+async function npmProblem(state) {
   const parse = (text) => {
     try {
       return JSON.parse(text);
@@ -1054,44 +1060,85 @@ function npmProblem(state) {
       if (installed && installed.version !== spec) return `package-lock.json installs ${name} ${installed.version}, package.json pins ${spec}`;
     }
   }
-  // The lockfile is the PR's own, so none of its fields vouch for themselves: whatever lets an
-  // entry skip the registry check, or names the package it installs, must already be on main.
   const mainLock = parse(showAt(state, state.mergeBase, 'package-lock.json'))?.packages ?? {};
+  const changed = [];
   for (const [key, entry] of Object.entries(lock.packages)) {
     if (!key) continue;
-    const folder = key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
-    // A package bundled inside another's tarball comes from that tarball. One marked bundled at
-    // the top level is still downloaded from `resolved`, so it gets no pass.
-    if (entry.inBundle) {
-      if (key.split('node_modules/').length > 2 && mainLock[key]?.inBundle) continue;
-      return `${key} is marked as bundled, which main doesn't have`;
-    }
-    // An alias installs one package under another's name; a new one could name eslint's entry
-    // after any package on the registry.
+    const [before, ...folders] = key.split('node_modules/').map((part) => part.replace(/\/$/, ''));
+    if (before !== '' || !folders.length || !folders.every((folder) => NPM_NAME.test(folder))) return `${key} isn't a node_modules path`;
+    if (entry.inBundle) return `${key} is marked as bundled, so npm would install it on the lockfile's word`;
+    // An alias installs one package under another's name; only the ones main already has count.
+    const folder = folders.at(-1);
     if (entry.name && entry.name !== folder && mainLock[key]?.name !== entry.name) {
       return `${key} installs ${entry.name} under another name, which main doesn't`;
     }
     const name = entry.name ?? folder;
+    if (!NPM_NAME.test(name) || !SEMVER.test(entry.version ?? '')) return `${key} has a name or version that isn't one (${name}@${entry.version})`;
     const expected = `https://registry.npmjs.org/${name}/-/${name.split('/').pop()}-${entry.version}.tgz`;
     if (entry.resolved !== expected) return `${key} resolves from ${entry.resolved ?? 'nowhere (a link)'}, not ${expected}`;
     if (!entry.integrity) return `${key} has no integrity hash`;
+    if (JSON.stringify(entry) !== JSON.stringify(mainLock[key])) changed.push({ key, name, entry });
+  }
+  for (let i = 0; i < changed.length; i += 8) {
+    const problem = (await Promise.all(changed.slice(i, i + 8).map(registryProblem))).find(Boolean);
+    if (problem) return problem;
   }
   return null;
 }
 
-// Cargo.toml may change only in its dependency tables, every dependency must come from crates.io
-// under its own name (no git, path, other registry or `package =` rename), and Cargo.lock must
-// take every crate from crates.io, except the app itself, with nothing replaced or patched. cargo test and clippy run with --locked, so a Cargo.lock that doesn't match
-// Cargo.toml fails the check.
+async function registryProblem({ key, name, entry }) {
+  let manifest;
+  try {
+    const response = await fetch(`https://registry.npmjs.org/${name.replace('/', '%2f')}/${entry.version}`, { signal: AbortSignal.timeout(30_000) });
+    if (!response.ok) return `the registry has no ${name}@${entry.version} (${key}, HTTP ${response.status})`;
+    manifest = await response.json();
+  } catch (error) {
+    return `couldn't check ${key} against the registry: ${error.message}`;
+  }
+  // npm's lockfile lists optional dependencies under optionalDependencies only.
+  const optional = manifest.optionalDependencies ?? {};
+  const required = Object.fromEntries(Object.entries(manifest.dependencies ?? {}).filter(([dep]) => !(dep in optional)));
+  const bin = (value) =>
+    sortedEntries(
+      Object.fromEntries(
+        Object.entries(typeof value === 'string' ? { [name.split('/').pop()]: value } : (value ?? {})).map(([command, file]) => [
+          command,
+          String(file).replace(/^\.\//, ''),
+        ]),
+      ),
+    );
+  const differs = [
+    manifest.dist?.tarball !== entry.resolved && 'tarball',
+    manifest.dist?.integrity !== entry.integrity && 'integrity',
+    sortedEntries(required) !== sortedEntries(entry.dependencies) && 'dependencies',
+    sortedEntries(optional) !== sortedEntries(entry.optionalDependencies) && 'optionalDependencies',
+    sortedEntries(manifest.peerDependencies) !== sortedEntries(entry.peerDependencies) && 'peerDependencies',
+    bin(manifest.bin) !== bin(entry.bin) && 'bin',
+  ].filter(Boolean);
+  return differs.length ? `${key} doesn't match ${name}@${entry.version} on the registry (${differs.join(', ')})` : null;
+}
+
+// A changed line in a dependency table may only be a table header or a crates.io dependency under
+// its own name, with a version, features, optional or default-features. Unchanged lines are
+// main's. Anything else (git, path, another registry, a `package =` rename in any TOML spelling,
+// a dotted or quoted key, a sub-table) isn't something the gate can vouch for.
+const CARGO_ITEM = '(version\\s*=\\s*"[^"\\\\]*"|features\\s*=\\s*\\[(\\s*"[\\w/+:.-]*"\\s*,?)*\\s*\\]|optional\\s*=\\s*(true|false)|default-features\\s*=\\s*(true|false))';
+const CARGO_DEPENDENCY = new RegExp(`^[A-Za-z0-9_-]+\\s*=\\s*("[^"\\\\]*"|\\{\\s*${CARGO_ITEM}(\\s*,\\s*${CARGO_ITEM})*\\s*,?\\s*\\})$`);
+const CARGO_TABLE = /^\[((dev-|build-)?dependencies|target\.'[^']*'\.(dev-|build-)?dependencies)\]$/;
+
+// Cargo.toml may change only in its dependency tables, in the forms above, and Cargo.lock must
+// take every crate from crates.io, except the app itself, with nothing replaced or patched.
+// cargo test and clippy run with --locked, so a Cargo.lock that doesn't match Cargo.toml fails
+// the check, and cargo checks every crate it downloads against the lock's checksum.
 function cargoProblem(state) {
   const split = (text) => {
     const tables = { dependencies: [], settings: [] };
-    let inDependencies = false;
+    let table = null;
     for (const line of (text ?? '').split('\n')) {
-      const table = /^\s*\[\[?([^\]]+)\]\]?/.exec(line);
-      if (table) inDependencies = /(^|\.)(dev-|build-)?dependencies(\.|$)/.test(table[1].replace(/\s/g, ''));
       const kept = line.replace(/#.*$/, '').trim();
-      if (kept) (inDependencies ? tables.dependencies : tables.settings).push(kept);
+      const header = /^\[\[?([^\]]+)\]\]?/.exec(kept);
+      if (header) table = /(^|\.)(dev-|build-)?dependencies(\.|$)/.test(header[1].replace(/\s/g, '')) ? kept : null;
+      if (kept) (table ? tables.dependencies : tables.settings).push(table && !header ? `${table}\n${kept}` : kept);
     }
     return tables;
   };
@@ -1099,11 +1146,18 @@ function cargoProblem(state) {
   const after = split(showAt(state, state.head, 'src-tauri/Cargo.toml'));
   if (!after.settings.length) return 'src-tauri/Cargo.toml is missing';
   if (before.settings.join('\n') !== after.settings.join('\n')) return 'Cargo.toml changes more than its dependency tables';
-  const offRegistry = after.dependencies.find((line) => /(^|[{,\s])(git|path|registry|registry-index|branch|tag|rev)\s*=/.test(line));
-  if (offRegistry) return `a dependency that isn't from crates.io: ${offRegistry}`;
-  // `package =` installs another crate under a dependency's name, like an npm alias.
-  const renamed = after.dependencies.find((line) => /(^|[{,\s])package\s*=/.test(line));
-  if (renamed) return `a dependency renamed to another crate: ${renamed}`;
+  const unchanged = new Map();
+  for (const line of before.dependencies) unchanged.set(line, (unchanged.get(line) ?? 0) + 1);
+  for (const line of after.dependencies) {
+    if (unchanged.get(line)) {
+      unchanged.set(line, unchanged.get(line) - 1);
+      continue;
+    }
+    const [table, entry] = line.includes('\n') ? line.split('\n') : [line, null];
+    if (!CARGO_TABLE.test(table) || (entry !== null && !CARGO_DEPENDENCY.test(entry))) {
+      return `a dependency line the gate can't vouch for: ${entry ?? table}`;
+    }
+  }
   const own = /^name\s*=\s*"([^"]+)"/m.exec(after.settings.join('\n'))?.[1];
   const lock = showAt(state, state.head, 'src-tauri/Cargo.lock');
   if (!lock) return 'src-tauri/Cargo.lock is missing';
