@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#e9e3d5"/>
+  <path d="M 0 120.0 L 50 129.9 L 100 137.3 L 150 140.6 L 200 138.7 L 250 132.3 L 300 122.9 L 350 112.8 L 400 104.4 L 450 99.9 L 500 100.2 L 550 105.5 L 600 114.2" fill="none" stroke="#ee6c4d" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 194.8 L 50 198.7 L 100 196.5 L 150 188.8 L 200 177.5 L 250 165.3 L 300 155.3 L 350 149.8 L 400 150.3 L 450 156.5 L 500 167.1 L 550 179.3 L 600 190.3" fill="none" stroke="#3d5a80" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 246.6 L 50 240.3 L 100 230.9 L 150 220.8 L 200 212.5 L 250 208.0 L 300 208.4 L 350 213.5 L 400 222.3 L 450 232.4 L 500 241.5 L 550 247.2 L 600 248.3" fill="none" stroke="#ee6c4d" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 286.6 L 50 270.5 L 100 257.2 L 150 250.0 L 200 250.6 L 250 258.9 L 300 272.8 L 350 289.1 L 400 303.5 L 450 312.8 L 500 314.4 L 550 308.2 L 600 295.5" fill="none" stroke="#3d5a80" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 321.8 L 50 317.7 L 100 318.0 L 150 322.8 L 200 330.8 L 250 340.0 L 300 348.3 L 350 353.6 L 400 354.6 L 450 351.0 L 500 343.7 L 550 334.6 L 600 325.8" fill="none" stroke="#ee6c4d" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 361.1 L 50 368.8 L 100 381.6 L 150 396.5 L 200 409.8 L 250 418.2 L 300 419.8 L 350 414.0 L 400 402.4 L 450 387.7 L 500 373.6 L 550 363.5 L 600 359.9" fill="none" stroke="#3d5a80" stroke-width="12.0" stroke-linecap="round"/>
+  <text x="42" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#1b1b1e">Breathing Exercises</text>
+  <text x="42" y="577" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#1b1b1e" opacity="0.7">Unit Komorebi</text>
+</svg>

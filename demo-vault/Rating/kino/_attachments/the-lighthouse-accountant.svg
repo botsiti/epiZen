@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600">
+  <rect width="400" height="600" fill="#e9e3d5"/>
+  <path d="M 0 120.0 L 33 134.7 L 67 145.8 L 100 150.6 L 133 147.9 L 167 138.3 L 200 124.3 L 233 109.2 L 267 96.8 L 300 90.0 L 333 90.6 L 367 98.4 L 400 111.4" fill="none" stroke="#ee6c4d" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 192.7 L 33 196.2 L 67 194.2 L 100 187.3 L 133 177.1 L 167 166.2 L 200 157.2 L 233 152.3 L 267 152.7 L 300 158.3 L 333 167.8 L 367 178.8 L 400 188.6" fill="none" stroke="#3d5a80" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 265.3 L 33 252.6 L 67 233.8 L 100 213.6 L 133 196.9 L 167 187.9 L 200 188.6 L 233 199.0 L 267 216.5 L 300 236.8 L 333 255.0 L 367 266.5 L 400 268.6" fill="none" stroke="#ee6c4d" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 287.9 L 33 267.3 L 67 250.4 L 100 241.1 L 133 241.9 L 167 252.5 L 200 270.3 L 233 291.0 L 267 309.5 L 300 321.2 L 333 323.4 L 367 315.4 L 400 299.2" fill="none" stroke="#3d5a80" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 307.4 L 33 299.1 L 67 299.8 L 100 309.4 L 133 325.5 L 167 344.1 L 200 360.8 L 233 371.4 L 267 373.3 L 300 366.1 L 333 351.5 L 367 333.2 L 400 315.5" fill="none" stroke="#ee6c4d" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 365.7 L 33 372.1 L 67 382.9 L 100 395.5 L 133 406.7 L 167 413.8 L 200 415.1 L 233 410.3 L 267 400.5 L 300 388.1 L 333 376.2 L 367 367.7 L 400 364.6" fill="none" stroke="#3d5a80" stroke-width="8.0" stroke-linecap="round"/>
+  <text x="28" y="552" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="23" font-weight="600" fill="#1b1b1e">The Lighthouse Accountant</text>
+  <text x="28" y="584" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" fill="#1b1b1e" opacity="0.7">2019</text>
+</svg>

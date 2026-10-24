@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#232931"/>
+  <path d="M 0 72.0 L 53 77.6 L 107 81.9 L 160 83.7 L 213 82.7 L 267 79.0 L 320 73.7 L 373 67.9 L 427 63.1 L 480 60.5 L 533 60.7 L 587 63.7 L 640 68.7" fill="none" stroke="#eeeeee" stroke-width="7.2" stroke-linecap="round"/>
+  <path d="M 0 120.2 L 53 123.1 L 107 121.5 L 160 115.6 L 213 107.1 L 267 97.8 L 320 90.2 L 373 86.0 L 427 86.4 L 480 91.1 L 533 99.2 L 587 108.4 L 640 116.7" fill="none" stroke="#4ecca3" stroke-width="7.2" stroke-linecap="round"/>
+  <path d="M 0 154.0 L 53 148.1 L 107 139.5 L 160 130.2 L 213 122.5 L 267 118.3 L 320 118.6 L 373 123.4 L 427 131.5 L 480 140.9 L 533 149.2 L 587 154.6 L 640 155.5" fill="none" stroke="#eeeeee" stroke-width="7.2" stroke-linecap="round"/>
+  <path d="M 0 172.4 L 53 161.4 L 107 152.3 L 160 147.4 L 213 147.8 L 267 153.4 L 320 163.0 L 373 174.0 L 427 183.9 L 480 190.1 L 533 191.3 L 587 187.0 L 640 178.4" fill="none" stroke="#4ecca3" stroke-width="7.2" stroke-linecap="round"/>
+  <path d="M 0 189.0 L 53 185.3 L 107 185.6 L 160 189.8 L 213 196.9 L 267 205.2 L 320 212.6 L 373 217.3 L 427 218.1 L 480 214.9 L 533 208.5 L 587 200.3 L 640 192.5" fill="none" stroke="#eeeeee" stroke-width="7.2" stroke-linecap="round"/>
+  <path d="M 0 219.3 L 53 223.2 L 107 229.7 L 160 237.3 L 213 244.1 L 267 248.4 L 320 249.2 L 373 246.3 L 427 240.3 L 480 232.8 L 533 225.6 L 587 220.5 L 640 218.6" fill="none" stroke="#4ecca3" stroke-width="7.2" stroke-linecap="round"/>
+  <text x="25" y="317" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="600" fill="#f4f1ea">Ambient Music Theory for Non-Musicians</text>
+  <text x="25" y="346" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" fill="#f4f1ea" opacity="0.7">Room Tone</text>
+</svg>

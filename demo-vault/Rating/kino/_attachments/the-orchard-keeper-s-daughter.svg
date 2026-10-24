@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600">
+  <rect width="400" height="600" fill="#3a2e39"/>
+  <circle cx="203" cy="275" r="168" fill="none" stroke="#f4e8c1" stroke-width="7.2" opacity="0.85"/>
+  <circle cx="203" cy="275" r="144" fill="none" stroke="#9e8fb2" stroke-width="7.2" opacity="0.85"/>
+  <circle cx="203" cy="275" r="120" fill="none" stroke="#f4e8c1" stroke-width="7.2" opacity="0.85"/>
+  <circle cx="203" cy="275" r="96" fill="none" stroke="#9e8fb2" stroke-width="7.2" opacity="0.85"/>
+  <circle cx="203" cy="275" r="72" fill="none" stroke="#f4e8c1" stroke-width="7.2" opacity="0.85"/>
+  <circle cx="203" cy="275" r="48" fill="none" stroke="#9e8fb2" stroke-width="7.2" opacity="0.85"/>
+  <circle cx="203" cy="275" r="24" fill="none" stroke="#f4e8c1" stroke-width="7.2" opacity="0.85"/>
+  <text x="28" y="552" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="23" font-weight="600" fill="#f4f1ea">The Orchard Keeper's Daughter</text>
+  <text x="28" y="584" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" fill="#f4f1ea" opacity="0.7">2017</text>
+</svg>

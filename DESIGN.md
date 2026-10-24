@@ -1,0 +1,59 @@
+# Design
+
+Dark and calm. One accent colour. A lot of space. The note is the subject; the app gets out of its way.
+
+## Colour
+
+Tokens live in `:root` in `src/styles.css`. Use them. A new colour gets added here first.
+
+| Token          | Value     | For                                        |
+| -------------- | --------- | ------------------------------------------ |
+| `--bg`         | `#121416` | main pane                                  |
+| `--bg-sidebar` | `#0e1012` | sidebar                                    |
+| `--surface`    | `#171a1d` | callouts, code, quiet fills                |
+| `--border`     | `#23272b` | hairlines only                             |
+| `--text`       | `#e7e5e0` | body text, titles                          |
+| `--text-muted` | `#9a9f9c` | secondary text, sidebar rows               |
+| `--text-faint` | `#5f6568` | labels, hints, empty values                |
+| `--accent`     | `#8fbcaa` | links, the selected note, focus, checkboxes |
+
+The accent is sage, and it is the only colour. No red for errors, no green for success, no
+colour per callout type. A link to a missing note is muted with a dotted underline, not red.
+Covers and other images bring their own colour; the interface doesn't.
+
+## Space
+
+Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
+
+- The reading column is at most 680px wide, centred.
+- The main pane has 96px above the content and 64px at the sides.
+- 48px above a heading inside a note, 32px under the note title, 48px under the properties.
+- When in doubt, add space rather than a line or a box.
+
+## Type
+
+- The system font (SF Pro on macOS), `ui-monospace` for code. No web fonts.
+- Note body 16.5px with line height 1.7. Interface text 13.5–15px. Titles 30px, weight 600.
+- Labels (folder above a title, callout titles, vault name): 12px, weight 600, uppercase,
+  letter-spacing 0.08em, faint.
+
+## Shape and motion
+
+- Radius 6px. Borders are 1px hairlines. No shadows, gradients or blur.
+- Motion only for a change of state (hover, a folder opening), 120ms ease-out. Nothing bounces
+  and nothing moves on load. `prefers-reduced-motion` turns it off.
+
+## Components
+
+- **Sidebar**: notes only, with image-only folders hidden. Folders first, numbers in natural
+  order. A note indents one step past its folder's name. Long names end in "…". The selected
+  note gets an accent bar and a soft accent background.
+- **Properties**: a two-column list with faint labels. An empty value shows as a faint "—".
+- **Callouts**: a surface block with a small uppercase title, no icon, no colour by type.
+- **Tasks**: accent-tinted checkboxes. They are disabled until the app can write.
+- **Empty and error screens**: a label, a title and one or two quiet lines. No illustrations.
+
+## Checking a UI change
+
+The e2e run saves every screen to `evidence/`. Hold them against this page: one accent,
+nothing cramped, nothing cut off without "…", chevrons that match their folder.

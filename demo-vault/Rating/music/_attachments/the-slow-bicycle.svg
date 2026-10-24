@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#1b1b1e"/>
+  <circle cx="328" cy="270" r="132" fill="#e0b1cb"/>
+  <rect x="0" y="270" width="600" height="42" fill="#9f86c0" opacity="0.90"/>
+  <rect x="0" y="312" width="600" height="42" fill="#e0b1cb" opacity="0.78"/>
+  <rect x="0" y="354" width="600" height="42" fill="#9f86c0" opacity="0.66"/>
+  <rect x="0" y="396" width="600" height="42" fill="#e0b1cb" opacity="0.54"/>
+  <rect x="0" y="438" width="600" height="42" fill="#9f86c0" opacity="0.42"/>
+  <rect x="0" y="480" width="600" height="42" fill="#e0b1cb" opacity="0.30"/>
+  <text x="42" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#f4f1ea">The Slow Bicycle</text>
+  <text x="42" y="577" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#f4f1ea" opacity="0.7">Jun Arakawa Quartet</text>
+</svg>

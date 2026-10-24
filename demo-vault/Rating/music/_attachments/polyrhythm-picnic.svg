@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#f2efe9"/>
+  <rect x="75" y="48" width="60" height="60" rx="9" fill="#264653" opacity="0.54"/>
+  <rect x="150" y="48" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.35"/>
+  <rect x="225" y="48" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.28"/>
+  <rect x="300" y="48" width="60" height="60" rx="9" fill="#264653" opacity="0.22"/>
+  <rect x="375" y="48" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.69"/>
+  <rect x="450" y="48" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.29"/>
+  <rect x="75" y="123" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.56"/>
+  <rect x="150" y="123" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.77"/>
+  <rect x="225" y="123" width="60" height="60" rx="9" fill="#264653" opacity="0.27"/>
+  <rect x="300" y="123" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.42"/>
+  <rect x="375" y="123" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.71"/>
+  <rect x="450" y="123" width="60" height="60" rx="9" fill="#264653" opacity="0.68"/>
+  <rect x="75" y="198" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.23"/>
+  <rect x="150" y="198" width="60" height="60" rx="9" fill="#264653" opacity="0.42"/>
+  <rect x="225" y="198" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.58"/>
+  <rect x="300" y="198" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.67"/>
+  <rect x="375" y="198" width="60" height="60" rx="9" fill="#264653" opacity="0.34"/>
+  <rect x="450" y="198" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.68"/>
+  <rect x="75" y="273" width="60" height="60" rx="9" fill="#264653" opacity="0.60"/>
+  <rect x="150" y="273" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.29"/>
+  <rect x="225" y="273" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.53"/>
+  <rect x="300" y="273" width="60" height="60" rx="9" fill="#264653" opacity="0.29"/>
+  <rect x="375" y="273" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.85"/>
+  <rect x="450" y="273" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.73"/>
+  <rect x="75" y="348" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.41"/>
+  <rect x="150" y="348" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.79"/>
+  <rect x="225" y="348" width="60" height="60" rx="9" fill="#264653" opacity="0.87"/>
+  <rect x="300" y="348" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.77"/>
+  <rect x="375" y="348" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.51"/>
+  <rect x="450" y="348" width="60" height="60" rx="9" fill="#264653" opacity="0.51"/>
+  <rect x="75" y="423" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.69"/>
+  <rect x="150" y="423" width="60" height="60" rx="9" fill="#264653" opacity="0.64"/>
+  <rect x="225" y="423" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.80"/>
+  <rect x="300" y="423" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.73"/>
+  <rect x="375" y="423" width="60" height="60" rx="9" fill="#264653" opacity="0.76"/>
+  <rect x="450" y="423" width="60" height="60" rx="9" fill="#2a9d8f" opacity="0.64"/>
+  <text x="42" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#1b1b1e">Polyrhythm Picnic</text>
+  <text x="42" y="577" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#1b1b1e" opacity="0.7">Kofi Mensah Collective</text>
+</svg>

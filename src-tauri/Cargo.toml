@@ -1,0 +1,28 @@
+[package]
+name = "epizen"
+version = "0.1.0"
+description = "A calm desktop app for a vault of plain Markdown notes"
+edition = "2024"
+publish = false
+
+[lib]
+name = "epizen_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-wdio = { version = "=1.5.0", optional = true }
+tauri-plugin-wdio-webdriver = { version = "=1.5.0", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+# Test-only: lets WebdriverIO drive the app over a local WebDriver port.
+# Built by `npm run build:e2e` in debug mode. Never part of a release build.
+e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]

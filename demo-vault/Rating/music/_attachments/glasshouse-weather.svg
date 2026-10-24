@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#e9e3d5"/>
+  <path d="M 0 120.0 L 50 135.6 L 100 147.3 L 150 152.4 L 200 149.5 L 250 139.4 L 300 124.6 L 350 108.6 L 400 95.4 L 450 88.2 L 500 88.9 L 550 97.1 L 600 110.9" fill="none" stroke="#ee6c4d" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 204.3 L 50 209.9 L 100 206.8 L 150 195.6 L 200 179.1 L 250 161.4 L 300 146.7 L 350 138.8 L 400 139.4 L 450 148.6 L 500 163.9 L 550 181.8 L 600 197.7" fill="none" stroke="#3d5a80" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 247.9 L 50 241.1 L 100 231.1 L 150 220.3 L 200 211.4 L 250 206.6 L 300 207.0 L 350 212.6 L 400 221.9 L 450 232.7 L 500 242.4 L 550 248.5 L 600 249.7" fill="none" stroke="#ee6c4d" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 285.8 L 50 272.6 L 100 261.8 L 150 255.9 L 200 256.4 L 250 263.2 L 300 274.6 L 350 287.7 L 400 299.5 L 450 307.0 L 500 308.4 L 550 303.3 L 600 293.0" fill="none" stroke="#3d5a80" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 318.1 L 50 312.9 L 100 313.4 L 150 319.3 L 200 329.4 L 250 341.1 L 300 351.5 L 350 358.2 L 400 359.4 L 450 354.9 L 500 345.7 L 550 334.2 L 600 323.2" fill="none" stroke="#ee6c4d" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 357.6 L 50 366.1 L 100 380.5 L 150 397.3 L 200 412.2 L 250 421.7 L 300 423.5 L 350 417.0 L 400 403.9 L 450 387.5 L 500 371.6 L 550 360.2 L 600 356.2" fill="none" stroke="#3d5a80" stroke-width="12.0" stroke-linecap="round"/>
+  <text x="42" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#1b1b1e">Glasshouse Weather</text>
+  <text x="42" y="577" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#1b1b1e" opacity="0.7">Mira Okonkwo</text>
+</svg>

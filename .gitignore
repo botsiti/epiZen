@@ -1,0 +1,9 @@
+node_modules/
+dist/
+evidence/
+src-tauri/target/
+src-tauri/gen/
+# Obsidian writes its own settings when you open the demo vault in it.
+demo-vault/.obsidian/
+.DS_Store
+*.log

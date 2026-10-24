@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#1f2a33"/>
+  <circle cx="255" cy="297" r="252" fill="none" stroke="#e9e3d5" stroke-width="10.8" opacity="0.85"/>
+  <circle cx="255" cy="297" r="216" fill="none" stroke="#8fbcaa" stroke-width="10.8" opacity="0.85"/>
+  <circle cx="255" cy="297" r="180" fill="none" stroke="#e9e3d5" stroke-width="10.8" opacity="0.85"/>
+  <circle cx="255" cy="297" r="144" fill="none" stroke="#8fbcaa" stroke-width="10.8" opacity="0.85"/>
+  <circle cx="255" cy="297" r="108" fill="none" stroke="#e9e3d5" stroke-width="10.8" opacity="0.85"/>
+  <circle cx="255" cy="297" r="72" fill="none" stroke="#8fbcaa" stroke-width="10.8" opacity="0.85"/>
+  <circle cx="255" cy="297" r="36" fill="none" stroke="#e9e3d5" stroke-width="10.8" opacity="0.85"/>
+  <text x="42" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#f4f1ea">Low Tide Hymns</text>
+  <text x="42" y="577" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#f4f1ea" opacity="0.7">Saltmarsh Choir</text>
+</svg>

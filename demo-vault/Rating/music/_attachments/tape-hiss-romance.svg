@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#232931"/>
+  <path d="M 0 120.0 L 50 130.1 L 100 137.8 L 150 141.1 L 200 139.2 L 250 132.6 L 300 123.0 L 350 112.6 L 400 104.0 L 450 99.4 L 500 99.8 L 550 105.1 L 600 114.1" fill="none" stroke="#eeeeee" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 191.5 L 50 194.7 L 100 192.9 L 150 186.4 L 200 176.9 L 250 166.7 L 300 158.3 L 350 153.7 L 400 154.1 L 450 159.4 L 500 168.2 L 550 178.5 L 600 187.6" fill="none" stroke="#4ecca3" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 259.3 L 50 248.6 L 100 232.9 L 150 215.9 L 200 201.9 L 250 194.3 L 300 195.0 L 350 203.7 L 400 218.4 L 450 235.4 L 500 250.6 L 550 260.3 L 600 262.1" fill="none" stroke="#eeeeee" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 287.4 L 50 268.7 L 100 253.2 L 150 244.8 L 200 245.5 L 250 255.2 L 300 271.4 L 350 290.2 L 400 307.0 L 450 317.7 L 500 319.6 L 550 312.4 L 600 297.7" fill="none" stroke="#4ecca3" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 311.8 L 50 304.7 L 100 305.3 L 150 313.4 L 200 327.0 L 250 342.9 L 300 357.0 L 350 366.1 L 400 367.7 L 450 361.6 L 500 349.2 L 550 333.6 L 600 318.6" fill="none" stroke="#eeeeee" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 357.3 L 50 365.9 L 100 380.5 L 150 397.3 L 200 412.4 L 250 422.0 L 300 423.8 L 350 417.3 L 400 404.1 L 450 387.4 L 500 371.4 L 550 360.0 L 600 355.9" fill="none" stroke="#4ecca3" stroke-width="12.0" stroke-linecap="round"/>
+  <text x="42" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#f4f1ea">Tape Hiss Romance</text>
+  <text x="42" y="577" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#f4f1ea" opacity="0.7">Cassette Weather</text>
+</svg>

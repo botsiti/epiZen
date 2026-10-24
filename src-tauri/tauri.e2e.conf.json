@@ -1,0 +1,32 @@
+{
+  "build": {
+    "beforeBuildCommand": "npm run build:e2e-web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Epizen",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 720,
+        "minHeight": 480,
+        "theme": "Dark",
+        "backgroundColor": "#121416",
+        "focus": false
+      }
+    ],
+    "security": {
+      "capabilities": [
+        "default",
+        {
+          "identifier": "e2e",
+          "description": "Test-only: lets WebdriverIO drive the window. Only in `npm run build:e2e`.",
+          "windows": ["main"],
+          "permissions": ["core:default", "wdio:default", "wdio-webdriver:default"]
+        }
+      ]
+    }
+  }
+}

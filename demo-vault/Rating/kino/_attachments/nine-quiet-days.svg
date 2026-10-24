@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600">
+  <rect width="400" height="600" fill="#0b3d3a"/>
+  <circle cx="248" cy="228" r="120" fill="#7fb7a4"/>
+  <path d="M 0 432 A 200 200 0 0 1 220 150" fill="none" stroke="#f1c27d" stroke-width="12.0"/>
+  <text x="28" y="552" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="23" font-weight="600" fill="#f4f1ea">Nine Quiet Days</text>
+  <text x="28" y="584" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" fill="#f4f1ea" opacity="0.7">2022</text>
+</svg>

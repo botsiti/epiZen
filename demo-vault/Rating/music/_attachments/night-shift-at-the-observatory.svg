@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#0b3d3a"/>
+  <circle cx="372" cy="228" r="180" fill="#7fb7a4"/>
+  <path d="M 0 432 A 300 300 0 0 1 330 150" fill="none" stroke="#f1c27d" stroke-width="18.0"/>
+  <text x="42" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#f4f1ea">Night Shift at the Observatory</text>
+  <text x="42" y="577" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#f4f1ea" opacity="0.7">Tessellate</text>
+</svg>
