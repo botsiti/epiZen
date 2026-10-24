@@ -416,9 +416,11 @@ function check(args) {
 }
 
 // The e2e tests listen on fixed WebDriver ports, so two runs on this Mac answer each other's
-// sessions and both fail. Take a lock that other gates respect, and wait out any other wdio run.
+// sessions and both fail. Take a lock that other gates respect, and wait until no other
+// `npm run check` or wdio run is going, since one still compiling reaches its e2e step later.
 function waitForQuiet(lockDir) {
   const deadline = performance.now() + 45 * 60_000;
+  const pidFile = path.join(lockDir, 'pid');
   const alive = (pid) => {
     try {
       process.kill(pid, 0);
@@ -427,27 +429,43 @@ function waitForQuiet(lockDir) {
       return error.code === 'EPERM';
     }
   };
+  const holder = () => {
+    try {
+      return Number(fs.readFileSync(pidFile, 'utf8')) || 0;
+    } catch {
+      return 0;
+    }
+  };
   const release = () => fs.rmSync(lockDir, { recursive: true, force: true });
   for (;;) {
     let held = false;
     try {
       fs.mkdirSync(lockDir);
-      fs.writeFileSync(path.join(lockDir, 'pid'), String(process.pid));
+      fs.writeFileSync(pidFile, String(process.pid));
       held = true;
     } catch {
-      let holder = 0;
+      let age;
       try {
-        holder = Number(fs.readFileSync(path.join(lockDir, 'pid'), 'utf8'));
+        age = Date.now() - fs.statSync(lockDir).mtimeMs;
       } catch {
-        // No pid yet: another gate is taking the lock right now.
+        continue; // released while we looked
       }
-      // A lock whose owner has exited is stale.
-      if (holder && !alive(holder)) {
-        release();
+      // Stale: the owner has exited, or the lock never got a pid. Look again just before
+      // breaking it, and break it by renaming, which only one waiter can do, so a lock another
+      // gate took a moment ago survives.
+      const owner = holder();
+      if ((owner ? !alive(owner) : age > 120_000) && holder() === owner) {
+        const stale = `${lockDir}.stale-${process.pid}`;
+        try {
+          fs.renameSync(lockDir, stale);
+          fs.rmSync(stale, { recursive: true, force: true });
+        } catch {
+          // Another waiter broke it first.
+        }
         continue;
       }
     }
-    if (held && tryRun('pgrep', ['-f', 'wdio run']) === null) return release;
+    if (held && tryRun('pgrep', ['-f', 'wdio run|scripts/check\\.mjs']) === null) return release;
     if (held) release();
     if (performance.now() > deadline) fail('Another check or e2e run kept this Mac busy for 45 minutes. Try again later.');
     spawnSync('sleep', ['15']);
