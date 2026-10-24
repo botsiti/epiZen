@@ -260,10 +260,13 @@ function prep(args) {
     git(where.root, 'worktree', 'add', '--quiet', '--detach', where.worktree, head);
   }
 
-  // A fresh run (Bat asks for one, say after a rethink) starts a new ledger: rounds, findings and
-  // earlier risk verdicts are set aside in a dated file, not deleted.
+  // A fresh run (Bat asks for one, say after a rethink) starts a new ledger: rounds and findings
+  // are set aside in a dated file, not deleted. A high verdict carries over, since Bat asked for a
+  // fresh review, not for the PR to be rated again from nothing.
   if (args.fresh && fs.existsSync(ledgerFile(pr))) {
+    const highReasons = readJson(ledgerFile(pr))?.highReasons ?? [];
     fs.renameSync(ledgerFile(pr), path.join(dir, `ledger-until-${new Date().toISOString().replace(/[:.]/g, '-')}.json`));
+    if (highReasons.length) writeJson(ledgerFile(pr), { ...loadLedger(pr, info.title), highReasons });
   }
   const ledger = loadLedger(pr, info.title);
   ledger.title = info.title;

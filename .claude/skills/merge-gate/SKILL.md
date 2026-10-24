@@ -60,7 +60,7 @@ Blocking: every open Important finding, plus a red `npm run check`, which counts
 
 If nothing blocks, go to step 6.
 
-If this was the third round of this run and something still blocks, stop. Post a PR comment that says the gate stopped after three rounds and lists what is still open, run `G status <PR> failure "Stopped after 3 rounds: rethink the approach"`, write the log line (step 8 with `--outcome "stopped after 3 rounds"`), and tell Bat to rethink the approach instead of patching it again. When Bat asks for a fresh run after the rethink, start with `G prep <PR> --fresh`: it sets the old ledger aside, so the rounds, findings and risk verdicts start over.
+If this was the third round of this run and something still blocks, stop. Post a PR comment that says the gate stopped after three rounds and lists what is still open, run `G status <PR> failure "Stopped after 3 rounds: rethink the approach"`, write the log line (step 8 with `--outcome "stopped after 3 rounds"`), and tell Bat to rethink the approach instead of patching it again. When Bat asks for a fresh run after the rethink, start with `G prep <PR> --fresh`: it sets the old ledger aside, so the rounds and findings start over. A high risk verdict from before carries over.
 
 Otherwise handle each blocking item:
 
