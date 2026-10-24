@@ -15,26 +15,40 @@ const STATUS_CONTEXT = 'merge-gate';
 // GitHub rejects comments over 65,536 characters.
 const COMMENT_LIMIT = 60_000;
 
-// A change to any of these makes the PR high risk, whatever else it does; the first match names
-// it. CI is the workflow and also what it runs: the check runner, the configs of the checks in
-// it, and the npm scripts (compared separately, so a dependency bump in package.json doesn't
-// count). Claude's project config can change what the gate itself runs, and Tauri's config can
-// declare capabilities inline as well as in capabilities/. Matching ignores case, because macOS
-// checks `.Claude/x` out into `.claude/`, and a rule also matches the directory itself, which a
-// symlink can replace.
-const HIGH_RISK_PATHS = [
-  [/^\.github\/(workflows|actions)(\/|$)/i, 'the CI workflow'],
-  [/^scripts\/(check|vault-snapshot)\.mjs$/i, 'what npm run check runs'],
-  [
-    /^(eslint\.config\.[cm]?[jt]s|vite(st)?\.config\.[cm]?[jt]s|tsconfig(\.[\w-]+)?\.json|e2e\/tsconfig\.json|e2e\/wdio\.conf\.[cm]?[jt]s|test\/setup\.ts|\.npmrc|\.nvmrc|rust-toolchain(\.toml)?|(src-tauri\/)?clippy\.toml|(src-tauri\/)?\.cargo(\/.*)?)$/i,
-    'the configuration of a check',
-  ],
-  [/^\.claude\/skills\/merge-gate(\/|$)/i, 'the merge-gate skill'],
-  [/^\.claude(\/|$)/i, "Claude's project config (agents, hooks, settings, skills)"],
-  [/(^|\/)(CLAUDE|AGENTS)(\.local)?\.md$/i, 'instructions Claude or Codex follow (CLAUDE.md, AGENTS.md)'],
-  [/^REVIEW\.md$/i, 'REVIEW.md'],
-  [/^src-tauri\/(capabilities(\/|$)|tauri(\.[\w-]+)?\.conf\.json$)/i, 'what the app may touch (Tauri capabilities and config)'],
+// A PR can be low or medium risk only when every path it changes is on this list; everything else
+// is high, so a path nobody thought of waits for Bat instead of slipping through. Paths are
+// compared after folding them the way APFS does (compatibility form, any case), because macOS
+// checks `ſcripts/check.mjs` or `.Claude/x` out onto `scripts/check.mjs` and `.claude/x`.
+// Tests in test/ and e2e/specs/ are on the list; the harness that runs them (test/setup.ts,
+// e2e/wdio.conf.ts, e2e/paths.ts) is a check config and is not.
+const LOW_RISK_PATHS = [
+  [/^src\//, 'app code'],
+  [/^src-tauri\/src\//, 'app code'],
+  [/^index\.html$/, 'the app page'],
+  [/\.(css|scss|sass|less|png|jpe?g|gif|webp|avif|svg|ico|icns|bmp|tiff?|woff2?|ttf|otf|eot|mp3|mp4|webm|wav|ogg)$/, 'a style or asset'],
+  [/^(test\/.+\.test\.tsx?|e2e\/specs\/.+)$/, 'a test'],
+  [/^demo-vault\//, 'a demo-vault fixture'],
+  [/\.md$/, 'docs'],
 ];
+// Never low, wherever they sit (matched against the folded, lower-case path): dotfiles and
+// anything in a dot-folder (.claude, .github, .cargo, an Obsidian plugin in demo-vault/.obsidian);
+// the instructions Claude, Codex and the reviewers follow; and tool configs, since a nested
+// eslint.config.js or package.json overrides the root one for its folder.
+const NEVER_LOW = new RegExp(
+  [
+    '(^|/)\\.',
+    '(^|/)(claude|agents|review)([.-][^/]*)?\\.md$',
+    '(^|/)[^/]*\\.config\\.[^/]+$',
+    '(^|/)(tsconfig[^/]*\\.json|package(-lock)?\\.json|cargo\\.(toml|lock)|build\\.rs|clippy\\.toml|rust-toolchain(\\.toml)?)$',
+  ].join('|'),
+);
+// Dependency changes may be low or medium too, when they check out (see npmProblem, cargoProblem).
+const NPM_FILES = ['package.json', 'package-lock.json'];
+const CARGO_FILES = ['src-tauri/Cargo.toml', 'src-tauri/Cargo.lock'];
+const CRATES_IO = ['registry+https://github.com/rust-lang/crates.io-index', 'sparse+https://index.crates.io/'];
+const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+
+export const fold = (p) => p.normalize('NFKD').toUpperCase().toLowerCase().normalize('NFKD');
 // Added lines that call these might overwrite, rename or delete a note. They are hints for the
 // risk agent, which reads the code and decides.
 const FILE_WRITE_API =
@@ -246,25 +260,18 @@ function prep(args) {
     git(where.root, 'worktree', 'add', '--quiet', '--detach', where.worktree, head);
   }
 
+  // A fresh run (Bat asks for one, say after a rethink) starts a new ledger: rounds, findings and
+  // earlier risk verdicts are set aside in a dated file, not deleted.
+  if (args.fresh && fs.existsSync(ledgerFile(pr))) {
+    fs.renameSync(ledgerFile(pr), path.join(dir, `ledger-until-${new Date().toISOString().replace(/[:.]/g, '-')}.json`));
+  }
   const ledger = loadLedger(pr, info.title);
   ledger.title = info.title;
   writeJson(ledgerFile(pr), ledger);
 
   const fullDiff = path.join(dir, `${short(head)}.full.diff`);
   fs.writeFileSync(fullDiff, `${git(where.root, 'diff', '--no-color', '--find-renames', `origin/main...${head}`)}\n`);
-  // -z, so names with quotes, backslashes or control characters come out as they are, not quoted.
-  const tokens = git(where.root, 'diff', '-z', '--name-status', '--find-renames', `origin/main...${head}`).split('\0');
-  const files = [];
-  for (let i = 0; tokens[i]; ) {
-    const change = tokens[i];
-    if (/^[RC]/.test(change)) {
-      files.push({ status: change, from: tokens[i + 1], path: tokens[i + 2] });
-      i += 3;
-    } else {
-      files.push({ status: change, path: tokens[i + 1] });
-      i += 2;
-    }
-  }
+  const files = changedFiles(where.root, `origin/main...${head}`);
   const bodyFile = path.join(dir, 'description.md');
   fs.writeFileSync(bodyFile, info.body ?? '');
 
@@ -347,6 +354,24 @@ function prep(args) {
             fixedClasses: [...new Set(ledger.findings.filter((f) => f.status === 'fixed').map((f) => f.class))].filter(Boolean),
           },
   });
+}
+
+// -z, so names with quotes, backslashes or control characters come out as they are, not quoted;
+// --raw, for the new file mode (a symlink or submodule is never low risk).
+export function changedFiles(root, range) {
+  const tokens = git(root, 'diff', '-z', '--raw', '--find-renames', range).split('\0');
+  const files = [];
+  for (let i = 0; tokens[i]; ) {
+    const [, mode, change] = /^:\d+ (\d+) \S+ \S+ (\S+)$/.exec(tokens[i]) ?? fail(`Can't read git's diff line "${tokens[i]}".`);
+    if (/^[RC]/.test(change)) {
+      files.push({ status: change, mode, from: tokens[i + 1], path: tokens[i + 2] });
+      i += 3;
+    } else {
+      files.push({ status: change, mode, path: tokens[i + 1] });
+      i += 2;
+    }
+  }
+  return files;
 }
 
 function nitCap(root) {
@@ -883,70 +908,7 @@ function risk(args) {
   const state = loadState(pr);
   const ledger = loadLedger(pr, state.title);
 
-  const pathTriggers = [];
-  for (const file of state.files) {
-    for (const p of [file.path, file.from].filter(Boolean)) {
-      const match = HIGH_RISK_PATHS.find(([pattern]) => pattern.test(p));
-      if (match) pathTriggers.push({ path: p, change: file.status, what: match[1] });
-    }
-  }
-  const scriptsAt = (ref) => {
-    try {
-      return JSON.stringify(JSON.parse(git(state.root, 'show', `${ref}:package.json`)).scripts ?? {});
-    } catch {
-      return null;
-    }
-  };
-  if (state.files.some((f) => f.path === 'package.json') && scriptsAt(state.mergeBase) !== scriptsAt(state.head)) {
-    pathTriggers.push({ path: 'package.json', change: 'M', what: 'the npm scripts that npm run check runs' });
-  }
-  // Cargo.toml outside its dependency tables decides how cargo test and clippy run ([lints],
-  // [lib] test = false, features), so it counts like the npm scripts; a dependency bump doesn't.
-  const cargoSettingsAt = (ref, file) => {
-    let text;
-    try {
-      text = git(state.root, 'show', `${ref}:${file}`);
-    } catch {
-      return null;
-    }
-    let inDependencies = false;
-    return text
-      .split('\n')
-      .filter((line) => {
-        const table = /^\s*\[\[?([^\]]+)\]\]?/.exec(line);
-        if (table) inDependencies = /(^|\.)(dev-|build-)?dependencies(\.|$)/.test(table[1].replace(/\s/g, ''));
-        return !inDependencies && line.trim() && !line.trim().startsWith('#');
-      })
-      .join('\n');
-  };
-  for (const file of state.files) {
-    if (/(^|\/)Cargo\.toml$/i.test(file.path) && cargoSettingsAt(state.mergeBase, file.path) !== cargoSettingsAt(state.head, file.path)) {
-      pathTriggers.push({ path: file.path, change: file.status, what: 'Cargo settings outside the dependency tables (lints, targets, features)' });
-    }
-  }
-  // On macOS two paths that differ only in case are one file, so either can overwrite the other,
-  // including a guarded one the rules above would have caught under its usual spelling.
-  const spellings = new Map();
-  for (const p of git(state.root, 'ls-tree', '-r', '-z', '--name-only', state.head).split('\0').filter(Boolean)) {
-    const parts = p.split('/');
-    for (let i = 1; i <= parts.length; i += 1) {
-      const prefix = parts.slice(0, i).join('/');
-      const key = prefix.toLowerCase();
-      if (!spellings.has(key)) spellings.set(key, new Set());
-      spellings.get(key).add(prefix);
-    }
-  }
-  for (const file of state.files) {
-    const parts = file.path.split('/');
-    for (let i = 1; i <= parts.length; i += 1) {
-      const prefix = parts.slice(0, i).join('/');
-      const twin = [...(spellings.get(prefix.toLowerCase()) ?? [])].find((p) => p !== prefix);
-      if (twin) {
-        pathTriggers.push({ path: file.path, change: file.status, what: `a path that differs only in case from ${twin}, the same file on macOS` });
-        break;
-      }
-    }
-  }
+  const pathTriggers = riskTriggers(state);
   ledger.riskTriggers = { head: state.head, pathTriggers };
   writeJson(ledgerFile(pr), ledger);
 
@@ -1000,6 +962,135 @@ function risk(args) {
       })),
     },
   });
+}
+
+// Every changed path that keeps the PR from being low or medium, with the reason.
+function riskTriggers(state) {
+  const triggers = [];
+  // Two names APFS folds to the same one are one file on macOS, so either can overwrite the other.
+  const spellings = new Map();
+  for (const p of git(state.root, 'ls-tree', '-r', '-z', '--name-only', state.head).split('\0').filter(Boolean)) {
+    const parts = p.split('/');
+    for (let i = 1; i <= parts.length; i += 1) {
+      const prefix = parts.slice(0, i).join('/');
+      if (!spellings.has(fold(prefix))) spellings.set(fold(prefix), new Set());
+      spellings.get(fold(prefix)).add(prefix);
+    }
+  }
+  const twinOf = (p) => {
+    const parts = p.split('/');
+    for (let i = 1; i <= parts.length; i += 1) {
+      const prefix = parts.slice(0, i).join('/');
+      const twin = [...(spellings.get(fold(prefix)) ?? [])].find((s) => s !== prefix);
+      if (twin) return twin;
+    }
+    return null;
+  };
+  const problems = new Map();
+  const dependencyProblem = (kind) => {
+    if (!problems.has(kind)) problems.set(kind, kind === 'npm' ? npmProblem(state) : cargoProblem(state));
+    return problems.get(kind);
+  };
+
+  for (const file of state.files) {
+    const high = (p, what) => triggers.push({ path: p, change: file.status, what });
+    if (file.mode !== '000000' && !/^100(644|755)$/.test(file.mode)) {
+      high(file.path, 'something other than a regular file (a symlink or a submodule)');
+      continue;
+    }
+    // A rename counts on both sides: moving scripts/check.mjs into src/ removes the check runner.
+    for (const p of [file.from, file.path].filter(Boolean)) {
+      const folded = fold(p);
+      const twin = twinOf(p);
+      if (twin) high(p, `a name macOS folds onto ${twin}, so the two are one file`);
+      // eslint-disable-next-line no-control-regex
+      else if (/[\x00-\x1f\x7f-\x9f]/.test(p) || (!folded.startsWith('demo-vault/') && !/^[\x20-\x7e]+$/.test(folded))) {
+        high(p, 'a name with characters outside plain ASCII');
+      } else if (NPM_FILES.includes(p) || CARGO_FILES.includes(p)) {
+        const problem = dependencyProblem(NPM_FILES.includes(p) ? 'npm' : 'cargo');
+        if (problem) high(p, `dependencies in a way that doesn't check out: ${problem}`);
+      } else if (NEVER_LOW.test(folded) || !LOW_RISK_PATHS.some(([pattern]) => pattern.test(folded))) {
+        high(p, 'a path outside the low-risk list');
+      }
+    }
+  }
+  return triggers;
+}
+
+const showAt = (state, ref, file) => tryRun('git', ['-C', state.root, 'show', `${ref}:${file}`]);
+const sortedEntries = (object) => JSON.stringify(Object.entries(object ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+
+// package.json may change only in its dependency lists; package-lock.json must agree with it;
+// and every package must come from the npm registry, at the tarball for its own name and
+// version, so a lockfile can't point eslint at another package or another host.
+function npmProblem(state) {
+  const parse = (text) => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
+  const before = parse(showAt(state, state.mergeBase, 'package.json')) ?? {};
+  const pkg = parse(showAt(state, state.head, 'package.json'));
+  const lock = parse(showAt(state, state.head, 'package-lock.json'));
+  if (!pkg || !lock?.packages) return 'package.json or package-lock.json is missing or not valid JSON';
+  const settings = (p) => sortedEntries(Object.fromEntries(Object.entries(p).filter(([key]) => !DEPENDENCY_FIELDS.includes(key))));
+  if (settings(before) !== settings(pkg)) return 'package.json changes more than its dependency lists';
+  const root = lock.packages[''] ?? {};
+  for (const field of DEPENDENCY_FIELDS) {
+    if (sortedEntries(root[field]) !== sortedEntries(pkg[field])) return `package-lock.json's ${field} don't match package.json's`;
+  }
+  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+    for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
+      if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(spec)) return `${name} isn't pinned to an exact version (${spec})`;
+      const installed = lock.packages[`node_modules/${name}`];
+      if (!installed && field !== 'optionalDependencies') return `package-lock.json doesn't install ${name}`;
+      if (installed && installed.version !== spec) return `package-lock.json installs ${name} ${installed.version}, package.json pins ${spec}`;
+    }
+  }
+  for (const [key, entry] of Object.entries(lock.packages)) {
+    if (!key || entry.inBundle) continue; // the root, and packages shipped inside a registry tarball
+    const name = entry.name ?? key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
+    const expected = `https://registry.npmjs.org/${name}/-/${name.split('/').pop()}-${entry.version}.tgz`;
+    if (entry.resolved !== expected) return `${key} resolves from ${entry.resolved ?? 'nowhere (a link)'}, not ${expected}`;
+    if (!entry.integrity) return `${key} has no integrity hash`;
+  }
+  return null;
+}
+
+// Cargo.toml may change only in its dependency tables, every dependency must come from crates.io
+// (no git, path or other registry), and Cargo.lock must take every crate from crates.io except
+// the app itself. cargo test and clippy run with --locked, so a Cargo.lock that doesn't match
+// Cargo.toml fails the check.
+function cargoProblem(state) {
+  const split = (text) => {
+    const tables = { dependencies: [], settings: [] };
+    let inDependencies = false;
+    for (const line of (text ?? '').split('\n')) {
+      const table = /^\s*\[\[?([^\]]+)\]\]?/.exec(line);
+      if (table) inDependencies = /(^|\.)(dev-|build-)?dependencies(\.|$)/.test(table[1].replace(/\s/g, ''));
+      const kept = line.replace(/#.*$/, '').trim();
+      if (kept) (inDependencies ? tables.dependencies : tables.settings).push(kept);
+    }
+    return tables;
+  };
+  const before = split(showAt(state, state.mergeBase, 'src-tauri/Cargo.toml'));
+  const after = split(showAt(state, state.head, 'src-tauri/Cargo.toml'));
+  if (!after.settings.length) return 'src-tauri/Cargo.toml is missing';
+  if (before.settings.join('\n') !== after.settings.join('\n')) return 'Cargo.toml changes more than its dependency tables';
+  const offRegistry = after.dependencies.find((line) => /(^|[{,\s])(git|path|registry|registry-index|branch|tag|rev)\s*=/.test(line));
+  if (offRegistry) return `a dependency that isn't from crates.io: ${offRegistry}`;
+  const own = /^name\s*=\s*"([^"]+)"/m.exec(after.settings.join('\n'))?.[1];
+  const lock = showAt(state, state.head, 'src-tauri/Cargo.lock');
+  if (!lock) return 'src-tauri/Cargo.lock is missing';
+  for (const block of lock.split(/^\[\[package\]\]$/m).slice(1)) {
+    const name = /^name = "([^"]+)"/m.exec(block)?.[1];
+    const source = /^source = "([^"]+)"/m.exec(block)?.[1];
+    if (!source && name !== own) return `Cargo.lock has ${name} with no source (a path dependency)`;
+    if (source && !CRATES_IO.includes(source)) return `Cargo.lock takes ${name} from ${source}, not crates.io`;
+  }
+  return null;
 }
 
 // Takes the risk workflow's result file, so the level isn't copied by hand. It never goes below
@@ -1097,6 +1188,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const value = argv[i];
     if (value === '--bootstrap') args.bootstrap = true;
+    else if (value === '--fresh') args.fresh = true;
     else if (value === '--ci') args.ci.push(argv[(i += 1)]);
     else if (value === '--merged-by') args.mergedBy = argv[(i += 1)];
     else if (value === '--outcome') args.outcome = argv[(i += 1)];

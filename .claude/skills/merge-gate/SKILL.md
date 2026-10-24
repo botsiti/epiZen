@@ -60,7 +60,7 @@ Blocking: every open Important finding, plus a red `npm run check`, which counts
 
 If nothing blocks, go to step 6.
 
-If this was the third round of this run and something still blocks, stop. Post a PR comment that says the gate stopped after three rounds and lists what is still open, run `G status <PR> failure "Stopped after 3 rounds: rethink the approach"`, write the log line (step 8 with `--outcome "stopped after 3 rounds"`), and tell Bat to rethink the approach instead of patching it again.
+If this was the third round of this run and something still blocks, stop. Post a PR comment that says the gate stopped after three rounds and lists what is still open, run `G status <PR> failure "Stopped after 3 rounds: rethink the approach"`, write the log line (step 8 with `--outcome "stopped after 3 rounds"`), and tell Bat to rethink the approach instead of patching it again. When Bat asks for a fresh run after the rethink, start with `G prep <PR> --fresh`: it sets the old ledger aside, so the rounds, findings and risk verdicts start over.
 
 Otherwise handle each blocking item:
 
@@ -73,11 +73,19 @@ Then run the next round from step 0. Prep reports `incremental`, so the reviewer
 
 ## 6. Set the risk
 
-1. `G risk <PR>` lists changed paths that always make a PR high risk, and added lines that call file-writing APIs, and prints `workflowArgs` for the risk call. The paths: the CI workflow and what it runs (`scripts/check.mjs` and its helper, the npm scripts, `test/setup.ts`, the configs of ESLint, TypeScript, Vite and Vitest, WebdriverIO, npm and Node, Clippy and the Rust toolchain, and Cargo.toml outside its dependency tables), this skill and the rest of `.claude/`, any CLAUDE.md or AGENTS.md, REVIEW.md, Tauri's capabilities and config, and any path that differs only in case from another. Matching ignores case.
+1. `G risk <PR>` checks every changed path against a short low-risk list and prints `workflowArgs` for the risk call, with each path that isn't on it and the added lines that call file-writing APIs. A PR can be low or medium only when every changed path, on both sides of a rename, is on the list:
+   - app code under `src/` and `src-tauri/src/`, and `index.html`;
+   - styles, images, fonts and other media, by file type, wherever they sit;
+   - tests in `test/` (`*.test.ts(x)`) and `e2e/specs/` (the harness around them, such as `test/setup.ts` or `e2e/wdio.conf.ts`, is a check config and not on the list);
+   - fixtures under `demo-vault/`;
+   - Markdown docs, except CLAUDE.md, REVIEW.md and AGENTS.md (any variant, at any depth);
+   - dependency changes that check out: `package.json` changes only in its dependency lists, `package-lock.json` agrees with it (same lists, every pin installed at that version), and every package resolves from the npm registry at the tarball for its own name and version; or `src-tauri/Cargo.toml` changes only in its dependency tables, every dependency is from crates.io (no git, path or other registry), and `Cargo.lock` takes every crate from crates.io except the app itself.
+
+   Names are folded the way APFS folds them (compatibility form, any case) before they're matched. A path is never low, even inside `src/`, when it is a dotfile or sits in a dot-folder, is a tool config (`*.config.*`, `tsconfig*.json`, a nested `package.json`, Cargo files, `build.rs`), isn't a regular file (a symlink or submodule), isn't plain ASCII (fixtures excepted), or folds onto another path in the tree. Everything else is high: this gate and the rest of `.claude/`, CI and the check configs, scripts, Tauri permissions and config, and any path nobody thought of. Code that overwrites, renames or deletes an existing note is high wherever it sits; the risk agents in item 2 decide that from the code.
 2. Run the same workflow script with those args. A fresh agent decides from the code whether the change overwrites, renames or deletes a note that already exists, and if not, whether it is low or medium risk. If nothing has made it high, a second fresh agent asks whether this change needs Bat anyway. That agent can only raise the risk.
 3. Save the result as `<runDir>/risk-<sha7>.json`, then `G decide <PR> <runDir>/risk-<sha7>.json`. It reads the level from the file and never sets less than high when a path trigger fired.
 
-High means any path trigger, any code that overwrites, renames or deletes an existing note, a yes from the second agent, or a risk call that failed to run. Nothing lowers it: once any head of the PR was rated high, `G decide` keeps the PR high on every later head and rerun, because the risk agents can answer differently the second time.
+High means any path off the low-risk list, any code that overwrites, renames or deletes an existing note, a yes from the second agent, or a risk call that failed to run. Nothing lowers it: once any head of the PR was rated high, `G decide` keeps the PR high on every later head and rerun, because the risk agents can answer differently the second time.
 
 ## 7. Merge
 
