@@ -449,9 +449,14 @@ function waitForQuiet(lockDir) {
     let held = false;
     try {
       fs.mkdirSync(lockDir);
-      fs.writeFileSync(pidFile, String(process.pid));
       held = true;
-    } catch {
+    } catch (error) {
+      // Only "it exists" means someone holds it; anything else would loop here forever.
+      if (error.code !== 'EEXIST') fail(`Can't take the check lock at ${lockDir}: ${error.message}`);
+    }
+    if (held) {
+      fs.writeFileSync(pidFile, String(process.pid));
+    } else {
       let age;
       try {
         age = Date.now() - fs.statSync(lockDir).mtimeMs;
