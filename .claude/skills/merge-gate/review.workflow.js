@@ -238,27 +238,29 @@ ${JSON.stringify(FIXED, null, 1)}`,
     seen.add(i)
     return rootOf(d, seen)
   }
-  const unique = []
-  const repeats = []
-  const position = new Map()
+  // Repeat and reopen are decided once per group of duplicates, so a settled finding can't come
+  // back through a duplicate of the member that was marked as its repeat.
+  const groups = new Map()
   candidates.forEach((c, i) => {
     const item = byIndex.get(i) || {}
-    const reopens = [item.reopens, item.repeat_of].find((id) => id && fixedIds.has(id)) || null
-    // A reopen wins over a repeat, and an id that isn't a settled finding is no repeat at all.
-    if (!reopens && item.repeat_of && settledIds.has(item.repeat_of)) {
-      repeats.push({ ...c, reason: 'repeat', why: [`repeats ${item.repeat_of}`] })
-      return
-    }
     const root = rootOf(i, new Set())
-    if (root !== i && position.has(root)) {
-      const kept = unique[position.get(root)]
-      kept.found_by = [...new Set([...kept.found_by, ...c.found_by])]
-      if (reopens && !kept.reopens) kept.reopens = reopens
-      return
-    }
-    position.set(i, unique.length)
-    unique.push(reopens ? { ...c, reopens } : { ...c })
+    if (!groups.has(root)) groups.set(root, { members: [], repeatOf: null, reopens: null })
+    const group = groups.get(root)
+    group.members.push(c)
+    group.reopens = group.reopens || [item.reopens, item.repeat_of].find((id) => id && fixedIds.has(id)) || null
+    if (item.repeat_of && settledIds.has(item.repeat_of)) group.repeatOf = group.repeatOf || item.repeat_of
   })
+  const unique = []
+  const repeats = []
+  for (const [root, group] of groups) {
+    // A reopen wins over a repeat, and an id that isn't a settled finding is no repeat at all.
+    if (!group.reopens && group.repeatOf) {
+      for (const c of group.members) repeats.push({ ...c, reason: 'repeat', why: [`repeats ${group.repeatOf}`] })
+      continue
+    }
+    const kept = { ...candidates[root], found_by: [...new Set(group.members.flatMap((c) => c.found_by))] }
+    unique.push(group.reopens ? { ...kept, reopens: group.reopens } : kept)
+  }
   return { unique, repeats }
 }
 
