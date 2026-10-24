@@ -52,6 +52,8 @@ export function NoteContent({ path, text, files, onOpenLink }: NoteProps & { tex
         const link = parseVaultUrl(href);
         if (link?.kind === 'link') {
           const found = resolveLink(link.target, files, path);
+          // A plain link to an image has nowhere to go yet, so it shouldn't look clickable.
+          if (found?.kind === 'image') return <span className="wikilink-file">{children}</span>;
           const open = (event: MouseEvent) => {
             event.preventDefault();
             onOpenLink(link.target, path);

@@ -1,0 +1,4 @@
+# `tauri build` sets this for macOS; plain cargo (test, clippy) must match it or each
+# invalidates the other's build cache. Keep in step with bundle.macOS.minimumSystemVersion.
+[env]
+MACOSX_DEPLOYMENT_TARGET = "10.13"

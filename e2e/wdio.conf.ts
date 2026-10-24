@@ -3,16 +3,18 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TauriCapabilities } from '@wdio/tauri-service';
-import { APP, DEMO_VAULT, EVIDENCE, vaultCopy } from './paths';
+import { APP, COPY_PREFIX, DEMO_VAULT, EVIDENCE, vaultCopy } from './paths';
 
 // Tests only ever touch a copy of the demo vault. The launcher makes the copy once;
 // the test workers it starts inherit the path through the environment.
 process.env.EPIZEN_E2E_VAULT ??= copyDemoVault();
+// Refuses anything that isn't such a copy, before an app is opened on it or it is deleted.
+vaultCopy();
 // The app inherits this environment. A vault set in your shell must not leak into a test.
 delete process.env.EPIZEN_VAULT;
 
 function copyDemoVault() {
-  const copy = join(mkdtempSync(join(tmpdir(), 'epizen-e2e-')), 'demo-vault');
+  const copy = join(mkdtempSync(join(tmpdir(), COPY_PREFIX)), 'demo-vault');
   cpSync(DEMO_VAULT, copy, { recursive: true });
   return copy;
 }

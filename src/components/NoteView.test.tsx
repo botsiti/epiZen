@@ -75,6 +75,17 @@ describe('NoteContent', () => {
     expect(container.querySelector('pre code')).toHaveTextContent('[[not a link]]');
   });
 
+  it('survives a hand-written link that does not decode', () => {
+    render(<NoteContent path="d.md" text="[broken](wikilink:%E0) and more" files={files} onOpenLink={vi.fn()} />);
+    expect(screen.getByText('broken')).toBeInTheDocument();
+  });
+
+  it('does not make a plain link to an image look clickable', () => {
+    render(<NoteContent path="d.md" text="See [[glasshouse-weather.svg]]." files={files} onOpenLink={vi.fn()} />);
+    expect(screen.queryByRole('link', { name: 'glasshouse-weather.svg' })).toBeNull();
+    expect(screen.getByText('glasshouse-weather.svg')).toHaveClass('wikilink-file');
+  });
+
   it('shows embedded images from the vault', async () => {
     renderDay();
     const cover = await screen.findByTestId('vault-image');
