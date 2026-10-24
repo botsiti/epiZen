@@ -19,19 +19,21 @@ const COMMENT_LIMIT = 60_000;
 // it. CI is the workflow and also what it runs: the check runner, the configs of the checks in
 // it, and the npm scripts (compared separately, so a dependency bump in package.json doesn't
 // count). Claude's project config can change what the gate itself runs, and Tauri's config can
-// declare capabilities inline as well as in capabilities/.
+// declare capabilities inline as well as in capabilities/. Matching ignores case, because macOS
+// checks `.Claude/x` out into `.claude/`, and a rule also matches the directory itself, which a
+// symlink can replace.
 const HIGH_RISK_PATHS = [
-  [/^\.github\/workflows\//, 'the CI workflow'],
-  [/^scripts\/(check|vault-snapshot)\.mjs$/, 'what npm run check runs'],
+  [/^\.github\/workflows(\/|$)/i, 'the CI workflow'],
+  [/^scripts\/(check|vault-snapshot)\.mjs$/i, 'what npm run check runs'],
   [
-    /^(eslint\.config\.js|vite\.config\.ts|tsconfig\.json|e2e\/tsconfig\.json|e2e\/wdio\.conf\.ts|rust-toolchain\.toml|(src-tauri\/)?clippy\.toml|(src-tauri\/)?\.cargo\/.*)$/,
+    /^(eslint\.config\.js|vite\.config\.ts|tsconfig\.json|e2e\/tsconfig\.json|e2e\/wdio\.conf\.ts|rust-toolchain\.toml|(src-tauri\/)?clippy\.toml|(src-tauri\/)?\.cargo(\/.*)?)$/i,
     'the configuration of a check',
   ],
-  [/^\.claude\/skills\/merge-gate\//, 'the merge-gate skill'],
-  [/^\.claude\//, "Claude's project config (agents, hooks, settings, skills)"],
-  [/^CLAUDE\.md$/, 'CLAUDE.md'],
-  [/^REVIEW\.md$/, 'REVIEW.md'],
-  [/^src-tauri\/(capabilities\/|tauri(\.[\w-]+)?\.conf\.json$)/, 'what the app may touch (Tauri capabilities and config)'],
+  [/^\.claude\/skills\/merge-gate(\/|$)/i, 'the merge-gate skill'],
+  [/^\.claude(\/|$)/i, "Claude's project config (agents, hooks, settings, skills)"],
+  [/^CLAUDE\.md$/i, 'CLAUDE.md'],
+  [/^REVIEW\.md$/i, 'REVIEW.md'],
+  [/^src-tauri\/(capabilities(\/|$)|tauri(\.[\w-]+)?\.conf\.json$)/i, 'what the app may touch (Tauri capabilities and config)'],
 ];
 // Added lines that call these might overwrite, rename or delete a note. They are hints for the
 // risk agent, which reads the code and decides.
@@ -250,13 +252,19 @@ function prep(args) {
 
   const fullDiff = path.join(dir, `${short(head)}.full.diff`);
   fs.writeFileSync(fullDiff, `${git(where.root, 'diff', '--no-color', '--find-renames', `origin/main...${head}`)}\n`);
-  const files = git(where.root, 'diff', '--name-status', '--find-renames', `origin/main...${head}`)
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const [change, ...paths] = line.split('\t');
-      return { status: change, path: paths.at(-1), ...(paths.length > 1 ? { from: paths[0] } : {}) };
-    });
+  // -z, so names with quotes, backslashes or control characters come out as they are, not quoted.
+  const tokens = git(where.root, 'diff', '-z', '--name-status', '--find-renames', `origin/main...${head}`).split('\0');
+  const files = [];
+  for (let i = 0; tokens[i]; ) {
+    const change = tokens[i];
+    if (/^[RC]/.test(change)) {
+      files.push({ status: change, from: tokens[i + 1], path: tokens[i + 2] });
+      i += 3;
+    } else {
+      files.push({ status: change, path: tokens[i + 1] });
+      i += 2;
+    }
+  }
   const bodyFile = path.join(dir, 'description.md');
   fs.writeFileSync(bodyFile, info.body ?? '');
 
@@ -886,6 +894,29 @@ function risk(args) {
   };
   if (state.files.some((f) => f.path === 'package.json') && scriptsAt(state.mergeBase) !== scriptsAt(state.head)) {
     pathTriggers.push({ path: 'package.json', change: 'M', what: 'the npm scripts that npm run check runs' });
+  }
+  // On macOS two paths that differ only in case are one file, so either can overwrite the other,
+  // including a guarded one the rules above would have caught under its usual spelling.
+  const spellings = new Map();
+  for (const p of git(state.root, 'ls-tree', '-r', '-z', '--name-only', state.head).split('\0').filter(Boolean)) {
+    const parts = p.split('/');
+    for (let i = 1; i <= parts.length; i += 1) {
+      const prefix = parts.slice(0, i).join('/');
+      const key = prefix.toLowerCase();
+      if (!spellings.has(key)) spellings.set(key, new Set());
+      spellings.get(key).add(prefix);
+    }
+  }
+  for (const file of state.files) {
+    const parts = file.path.split('/');
+    for (let i = 1; i <= parts.length; i += 1) {
+      const prefix = parts.slice(0, i).join('/');
+      const twin = [...(spellings.get(prefix.toLowerCase()) ?? [])].find((p) => p !== prefix);
+      if (twin) {
+        pathTriggers.push({ path: file.path, change: file.status, what: `a path that differs only in case from ${twin}, the same file on macOS` });
+        break;
+      }
+    }
   }
   ledger.riskTriggers = { head: state.head, pathTriggers };
   writeJson(ledgerFile(pr), ledger);
