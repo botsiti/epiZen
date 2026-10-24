@@ -23,15 +23,15 @@ const COMMENT_LIMIT = 60_000;
 // checks `.Claude/x` out into `.claude/`, and a rule also matches the directory itself, which a
 // symlink can replace.
 const HIGH_RISK_PATHS = [
-  [/^\.github\/workflows(\/|$)/i, 'the CI workflow'],
+  [/^\.github\/(workflows|actions)(\/|$)/i, 'the CI workflow'],
   [/^scripts\/(check|vault-snapshot)\.mjs$/i, 'what npm run check runs'],
   [
-    /^(eslint\.config\.js|vite\.config\.ts|tsconfig\.json|e2e\/tsconfig\.json|e2e\/wdio\.conf\.ts|rust-toolchain\.toml|(src-tauri\/)?clippy\.toml|(src-tauri\/)?\.cargo(\/.*)?)$/i,
+    /^(eslint\.config\.[cm]?[jt]s|vite(st)?\.config\.[cm]?[jt]s|tsconfig(\.[\w-]+)?\.json|e2e\/tsconfig\.json|e2e\/wdio\.conf\.[cm]?[jt]s|test\/setup\.ts|\.npmrc|\.nvmrc|rust-toolchain(\.toml)?|(src-tauri\/)?clippy\.toml|(src-tauri\/)?\.cargo(\/.*)?)$/i,
     'the configuration of a check',
   ],
   [/^\.claude\/skills\/merge-gate(\/|$)/i, 'the merge-gate skill'],
   [/^\.claude(\/|$)/i, "Claude's project config (agents, hooks, settings, skills)"],
-  [/^CLAUDE\.md$/i, 'CLAUDE.md'],
+  [/(^|\/)(CLAUDE|AGENTS)(\.local)?\.md$/i, 'instructions Claude or Codex follow (CLAUDE.md, AGENTS.md)'],
   [/^REVIEW\.md$/i, 'REVIEW.md'],
   [/^src-tauri\/(capabilities(\/|$)|tauri(\.[\w-]+)?\.conf\.json$)/i, 'what the app may touch (Tauri capabilities and config)'],
 ];
@@ -894,6 +894,30 @@ function risk(args) {
   };
   if (state.files.some((f) => f.path === 'package.json') && scriptsAt(state.mergeBase) !== scriptsAt(state.head)) {
     pathTriggers.push({ path: 'package.json', change: 'M', what: 'the npm scripts that npm run check runs' });
+  }
+  // Cargo.toml outside its dependency tables decides how cargo test and clippy run ([lints],
+  // [lib] test = false, features), so it counts like the npm scripts; a dependency bump doesn't.
+  const cargoSettingsAt = (ref, file) => {
+    let text;
+    try {
+      text = git(state.root, 'show', `${ref}:${file}`);
+    } catch {
+      return null;
+    }
+    let inDependencies = false;
+    return text
+      .split('\n')
+      .filter((line) => {
+        const table = /^\s*\[\[?([^\]]+)\]\]?/.exec(line);
+        if (table) inDependencies = /(^|\.)(dev-|build-)?dependencies(\.|$)/.test(table[1].replace(/\s/g, ''));
+        return !inDependencies && line.trim() && !line.trim().startsWith('#');
+      })
+      .join('\n');
+  };
+  for (const file of state.files) {
+    if (/(^|\/)Cargo\.toml$/i.test(file.path) && cargoSettingsAt(state.mergeBase, file.path) !== cargoSettingsAt(state.head, file.path)) {
+      pathTriggers.push({ path: file.path, change: file.status, what: 'Cargo settings outside the dependency tables (lints, targets, features)' });
+    }
   }
   // On macOS two paths that differ only in case are one file, so either can overwrite the other,
   // including a guarded one the rules above would have caught under its usual spelling.
