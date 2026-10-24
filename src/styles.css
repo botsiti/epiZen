@@ -405,6 +405,10 @@ code {
   text-underline-offset: 3px;
 }
 
+.note-body .wikilink-file {
+  color: var(--text-muted);
+}
+
 .note-body a.is-missing {
   color: var(--text-muted);
   text-decoration: underline dotted var(--text-faint);

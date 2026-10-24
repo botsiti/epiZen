@@ -19,6 +19,8 @@ Look hardest at:
 - Obsidian compatibility: a file Epizen writes must still open in Obsidian and mean the same thing.
 - The `e2e` feature or its WebDriver plugins reaching a release build.
 - Tests that read or write `demo-vault/` itself instead of a copy.
+- Any recursive delete, in tests and scripts too. It may only remove a temporary folder the
+  same code just created, never a path that came from outside (an argument, an env variable).
 
 ## Severity
 

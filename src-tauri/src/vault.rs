@@ -111,7 +111,10 @@ impl Vault {
             let file_type = entry.file_type()?;
             let path = entry.path();
             if file_type.is_dir() {
-                self.walk(&path, files)?;
+                // One unreadable folder shouldn't hide the rest of the vault.
+                if self.walk(&path, files).is_err() {
+                    continue;
+                }
             } else if file_type.is_file()
                 && let Some(kind) = kind_of(&path)
                 && let Some(relative) = self.relative(&path)
@@ -260,6 +263,20 @@ mod tests {
             Err(VaultError::InvalidPath(_))
         ));
         assert!(vault.list_files().unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_folder_does_not_hide_the_rest() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, vault) = vault_with(&[("Archive/old.md", ""), ("today.md", "")]);
+        let archive = dir.path().join("Archive");
+        fs::set_permissions(&archive, fs::Permissions::from_mode(0o000)).unwrap();
+        let listed = vault.list_files();
+        fs::set_permissions(&archive, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let paths: Vec<String> = listed.unwrap().into_iter().map(|f| f.path).collect();
+        assert_eq!(paths, vec!["today.md"]);
     }
 
     #[test]

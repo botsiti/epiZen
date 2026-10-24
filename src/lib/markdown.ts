@@ -10,11 +10,18 @@ const EMBED = 'embed:';
 
 export type VaultUrl = { kind: 'link' | 'embed'; target: string };
 
-/** Reads back the URLs that `remarkWikilinks` puts on link and image nodes. */
+/**
+ * Reads back the URLs that `remarkWikilinks` puts on link and image nodes. A note can also
+ * spell one out by hand (`[x](wikilink:%E0)`); one that doesn't decode is not ours.
+ */
 export function parseVaultUrl(url: string | undefined): VaultUrl | undefined {
-  if (url?.startsWith(LINK)) return { kind: 'link', target: decodeURIComponent(url.slice(LINK.length)) };
-  if (url?.startsWith(EMBED)) return { kind: 'embed', target: decodeURIComponent(url.slice(EMBED.length)) };
-  return undefined;
+  const kind = url?.startsWith(LINK) ? 'link' : url?.startsWith(EMBED) ? 'embed' : undefined;
+  if (!url || !kind) return undefined;
+  try {
+    return { kind, target: decodeURIComponent(url.slice(kind === 'link' ? LINK.length : EMBED.length)) };
+  } catch {
+    return undefined;
+  }
 }
 
 /** react-markdown strips unknown URL schemes. Keep ours and sanitize the rest as usual. */
