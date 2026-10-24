@@ -15,17 +15,23 @@ const STATUS_CONTEXT = 'merge-gate';
 // GitHub rejects comments over 65,536 characters.
 const COMMENT_LIMIT = 60_000;
 
-// A change to any of these makes the PR high risk, whatever else it does. CI is the workflow
-// and also what it runs: the check runner, the configs of the checks in it, and the npm
-// scripts (compared separately, so a dependency bump in package.json doesn't count).
+// A change to any of these makes the PR high risk, whatever else it does; the first match names
+// it. CI is the workflow and also what it runs: the check runner, the configs of the checks in
+// it, and the npm scripts (compared separately, so a dependency bump in package.json doesn't
+// count). Claude's project config can change what the gate itself runs, and Tauri's config can
+// declare capabilities inline as well as in capabilities/.
 const HIGH_RISK_PATHS = [
   [/^\.github\/workflows\//, 'the CI workflow'],
   [/^scripts\/(check|vault-snapshot)\.mjs$/, 'what npm run check runs'],
-  [/^(eslint\.config\.js|vite\.config\.ts|tsconfig\.json|e2e\/tsconfig\.json|e2e\/wdio\.conf\.ts)$/, 'the configuration of a check'],
+  [
+    /^(eslint\.config\.js|vite\.config\.ts|tsconfig\.json|e2e\/tsconfig\.json|e2e\/wdio\.conf\.ts|rust-toolchain\.toml|(src-tauri\/)?clippy\.toml|(src-tauri\/)?\.cargo\/.*)$/,
+    'the configuration of a check',
+  ],
   [/^\.claude\/skills\/merge-gate\//, 'the merge-gate skill'],
+  [/^\.claude\//, "Claude's project config (agents, hooks, settings, skills)"],
   [/^CLAUDE\.md$/, 'CLAUDE.md'],
   [/^REVIEW\.md$/, 'REVIEW.md'],
-  [/^src-tauri\/capabilities\//, 'what the app may touch (Tauri capabilities)'],
+  [/^src-tauri\/(capabilities\/|tauri(\.[\w-]+)?\.conf\.json$)/, 'what the app may touch (Tauri capabilities and config)'],
 ];
 // Added lines that call these might overwrite, rename or delete a note. They are hints for the
 // risk agent, which reads the code and decides.
@@ -838,9 +844,8 @@ function risk(args) {
   const pathTriggers = [];
   for (const file of state.files) {
     for (const p of [file.path, file.from].filter(Boolean)) {
-      for (const [pattern, what] of HIGH_RISK_PATHS) {
-        if (pattern.test(p)) pathTriggers.push({ path: p, change: file.status, what });
-      }
+      const match = HIGH_RISK_PATHS.find(([pattern]) => pattern.test(p));
+      if (match) pathTriggers.push({ path: p, change: file.status, what: match[1] });
     }
   }
   const scriptsAt = (ref) => {

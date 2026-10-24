@@ -73,7 +73,7 @@ Then run the next round from step 0. Prep reports `incremental`, so the reviewer
 
 ## 6. Set the risk
 
-1. `G risk <PR>` lists changed paths that always make a PR high risk, and added lines that call file-writing APIs, and prints `workflowArgs` for the risk call. The paths: the CI workflow and what it runs (`scripts/check.mjs` and its helper, the npm scripts, the configs of ESLint, TypeScript, Vitest and WebdriverIO), this skill, CLAUDE.md, REVIEW.md, and `src-tauri/capabilities/`.
+1. `G risk <PR>` lists changed paths that always make a PR high risk, and added lines that call file-writing APIs, and prints `workflowArgs` for the risk call. The paths: the CI workflow and what it runs (`scripts/check.mjs` and its helper, the npm scripts, the configs of ESLint, TypeScript, Vitest, WebdriverIO, Cargo, Clippy and the Rust toolchain), this skill and the rest of `.claude/`, CLAUDE.md, REVIEW.md, and Tauri's capabilities and config.
 2. Run the same workflow script with those args. A fresh agent decides from the code whether the change overwrites, renames or deletes a note that already exists, and if not, whether it is low or medium risk. If nothing has made it high, a second fresh agent asks whether this change needs Bat anyway. That agent can only raise the risk.
 3. Save the result as `<runDir>/risk-<sha7>.json`, then `G decide <PR> <runDir>/risk-<sha7>.json`. It reads the level from the file and never sets less than high when a path trigger fired.
 
