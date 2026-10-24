@@ -77,7 +77,7 @@ Then run the next round from step 0. Prep reports `incremental`, so the reviewer
 2. Run the same workflow script with those args. A fresh agent decides from the code whether the change overwrites, renames or deletes a note that already exists, and if not, whether it is low or medium risk. If nothing has made it high, a second fresh agent asks whether this change needs Bat anyway. That agent can only raise the risk.
 3. Save the result as `<runDir>/risk-<sha7>.json`, then `G decide <PR> <runDir>/risk-<sha7>.json`. It reads the level from the file and never sets less than high when a path trigger fired.
 
-High means any path trigger, any code that overwrites, renames or deletes an existing note, a yes from the second agent, or a risk call that failed to run. Nothing lowers it.
+High means any path trigger, any code that overwrites, renames or deletes an existing note, a yes from the second agent, or a risk call that failed to run. Nothing lowers it: once any head of the PR was rated high, `G decide` keeps the PR high on every later head and rerun, because the risk agents can answer differently the second time.
 
 ## 7. Merge
 

@@ -908,8 +908,10 @@ function risk(args) {
   });
 }
 
-// Takes the risk workflow's result file, so the level isn't copied by hand, and never goes
-// below high when a path trigger fired for this head.
+// Takes the risk workflow's result file, so the level isn't copied by hand. It never goes below
+// high when a path trigger fired, and once any head of the PR was rated high the PR stays high:
+// the risk agents can answer differently on a rerun, and a merge from main or a no-op commit
+// doesn't remove what made it high.
 function decide(args) {
   const pr = prNumber(args);
   const state = loadState(pr);
@@ -922,8 +924,12 @@ function decide(args) {
     const reason = `changes ${t.what} (${t.path})`;
     if (!reasons.includes(reason)) reasons.push(reason);
   }
+  for (const reason of ledger.highReasons ?? []) {
+    if (!reasons.includes(reason)) reasons.push(reason);
+  }
   const level = reasons.length ? 'high' : result.level;
   if (!['low', 'medium', 'high'].includes(level)) fail(`Unknown risk level "${level}".`);
+  if (level === 'high') ledger.highReasons = reasons;
   ledger.risk = level;
   ledger.riskWhy = reasons;
   ledger.riskHead = state.head;
