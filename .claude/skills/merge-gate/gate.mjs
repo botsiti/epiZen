@@ -117,8 +117,12 @@ function readJson(file) {
   }
 }
 
+// Written next to the target and renamed over it, so a crash or a full disk mid-write leaves the
+// old file whole instead of half a file.
 function writeJson(file, value) {
-  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+  const temp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
+  fs.renameSync(temp, file);
 }
 
 const stateFile = (pr) => path.join(runDir(pr), 'state.json');
@@ -128,19 +132,29 @@ function loadState(pr) {
   return readJson(stateFile(pr)) ?? fail(`No state for PR ${pr}: run "prep ${pr}" first.`);
 }
 
+// A ledger that exists but can't be read stops the gate: starting a blank one would forget its
+// findings and risk verdicts. A new ledger keeps the high verdicts of every ledger set aside
+// before it (prep --fresh), so no way of starting over forgets that this PR was rated high.
 function loadLedger(pr, title = '') {
-  return (
-    readJson(ledgerFile(pr)) ?? {
-      pr,
-      title,
-      startedAt: new Date().toISOString(),
-      rounds: [],
-      findings: [],
-      dropped: [],
-      checks: {},
-      reviewedHead: null,
-    }
-  );
+  const file = ledgerFile(pr);
+  const unreadable = (f) => fail(`${f} isn't valid JSON. Restore it before running the gate again.`);
+  if (fs.existsSync(file)) return readJson(file) ?? unreadable(file);
+  const dir = path.dirname(file);
+  const highReasons = fs
+    .readdirSync(dir)
+    .filter((name) => /^ledger-until-.*\.json$/.test(name))
+    .flatMap((name) => (readJson(path.join(dir, name)) ?? unreadable(path.join(dir, name))).highReasons ?? []);
+  return {
+    pr,
+    title,
+    startedAt: new Date().toISOString(),
+    rounds: [],
+    findings: [],
+    dropped: [],
+    checks: {},
+    reviewedHead: null,
+    ...(highReasons.length ? { highReasons: [...new Set(highReasons)] } : {}),
+  };
 }
 
 function prNumber(args) {
@@ -261,12 +275,11 @@ function prep(args) {
   }
 
   // A fresh run (Bat asks for one, say after a rethink) starts a new ledger: rounds and findings
-  // are set aside in a dated file, not deleted. A high verdict carries over, since Bat asked for a
-  // fresh review, not for the PR to be rated again from nothing.
+  // are set aside in a dated file, not deleted. High verdicts carry over through loadLedger, since
+  // Bat asked for a fresh review, not for the PR to be rated again from nothing.
   if (args.fresh && fs.existsSync(ledgerFile(pr))) {
-    const highReasons = readJson(ledgerFile(pr))?.highReasons ?? [];
+    loadLedger(pr); // an unreadable ledger isn't set aside unread
     fs.renameSync(ledgerFile(pr), path.join(dir, `ledger-until-${new Date().toISOString().replace(/[:.]/g, '-')}.json`));
-    if (highReasons.length) writeJson(ledgerFile(pr), { ...loadLedger(pr, info.title), highReasons });
   }
   const ledger = loadLedger(pr, info.title);
   ledger.title = info.title;
