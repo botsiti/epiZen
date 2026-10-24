@@ -1049,9 +1049,24 @@ function npmProblem(state) {
       if (installed && installed.version !== spec) return `package-lock.json installs ${name} ${installed.version}, package.json pins ${spec}`;
     }
   }
+  // The lockfile is the PR's own, so none of its fields vouch for themselves: whatever lets an
+  // entry skip the registry check, or names the package it installs, must already be on main.
+  const mainLock = parse(showAt(state, state.mergeBase, 'package-lock.json'))?.packages ?? {};
   for (const [key, entry] of Object.entries(lock.packages)) {
-    if (!key || entry.inBundle) continue; // the root, and packages shipped inside a registry tarball
-    const name = entry.name ?? key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
+    if (!key) continue;
+    const folder = key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
+    // A package bundled inside another's tarball comes from that tarball. One marked bundled at
+    // the top level is still downloaded from `resolved`, so it gets no pass.
+    if (entry.inBundle) {
+      if (key.split('node_modules/').length > 2 && mainLock[key]?.inBundle) continue;
+      return `${key} is marked as bundled, which main doesn't have`;
+    }
+    // An alias installs one package under another's name; a new one could name eslint's entry
+    // after any package on the registry.
+    if (entry.name && entry.name !== folder && mainLock[key]?.name !== entry.name) {
+      return `${key} installs ${entry.name} under another name, which main doesn't`;
+    }
+    const name = entry.name ?? folder;
     const expected = `https://registry.npmjs.org/${name}/-/${name.split('/').pop()}-${entry.version}.tgz`;
     if (entry.resolved !== expected) return `${key} resolves from ${entry.resolved ?? 'nowhere (a link)'}, not ${expected}`;
     if (!entry.integrity) return `${key} has no integrity hash`;
@@ -1060,8 +1075,8 @@ function npmProblem(state) {
 }
 
 // Cargo.toml may change only in its dependency tables, every dependency must come from crates.io
-// (no git, path or other registry), and Cargo.lock must take every crate from crates.io except
-// the app itself. cargo test and clippy run with --locked, so a Cargo.lock that doesn't match
+// under its own name (no git, path, other registry or `package =` rename), and Cargo.lock must
+// take every crate from crates.io, except the app itself, with nothing replaced or patched. cargo test and clippy run with --locked, so a Cargo.lock that doesn't match
 // Cargo.toml fails the check.
 function cargoProblem(state) {
   const split = (text) => {
@@ -1081,9 +1096,13 @@ function cargoProblem(state) {
   if (before.settings.join('\n') !== after.settings.join('\n')) return 'Cargo.toml changes more than its dependency tables';
   const offRegistry = after.dependencies.find((line) => /(^|[{,\s])(git|path|registry|registry-index|branch|tag|rev)\s*=/.test(line));
   if (offRegistry) return `a dependency that isn't from crates.io: ${offRegistry}`;
+  // `package =` installs another crate under a dependency's name, like an npm alias.
+  const renamed = after.dependencies.find((line) => /(^|[{,\s])package\s*=/.test(line));
+  if (renamed) return `a dependency renamed to another crate: ${renamed}`;
   const own = /^name\s*=\s*"([^"]+)"/m.exec(after.settings.join('\n'))?.[1];
   const lock = showAt(state, state.head, 'src-tauri/Cargo.lock');
   if (!lock) return 'src-tauri/Cargo.lock is missing';
+  if (/^(replace\s*=|\[\[patch\.)/m.test(lock)) return 'Cargo.lock replaces or patches a crate';
   for (const block of lock.split(/^\[\[package\]\]$/m).slice(1)) {
     const name = /^name = "([^"]+)"/m.exec(block)?.[1];
     const source = /^source = "([^"]+)"/m.exec(block)?.[1];
