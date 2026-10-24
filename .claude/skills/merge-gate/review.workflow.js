@@ -53,8 +53,9 @@ const GROUPS = {
           index: { type: 'integer' },
           duplicate_of: { type: ['integer', 'null'] },
           repeat_of: { type: ['string', 'null'] },
+          reopens: { type: ['string', 'null'] },
         },
-        required: ['index', 'duplicate_of', 'repeat_of'],
+        required: ['index', 'duplicate_of', 'repeat_of', 'reopens'],
       },
     },
   },
@@ -89,6 +90,19 @@ const NEEDS_BAT = {
 }
 
 const short = (sha) => (sha || '').slice(0, 7)
+const FIXED = (A.previous || []).filter((p) => p.status === 'fixed')
+const SETTLED = (A.previous || []).filter((p) => p.status !== 'fixed')
+
+// An agent that dies returns null. Ask once more before counting it as missing; a review with
+// a missing reviewer or voter is reported as incomplete and never posted.
+async function ask(prompt, opts, answered) {
+  const done = answered || ((r) => r !== null && r !== undefined)
+  const first = await agent(prompt, opts)
+  if (done(first)) return first
+  log(`${opts.label} didn't answer; asking once more.`)
+  const second = await agent(prompt, { ...opts, label: `${opts.label}:retry` })
+  return done(second) ? second : null
+}
 const bySeverity = (a, b) =>
   SEVERITY.indexOf(a.severity) - SEVERITY.indexOf(b.severity) ||
   TAGS.indexOf(a.tag) - TAGS.indexOf(b.tag) ||
@@ -126,9 +140,13 @@ function finderPrompt(lens) {
     A.mode === 'incremental' && A.fixedClasses.length
       ? `\n- Earlier rounds fixed these bug classes: ${A.fixedClasses.join('; ')}. Look through the whole PR diff for any instance of them that is still there, and report each one.`
       : ''
-  const previous = A.previous.length
-    ? `\n\nAlready raised or already rejected in earlier rounds. Don't report these again, even reworded:\n${A.previous.map((p) => `- ${p.id} ${p.file}:${p.line} ${p.title} (${p.status})`).join('\n')}`
-    : ''
+  const previous =
+    (SETTLED.length
+      ? `\n\nAlready raised, answered or rejected in earlier rounds. Don't report these again, even reworded:\n${SETTLED.map((p) => `- ${p.id} ${p.file}:${p.line} ${p.title} (${p.status})`).join('\n')}`
+      : '') +
+    (FIXED.length
+      ? `\n\nFixed in earlier rounds. Check that each fix holds; if the problem is still there, report it again:\n${FIXED.map((p) => `- ${p.id} ${p.file}:${p.line} ${p.title}`).join('\n')}`
+      : '')
   return `You are one of four independent reviewers of ${WHERE}
 
 ${scope}
@@ -150,37 +168,35 @@ const CODEX_PROMPT = `Run this command with the Bash tool, with timeout 600000, 
 
 node ${A.skillDir}/gate.mjs codex ${A.pr}
 
-It runs \`codex review\` (OpenAI Codex, a reviewer from another company) on PR #${A.pr} and prints JSON: {"ok": ..., "error": ..., "findings": [...]}.
-Return that JSON in the schema as it is: copy every finding field for field. Do not add, drop, merge, re-tag or re-word findings, and do not judge them; other agents do that. If the command fails or prints something that isn't that JSON, return ok=false, the error text, and no findings.`
+It runs \`codex review\` (OpenAI Codex, a reviewer from another company) on PR #${A.pr} and prints JSON: {"ok": ..., "error": ..., "findings": [...], "unparsed": [...]}.
+Return that JSON in the schema as it is: copy every finding field for field. Do not add, drop, merge, re-tag or re-word findings, and do not judge them; other agents do that.
+If it has "unparsed", Codex wrote a review the command couldn't parse. Read each of those files: if Codex reported problems there, add each one as a finding (file relative to the repo root, line, title, body in Codex's words, evidence as file:line, tag Important, severity from its priority: P0 critical, P1 high, P2 medium, P3 low, class ""). If it reported none, add nothing.
+If the command fails or prints something that isn't that JSON, return ok=false, the error text, and no findings.`
 
 async function find() {
   phase('Find')
   const runs = await parallel([
     ...LENSES.map((lens) => () =>
-      agent(finderPrompt(lens.text), { label: `find:${lens.key}`, phase: 'Find', schema: FINDINGS }).then((r) => ({ key: lens.key, r })),
+      ask(finderPrompt(lens.text), { label: `find:${lens.key}`, phase: 'Find', schema: FINDINGS }).then((r) => ({ key: lens.key, r })),
     ),
-    () => agent(CODEX_PROMPT, { label: 'find:codex', phase: 'Find', schema: CODEX }).then((r) => ({ key: 'codex', r })),
+    () => ask(CODEX_PROMPT, { label: 'find:codex', phase: 'Find', schema: CODEX }, (r) => Boolean(r && r.ok)).then((r) => ({ key: 'codex', r })),
   ])
   const keys = [...LENSES.map((lens) => lens.key), 'codex']
   const sources = {}
   const candidates = []
+  const incomplete = []
   runs.forEach((run, i) => {
     const key = keys[i]
     const r = run && run.r
     if (!r) {
       sources[key] = 'failed'
-      log(`Reviewer ${key} failed to return.`)
-      return
-    }
-    if (key === 'codex' && !r.ok) {
-      sources[key] = `failed (${r.error || 'no output'})`
-      log(`Codex review failed: ${r.error || 'no output'}`)
+      incomplete.push(`reviewer ${key} never answered`)
       return
     }
     sources[key] = r.findings.length
     for (const f of r.findings) candidates.push({ ...f, found_by: [key] })
   })
-  return { sources, candidates }
+  return { sources, candidates, incomplete }
 }
 
 async function mergeDuplicates(candidates) {
@@ -192,15 +208,19 @@ async function mergeDuplicates(candidates) {
 
 For every candidate, by index:
 - duplicate_of: the lowest index of an earlier candidate that describes the same underlying problem at the same place (same root cause; another symptom of the same bug counts), else null.
-- repeat_of: the id of the earlier-round finding it repeats, else null. A repeat is the same problem at the same place, even reworded. Another instance of the same bug class somewhere else is not a repeat.
+- repeat_of: the id of the settled earlier-round finding it repeats, else null. A repeat is the same problem at the same place, even reworded. Another instance of the same bug class somewhere else is not a repeat.
+- reopens: the id of the fixed earlier-round finding it says is still there, else null. That is not a repeat: the fix didn't hold.
 
 Don't judge whether findings are real; other agents do that. ${DATA}
 
 Candidates:
 ${JSON.stringify(listed, null, 1)}
 
-Earlier rounds:
-${JSON.stringify(A.previous, null, 1)}`,
+Settled in earlier rounds (raised, answered or rejected):
+${JSON.stringify(SETTLED, null, 1)}
+
+Fixed in earlier rounds:
+${JSON.stringify(FIXED, null, 1)}`,
     { label: 'merge-duplicates', phase: 'Merge duplicates', schema: GROUPS },
   )
   if (!res) {
@@ -208,6 +228,8 @@ ${JSON.stringify(A.previous, null, 1)}`,
     return { unique: candidates, repeats: [] }
   }
   const byIndex = new Map(res.items.map((item) => [item.index, item]))
+  // A finding that was fixed can come back; only settled ones count as repeats.
+  const fixedIds = new Set(FIXED.map((p) => p.id))
   const rootOf = (i, seen) => {
     const d = byIndex.get(i) && byIndex.get(i).duplicate_of
     if (d === null || d === undefined || d < 0 || d >= i || seen.has(d)) return i
@@ -218,19 +240,21 @@ ${JSON.stringify(A.previous, null, 1)}`,
   const repeats = []
   const position = new Map()
   candidates.forEach((c, i) => {
-    const repeat = byIndex.get(i) && byIndex.get(i).repeat_of
-    if (repeat) {
-      repeats.push({ ...c, reason: 'repeat', why: [`repeats ${repeat}`] })
+    const item = byIndex.get(i) || {}
+    const reopens = [item.reopens, item.repeat_of].find((id) => id && fixedIds.has(id)) || null
+    if (item.repeat_of && !fixedIds.has(item.repeat_of)) {
+      repeats.push({ ...c, reason: 'repeat', why: [`repeats ${item.repeat_of}`] })
       return
     }
     const root = rootOf(i, new Set())
     if (root !== i && position.has(root)) {
       const kept = unique[position.get(root)]
       kept.found_by = [...new Set([...kept.found_by, ...c.found_by])]
+      if (reopens && !kept.reopens) kept.reopens = reopens
       return
     }
     position.set(i, unique.length)
-    unique.push({ ...c })
+    unique.push(reopens ? { ...c, reopens } : { ...c })
   })
   return { unique, repeats }
 }
@@ -270,8 +294,11 @@ function tally(f, votes) {
   const valid = votes.filter(Boolean)
   const yes = valid.filter((v) => v.real && !v.style_only)
   const style = valid.filter((v) => v.style_only).length
+  const missing = votes.length - valid.length
   const why = valid.map((v) => `${v.style_only ? 'style' : v.real ? 'real' : 'not real'}: ${v.reason}`)
   const votesText = `${yes.length}/${votes.length}`
+  // Missing votes that could still have made two "real" leave the finding undecided.
+  if (yes.length < 2 && yes.length + missing >= 2) return { keep: false, undecided: true, finding: { ...f, votes: votesText, why } }
   if (yes.length < 2) return { keep: false, finding: { ...f, votes: votesText, reason: style >= 2 ? 'style' : 'not real', why } }
   // Majority tag among the yes votes; a tie keeps the finder's tag, else the stricter one.
   const counts = TAGS.map((t) => [t, yes.filter((v) => v.tag === t).length])
@@ -289,7 +316,7 @@ async function vote(unique) {
   phase('Vote')
   return parallel(
     unique.map((f, i) => () =>
-      parallel([0, 1, 2].map((k) => () => agent(votePrompt(f, k), { label: `vote:${i + 1}.${k + 1}`, phase: 'Vote', schema: VOTE }))).then(
+      parallel([0, 1, 2].map((k) => () => ask(votePrompt(f, k), { label: `vote:${i + 1}.${k + 1}`, phase: 'Vote', schema: VOTE }))).then(
         (votes) => tally(f, votes),
       ),
     ),
@@ -297,16 +324,22 @@ async function vote(unique) {
 }
 
 async function review() {
-  const { sources, candidates } = await find()
+  const { sources, candidates, incomplete } = await find()
   const { unique, repeats } = await mergeDuplicates(candidates)
-  const results = (await vote(unique)).filter(Boolean)
-  const kept = results.filter((r) => r.keep).map((r) => r.finding)
-  const dropped = [...results.filter((r) => !r.keep).map((r) => r.finding), ...repeats]
+  const results = await vote(unique)
+  results.forEach((r, i) => {
+    if (!r) incomplete.push(`the vote on "${unique[i].title}" never finished`)
+    else if (r.undecided) incomplete.push(`voters never answered on "${r.finding.title}" (${r.finding.votes} real so far)`)
+  })
+  const decided = results.filter((r) => r && !r.undecided)
+  const kept = decided.filter((r) => r.keep).map((r) => r.finding)
+  const dropped = [...decided.filter((r) => !r.keep).map((r) => r.finding), ...repeats]
   // REVIEW.md caps the nits per review.
   const overCap = new Set(kept.filter((f) => f.tag === 'Nit').sort(bySeverity).slice(A.nitCap))
   for (const f of overCap) dropped.push({ ...f, reason: 'nit cap', why: [`more than ${A.nitCap} nits this round`] })
   const final = kept.filter((f) => !overCap.has(f)).sort(bySeverity)
   log(`${candidates.length} candidates, ${unique.length} after merging duplicates, ${final.length} kept, ${dropped.length} dropped.`)
+  if (incomplete.length) log(`Incomplete, so this round can't be posted: ${incomplete.join('; ')}`)
   return {
     stage: 'review',
     pr: A.pr,
@@ -318,6 +351,7 @@ async function review() {
     unique: unique.length,
     kept: final,
     dropped,
+    incomplete,
   }
 }
 

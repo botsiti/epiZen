@@ -15,12 +15,17 @@ const STATUS_CONTEXT = 'merge-gate';
 // GitHub rejects comments over 65,536 characters.
 const COMMENT_LIMIT = 60_000;
 
-// A change to any of these makes the PR high risk, whatever else it does.
+// A change to any of these makes the PR high risk, whatever else it does. CI is the workflow
+// and also what it runs: the check runner, the configs of the checks in it, and the npm
+// scripts (compared separately, so a dependency bump in package.json doesn't count).
 const HIGH_RISK_PATHS = [
   [/^\.github\/workflows\//, 'the CI workflow'],
+  [/^scripts\/(check|vault-snapshot)\.mjs$/, 'what npm run check runs'],
+  [/^(eslint\.config\.js|vite\.config\.ts|tsconfig\.json|e2e\/tsconfig\.json|e2e\/wdio\.conf\.ts)$/, 'the configuration of a check'],
   [/^\.claude\/skills\/merge-gate\//, 'the merge-gate skill'],
   [/^CLAUDE\.md$/, 'CLAUDE.md'],
   [/^REVIEW\.md$/, 'REVIEW.md'],
+  [/^src-tauri\/capabilities\//, 'what the app may touch (Tauri capabilities)'],
 ];
 // Added lines that call these might overwrite, rename or delete a note. They are hints for the
 // risk agent, which reads the code and decides.
@@ -67,13 +72,13 @@ function fail(message) {
 
 // ── state ────────────────────────────────────────────────────────────────────
 
-// The gate works in its own worktree next to the repo, following the
-// <parent>/.worktrees/<repo>/<name> layout, and keeps per-PR state beside it.
-function places() {
+// Each PR gets its own worktree next to the repo, following the <parent>/.worktrees/<repo>/<name>
+// layout, so two gates never share a checkout. Per-PR state lives beside them in gate-runs/.
+function places(pr) {
   const root = run('git', ['rev-parse', '--show-toplevel']);
   const mainRoot = path.dirname(run('git', ['rev-parse', '--path-format=absolute', '--git-common-dir']));
   const home = path.join(path.dirname(mainRoot), '.worktrees', path.basename(mainRoot));
-  return { root, mainRoot, worktree: path.join(home, 'merge-gate'), runs: path.join(home, 'merge-gate-runs') };
+  return { root, mainRoot, worktree: path.join(home, `gate-pr-${pr}`), runs: path.join(home, 'gate-runs') };
 }
 
 function runDir(pr) {
@@ -173,7 +178,7 @@ function setup(args) {
 
 function prep(args) {
   const pr = prNumber(args);
-  const where = places();
+  const where = places(pr);
   git(where.root, 'fetch', '--quiet', '--prune', 'origin');
 
   // The gate takes its rules, and itself, from main. Until main has the skill, --bootstrap
@@ -181,6 +186,14 @@ function prep(args) {
   const skillOnMain = tryRun('git', ['-C', where.root, 'cat-file', '-e', `origin/main:${SKILL_PATH}/SKILL.md`]) !== null;
   if (!skillOnMain && !args.bootstrap) fail(`origin/main has no ${SKILL_PATH} yet. Use --bootstrap until it does.`);
   if (skillOnMain && args.bootstrap) fail('main has the skill now, so --bootstrap is off. Run the skill from main.');
+  // The copy that is running must be this checkout's, which the drift check below ties to main:
+  // not a PR's copy in a gate worktree, and not a leftover.
+  const ownCopy = path.join(where.root, SKILL_PATH);
+  const running = fs.realpathSync(SKILL_DIR);
+  if (!args.bootstrap && (!fs.existsSync(ownCopy) || running !== fs.realpathSync(ownCopy))) {
+    fail(`This gate runs from ${SKILL_DIR}, not from ${ownCopy}. Run the copy in this checkout of main.`);
+  }
+  if (/\/gate-pr-\d+\//.test(running)) fail(`${SKILL_DIR} is inside a gate worktree, which holds a PR's code. Run a trusted copy.`);
   const guarded = ['CLAUDE.md', 'REVIEW.md', ...(skillOnMain ? [SKILL_PATH] : [])];
   const drift = [
     git(where.root, 'diff', '--name-only', 'origin/main', '--', ...guarded),
@@ -286,12 +299,18 @@ function prep(args) {
     ...ledger.findings.map(({ id, tag, file, line, title, status: s }) => ({ id, tag, file, line, title, status: s })),
     ...ledger.dropped.map(({ id, file, line, title, reason }) => ({ id, file, line, title, status: `dropped: ${reason}` })),
   ];
+  const checked = ledger.checks[head] ?? null;
+  const open = ledger.findings.filter((f) => f.status === 'open');
   print({
     ...state,
     files: files.length,
-    checked: ledger.checks[head] ?? null,
+    checked,
     roundsSoFar: ledger.rounds.length,
-    open: ledger.findings.filter((f) => f.status === 'open'),
+    open,
+    blocking: [
+      ...open.map((f) => `${f.id} ${f.title}`),
+      ...(checked && !checked.ok ? [`npm run check failed on ${short(head)}`] : []),
+    ],
     workflowArgs:
       mode === 'reviewed'
         ? null
@@ -319,7 +338,7 @@ function prep(args) {
 function nitCap(root) {
   const review = tryRun('git', ['-C', root, 'show', 'origin/main:REVIEW.md']) ?? '';
   const words = { one: 1, two: 2, three: 3, four: 4, five: 5 };
-  const match = /at most (\d+|one|two|three|four|five) nits?/i.exec(review);
+  const match = /at most (\d+|one|two|three|four|five) (?:nits?|per review)/i.exec(review);
   return match ? (words[match[1].toLowerCase()] ?? Number(match[1])) : 3;
 }
 
@@ -331,23 +350,27 @@ function check(args) {
   const logFile = path.join(state.runDir, `check-${short(state.head)}.log`);
   const fd = fs.openSync(logFile, 'w');
   const env = { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' };
+  const release = waitForQuiet(path.join(path.dirname(state.runDir), 'check.lock'));
   const started = performance.now();
-
-  // node_modules lives in the gate worktree between runs; reinstall only when the lockfile changes.
-  const lock = path.join(state.worktree, 'package-lock.json');
-  const stamp = path.join(state.worktree, 'node_modules', '.merge-gate-lock');
-  const lockHash = fs.existsSync(lock) ? createHash('sha256').update(fs.readFileSync(lock)).digest('hex') : '';
   let exitCode = 0;
-  if (!fs.existsSync(stamp) || fs.readFileSync(stamp, 'utf8') !== lockHash) {
-    fs.writeSync(fd, '$ npm ci\n');
-    exitCode = spawnSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: state.worktree, stdio: ['ignore', fd, fd], env }).status ?? 1;
-    if (exitCode === 0) fs.writeFileSync(stamp, lockHash);
+  try {
+    // node_modules stays in the PR's worktree between rounds; reinstall only when the lockfile changes.
+    const lock = path.join(state.worktree, 'package-lock.json');
+    const stamp = path.join(state.worktree, 'node_modules', '.merge-gate-lock');
+    const lockHash = fs.existsSync(lock) ? createHash('sha256').update(fs.readFileSync(lock)).digest('hex') : '';
+    if (!fs.existsSync(stamp) || fs.readFileSync(stamp, 'utf8') !== lockHash) {
+      fs.writeSync(fd, '$ npm ci\n');
+      exitCode = spawnSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: state.worktree, stdio: ['ignore', fd, fd], env }).status ?? 1;
+      if (exitCode === 0) fs.writeFileSync(stamp, lockHash);
+    }
+    if (exitCode === 0) {
+      fs.writeSync(fd, '$ npm run check\n');
+      exitCode = spawnSync('npm', ['run', 'check'], { cwd: state.worktree, stdio: ['ignore', fd, fd], env }).status ?? 1;
+    }
+  } finally {
+    fs.closeSync(fd);
+    release();
   }
-  if (exitCode === 0) {
-    fs.writeSync(fd, '$ npm run check\n');
-    exitCode = spawnSync('npm', ['run', 'check'], { cwd: state.worktree, stdio: ['ignore', fd, fd], env }).status ?? 1;
-  }
-  fs.closeSync(fd);
   const seconds = Math.round((performance.now() - started) / 1000);
   const ok = exitCode === 0;
 
@@ -384,6 +407,45 @@ function check(args) {
   ledger.checks[state.head] = { ok, exitCode, seconds, url };
   writeJson(ledgerFile(pr), ledger);
   print({ ok, exitCode, seconds, log: logFile, url, summary });
+}
+
+// The e2e tests listen on fixed WebDriver ports, so two runs on this Mac answer each other's
+// sessions and both fail. Take a lock that other gates respect, and wait out any other wdio run.
+function waitForQuiet(lockDir) {
+  const deadline = performance.now() + 45 * 60_000;
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return error.code === 'EPERM';
+    }
+  };
+  const release = () => fs.rmSync(lockDir, { recursive: true, force: true });
+  for (;;) {
+    let held = false;
+    try {
+      fs.mkdirSync(lockDir);
+      fs.writeFileSync(path.join(lockDir, 'pid'), String(process.pid));
+      held = true;
+    } catch {
+      let holder = 0;
+      try {
+        holder = Number(fs.readFileSync(path.join(lockDir, 'pid'), 'utf8'));
+      } catch {
+        // No pid yet: another gate is taking the lock right now.
+      }
+      // A lock whose owner has exited is stale.
+      if (holder && !alive(holder)) {
+        release();
+        continue;
+      }
+    }
+    if (held && tryRun('pgrep', ['-f', 'wdio run']) === null) return release;
+    if (held) release();
+    if (performance.now() > deadline) fail('Another check or e2e run kept this Mac busy for 45 minutes. Try again later.');
+    spawnSync('sleep', ['15']);
+  }
 }
 
 function stripAnsi(text) {
@@ -439,6 +501,7 @@ function codex(args) {
 
   const findings = [];
   const raw = [];
+  const unparsed = [];
   for (const target of targets) {
     const result = spawnSync('codex', ['review', ...config, ...target], {
       cwd: state.worktree,
@@ -452,20 +515,25 @@ function codex(args) {
     if (result.error || result.status !== 0) {
       return print({ ok: false, error: result.error?.message ?? `codex exited with ${result.status}`, raw, findings: [] });
     }
-    const text = result.stdout.includes('Full review comments:') ? result.stdout : `${result.stdout}\n${result.stderr}`;
-    findings.push(...parseCodex(text, state.worktree));
+    const parsed = parseCodex(result.stdout, state.worktree) ?? parseCodex(`${result.stdout}\n${result.stderr}`, state.worktree);
+    // No findings block: Codex either found nothing or wrote its review in another shape.
+    // The workflow's Codex agent reads these files and decides which.
+    if (parsed) findings.push(...parsed);
+    else unparsed.push(file);
   }
-  print({ ok: true, findings, raw });
+  print({ ok: true, findings, ...(unparsed.length ? { unparsed } : {}), raw });
 }
 
-// Codex ends with a block like:
+// Codex ends with a block like this, headed "Review comment:" when there is only one:
 //   Full review comments:
 //
 //   - [P1] Keep the original note until the copy is written — /abs/path/notes.ts:3-4
 //     If writing fails after the rename, ...
+// Returns null when there is no such block.
 export function parseCodex(text, worktree) {
-  const at = text.lastIndexOf('Full review comments:');
-  if (at < 0) return [];
+  const headers = [...text.matchAll(/^(?:Full review comments|Review comment):[ \t]*$/gm)];
+  if (!headers.length) return null;
+  const at = headers.at(-1).index;
   const prefixes = [worktree, fs.existsSync(worktree) ? fs.realpathSync(worktree) : worktree].map((p) => `${p}/`);
   const relative = (file) => {
     const prefix = prefixes.find((p) => file.startsWith(p));
@@ -474,7 +542,8 @@ export function parseCodex(text, worktree) {
   const findings = [];
   let current = null;
   for (const line of text.slice(at).split('\n').slice(1)) {
-    const header = /^- \[P(\d)\] (.+?) — (.+?):(\d+)(?:-(\d+))?\s*$/.exec(line);
+    // The title may contain " — " itself, so the path starts after the last one.
+    const header = /^- \[P(\d)\] (.+) — (.+?):(\d+)(?:-(\d+))?\s*$/.exec(line);
     if (header) {
       const priority = Number(header[1]);
       const file = relative(header[3]);
@@ -503,14 +572,16 @@ export function parseCodex(text, worktree) {
 
 // ── post ─────────────────────────────────────────────────────────────────────
 
-
 function post(args) {
   const pr = prNumber(args);
   const state = loadState(pr);
   const result = readJson(args._[1]) ?? fail(`Can't read the workflow result at ${args._[1]}.`);
   if (result.headSha !== state.head) fail(`That result is for ${short(result.headSha)}, but the PR head is ${short(state.head)}.`);
+  // A reviewer or voter that never answered could have held a real finding: fail closed.
+  if (result.incomplete?.length) fail(`Round ${result.round} is incomplete (${result.incomplete.join('; ')}). Run the workflow again.`);
   const round = result.round;
-  if (loadLedger(pr).rounds.some((r) => r.round === round)) fail(`Round ${round} is already posted on PR ${pr}.`);
+  const ledger = loadLedger(pr, state.title);
+  if (ledger.rounds.some((r) => r.round === round)) fail(`Round ${round} is already posted on PR ${pr}.`);
   const kept = result.kept.map((finding, i) => ({ ...finding, id: `R${round}.${i + 1}` }));
   const dropped = result.dropped.map((finding, i) => ({ ...finding, id: `D${round}.${i + 1}` }));
 
@@ -535,21 +606,14 @@ function post(args) {
   let review;
   try {
     review = ghJson(endpoint, JSON.stringify(payload()));
-  } catch {
-    // A line GitHub can't place rejects the whole review: put every finding in the body.
+  } catch (error) {
+    // A line GitHub can't place rejects the whole review with a 422: put every finding in the
+    // body instead. Any other error may have come after GitHub created the review, so stop.
+    if (!/HTTP 422/.test(String(error.stderr || error.message))) throw error;
     inline = [];
     review = ghJson(endpoint, JSON.stringify(payload()));
   }
 
-  const commentIds = {};
-  if (inline.length) {
-    for (const comment of ghJson(['api', `repos/${state.repo}/pulls/${pr}/reviews/${review.id}/comments?per_page=100`])) {
-      const id = /<!-- merge-gate:(R\d+\.\d+) -->/.exec(comment.body)?.[1];
-      if (id) commentIds[id] = comment.id;
-    }
-  }
-
-  const ledger = loadLedger(pr, state.title);
   const tally = {};
   for (const f of dropped) tally[f.reason] = (tally[f.reason] ?? 0) + 1;
   ledger.rounds.push({
@@ -575,15 +639,29 @@ function post(args) {
       class: f.class,
       votes: f.votes,
       status: f.tag === 'Important' ? 'open' : 'posted',
-      commentId: commentIds[f.id] ?? null,
+      commentId: null,
+      ...(f.reopens ? { reopens: f.reopens } : {}),
     });
+    // A fix that didn't hold: the old finding is superseded by this one.
+    const earlier = f.reopens && ledger.findings.find((e) => e.id === f.reopens);
+    if (earlier) earlier.status = 'reopened';
   }
   for (const f of dropped) {
     ledger.dropped.push({ id: f.id, round, file: f.file, line: f.line, title: f.title, reason: f.reason, votes: f.votes ?? null });
   }
   ledger.reviewedHead = state.head;
   ledger.reviewedBase = state.mergeBase;
+  // Saved before anything else can fail, so a rerun can't post this round twice.
   writeJson(ledgerFile(pr), ledger);
+
+  if (inline.length) {
+    for (const comment of ghJson(['api', `repos/${state.repo}/pulls/${pr}/reviews/${review.id}/comments?per_page=100`])) {
+      const id = /<!-- merge-gate:(R\d+\.\d+) -->/.exec(comment.body)?.[1];
+      const finding = id && ledger.findings.find((f) => f.id === id);
+      if (finding) finding.commentId = comment.id;
+    }
+    writeJson(ledgerFile(pr), ledger);
+  }
   print({
     review: review.html_url,
     posted: kept.length,
@@ -664,7 +742,7 @@ function findingBody(f) {
     '',
     `Evidence: ${f.evidence}`,
     '',
-    `<sub>merge-gate ${f.id} · found by ${(f.found_by ?? []).join(', ')} · ${f.votes} voters say real</sub>`,
+    `<sub>merge-gate ${f.id} · found by ${(f.found_by ?? []).join(', ')} · ${f.votes} voters say real${f.reopens ? ` · reopens ${f.reopens}` : ''}</sub>`,
     `<!-- merge-gate:${f.id} -->`,
   ].join('\n');
 }
@@ -709,11 +787,30 @@ function resolveThread(repo, pr, commentId) {
 
 // ── status ───────────────────────────────────────────────────────────────────
 
+// Success is the gate's approval of one head, so it is refused unless the ledger shows that
+// head reviewed, checked green, with nothing open and its risk set. High risk also needs
+// --approved-by-bat, which the session passes only when Bat has approved this head.
 function status(args) {
   const pr = prNumber(args);
   const [, value, description = ''] = args._;
   if (!['pending', 'success', 'failure', 'error'].includes(value)) fail('Usage: status <PR> pending|success|failure|error "<description>"');
   const state = loadState(pr);
+  if (value === 'success') {
+    const ledger = loadLedger(pr, state.title);
+    const open = ledger.findings.filter((f) => f.status === 'open').map((f) => f.id);
+    const problems = [
+      ledger.reviewedHead !== state.head && `${short(state.head)} hasn't been reviewed`,
+      !ledger.checks[state.head]?.ok && `npm run check hasn't passed on ${short(state.head)}`,
+      open.length && `Important findings are still open: ${open.join(', ')}`,
+      ledger.riskHead !== state.head && `the risk isn't set for ${short(state.head)}`,
+      ledger.riskHead === state.head && ledger.risk === 'high' && !args.approvedByBat && 'it is high risk and Bat has not approved it',
+    ].filter(Boolean);
+    if (problems.length) fail(`Not setting success: ${problems.join('; ')}.`);
+    if (args.approvedByBat) {
+      ledger.approved = { by: 'Bat', head: state.head, at: new Date().toISOString() };
+      writeJson(ledgerFile(pr), ledger);
+    }
+  }
   gh([
     'api',
     '--method',
@@ -746,6 +843,18 @@ function risk(args) {
       }
     }
   }
+  const scriptsAt = (ref) => {
+    try {
+      return JSON.stringify(JSON.parse(git(state.root, 'show', `${ref}:package.json`)).scripts ?? {});
+    } catch {
+      return null;
+    }
+  };
+  if (state.files.some((f) => f.path === 'package.json') && scriptsAt(state.mergeBase) !== scriptsAt(state.head)) {
+    pathTriggers.push({ path: 'package.json', change: 'M', what: 'the npm scripts that npm run check runs' });
+  }
+  ledger.riskTriggers = { head: state.head, pathTriggers };
+  writeJson(ledgerFile(pr), ledger);
 
   const noteWriteHints = [];
   let file = null;
@@ -799,17 +908,27 @@ function risk(args) {
   });
 }
 
+// Takes the risk workflow's result file, so the level isn't copied by hand, and never goes
+// below high when a path trigger fired for this head.
 function decide(args) {
   const pr = prNumber(args);
-  const [, level, why = ''] = args._;
-  if (!['low', 'medium', 'high'].includes(level)) fail('Usage: decide <PR> low|medium|high "<reasons>"');
   const state = loadState(pr);
+  const result = readJson(args._[1]) ?? fail('Usage: decide <PR> <risk result .json>');
+  if (result.stage !== 'risk' || result.headSha !== state.head) fail(`That risk result isn't for the current head ${short(state.head)}.`);
   const ledger = loadLedger(pr, state.title);
+  if (ledger.riskTriggers?.head !== state.head) fail(`Run "risk ${pr}" for ${short(state.head)} first.`);
+  const reasons = [...(result.reasons ?? [])];
+  for (const t of ledger.riskTriggers.pathTriggers) {
+    const reason = `changes ${t.what} (${t.path})`;
+    if (!reasons.includes(reason)) reasons.push(reason);
+  }
+  const level = reasons.length ? 'high' : result.level;
+  if (!['low', 'medium', 'high'].includes(level)) fail(`Unknown risk level "${level}".`);
   ledger.risk = level;
-  ledger.riskWhy = why;
+  ledger.riskWhy = reasons;
   ledger.riskHead = state.head;
   writeJson(ledgerFile(pr), ledger);
-  print({ risk: level, head: state.head });
+  print({ risk: level, reasons, head: state.head });
 }
 
 // ── log ──────────────────────────────────────────────────────────────────────
@@ -859,6 +978,10 @@ function log(args) {
   if (at >= 0) lines[at] = line;
   else lines.push(line);
   fs.writeFileSync(file, `${lines.join('\n')}\n`);
+
+  // Once the PR is merged or closed its worktree has done its job. The ledger stays.
+  const worktree = places(pr).worktree;
+  if (info.state !== 'OPEN' && fs.existsSync(worktree)) git(state.mainRoot, 'worktree', 'remove', '--force', worktree);
   print({ file, line });
 }
 
@@ -877,6 +1000,7 @@ function parseArgs(argv) {
     else if (value === '--ci') args.ci.push(argv[(i += 1)]);
     else if (value === '--merged-by') args.mergedBy = argv[(i += 1)];
     else if (value === '--outcome') args.outcome = argv[(i += 1)];
+    else if (value === '--approved-by-bat') args.approvedByBat = true;
     else args._.push(value);
   }
   return args;
