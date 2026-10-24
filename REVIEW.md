@@ -25,7 +25,8 @@ Look hardest at:
 ## Severity
 
 - **Important**: could lose or change a note, break Obsidian compatibility, ship test-only code,
-  or make `npm run check` pass when it shouldn't.
+  or make `npm run check` pass when it shouldn't. A crash or a security hole is Important too,
+  even when no note is touched.
 - **Nit**: anything else worth saying. **At most three per review.** Keep the three that matter
   most and drop the rest.
 - **Pre-existing**: a real problem this pull request didn't introduce. Tag it so it doesn't read
