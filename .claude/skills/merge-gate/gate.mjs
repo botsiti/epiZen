@@ -972,7 +972,8 @@ function riskTriggers(state) {
   const triggers = [];
   // Two names APFS folds to the same one are one file on macOS, so either can overwrite the other.
   const spellings = new Map();
-  for (const p of git(state.root, 'ls-tree', '-r', '-z', '--name-only', state.head).split('\0').filter(Boolean)) {
+  const atHead = new Set(git(state.root, 'ls-tree', '-r', '-z', '--name-only', state.head).split('\0').filter(Boolean));
+  for (const p of atHead) {
     const parts = p.split('/');
     for (let i = 1; i <= parts.length; i += 1) {
       const prefix = parts.slice(0, i).join('/');
@@ -1004,7 +1005,8 @@ function riskTriggers(state) {
     // A rename counts on both sides: moving scripts/check.mjs into src/ removes the check runner.
     for (const p of [file.from, file.path].filter(Boolean)) {
       const folded = fold(p);
-      const twin = twinOf(p);
+      // Only a path that exists at the head can collide; the old side of a case-only rename can't.
+      const twin = atHead.has(p) ? twinOf(p) : null;
       if (twin) high(p, `a name macOS folds onto ${twin}, so the two are one file`);
       // eslint-disable-next-line no-control-regex
       else if (/[\x00-\x1f\x7f-\x9f]/.test(p) || (!folded.startsWith('demo-vault/') && !/^[\x20-\x7e]+$/.test(folded))) {
