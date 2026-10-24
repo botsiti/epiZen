@@ -2,7 +2,7 @@
 // Helpers for the /merge-gate skill. SKILL.md next to this file says when each command runs.
 // Every command prints one JSON object. A failure prints {"error": "..."} and exits 1.
 
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -486,7 +486,7 @@ function duration(ms) {
 // Codex reads AGENTS.md from the checkout, which here is the branch, so project docs are
 // switched off and main's CLAUDE.md and REVIEW.md go in as developer instructions instead.
 // `codex review` takes no custom prompt together with --base or --commit.
-function codex(args) {
+async function codex(args) {
   const pr = prNumber(args);
   const state = loadState(pr);
   const rules = ['CLAUDE.md', 'REVIEW.md']
@@ -505,21 +505,18 @@ function codex(args) {
       ? state.commits.map((sha) => ['--commit', sha])
       : [['--base', 'origin/main']];
 
+  // The reviews run side by side, so all of them fit in the agent's one 600s Bash call.
+  const results = await Promise.all(targets.map((target) => runCodex(['review', ...config, ...target], state.worktree, 540_000)));
   const findings = [];
   const raw = [];
   const unparsed = [];
-  for (const target of targets) {
-    const result = spawnSync('codex', ['review', ...config, ...target], {
-      cwd: state.worktree,
-      encoding: 'utf8',
-      timeout: 540_000,
-      maxBuffer: 64 * 1024 * 1024,
-    });
+  for (const [i, result] of results.entries()) {
+    const target = targets[i];
     const file = path.join(state.runDir, `codex-${short(state.head)}-${target[0].slice(2)}-${short(target[1].replace('origin/', ''))}.txt`);
-    fs.writeFileSync(file, `${result.stdout ?? ''}\n----- stderr -----\n${result.stderr ?? ''}`);
+    fs.writeFileSync(file, `${result.stdout}\n----- stderr -----\n${result.stderr}`);
     raw.push(file);
     if (result.error || result.status !== 0) {
-      return print({ ok: false, error: result.error?.message ?? `codex exited with ${result.status}`, raw, findings: [] });
+      return print({ ok: false, error: result.error?.message ?? `codex exited with ${result.status ?? result.signal}`, raw, findings: [] });
     }
     const parsed = parseCodex(result.stdout, state.worktree) ?? parseCodex(`${result.stdout}\n${result.stderr}`, state.worktree);
     // No findings block: Codex either found nothing or wrote its review in another shape.
@@ -528,6 +525,20 @@ function codex(args) {
     else unparsed.push(file);
   }
   print({ ok: true, findings, ...(unparsed.length ? { unparsed } : {}), raw });
+}
+
+function runCodex(args, cwd, timeout) {
+  return new Promise((resolve) => {
+    const child = spawn('codex', args, { cwd, timeout, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => (stdout += chunk));
+    child.stderr.on('data', (chunk) => (stderr += chunk));
+    child.on('error', (error) => resolve({ error, stdout, stderr }));
+    child.on('close', (status, signal) => resolve({ status, signal, stdout, stderr }));
+  });
 }
 
 // Codex ends with a block like this, headed "Review comment:" when there is only one:
@@ -1022,7 +1033,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process
   const command = COMMANDS[name];
   if (!command) fail(`Usage: gate.mjs <${Object.keys(COMMANDS).join('|')}> ...`);
   try {
-    command(parseArgs(argv));
+    await command(parseArgs(argv));
   } catch (error) {
     fail(String(error.stderr || error.message || error).trim());
   }
