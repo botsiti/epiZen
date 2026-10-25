@@ -99,6 +99,7 @@ pub fn run() {
     let state = VaultState::from_startup(std::env::args_os(), std::env::var_os("EPIZEN_VAULT"));
     let builder = tauri::Builder::default()
         .manage(state)
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             vault_status,
             list_files,
