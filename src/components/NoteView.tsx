@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { readNote, type VaultFile } from '../lib/api';
+import { readNote, writeNote, type VaultFile } from '../lib/api';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
+import { lineEnding } from '../lib/text';
+import { Editor } from './Editor';
 import { VaultImage } from './VaultImage';
 
 const remarkPlugins = [remarkGfm, remarkCallouts, remarkWikilinks];
@@ -15,8 +17,13 @@ interface NoteProps {
   onOpenLink: (target: string, fromPath: string) => void;
 }
 
-/** Loads a note from the vault and shows it. Read-only. */
-export function NoteView({ path, files, onOpenLink }: NoteProps) {
+interface ViewProps extends NoteProps {
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
+}
+
+/** Loads a note from the vault and shows it, or edits it. */
+export function NoteView({ path, files, onOpenLink, editing, onEditingChange }: ViewProps) {
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
 
   useEffect(() => {
@@ -40,10 +47,139 @@ export function NoteView({ path, files, onOpenLink }: NoteProps) {
     );
   }
   if (note.text === undefined) return null;
-  return <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} />;
+  if (editing) {
+    return (
+      <NoteEditor
+        path={path}
+        text={note.text}
+        files={files}
+        onOpenLink={onOpenLink}
+        onSaved={(text) => setNote({ path, text })}
+        onDone={() => onEditingChange(false)}
+      />
+    );
+  }
+  const edit = (
+    <button type="button" className="quiet-button" onClick={() => onEditingChange(true)} data-testid="edit-note">
+      Edit
+    </button>
+  );
+  return <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} />;
 }
 
-export function NoteContent({ path, text, files, onOpenLink }: NoteProps & { text: string }) {
+type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'failed'; message: string };
+
+interface EditorProps extends NoteProps {
+  text: string;
+  onSaved: (text: string) => void;
+  onDone: () => void;
+}
+
+/**
+ * The note's source beside a live preview. Edits save on their own after a short pause, one
+ * save at a time, each only over the text the last one left. If the note changed on disk
+ * meanwhile, saving stops and says so; nothing is overwritten.
+ */
+function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone }: EditorProps) {
+  const separator = lineEnding(text);
+  const [draft, setDraft] = useState(text);
+  const [state, setState] = useState<SaveState>({ kind: 'idle' });
+  const saved = useRef(text);
+  const latest = useRef(text);
+  const queue = useRef(Promise.resolve());
+  const stopped = useRef(false);
+  const reportSaved = useRef(onSaved);
+  useEffect(() => {
+    reportSaved.current = onSaved;
+  }, [onSaved]);
+
+  const save = useCallback(() => {
+    queue.current = queue.current.then(async () => {
+      const next = latest.current;
+      if (stopped.current || next === saved.current) return;
+      setState({ kind: 'saving' });
+      try {
+        await writeNote(path, next, saved.current);
+        saved.current = next;
+        reportSaved.current(next);
+        setState({ kind: latest.current === next ? 'saved' : 'saving' });
+      } catch (err) {
+        stopped.current = true;
+        setState({ kind: 'failed', message: String(err) });
+      }
+    });
+    return queue.current;
+  }, [path]);
+
+  useEffect(() => {
+    if (draft === saved.current) return;
+    const timer = setTimeout(() => void save(), 600);
+    return () => clearTimeout(timer);
+  }, [draft, save]);
+  // Leaving the note saves what is left.
+  useEffect(() => () => void save(), [save]);
+
+  const change = useCallback((next: string) => {
+    latest.current = next;
+    setDraft(next);
+  }, []);
+  const done = () => void save().then(onDone);
+
+  const folder = noteFolder(path);
+  const label = { idle: '', saving: 'Saving…', saved: 'Saved', failed: 'Not saved' }[state.kind];
+  return (
+    <article className="note is-editing" data-testid="note-editor" data-path={path}>
+      <header className="note-header">
+        {folder && <p className="eyebrow">{folder}</p>}
+        <div className="title-row">
+          <h1 data-testid="note-title">{noteTitle(path)}</h1>
+          <span className="save-state" data-testid="save-state">
+            {label}
+          </span>
+          <button type="button" className="quiet-button" onClick={done} data-testid="edit-done">
+            Done
+          </button>
+        </div>
+      </header>
+      {state.kind === 'failed' && (
+        <p className="note-warning" data-testid="save-error">
+          Couldn't save: {state.message}. Your text is still here; copy it before you leave this note.
+        </p>
+      )}
+      {separator ? (
+        <div className="edit-panes">
+          <Editor initial={text} lineSeparator={separator} onChange={change} />
+          <div className="preview" data-testid="preview">
+            <NoteBody path={path} text={draft} files={files} onOpenLink={onOpenLink} />
+          </div>
+        </div>
+      ) : (
+        <p className="note-warning" data-testid="mixed-line-endings">
+          This note mixes line endings, so Epizen won't edit it: saving would change lines you didn't touch.
+        </p>
+      )}
+    </article>
+  );
+}
+
+export function NoteContent({ path, text, files, onOpenLink, actions }: NoteProps & { text: string; actions?: ReactNode }) {
+  const folder = noteFolder(path);
+  return (
+    <article className="note" data-testid="note" data-path={path}>
+      <header className="note-header">
+        {folder && <p className="eyebrow">{folder}</p>}
+        <div className="title-row">
+          <h1 data-testid="note-title">{noteTitle(path)}</h1>
+          {actions}
+        </div>
+      </header>
+      <NoteBody path={path} text={text} files={files} onOpenLink={onOpenLink} />
+    </article>
+  );
+}
+
+/** A note's properties and Markdown, rendered. */
+function NoteBody({ path, text, files, onOpenLink }: NoteProps & { text: string }) {
   const { properties, body, error } = useMemo(() => parseNote(text), [text]);
 
   const components = useMemo<Components>(
@@ -84,13 +220,8 @@ export function NoteContent({ path, text, files, onOpenLink }: NoteProps & { tex
     [files, path, onOpenLink],
   );
 
-  const folder = noteFolder(path);
   return (
-    <article className="note" data-testid="note" data-path={path}>
-      <header className="note-header">
-        {folder && <p className="eyebrow">{folder}</p>}
-        <h1 data-testid="note-title">{noteTitle(path)}</h1>
-      </header>
+    <>
       {error && <p className="note-warning">These properties aren't valid YAML, so the note is shown as written.</p>}
       <PropertyList properties={properties} />
       <div className="note-body">
@@ -98,7 +229,7 @@ export function NoteContent({ path, text, files, onOpenLink }: NoteProps & { tex
           {body}
         </Markdown>
       </div>
-    </article>
+    </>
   );
 }
 

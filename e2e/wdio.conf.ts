@@ -10,8 +10,11 @@ import { APP, COPY_PREFIX, DEMO_VAULT, EVIDENCE, vaultCopy } from './paths';
 process.env.EPIZEN_E2E_VAULT ??= copyDemoVault();
 // Refuses anything that isn't such a copy, before an app is opened on it or it is deleted.
 vaultCopy();
-// The app inherits this environment. A vault set in your shell must not leak into a test.
+// The app inherits this environment. A vault set in your shell must not leak into a test,
+// and the app keeps its settings (the last vault, periodic notes) next to the copy, never in
+// your own config folder.
 delete process.env.EPIZEN_VAULT;
+process.env.EPIZEN_CONFIG_DIR = join(dirname(vaultCopy()), 'config');
 
 function copyDemoVault() {
   const copy = join(mkdtempSync(join(tmpdir(), COPY_PREFIX)), 'demo-vault');

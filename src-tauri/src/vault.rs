@@ -1,11 +1,13 @@
-//! Read-only access to a vault: a folder of plain Markdown notes and their images.
+//! Access to a vault: a folder of plain Markdown notes and their images.
 //!
-//! Nothing in this module writes to disk. Every path that comes from the frontend
-//! goes through [`Vault::resolve`], which keeps reads inside the vault folder.
+//! This is the only code that touches the vault. Every path that comes from the frontend
+//! goes through [`Vault::resolve`] or [`Vault::new_note_path`], which keep it inside the vault
+//! folder. It writes in two ways only: a new note that can't replace an existing file, and a
+//! note's new text, renamed over it whole and only while the note still holds what the app read.
 
 use std::fmt;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
 use serde::Serialize;
@@ -39,6 +41,11 @@ pub enum VaultError {
     InvalidPath(String),
     NotFound(String),
     WrongKind(String),
+    /// Creating a note whose name is taken.
+    Exists(String),
+    /// The note on disk isn't the text the app last read or wrote, so saving would overwrite
+    /// someone else's edit.
+    Changed(String),
     Io(io::Error),
 }
 
@@ -49,6 +56,10 @@ impl fmt::Display for VaultError {
             Self::InvalidPath(path) => write!(f, "not a path inside the vault: {path}"),
             Self::NotFound(path) => write!(f, "no such file in the vault: {path}"),
             Self::WrongKind(path) => write!(f, "wrong kind of file: {path}"),
+            Self::Exists(path) => write!(f, "a file with this name already exists: {path}"),
+            Self::Changed(path) => {
+                write!(f, "the note changed on disk since it was opened: {path}")
+            }
             Self::Io(err) => write!(f, "{err}"),
         }
     }
@@ -98,6 +109,60 @@ impl Vault {
         Ok(fs::read(self.resolve(path, FileKind::Image)?)?)
     }
 
+    /// Creates a note, and its folders inside the vault. Never replaces a file: the check
+    /// and the create are one step (`create_new`), so a name taken a moment ago is refused.
+    pub fn create_note(&self, path: &str, text: &str) -> Result<(), VaultError> {
+        let target = self.new_note_path(path)?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+            .map_err(|err| match err.kind() {
+                io::ErrorKind::AlreadyExists => VaultError::Exists(path.to_owned()),
+                _ => err.into(),
+            })?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+        Ok(())
+    }
+
+    /// Replaces a note's text, only while the note still holds `expected`: the text the app
+    /// last read or wrote. The new text goes to a hidden file beside the note and is renamed
+    /// over it, so a crash or a full disk leaves the old note whole. Saving the text it
+    /// already holds writes nothing.
+    pub fn write_note(&self, path: &str, text: &str, expected: &str) -> Result<(), VaultError> {
+        let real = self.resolve(path, FileKind::Note)?;
+        if fs::read(&real)? != expected.as_bytes() {
+            return Err(VaultError::Changed(path.to_owned()));
+        }
+        if text == expected {
+            return Ok(());
+        }
+        let (Some(dir), Some(name)) = (real.parent(), real.file_name()) else {
+            return Err(VaultError::InvalidPath(path.to_owned()));
+        };
+        let temp = dir.join(format!(
+            ".{}.epizen-{}.tmp",
+            name.to_string_lossy(),
+            std::process::id()
+        ));
+        let written = (|| {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temp)?;
+            file.write_all(text.as_bytes())?;
+            file.set_permissions(fs::metadata(&real)?.permissions())?;
+            file.sync_all()?;
+            fs::rename(&temp, &real)
+        })();
+        if written.is_err() {
+            // Only the temporary file this call made, never the note.
+            let _ = fs::remove_file(&temp);
+        }
+        Ok(written?)
+    }
+
     fn walk(&self, dir: &Path, files: &mut Vec<VaultFile>) -> Result<(), VaultError> {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
@@ -140,18 +205,7 @@ impl Vault {
 
     /// Turns a vault-relative path from the frontend into a real file inside the vault.
     fn resolve(&self, path: &str, expected: FileKind) -> Result<PathBuf, VaultError> {
-        let relative = Path::new(path);
-        let plain = !path.is_empty()
-            && relative.components().all(|part| match part {
-                Component::Normal(name) => !name.to_string_lossy().starts_with('.'),
-                _ => false,
-            });
-        if !plain {
-            return Err(VaultError::InvalidPath(path.to_owned()));
-        }
-        if kind_of(relative) != Some(expected) {
-            return Err(VaultError::WrongKind(path.to_owned()));
-        }
+        let relative = plain_path(path, expected)?;
         let real = match self.root.join(relative).canonicalize() {
             Ok(real) => real,
             Err(err) if err.kind() == io::ErrorKind::NotFound => {
@@ -165,6 +219,43 @@ impl Vault {
         }
         Ok(real)
     }
+
+    /// Where a new note goes: a plain path whose existing folders all lie inside the vault
+    /// (a symlinked folder can't carry it out), with the missing folders created.
+    fn new_note_path(&self, path: &str) -> Result<PathBuf, VaultError> {
+        let relative = plain_path(path, FileKind::Note)?;
+        let invalid = || VaultError::InvalidPath(path.to_owned());
+        let name = relative.file_name().ok_or_else(invalid)?;
+        let folder = self.root.join(relative.parent().ok_or_else(invalid)?);
+        let mut existing = folder.as_path();
+        while !existing.exists() {
+            existing = existing.parent().ok_or_else(invalid)?;
+        }
+        let real = existing.canonicalize()?;
+        if !real.starts_with(&self.root) || !real.is_dir() {
+            return Err(invalid());
+        }
+        let missing = folder.strip_prefix(existing).map_err(|_| invalid())?;
+        fs::create_dir_all(real.join(missing))?;
+        Ok(real.join(missing).join(name))
+    }
+}
+
+/// A vault-relative path made only of plain names, none hidden, for a file of the given kind.
+fn plain_path(path: &str, expected: FileKind) -> Result<&Path, VaultError> {
+    let relative = Path::new(path);
+    let plain = !path.is_empty()
+        && relative.components().all(|part| match part {
+            Component::Normal(name) => !name.to_string_lossy().starts_with('.'),
+            _ => false,
+        });
+    if !plain {
+        return Err(VaultError::InvalidPath(path.to_owned()));
+    }
+    if kind_of(relative) != Some(expected) {
+        return Err(VaultError::WrongKind(path.to_owned()));
+    }
+    Ok(relative)
 }
 
 fn kind_of(path: &Path) -> Option<FileKind> {
@@ -281,11 +372,21 @@ mod tests {
 
     #[test]
     fn reads_each_kind_only_through_its_own_command() {
-        let (_dir, vault) = vault_with(&[("n.md", "text"), ("c.svg", "<svg/>"), ("b.canvas", "{}")]);
+        let (_dir, vault) =
+            vault_with(&[("n.md", "text"), ("c.svg", "<svg/>"), ("b.canvas", "{}")]);
         assert_eq!(vault.read_image("c.svg").unwrap(), b"<svg/>");
-        assert!(matches!(vault.read_note("c.svg"), Err(VaultError::WrongKind(_))));
-        assert!(matches!(vault.read_image("n.md"), Err(VaultError::WrongKind(_))));
-        assert!(matches!(vault.read_note("b.canvas"), Err(VaultError::WrongKind(_))));
+        assert!(matches!(
+            vault.read_note("c.svg"),
+            Err(VaultError::WrongKind(_))
+        ));
+        assert!(matches!(
+            vault.read_image("n.md"),
+            Err(VaultError::WrongKind(_))
+        ));
+        assert!(matches!(
+            vault.read_note("b.canvas"),
+            Err(VaultError::WrongKind(_))
+        ));
     }
 
     #[test]
@@ -295,6 +396,147 @@ mod tests {
             vault.read_note("31.07.2026.md"),
             Err(VaultError::NotFound(_))
         ));
+    }
+
+    #[test]
+    fn creates_a_note_and_its_folders_but_never_replaces_a_file() {
+        let (dir, vault) = vault_with(&[("Inbox/taken.md", "keep me")]);
+        vault.create_note("Inbox/new.md", "# New\n").unwrap();
+        vault.create_note("Projects/2026/plan.md", "").unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Inbox/new.md")).unwrap(),
+            "# New\n"
+        );
+        assert!(dir.path().join("Projects/2026/plan.md").is_file());
+
+        assert!(matches!(
+            vault.create_note("Inbox/taken.md", "lost?"),
+            Err(VaultError::Exists(_))
+        ));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Inbox/taken.md")).unwrap(),
+            "keep me"
+        );
+        for path in [
+            "../out.md",
+            "/tmp/out.md",
+            ".obsidian/x.md",
+            "Inbox/.hidden.md",
+            "x.txt",
+            "",
+        ] {
+            assert!(
+                vault.create_note(path, "").is_err(),
+                "{path:?} should be refused"
+            );
+        }
+        assert!(!dir.path().join(".obsidian").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creates_nothing_through_a_symlinked_folder_that_leaves_the_vault() {
+        let outside = tempfile::tempdir().unwrap();
+        let (dir, vault) = vault_with(&[]);
+        std::os::unix::fs::symlink(outside.path(), dir.path().join("linked")).unwrap();
+        assert!(matches!(
+            vault.create_note("linked/deep/x.md", ""),
+            Err(VaultError::InvalidPath(_))
+        ));
+        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn writes_a_note_only_over_the_text_it_expects() {
+        let text = "---\r\nmood: 7\r\n---\r\nДень — ok\r\n";
+        let (dir, vault) = vault_with(&[("day.md", text)]);
+        let path = dir.path().join("day.md");
+
+        vault.write_note("day.md", text, text).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+
+        let edited = text.replace("ok", "ok, edited");
+        vault.write_note("day.md", &edited, text).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), edited);
+
+        // Someone else changed it meanwhile: refuse, and leave their text alone.
+        assert!(matches!(
+            vault.write_note("day.md", "mine", text),
+            Err(VaultError::Changed(_))
+        ));
+        assert_eq!(fs::read_to_string(&path).unwrap(), edited);
+        assert!(matches!(
+            vault.write_note("missing.md", "x", ""),
+            Err(VaultError::NotFound(_))
+        ));
+        // No temporary file is left beside the note.
+        let names: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["day.md"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_write_keeps_the_note_s_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, vault) = vault_with(&[("private.md", "a")]);
+        let path = dir.path().join("private.md");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        vault.write_note("private.md", "b", "a").unwrap();
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
+    /// Every file under `root`, hidden ones included, with its bytes.
+    fn snapshot(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+        let mut files = std::collections::BTreeMap::new();
+        let mut dirs = vec![root.to_path_buf()];
+        while let Some(dir) = dirs.pop() {
+            for entry in fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else {
+                    let bytes = fs::read(&path).unwrap();
+                    files.insert(path.strip_prefix(root).unwrap().to_path_buf(), bytes);
+                }
+            }
+        }
+        files
+    }
+
+    #[test]
+    fn writing_to_a_copy_of_the_demo_vault_changes_only_the_intended_files() {
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../demo-vault");
+        let copy = tempfile::tempdir().unwrap();
+        for (path, bytes) in snapshot(&demo) {
+            let target = copy.path().join(path);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(target, bytes).unwrap();
+        }
+        let before = snapshot(copy.path());
+        let vault = Vault::open(copy.path()).unwrap();
+
+        let day = "Calendar/2026/days 2026/14.08.2026.md";
+        let text = vault.read_note(day).unwrap();
+        let edited = text.replace("Busy but calm.", "Busy, then calm.");
+        assert_ne!(edited, text);
+        vault.write_note(day, &edited, &text).unwrap();
+        vault.create_note("Inbox/Idea.md", "An idea\n").unwrap();
+
+        let mut after = snapshot(copy.path());
+        assert_eq!(after.remove(Path::new(day)).unwrap(), edited.as_bytes());
+        assert_eq!(
+            after.remove(Path::new("Inbox/Idea.md")).unwrap(),
+            b"An idea\n"
+        );
+        let mut before = before;
+        before.remove(Path::new(day)).unwrap();
+        assert_eq!(after, before, "only the edited and the new note may differ");
     }
 
     #[test]

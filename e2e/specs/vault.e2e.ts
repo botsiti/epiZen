@@ -1,7 +1,9 @@
 import { $, $$, browser, expect } from '@wdio/globals';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { DEMO_VAULT, vaultCopy } from '../paths';
-import { followLink, openFolders, openNote, prepareWindow, screenshot } from '../support';
+import { followLink, openFolders, openNote, prepareWindow, screenshot, typeInEditor } from '../support';
 
 const DAYS = 'Calendar/2026/days 2026';
 const title = () => $('[data-testid="note-title"]');
@@ -75,7 +77,35 @@ describe('the demo vault', () => {
     await screenshot('10-missing-note');
   });
 
-  it('left every file in the vault copy as it was', () => {
-    expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual([]);
+  it('opens a note in the editor and leaves it as it was when nothing is typed', async () => {
+    await openNote(`${DAYS}/14.08.2026.md`);
+    await $('[data-testid="edit-note"]').click();
+    // Waiting on the editor's text would scroll it into view, past the title.
+    await $('[data-testid="note-editor"]').waitForDisplayed();
+    await expect($('[data-testid="preview"]')).toHaveText(expect.stringContaining('Busy but calm.'));
+    await screenshot('11-editor');
+    await $('[data-testid="edit-done"]').click();
+    await $('[data-testid="note"]').waitForDisplayed();
+  });
+
+  it('creates a new note and saves what is typed into it', async () => {
+    // From the home screen a new note goes to the top of the vault.
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="new-note-button"]').click();
+    await $('[data-testid="new-note-name"]').setValue('Inbox idea');
+    await expect($('[data-testid="new-note-folder"]')).toHaveValue('');
+    await screenshot('12-new-note');
+    await $('[data-testid="new-note-create"]').click();
+    await $('[data-testid="editor"] .cm-content').waitForDisplayed();
+    await typeInEditor('# Hello from Epizen');
+    await expect($('[data-testid="save-state"]')).toHaveText('Saved', { wait: 5000 });
+    await expect($('[data-testid="preview"] h1')).toHaveText('Hello from Epizen');
+    expect(readFileSync(join(vaultCopy(), 'Inbox idea.md'), 'utf8')).toBe('# Hello from Epizen');
+    await screenshot('13-new-note-editor');
+    await expect($('[data-testid="tree-note"][data-path="Inbox idea.md"]')).toBeDisplayed();
+  });
+
+  it('changed nothing in the vault copy but the new note', () => {
+    expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(['added: Inbox idea.md']);
   });
 });

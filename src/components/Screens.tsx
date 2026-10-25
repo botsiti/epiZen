@@ -33,14 +33,25 @@ export function MissingNote({ target, onBack }: { target: string; onBack?: () =>
   );
 }
 
-export function NoVault({ message }: { message?: string }) {
+interface NoVaultProps {
+  message?: string;
+  onOpenFolder: () => void;
+  /** Why the last folder the user picked couldn't be opened. */
+  folderError?: string;
+}
+
+export function NoVault({ message, onOpenFolder, folderError }: NoVaultProps) {
   return (
     <main className="screen screen-full" data-testid={message ? 'vault-error' : 'no-vault'}>
       <p className="eyebrow">Epizen</p>
       <h1>{message ? "Couldn't open the vault" : 'No vault open'}</h1>
       {message && <p className="muted">{message}</p>}
+      <button type="button" className="quiet-button" onClick={onOpenFolder} data-testid="open-folder">
+        Open a folder of notes…
+      </button>
+      {folderError && <p className="muted">{folderError}</p>}
       <p className="hint">
-        Start Epizen with <code>--vault &lt;folder&gt;</code>, or set <code>EPIZEN_VAULT</code> to a folder of notes.
+        Epizen opens it again next time. You can also start it with <code>--vault &lt;folder&gt;</code>.
       </p>
     </main>
   );

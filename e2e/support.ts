@@ -33,6 +33,18 @@ export async function openNote(path: string) {
   await $(`[data-testid="note"][data-path="${path}"]`).waitForDisplayed();
 }
 
+/**
+ * Types into the note editor. This driver's key presses don't reach a contenteditable, so it
+ * sends what macOS sends when a person types: an `insertText` edit at the cursor.
+ */
+export async function typeInEditor(text: string) {
+  await $('[data-testid="editor"] .cm-content').click();
+  await browser.execute((value) => {
+    document.querySelector<HTMLElement>('[data-testid="editor"] .cm-content')?.focus();
+    document.execCommand('insertText', false, value);
+  }, text);
+}
+
 export async function followLink(target: string) {
   await $(`[data-testid="note"] a[data-wikilink="${target}"]`).click();
 }
