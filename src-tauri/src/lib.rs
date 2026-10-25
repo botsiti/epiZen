@@ -120,12 +120,13 @@ async fn open_vault(
 ) -> Result<VaultStatus, String> {
     let vault = Vault::open(&path).map_err(|err| format!("Couldn't open the vault: {err}"))?;
     let status = VaultStatus::Open { name: vault.name() };
+    // Remembered first: if that fails, the vault that was open stays open, as the error says.
+    settings
+        .set_last_vault(&path)
+        .map_err(|err| format!("Couldn't remember the vault: {err}"))?;
     *state
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = VaultState::Open(vault);
-    settings
-        .set_last_vault(&path)
-        .map_err(|err| err.to_string())?;
     Ok(status)
 }
 
