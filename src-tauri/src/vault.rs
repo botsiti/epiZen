@@ -136,16 +136,16 @@ impl Vault {
     /// moment: if it isn't `expected`, someone saved meanwhile, and it goes straight back, the
     /// same file, so their save stands as they wrote it and ours reports `Changed`.
     pub fn write_note(&self, path: &str, text: &str, expected: &str) -> Result<(), VaultError> {
-        self.write_note_with(path, text, expected, || {})
+        self.write_note_with(path, text, expected, |_| {})
     }
 
-    /// `write_note`, with a hook that runs just before the swap, for tests to save "meanwhile".
+    /// `write_note`, with a hook that runs just before each swap, for tests to save "meanwhile".
     fn write_note_with(
         &self,
         path: &str,
         text: &str,
         expected: &str,
-        before_swap: impl FnOnce(),
+        mut before: impl FnMut(Step),
     ) -> Result<(), VaultError> {
         let changed = || VaultError::Changed(path.to_owned());
         let real = self.resolve(path, FileKind::Note)?;
@@ -163,7 +163,7 @@ impl Vault {
             file.sync_all()
         })()
         .and_then(|()| {
-            before_swap();
+            before(Step::Swap);
             swap(&temp, &real)
         });
         if let Err(err) = prepared {
@@ -175,19 +175,24 @@ impl Vault {
             fs::remove_file(&temp)?;
             return Ok(());
         }
+        before(Step::SwapBack);
+        let kept = |detail: String| {
+            // A version nobody checked stays beside the note, hidden, rather than being lost.
+            VaultError::Io(io::Error::other(format!(
+                "the note changed on disk while saving; another version of it is kept as {}{detail}",
+                temp.display()
+            )))
+        };
         if let Err(err) = swap(&temp, &real) {
-            // Their file stays beside the note, hidden, rather than being lost.
-            return Err(VaultError::Io(io::Error::new(
-                err.kind(),
-                format!(
-                    "the note changed on disk while saving; its other version is kept as {}: {err}",
-                    temp.display()
-                ),
-            )));
+            return Err(kept(format!(": {err}")));
         }
-        // Back in place, their file is the note again; ours, now in `temp`, goes.
-        fs::remove_file(&temp)?;
-        Err(changed())
+        // Their file is the note again. What came out is removed only if it is exactly ours;
+        // if yet another save landed meanwhile, that one is what came out, and it is kept.
+        if fs::read(&temp).is_ok_and(|ours| ours == text.as_bytes()) {
+            fs::remove_file(&temp)?;
+            return Err(changed());
+        }
+        Err(kept(String::new()))
     }
 
     fn walk(&self, dir: &Path, files: &mut Vec<VaultFile>) -> Result<(), VaultError> {
@@ -342,6 +347,13 @@ fn swap(_: &Path, _: &Path) -> io::Result<()> {
         io::ErrorKind::Unsupported,
         "Epizen saves notes only on macOS, where it can swap files in one step",
     ))
+}
+
+/// The two moments a save trades files: putting the new text in, and putting an outside save back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Swap,
+    SwapBack,
 }
 
 /// A vault-relative path made only of plain names, none hidden, for a file of the given kind.
@@ -624,8 +636,10 @@ mod tests {
     fn an_edit_saved_meanwhile_in_place_stands_and_ours_is_refused() {
         let (dir, vault) = vault_with(&[("day.md", "mine before")]);
         let path = dir.path().join("day.md");
-        let result = vault.write_note_with("day.md", "mine after", "mine before", || {
-            fs::write(&path, "theirs").unwrap();
+        let result = vault.write_note_with("day.md", "mine after", "mine before", |step| {
+            if step == Step::Swap {
+                fs::write(&path, "theirs").unwrap();
+            }
         });
         assert!(matches!(result, Err(VaultError::Changed(_))));
         assert_eq!(fs::read_to_string(&path).unwrap(), "theirs");
@@ -643,9 +657,11 @@ mod tests {
         let (dir, vault) = vault_with(&[("day.md", "mine before")]);
         let path = dir.path().join("day.md");
         let theirs = dir.path().join("theirs.tmp");
-        let result = vault.write_note_with("day.md", "mine after", "mine before", || {
-            fs::write(&theirs, "theirs").unwrap();
-            fs::rename(&theirs, &path).unwrap();
+        let result = vault.write_note_with("day.md", "mine after", "mine before", |step| {
+            if step == Step::Swap {
+                fs::write(&theirs, "theirs").unwrap();
+                fs::rename(&theirs, &path).unwrap();
+            }
         });
         assert!(matches!(result, Err(VaultError::Changed(_))));
         assert_eq!(fs::read_to_string(&path).unwrap(), "theirs");
@@ -653,6 +669,32 @@ mod tests {
         vault.write_note("day.md", "mine after", "theirs").unwrap();
         assert_ne!(fs::metadata(&path).unwrap().ino(), inode);
         assert_eq!(fs::read_to_string(&path).unwrap(), "mine after");
+    }
+
+    #[test]
+    fn a_second_outside_save_during_the_swap_back_is_kept_not_removed() {
+        let (dir, vault) = vault_with(&[("day.md", "mine before")]);
+        let path = dir.path().join("day.md");
+        let result = vault.write_note_with("day.md", "mine after", "mine before", |step| {
+            let text = if step == Step::Swap {
+                "theirs"
+            } else {
+                "theirs, again"
+            };
+            fs::write(&path, text).unwrap();
+        });
+        assert!(matches!(result, Err(VaultError::Io(_))), "{result:?}");
+        let mut texts: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap())
+            .collect();
+        texts.sort();
+        assert_eq!(
+            texts,
+            vec!["theirs", "theirs, again"],
+            "both outside saves survive; ours goes"
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), "theirs");
     }
 
     #[cfg(target_os = "macos")]
