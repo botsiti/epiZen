@@ -15,7 +15,7 @@ use tauri::ipc::Response;
 use tauri::{Emitter, Manager, RunEvent, State, WindowEvent};
 
 pub use settings::Settings;
-pub use vault::{FileKind, Vault, VaultError, VaultFile};
+pub use vault::{FileKind, NoteText, Vault, VaultError, VaultFile};
 
 #[cfg(all(feature = "e2e", not(debug_assertions)))]
 compile_error!("the `e2e` feature opens a WebDriver port; build it in debug mode only");
@@ -162,6 +162,11 @@ async fn read_note(state: Shared<'_>, path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn read_all_notes(state: Shared<'_>) -> Result<Vec<NoteText>, String> {
+    with_vault(state, Vault::read_all_notes)
+}
+
+#[tauri::command]
 async fn read_image(state: Shared<'_>, path: String) -> Result<Response, String> {
     with_vault(state, |vault| vault.read_image(&path)).map(Response::new)
 }
@@ -265,6 +270,7 @@ pub fn run() {
             pick_vault,
             list_files,
             read_note,
+            read_all_notes,
             read_image,
             create_note,
             write_note,

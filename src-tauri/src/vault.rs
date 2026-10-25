@@ -36,6 +36,13 @@ pub struct VaultFile {
     pub kind: FileKind,
 }
 
+/// A note's path and text, for reading the whole vault at once.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NoteText {
+    pub path: String,
+    pub text: String,
+}
+
 #[derive(Debug)]
 pub enum VaultError {
     NotAFolder(PathBuf),
@@ -104,6 +111,23 @@ impl Vault {
 
     pub fn read_note(&self, path: &str) -> Result<String, VaultError> {
         Ok(fs::read_to_string(self.resolve(path, FileKind::Note)?)?)
+    }
+
+    /// Every note's text, for links, backlinks and the graph. A note that can't be read as
+    /// UTF-8 text is left out rather than failing the rest.
+    pub fn read_all_notes(&self) -> Result<Vec<NoteText>, VaultError> {
+        Ok(self
+            .list_files()?
+            .into_iter()
+            .filter(|file| file.kind == FileKind::Note)
+            .filter_map(|file| {
+                let text = self.read_note(&file.path).ok()?;
+                Some(NoteText {
+                    path: file.path,
+                    text,
+                })
+            })
+            .collect())
     }
 
     pub fn read_image(&self, path: &str) -> Result<Vec<u8>, VaultError> {
@@ -507,6 +531,19 @@ mod tests {
             vault.read_note("b.canvas"),
             Err(VaultError::WrongKind(_))
         ));
+    }
+
+    #[test]
+    fn reads_every_note_at_once_and_skips_one_that_is_not_text() {
+        let (dir, vault) =
+            vault_with(&[("a.md", "[[b]]"), ("x/b.md", "День"), ("c.svg", "<svg/>")]);
+        fs::write(dir.path().join("bad.md"), [0xff, 0xfe, 0x00]).unwrap();
+        let notes = vault.read_all_notes().unwrap();
+        let read: Vec<(&str, &str)> = notes
+            .iter()
+            .map(|n| (n.path.as_str(), n.text.as_str()))
+            .collect();
+        assert_eq!(read, vec![("a.md", "[[b]]"), ("x/b.md", "День")]);
     }
 
     #[test]

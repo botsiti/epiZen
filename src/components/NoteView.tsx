@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { readNote, writeNote, type VaultFile } from '../lib/api';
+import type { LinkTarget } from '../lib/completion';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
@@ -21,12 +22,19 @@ interface NoteProps {
 interface ViewProps extends NoteProps {
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
+  /** A save reached the note. */
+  onSaved: (path: string, text: string) => void;
   /** A save failed after the editor was closed: the text that didn't reach the note. */
   onUnsaved: (path: string, text: string, message: string) => void;
+  /** What `[[` offers in the editor. */
+  linkTargets: LinkTarget[];
+  /** Shown under the note when reading it: its backlinks. */
+  footer?: ReactNode;
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
-export function NoteView({ path, files, onOpenLink, editing, onEditingChange, onUnsaved }: ViewProps) {
+export function NoteView(props: ViewProps) {
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
 
   useEffect(() => {
@@ -57,9 +65,13 @@ export function NoteView({ path, files, onOpenLink, editing, onEditingChange, on
         text={note.text}
         files={files}
         onOpenLink={onOpenLink}
-        onSaved={(text) => setNote({ path, text })}
+        onSaved={(text) => {
+          setNote({ path, text });
+          onSaved(path, text);
+        }}
         onDone={() => onEditingChange(false)}
         onUnsaved={(text, message) => onUnsaved(path, text, message)}
+        linkTargets={linkTargets}
       />
     );
   }
@@ -68,7 +80,12 @@ export function NoteView({ path, files, onOpenLink, editing, onEditingChange, on
       Edit
     </button>
   );
-  return <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} />;
+  return (
+    <>
+      <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} />
+      {footer}
+    </>
+  );
 }
 
 type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'failed'; message: string };
@@ -78,6 +95,7 @@ interface EditorProps extends NoteProps {
   onSaved: (text: string) => void;
   onDone: () => void;
   onUnsaved: (text: string, message: string) => void;
+  linkTargets: LinkTarget[];
 }
 
 /**
@@ -86,7 +104,7 @@ interface EditorProps extends NoteProps {
  * meanwhile, saving stops and says so; nothing is overwritten, and the text that wasn't saved
  * is never dropped without a word: Done stays put, and leaving hands it to `onUnsaved`.
  */
-function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved }: EditorProps) {
+function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved, linkTargets }: EditorProps) {
   // Decided once: saves keep the note's line ending, so it can't change under the editor.
   const [separator] = useState(() => lineEnding(text));
   const [draft, setDraft] = useState(text);
@@ -177,7 +195,7 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved 
       )}
       {separator ? (
         <div className="edit-panes">
-          <Editor initial={text} lineSeparator={separator} onChange={change} />
+          <Editor initial={text} lineSeparator={separator} onChange={change} linkTargets={linkTargets} />
           <div className="preview" data-testid="preview">
             <NoteBody path={path} text={draft} files={files} onOpenLink={onOpenLink} />
           </div>
