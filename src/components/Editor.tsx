@@ -9,7 +9,10 @@ import { useEffect, useRef } from 'react';
 interface Props {
   /** The text the editor starts with. Later changes to it are ignored; remount to load another note. */
   initial: string;
-  /** Joins lines when the text is read back, so a CRLF note stays CRLF. */
+  /**
+   * The note's line ending. The editor splits lines on any ending, so pasted text can't bring
+   * foreign ones in, and joins them with this one, so a CRLF note stays CRLF throughout.
+   */
   lineSeparator: '\n' | '\r\n';
   onChange: (text: string) => void;
   /** More CodeMirror extensions, such as autocomplete. */
@@ -64,7 +67,6 @@ export function Editor({ initial, lineSeparator, onChange, extensions }: Props) 
       state: EditorState.create({
         doc,
         extensions: [
-          EditorState.lineSeparator.of(separator),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown(),
@@ -73,7 +75,9 @@ export function Editor({ initial, lineSeparator, onChange, extensions }: Props) 
           placeholder('Start writing…'),
           theme,
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) report.current(update.state.sliceDoc());
+            if (!update.docChanged) return;
+            const text = update.state.doc.toString();
+            report.current(separator === '\n' ? text : text.replaceAll('\n', separator));
           }),
           ...extra,
         ],
