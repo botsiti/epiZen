@@ -7,7 +7,7 @@
 
 use std::fmt;
 use std::fs;
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
 use serde::Serialize;
@@ -127,51 +127,70 @@ impl Vault {
     }
 
     /// Replaces a note's text, only while the note still holds `expected`: the text the app
-    /// last read or wrote. The new text goes to a hidden file beside the note, takes on the
-    /// note's permissions, creation date and extended attributes (Finder tags, comments), and
-    /// is renamed over it, so a crash or a full disk leaves the old note whole. Saving the text
-    /// it already holds writes nothing.
+    /// last read or wrote. Saving the text it already holds writes nothing.
+    ///
+    /// The new text goes to a hidden file beside the note, with the note's extended attributes
+    /// (Finder tags, comments), creation date and permissions, and then trades places with the
+    /// note in one step. The file that comes out is exactly what was at the note's path at that
+    /// moment: if it isn't `expected`, someone saved meanwhile, and it goes straight back, the
+    /// same file, so their save stands as they wrote it and ours reports `Changed`.
     pub fn write_note(&self, path: &str, text: &str, expected: &str) -> Result<(), VaultError> {
+        self.write_note_with(path, text, expected, || {})
+    }
+
+    /// `write_note`, with a hook that runs just before the swap, for tests to save "meanwhile".
+    fn write_note_with(
+        &self,
+        path: &str,
+        text: &str,
+        expected: &str,
+        before_swap: impl FnOnce(),
+    ) -> Result<(), VaultError> {
         let changed = || VaultError::Changed(path.to_owned());
         let real = self.resolve(path, FileKind::Note)?;
-        // Kept open: an app that writes the note in place after the last look below writes
-        // into this file, and the check after the rename sees it.
-        let mut old = fs::File::open(&real)?;
-        if read_from_start(&mut old)? != expected.as_bytes() {
+        if fs::read(&real)? != expected.as_bytes() {
             return Err(changed());
         }
         if text == expected {
             return Ok(());
         }
         let temp = temp_beside(&real).ok_or_else(|| VaultError::InvalidPath(path.to_owned()))?;
-        let written = (|| {
+        let prepared = (|| {
             let mut file = fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .open(&temp)?;
             file.write_all(text.as_bytes())?;
             copy_metadata(&real, &temp, &file)?;
-            file.sync_all()?;
-            // A last look right before the swap, after the slow part.
-            if fs::read(&real)? != expected.as_bytes() {
-                return Err(changed());
-            }
-            fs::rename(&temp, &real)?;
-            Ok(())
-        })();
-        if written.is_err() {
+            file.sync_all()
+        })()
+        .and_then(|()| {
+            before_swap();
+            swap(&temp, &real)
+        });
+        if let Err(err) = prepared {
             // Only the temporary file this call made, never the note.
             let _ = fs::remove_file(&temp);
-            return written;
+            return Err(err.into());
         }
-        // Someone wrote into the old file between the last look and the rename: put their
-        // text back as the note, and keep ours unsaved.
-        let theirs = read_from_start(&mut old)?;
-        if theirs != expected.as_bytes() {
-            restore(&real, &theirs)?;
-            return Err(changed());
+        // `temp` now holds whatever was at the note's path when the two traded places.
+        if fs::read(&temp).is_ok_and(|replaced| replaced == expected.as_bytes()) {
+            fs::remove_file(&temp)?;
+            return Ok(());
         }
-        Ok(())
+        if let Err(err) = swap(&temp, &real) {
+            // Their file stays beside the note, hidden, rather than being lost.
+            return Err(VaultError::Io(io::Error::new(
+                err.kind(),
+                format!(
+                    "the note changed on disk while saving; its other version is kept as {}: {err}",
+                    temp.display()
+                ),
+            )));
+        }
+        // Back in place, their file is the note again; ours, now in `temp`, goes.
+        fs::remove_file(&temp)?;
+        Err(changed())
     }
 
     fn walk(&self, dir: &Path, files: &mut Vec<VaultFile>) -> Result<(), VaultError> {
@@ -252,44 +271,16 @@ impl Vault {
     }
 }
 
-fn read_from_start(file: &mut fs::File) -> io::Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    file.rewind()?;
-    file.read_to_end(&mut bytes)?;
-    Ok(bytes)
-}
-
 /// A hidden file beside the note, which the vault listing skips.
 fn temp_beside(real: &Path) -> Option<PathBuf> {
     let name = real.file_name()?.to_string_lossy();
     Some(real.with_file_name(format!(".{name}.epizen-{}.tmp", std::process::id())))
 }
 
-/// Puts `bytes` back as the note, the same way a save does.
-fn restore(real: &Path, bytes: &[u8]) -> Result<(), VaultError> {
-    let temp =
-        temp_beside(real).ok_or_else(|| VaultError::InvalidPath(real.display().to_string()))?;
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp)?;
-    file.write_all(bytes)?;
-    copy_metadata(real, &temp, &file)?;
-    file.sync_all()?;
-    fs::rename(&temp, real)?;
-    Ok(())
-}
-
-/// What a note keeps across a save besides its text: permissions, creation date and extended
-/// attributes. An attribute the system won't let us set is skipped rather than failing the save.
+/// What a note keeps across a save besides its text: extended attributes, creation date and
+/// permissions, in that order, since a read-only mode would refuse the attributes. An attribute
+/// the system won't let us set is skipped rather than failing the save.
 fn copy_metadata(from: &Path, to: &Path, file: &fs::File) -> io::Result<()> {
-    let metadata = fs::metadata(from)?;
-    file.set_permissions(metadata.permissions())?;
-    #[cfg(target_os = "macos")]
-    if let Ok(created) = metadata.created() {
-        use std::os::macos::fs::FileTimesExt;
-        file.set_times(fs::FileTimes::new().set_created(created))?;
-    }
     if let Ok(names) = xattr::list(from) {
         for name in names {
             if let Ok(Some(value)) = xattr::get(from, &name) {
@@ -297,7 +288,37 @@ fn copy_metadata(from: &Path, to: &Path, file: &fs::File) -> io::Result<()> {
             }
         }
     }
-    Ok(())
+    let metadata = fs::metadata(from)?;
+    #[cfg(target_os = "macos")]
+    if let Ok(created) = metadata.created() {
+        use std::os::macos::fs::FileTimesExt;
+        file.set_times(fs::FileTimes::new().set_created(created))?;
+    }
+    file.set_permissions(metadata.permissions())
+}
+
+/// Trades the two paths' files in one step (macOS `renamex_np` with `RENAME_SWAP`).
+#[cfg(target_os = "macos")]
+fn swap(a: &Path, b: &Path) -> io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let a = CString::new(a.as_os_str().as_bytes())?;
+    let b = CString::new(b.as_os_str().as_bytes())?;
+    // SAFETY: both are valid NUL-terminated paths that outlive the call; renamex_np only reads them.
+    if unsafe { libc::renamex_np(a.as_ptr(), b.as_ptr(), libc::RENAME_SWAP) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+/// Elsewhere there is no swap: the new file is renamed over the note, so the check after it
+/// only sees the note's text from just before. Epizen is built for macOS.
+#[cfg(not(target_os = "macos"))]
+fn swap(temp: &Path, real: &Path) -> io::Result<()> {
+    let current = fs::read(real)?;
+    fs::rename(temp, real)?;
+    fs::write(temp, current)
 }
 
 /// A vault-relative path made only of plain names, none hidden, for a file of the given kind.
@@ -574,6 +595,63 @@ mod tests {
             Some(&tag[..])
         );
         assert_eq!(fs::metadata(&path).unwrap().created().unwrap(), born);
+    }
+
+    #[test]
+    fn an_edit_saved_meanwhile_in_place_stands_and_ours_is_refused() {
+        let (dir, vault) = vault_with(&[("day.md", "mine before")]);
+        let path = dir.path().join("day.md");
+        let result = vault.write_note_with("day.md", "mine after", "mine before", || {
+            fs::write(&path, "theirs").unwrap();
+        });
+        assert!(matches!(result, Err(VaultError::Changed(_))));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "theirs");
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "no temporary file left"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_edit_saved_meanwhile_by_replacing_the_file_stands_as_that_same_file() {
+        use std::os::unix::fs::MetadataExt;
+        let (dir, vault) = vault_with(&[("day.md", "mine before")]);
+        let path = dir.path().join("day.md");
+        let theirs = dir.path().join("theirs.tmp");
+        let result = vault.write_note_with("day.md", "mine after", "mine before", || {
+            fs::write(&theirs, "theirs").unwrap();
+            fs::rename(&theirs, &path).unwrap();
+        });
+        assert!(matches!(result, Err(VaultError::Changed(_))));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "theirs");
+        let inode = fs::metadata(&path).unwrap().ino();
+        vault.write_note("day.md", "mine after", "theirs").unwrap();
+        assert_ne!(fs::metadata(&path).unwrap().ino(), inode);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "mine after");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_read_only_note_keeps_its_extended_attributes() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, vault) = vault_with(&[("locked.md", "a")]);
+        let path = dir.path().join("locked.md");
+        xattr::set(&path, "com.apple.metadata:kMDItemFinderComment", b"keep").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        vault.write_note("locked.md", "b", "a").unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "b");
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o444
+        );
+        assert_eq!(
+            xattr::get(&path, "com.apple.metadata:kMDItemFinderComment")
+                .unwrap()
+                .as_deref(),
+            Some(&b"keep"[..])
+        );
     }
 
     /// Every file under `root`, hidden ones included, with its bytes.

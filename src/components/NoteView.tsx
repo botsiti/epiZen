@@ -5,6 +5,7 @@ import { readNote, writeNote, type VaultFile } from '../lib/api';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
+import { flushBeforeClose } from '../lib/saving';
 import { lineEnding } from '../lib/text';
 import { Editor } from './Editor';
 import { VaultImage } from './VaultImage';
@@ -99,12 +100,13 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved 
   useEffect(() => {
     report.current = { onSaved, onUnsaved };
   }, [onSaved, onUnsaved]);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set here too: StrictMode runs this cleanup once before the editor is really gone.
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const save = useCallback(() => {
     queue.current = queue.current.then(async () => {
@@ -135,6 +137,8 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved 
   }, [draft, save]);
   // Leaving the note saves what is left, or hands it on if it can't be saved.
   useEffect(() => () => void save(), [save]);
+  // So does closing the window or quitting, which never unmounts the editor.
+  useEffect(() => flushBeforeClose(() => save().then(() => failure.current === undefined)), [save]);
 
   const change = useCallback((next: string) => {
     latest.current = next;

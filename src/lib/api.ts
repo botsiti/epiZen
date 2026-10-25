@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 
 /** Mirrors `VaultStatus` in src-tauri/src/lib.rs. */
@@ -31,6 +32,17 @@ export const writeNote = (path: string, text: string, expected: string) =>
 export const getSettings = () => invoke<Settings>('get_settings');
 /** Merges by top-level key; `null` removes a key. Returns every setting. */
 export const updateSettings = (patch: Settings) => invoke<Settings>('update_settings', { patch });
+
+/**
+ * Closing the window or quitting waits for the app: `handler` runs on each attempt and calls
+ * `closeNow` when the editor's saves are done. Returns a function that stops listening.
+ */
+export async function guardClose(handler: () => void): Promise<() => void> {
+  const stop = await listen('epizen://close-requested', handler);
+  await invoke('guard_close');
+  return stop;
+}
+export const closeNow = () => invoke<void>('close_now');
 
 /** The system's folder picker. Resolves to `null` when the user cancels. */
 export const pickFolder = () => open({ directory: true, multiple: false, title: 'Open a vault' });

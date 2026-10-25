@@ -7,11 +7,12 @@ mod vault;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::ipc::Response;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, RunEvent, State, WindowEvent};
 
 pub use settings::Settings;
 pub use vault::{FileKind, Vault, VaultError, VaultFile};
@@ -173,9 +174,46 @@ async fn update_settings(
     settings.update(patch).map_err(|err| err.to_string())
 }
 
+/// Closing waits for the editor's last save. Once the frontend can listen (`guarded`), a close or
+/// quit is held and the frontend is asked to save; it lets go with `close_now` (`done`).
+#[derive(Default)]
+struct Closing {
+    guarded: AtomicBool,
+    done: AtomicBool,
+}
+
+const CLOSE_REQUESTED: &str = "epizen://close-requested";
+
+impl Closing {
+    /// True when this close should wait for the frontend.
+    fn hold(&self) -> bool {
+        self.guarded.load(Ordering::SeqCst) && !self.done.load(Ordering::SeqCst)
+    }
+}
+
+#[tauri::command]
+fn guard_close(closing: State<'_, Closing>) {
+    closing.guarded.store(true, Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn close_now(app: tauri::AppHandle, closing: State<'_, Closing>) {
+    closing.done.store(true, Ordering::SeqCst);
+    app.exit(0);
+}
+
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(Closing::default())
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && window.state::<Closing>().hold()
+            {
+                api.prevent_close();
+                let _ = window.emit(CLOSE_REQUESTED, ());
+            }
+        })
         .setup(|app| {
             // Tests point this at a temporary folder, so they never read or change real settings.
             let dir = match std::env::var_os("EPIZEN_CONFIG_DIR").filter(|dir| !dir.is_empty()) {
@@ -201,7 +239,9 @@ pub fn run() {
             create_note,
             write_note,
             get_settings,
-            update_settings
+            update_settings,
+            guard_close,
+            close_now
         ]);
 
     #[cfg(feature = "e2e")]
@@ -210,8 +250,17 @@ pub fn run() {
         .plugin(tauri_plugin_wdio_webdriver::init());
 
     builder
-        .run(tauri::generate_context!())
-        .expect("error while running Epizen");
+        .build(tauri::generate_context!())
+        .expect("error while building Epizen")
+        .run(|app, event| {
+            // Cmd+Q and the app menu's Quit come here, not through the window.
+            if let RunEvent::ExitRequested { api, .. } = event
+                && app.state::<Closing>().hold()
+            {
+                api.prevent_exit();
+                let _ = app.emit(CLOSE_REQUESTED, ());
+            }
+        });
 }
 
 #[cfg(test)]

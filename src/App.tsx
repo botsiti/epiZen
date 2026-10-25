@@ -3,8 +3,9 @@ import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
 import { Home, MissingNote, NoVault, Unsaved } from './components/Screens';
 import { Sidebar } from './components/Sidebar';
-import { createNote, listFiles, openVault, pickFolder, vaultStatus, type VaultFile, type VaultStatus } from './lib/api';
+import { closeNow, createNote, guardClose, listFiles, openVault, pickFolder, vaultStatus, type VaultFile, type VaultStatus } from './lib/api';
 import { noteFolder, resolveLink } from './lib/links';
+import { flushAll } from './lib/saving';
 import { buildTree, countFolders } from './lib/tree';
 
 type View =
@@ -46,6 +47,19 @@ export function App() {
   const place = view.kind === 'note' ? view.path : view.kind;
   useEffect(() => main.current?.scrollTo(0, 0), [place]);
 
+  // A close or quit first saves what the editor holds. If that fails, the window stays open with
+  // the editor's warning and its text; closing again closes.
+  useEffect(() => {
+    let warned = false;
+    const stop = guardClose(() => {
+      void flushAll().then((saved) => {
+        if (saved || warned) void closeNow();
+        warned = true;
+      });
+    });
+    return () => void stop.then((unlisten) => unlisten());
+  }, []);
+
   const tree = useMemo(() => buildTree(files), [files]);
   const folders = useMemo(
     () => [...new Set(files.filter((file) => file.kind === 'note').map((file) => noteFolder(file.path)))].filter(Boolean).sort(),
@@ -83,8 +97,9 @@ export function App() {
   const create = useCallback(
     async (path: string) => {
       await createNote(path, '');
-      setFiles(await listFiles());
       go({ kind: 'note', path, editing: true });
+      // The note exists now; listing the vault again only updates the sidebar.
+      listFiles().then(setFiles, () => undefined);
     },
     [go],
   );
