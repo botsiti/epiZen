@@ -29,8 +29,8 @@ describe('the demo vault', () => {
     await screenshot('04-daily-note');
   });
 
-  it('shows tasks that cannot be ticked from the app', async () => {
-    const boxes = await $$('[data-testid="note"] input[type="checkbox"]').getElements();
+  it("shows tasks in the note's text that cannot be ticked there", async () => {
+    const boxes = await $$('[data-testid="note"] .note-body input[type="checkbox"]').getElements();
     expect(boxes.length).toBeGreaterThan(0);
     for (const box of boxes) await expect(box).toBeDisabled();
   });
@@ -173,6 +173,40 @@ describe('the demo vault', () => {
     await screenshot('15-new-day');
   });
 
+  it('shows a day as a dashboard, and ticking a task there writes only that box back', async () => {
+    await showMonth('August 2026');
+    await $('[data-testid="calendar-day"][data-date="2026-08-14"]').click();
+    const dashboard = $('[data-testid="dashboard"][data-period="day"]');
+    await expect(dashboard).toHaveText(expect.stringContaining('Tasks · 3 of 5 done'));
+    await expect($('[data-testid="dash-minutes"]')).toHaveText(expect.stringContaining('25m of 1h 16m'));
+    await expect($('[data-testid="dash-meters"]')).toHaveText(expect.stringContaining('mood9'));
+    await screenshot('22-daily-dashboard');
+
+    const file = join(vaultCopy(), `${DAYS}/14.08.2026.md`);
+    const before = readFileSync(file, 'utf8');
+    const task = '- [ ] #daily/code — refactor the settings screen [minutes::58]';
+    const line = before.split('\n').indexOf(task);
+    expect(line).toBeGreaterThan(0);
+    await $(`[data-testid="dash-task"][data-line="${line}"]`).click();
+    const ticked = before.replace(task, task.replace('[ ]', '[x]'));
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === ticked, { timeout: 5000, timeoutMsg: 'the tick never reached the note' });
+    await expect(dashboard).toHaveText(expect.stringContaining('Tasks · 4 of 5 done'));
+  });
+
+  it('sums a week from its seven days, and a month from its weeks', async () => {
+    await $('[data-testid="calendar-week"][data-week="33"]').click();
+    const week = $('[data-testid="dashboard"][data-period="week"]');
+    await expect(week).toHaveText(expect.stringMatching(/Days · \d+ of \d+ done/));
+    expect(await $$('[data-testid="dashboard"] [data-testid="dash-row"]').length).toBe(7);
+    await screenshot('23-weekly-dashboard');
+
+    await $('[data-testid="calendar-month"]').click();
+    const month = $('[data-testid="dashboard"][data-period="month"]');
+    await expect(month).toHaveText(expect.stringMatching(/Weeks · \d+ of \d+ done/));
+    expect(await $$('[data-testid="dashboard"] [data-testid="dash-row"]').length).toBe(6);
+    await screenshot('24-monthly-dashboard');
+  });
+
   it('keeps the periodic notes setup in Settings', async () => {
     await $('[data-testid="open-settings"]').click();
     await expect($('[data-testid="settings-day-format"]')).toHaveValue('DD.MM.YYYY');
@@ -180,11 +214,12 @@ describe('the demo vault', () => {
     await screenshot('16-settings');
   });
 
-  it('changed nothing in the vault copy but the three new notes', () => {
+  it('changed nothing in the vault copy but the three new notes and the ticked day', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual([
       `added: ${DAYS}/30.07.2026.md`,
       `added: ${DAYS}/31.07.2026.md`,
       'added: Inbox idea.md',
+      `changed: ${DAYS}/14.08.2026.md`,
     ]);
   });
 });

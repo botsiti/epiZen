@@ -936,3 +936,140 @@ code {
   font-size: 12px;
   pointer-events: none;
 }
+
+/* Dashboards on daily, weekly and monthly notes */
+
+.dashboard {
+  display: grid;
+  gap: var(--space-6);
+  margin: 0 0 var(--space-7);
+}
+
+.dash-meters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--space-4) var(--space-5);
+  margin: 0;
+}
+
+.dash-meter dt {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dash-meter dd {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--text);
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-meter dd .dash-faint {
+  font-size: 12px;
+}
+
+.dash-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.dash-block {
+  min-width: 0;
+}
+
+.dash-faint {
+  color: var(--text-faint);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dash-bar {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.dash-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.dash-bar.is-planned {
+  background: var(--border);
+}
+
+.dash-tasks,
+.dash-rows {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dash-task {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  font-size: 14.5px;
+  cursor: pointer;
+}
+
+.dash-task input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+  transform: translateY(1px);
+}
+
+.dash-task-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dash-task.is-done .dash-task-text {
+  color: var(--text-muted);
+}
+
+.dash-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  border-radius: var(--radius);
+  text-align: left;
+  font-size: 13.5px;
+  transition: background-color var(--ease);
+}
+
+button.dash-row:hover {
+  background: rgb(255 255 255 / 3%);
+}
+
+.dash-row.is-missing .dash-row-label {
+  color: var(--text-faint);
+}
+
+.dash-row-label {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-list + .dash-list {
+  margin-top: var(--space-5);
+}
