@@ -296,26 +296,24 @@ function prep(args) {
 
   // Round 1 reviews the whole diff. Round 2 reviews only the commits after the last reviewed
   // head, unless history was rewritten under it or main was merged in: then the range would show
-  // main's own changes as new. If the PR's own change is still the patch that was reviewed, as
-  // after `gh pr update-branch`, the review carries over and only the check and the risk run on
-  // the new head; otherwise the whole diff is reviewed again.
+  // main's own changes as new. A head that only brought main in, as `gh pr update-branch` does,
+  // keeps the review when the PR's own change is still the reviewed patch, and only the check and
+  // the risk run on it. reply clears reviewedPatch once the gate has pushed fixes, so a head that
+  // drops them never inherits the review that asked for them.
   const mergeBase = git(where.root, 'merge-base', 'origin/main', head);
   let mode = 'full';
   let diff = fullDiff;
   let commits = [];
   const since = ledger.reviewedHead;
+  const descends = since && tryRun('git', ['-C', where.root, 'merge-base', '--is-ancestor', since, head]) !== null;
   if (since === head) {
     mode = 'reviewed';
-  } else if (
-    since &&
-    ledger.reviewedBase === mergeBase &&
-    tryRun('git', ['-C', where.root, 'merge-base', '--is-ancestor', since, head]) !== null
-  ) {
+  } else if (descends && ledger.reviewedBase === mergeBase) {
     mode = 'incremental';
     diff = path.join(dir, `${short(head)}.since-${short(since)}.diff`);
     fs.writeFileSync(diff, `${git(where.root, 'diff', '--no-color', '--find-renames', since, head)}\n`);
     commits = git(where.root, 'rev-list', '--reverse', `${since}..${head}`).split('\n').filter(Boolean);
-  } else if (since && ledger.reviewedPatch && patchId(where.root, fullDiff) === ledger.reviewedPatch) {
+  } else if (descends && ledger.reviewedPatch && patchId(where.root, fullDiff) === ledger.reviewedPatch) {
     mode = 'reviewed';
     ledger.reviewedHead = head;
     ledger.reviewedBase = mergeBase;
@@ -361,7 +359,13 @@ function prep(args) {
       ...(checked && !checked.ok ? [`npm run check failed on ${short(head)}`] : []),
     ],
     ...(mode !== 'reviewed' && !roundsLeft
-      ? { next: `This head needs a review, and PR ${pr} has had its ${MAX_ROUNDS} rounds. The gate never runs a third: stop as step 5 says.` }
+      ? {
+          next:
+            `This head needs a review, and PR ${pr} has had its ${MAX_ROUNDS} rounds; the gate never runs a third. ` +
+            (mode === 'full' && !open.length
+              ? "Nothing is open: main changed lines next to the PR's own, so its change isn't the reviewed patch any more. Stop, set the status to failure, and tell Bat."
+              : 'Stop as step 5 says.'),
+        }
       : {}),
     workflowArgs:
       mode === 'reviewed' || !roundsLeft
@@ -405,12 +409,13 @@ export function changedFiles(root, range) {
   return files;
 }
 
-// Git's patch id ignores line numbers and whitespace, so merging main into a PR keeps it, unless
-// main changed lines the PR's own hunks show.
+// Git's patch id ignores line numbers, so merging main into a PR keeps it, unless main changed
+// lines the PR's own hunks show. --verbatim keeps whitespace in it: a changed space inside a
+// string or a regex is a change to review.
 function patchId(root, diffFile) {
   const diff = fs.readFileSync(diffFile, 'utf8');
   if (!diff.trim()) return null;
-  return run('git', ['-C', root, 'patch-id', '--stable'], { input: diff }).split(' ')[0] || null;
+  return run('git', ['-C', root, 'patch-id', '--verbatim'], { input: diff }).split(' ')[0] || null;
 }
 
 function nitCap(root) {
@@ -749,6 +754,8 @@ function post(args) {
       file: f.file,
       line: f.line,
       title: f.title,
+      body: f.body,
+      evidence: f.evidence,
       class: f.class,
       votes: f.votes,
       status: f.tag === 'Important' ? 'open' : 'posted',
@@ -765,6 +772,8 @@ function post(args) {
   ledger.reviewedHead = state.head;
   ledger.reviewedBase = state.mergeBase;
   ledger.reviewedPatch = patchId(state.root, state.fullDiff);
+  // This round's reviewers were asked whether every earlier fix holds at this head.
+  delete ledger.fixesUnreviewed;
   // Saved before anything else can fail, so a rerun can't post this round twice.
   writeJson(ledgerFile(pr), ledger);
 
@@ -879,6 +888,11 @@ function reply(args) {
   }
   finding.status = kind;
   finding.resolution = text;
+  // A fix is only a claim until round 2 reviews the head that has it.
+  if (kind === 'fixed') {
+    ledger.reviewedPatch = null;
+    ledger.fixesUnreviewed = true;
+  }
   writeJson(ledgerFile(pr), ledger);
   print({ id, status: kind });
 }
@@ -902,7 +916,8 @@ function resolveThread(repo, pr, commentId) {
 // ── status ───────────────────────────────────────────────────────────────────
 
 // Success is the gate's approval of one head, so it is refused unless the ledger shows that
-// head reviewed, checked green, with nothing open and its risk set. High risk also needs
+// head reviewed, checked green, with nothing open, no fix of the gate's left unreviewed, and its
+// risk set. High risk also needs
 // --approved-by-bat, which the session passes only when Bat has approved this head.
 function status(args) {
   const pr = prNumber(args);
@@ -916,6 +931,7 @@ function status(args) {
       ledger.reviewedHead !== state.head && `${short(state.head)} hasn't been reviewed`,
       !ledger.checks[state.head]?.ok && `npm run check hasn't passed on ${short(state.head)}`,
       open.length && `Important findings are still open: ${open.join(', ')}`,
+      ledger.fixesUnreviewed && "the gate's fixes haven't been reviewed by round 2",
       ledger.riskHead !== state.head && `the risk isn't set for ${short(state.head)}`,
       ledger.riskHead === state.head && ledger.risk === 'high' && !args.approvedByBat && 'it is high risk and Bat has not approved it',
     ].filter(Boolean);
@@ -992,7 +1008,7 @@ async function risk(args) {
       // No round reviews an answer, so the risk agent reads each one.
       answered: ledger.findings
         .filter((f) => f.tag === 'Important' && f.status === 'answered')
-        .map(({ id, severity, file: f, line, title, resolution }) => ({ id, severity, file: f, line, title, answer: resolution })),
+        .map(({ id, severity, file: f, line, title, body, evidence, resolution }) => ({ id, severity, file: f, line, title, body, evidence, answer: resolution })),
     },
   });
 }

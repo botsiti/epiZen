@@ -4,7 +4,7 @@ export const meta = {
   phases: [
     { title: 'Find', detail: 'one Claude reviewer and Codex, side by side' },
     { title: 'Merge duplicates', detail: 'one finding per problem, nothing repeated from round 1' },
-    { title: 'Vote', detail: 'two fresh voters per Important finding, both must say real' },
+    { title: 'Vote', detail: 'two fresh voters per Important finding; both say real, or one says real and critical' },
     { title: 'Risk', detail: 'note writes, and the answers the gate gave instead of fixes' },
   ],
 }
@@ -240,7 +240,15 @@ ${JSON.stringify(FIXED, null, 1)}`,
   const repeats = []
   for (const [root, group] of groups) {
     // A reopen wins over a repeat, and an id that isn't a settled finding is no repeat at all.
-    const kept = { ...candidates[root], found_by: [...new Set(group.members.flatMap((c) => c.found_by))] }
+    // The group takes its strictest tag and severity, so a problem one reviewer calls a Nit and
+    // the other Important still goes to the vote; a fix that didn't hold is Important again.
+    const strictest = (list, key) => list[Math.min(...group.members.map((c) => list.indexOf(c[key])).filter((i) => i >= 0), list.length - 1)]
+    const kept = {
+      ...candidates[root],
+      tag: group.reopens ? 'Important' : strictest(TAGS, 'tag'),
+      severity: strictest(SEVERITY, 'severity'),
+      found_by: [...new Set(group.members.flatMap((c) => c.found_by))],
+    }
     if (!group.reopens && group.repeatOf) repeats.push({ ...kept, reason: 'repeat', why: [`repeats ${group.repeatOf}`] })
     else unique.push(group.reopens ? { ...kept, reopens: group.reopens } : kept)
   }
@@ -248,12 +256,15 @@ ${JSON.stringify(FIXED, null, 1)}`,
 }
 
 // Two voters answer the same question; each spends most of its effort on a different way a
-// finding can be wrong. A finding stays only when both say it's real.
+// finding can be wrong.
 const VOTER_FOCUS = [
   'Spend most of your effort tracing the path: from an entry point the user or the app actually hits, does execution reach the cited code with the input that makes it fail?',
   'Spend most of your effort looking for what already prevents it (callers, validation, types, error handling, tests), and on whether it matters: what a user of epiZen would lose or see.',
 ]
-const NEEDED = VOTER_FOCUS.length
+// A finding stays when both voters say it's real. On a split it stays only when the voter who
+// says real rates it critical, a note lost or damaged or a security hole: one "no" is too little
+// to drop that on.
+const keeps = (yes) => yes.length === VOTER_FOCUS.length || yes.some((v) => v.severity === 'critical')
 
 function votePrompt(f, k) {
   const finding = { file: f.file, line: f.line, end_line: f.end_line, title: f.title, body: f.body, evidence: f.evidence, tag: f.tag, severity: f.severity, class: f.class }
@@ -285,9 +296,9 @@ function tally(f, votes) {
   const missing = votes.length - valid.length
   const why = valid.map((v) => `${v.style_only ? 'style' : v.real ? 'real' : 'not real'}: ${v.reason}`)
   const votesText = `${yes.length}/${votes.length}`
-  // Missing votes that could still have made every vote "real" leave the finding undecided.
-  if (yes.length < NEEDED && yes.length + missing >= NEEDED) return { keep: false, undecided: true, finding: { ...f, votes: votesText, why } }
-  if (yes.length < NEEDED) return { keep: false, finding: { ...f, votes: votesText, reason: style * 2 > valid.length ? 'style' : 'not real', why } }
+  // Any missing vote could have been a critical "real", so without a keep it leaves the finding undecided.
+  if (!keeps(yes) && missing) return { keep: false, undecided: true, finding: { ...f, votes: votesText, why } }
+  if (!keeps(yes)) return { keep: false, finding: { ...f, votes: votesText, reason: style * 2 > valid.length ? 'style' : 'not real', why } }
   // Majority tag among the yes votes; a tie keeps the finder's tag, else the stricter one.
   const counts = TAGS.map((t) => [t, yes.filter((v) => v.tag === t).length])
   const best = Math.max(...counts.map(([, n]) => n))
