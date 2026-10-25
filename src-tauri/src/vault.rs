@@ -7,7 +7,7 @@
 
 use std::fmt;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Seek, Write};
 use std::path::{Component, Path, PathBuf};
 
 use serde::Serialize;
@@ -127,40 +127,51 @@ impl Vault {
     }
 
     /// Replaces a note's text, only while the note still holds `expected`: the text the app
-    /// last read or wrote. The new text goes to a hidden file beside the note and is renamed
-    /// over it, so a crash or a full disk leaves the old note whole. Saving the text it
-    /// already holds writes nothing.
+    /// last read or wrote. The new text goes to a hidden file beside the note, takes on the
+    /// note's permissions, creation date and extended attributes (Finder tags, comments), and
+    /// is renamed over it, so a crash or a full disk leaves the old note whole. Saving the text
+    /// it already holds writes nothing.
     pub fn write_note(&self, path: &str, text: &str, expected: &str) -> Result<(), VaultError> {
+        let changed = || VaultError::Changed(path.to_owned());
         let real = self.resolve(path, FileKind::Note)?;
-        if fs::read(&real)? != expected.as_bytes() {
-            return Err(VaultError::Changed(path.to_owned()));
+        // Kept open: an app that writes the note in place after the last look below writes
+        // into this file, and the check after the rename sees it.
+        let mut old = fs::File::open(&real)?;
+        if read_from_start(&mut old)? != expected.as_bytes() {
+            return Err(changed());
         }
         if text == expected {
             return Ok(());
         }
-        let (Some(dir), Some(name)) = (real.parent(), real.file_name()) else {
-            return Err(VaultError::InvalidPath(path.to_owned()));
-        };
-        let temp = dir.join(format!(
-            ".{}.epizen-{}.tmp",
-            name.to_string_lossy(),
-            std::process::id()
-        ));
+        let temp = temp_beside(&real).ok_or_else(|| VaultError::InvalidPath(path.to_owned()))?;
         let written = (|| {
             let mut file = fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .open(&temp)?;
             file.write_all(text.as_bytes())?;
-            file.set_permissions(fs::metadata(&real)?.permissions())?;
+            copy_metadata(&real, &temp, &file)?;
             file.sync_all()?;
-            fs::rename(&temp, &real)
+            // A last look right before the swap, after the slow part.
+            if fs::read(&real)? != expected.as_bytes() {
+                return Err(changed());
+            }
+            fs::rename(&temp, &real)?;
+            Ok(())
         })();
         if written.is_err() {
             // Only the temporary file this call made, never the note.
             let _ = fs::remove_file(&temp);
+            return written;
         }
-        Ok(written?)
+        // Someone wrote into the old file between the last look and the rename: put their
+        // text back as the note, and keep ours unsaved.
+        let theirs = read_from_start(&mut old)?;
+        if theirs != expected.as_bytes() {
+            restore(&real, &theirs)?;
+            return Err(changed());
+        }
+        Ok(())
     }
 
     fn walk(&self, dir: &Path, files: &mut Vec<VaultFile>) -> Result<(), VaultError> {
@@ -239,6 +250,54 @@ impl Vault {
         fs::create_dir_all(real.join(missing))?;
         Ok(real.join(missing).join(name))
     }
+}
+
+fn read_from_start(file: &mut fs::File) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    file.rewind()?;
+    file.read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+/// A hidden file beside the note, which the vault listing skips.
+fn temp_beside(real: &Path) -> Option<PathBuf> {
+    let name = real.file_name()?.to_string_lossy();
+    Some(real.with_file_name(format!(".{name}.epizen-{}.tmp", std::process::id())))
+}
+
+/// Puts `bytes` back as the note, the same way a save does.
+fn restore(real: &Path, bytes: &[u8]) -> Result<(), VaultError> {
+    let temp =
+        temp_beside(real).ok_or_else(|| VaultError::InvalidPath(real.display().to_string()))?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)?;
+    file.write_all(bytes)?;
+    copy_metadata(real, &temp, &file)?;
+    file.sync_all()?;
+    fs::rename(&temp, real)?;
+    Ok(())
+}
+
+/// What a note keeps across a save besides its text: permissions, creation date and extended
+/// attributes. An attribute the system won't let us set is skipped rather than failing the save.
+fn copy_metadata(from: &Path, to: &Path, file: &fs::File) -> io::Result<()> {
+    let metadata = fs::metadata(from)?;
+    file.set_permissions(metadata.permissions())?;
+    #[cfg(target_os = "macos")]
+    if let Ok(created) = metadata.created() {
+        use std::os::macos::fs::FileTimesExt;
+        file.set_times(fs::FileTimes::new().set_created(created))?;
+    }
+    if let Ok(names) = xattr::list(from) {
+        for name in names {
+            if let Ok(Some(value)) = xattr::get(from, &name) {
+                let _ = xattr::set(to, &name, &value);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A vault-relative path made only of plain names, none hidden, for a file of the given kind.
@@ -489,6 +548,32 @@ mod tests {
             fs::metadata(&path).unwrap().permissions().mode() & 0o777,
             0o600
         );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_write_keeps_the_note_s_creation_date_and_extended_attributes() {
+        let (dir, vault) = vault_with(&[("tagged.md", "a")]);
+        let path = dir.path().join("tagged.md");
+        let tag = b"<plist><array><string>Red\n6</string></array></plist>";
+        xattr::set(&path, "com.apple.metadata:_kMDItemUserTags", tag).unwrap();
+        let born =
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        {
+            use std::os::macos::fs::FileTimesExt;
+            let file = fs::File::options().write(true).open(&path).unwrap();
+            file.set_times(fs::FileTimes::new().set_created(born))
+                .unwrap();
+        }
+        vault.write_note("tagged.md", "b", "a").unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "b");
+        assert_eq!(
+            xattr::get(&path, "com.apple.metadata:_kMDItemUserTags")
+                .unwrap()
+                .as_deref(),
+            Some(&tag[..])
+        );
+        assert_eq!(fs::metadata(&path).unwrap().created().unwrap(), born);
     }
 
     /// Every file under `root`, hidden ones included, with its bytes.

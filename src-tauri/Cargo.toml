@@ -17,6 +17,7 @@ tauri = { version = "2.12", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2.8"
+xattr = "1"
 tauri-plugin-wdio = { version = "=1.5.0", optional = true }
 tauri-plugin-wdio-webdriver = { version = "=1.5.0", optional = true }
 
