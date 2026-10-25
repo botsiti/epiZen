@@ -7,7 +7,7 @@ mod vault;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -201,7 +201,8 @@ async fn update_settings(
 /// quit is held and the frontend is asked to save; it lets go with `close_now` (`done`).
 #[derive(Default)]
 struct Closing {
-    guarded: AtomicBool,
+    /// Listeners the page has open; StrictMode and hot reload open and close them out of order.
+    guarded: AtomicUsize,
     done: AtomicBool,
 }
 
@@ -210,13 +211,19 @@ const CLOSE_REQUESTED: &str = "epizen://close-requested";
 impl Closing {
     /// True when this close should wait for the frontend.
     fn hold(&self) -> bool {
-        self.guarded.load(Ordering::SeqCst) && !self.done.load(Ordering::SeqCst)
+        self.guarded.load(Ordering::SeqCst) > 0 && !self.done.load(Ordering::SeqCst)
     }
 }
 
 #[tauri::command]
 fn guard_close(closing: State<'_, Closing>, on: bool) {
-    closing.guarded.store(on, Ordering::SeqCst);
+    if on {
+        closing.guarded.fetch_add(1, Ordering::SeqCst);
+    } else {
+        let _ = closing
+            .guarded
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1));
+    }
 }
 
 #[tauri::command]

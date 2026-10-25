@@ -183,11 +183,16 @@ impl Vault {
                 temp.display()
             )))
         };
+        // The note should hold ours now. If it doesn't, someone saved after us: theirs is the newest
+        // and stays the note; the older outside save we took out is kept aside.
+        if !fs::read(&real).is_ok_and(|now| now == text.as_bytes()) {
+            return Err(kept(String::new()));
+        }
         if let Err(err) = swap(&temp, &real) {
             return Err(kept(format!(": {err}")));
         }
         // Their file is the note again. What came out is removed only if it is exactly ours;
-        // if yet another save landed meanwhile, that one is what came out, and it is kept.
+        // if yet another save landed in that last instant, that one came out, and it is kept.
         if fs::read(&temp).is_ok_and(|ours| ours == text.as_bytes()) {
             fs::remove_file(&temp)?;
             return Err(changed());
@@ -672,7 +677,7 @@ mod tests {
     }
 
     #[test]
-    fn a_second_outside_save_during_the_swap_back_is_kept_not_removed() {
+    fn with_two_outside_saves_the_newest_stays_the_note_and_the_older_is_kept() {
         let (dir, vault) = vault_with(&[("day.md", "mine before")]);
         let path = dir.path().join("day.md");
         let result = vault.write_note_with("day.md", "mine after", "mine before", |step| {
@@ -694,7 +699,7 @@ mod tests {
             vec!["theirs", "theirs, again"],
             "both outside saves survive; ours goes"
         );
-        assert_eq!(fs::read_to_string(&path).unwrap(), "theirs");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "theirs, again");
     }
 
     #[cfg(target_os = "macos")]
