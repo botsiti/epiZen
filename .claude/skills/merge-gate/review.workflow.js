@@ -1,11 +1,11 @@
 export const meta = {
   name: 'merge-gate',
-  description: 'One /merge-gate pass on a PR: three fresh reviewers and Codex find, three voters per finding verify; or the risk call',
+  description: 'One /merge-gate pass on a PR: one fresh Claude reviewer and Codex find, two voters per Important finding verify; or the risk call',
   phases: [
-    { title: 'Find', detail: 'bugs, note safety, security, Codex' },
-    { title: 'Merge duplicates', detail: 'one finding per problem, nothing repeated from earlier rounds' },
-    { title: 'Vote', detail: 'three fresh voters per finding, two must say real' },
-    { title: 'Risk', detail: 'note writes, then whether Bat should look anyway' },
+    { title: 'Find', detail: 'one Claude reviewer and Codex, side by side' },
+    { title: 'Merge duplicates', detail: 'one finding per problem, nothing repeated from round 1' },
+    { title: 'Vote', detail: 'two fresh voters per Important finding, both must say real' },
+    { title: 'Risk', detail: 'note writes, and the answers the gate gave instead of fixes' },
   ],
 }
 
@@ -80,13 +80,10 @@ const RISK = {
     note_mutation_evidence: { type: 'string', description: 'file:line of each path that overwrites, renames or deletes an existing note' },
     level: { enum: ['low', 'medium'] },
     reason: { type: 'string' },
+    answers_hold: { type: 'boolean', description: 'false when any answered finding is real after all' },
+    answers_reason: { type: 'string', description: 'for each answer that does not hold: its id and why, with file:line' },
   },
-  required: ['note_mutation', 'note_mutation_evidence', 'level', 'reason'],
-}
-const NEEDS_BAT = {
-  type: 'object',
-  properties: { needs_bat: { type: 'boolean' }, reason: { type: 'string' } },
-  required: ['needs_bat', 'reason'],
+  required: ['note_mutation', 'note_mutation_evidence', 'level', 'reason', 'answers_hold', 'answers_reason'],
 }
 
 const short = (sha) => (sha || '').slice(0, 7)
@@ -117,22 +114,13 @@ const TAGGING = `Tag each finding Important, Nit or Pre-existing exactly as REVI
 
 // ── review ───────────────────────────────────────────────────────────────────
 
-const LENSES = [
-  {
-    key: 'bugs',
-    text: "bugs. Wrong logic or conditions, off-by-one errors, unhandled errors and rejected promises, races, stale React state or effects, panics on user data in Rust (unwrap, indexing), types that disagree across the Tauri IPC boundary, tests that pass for the wrong reason. Leave note safety and security to the other reviewers unless it is also a plain bug.",
-  },
-  {
-    key: 'notes',
-    text: "anything that can lose or damage a note, or change one the user didn't ask to change. Notes are plain Markdown files that Obsidian must still open. Look for: writes that aren't atomic (temp file, then rename) or that truncate first; saving over a newer version or an outside edit; a rename or move that loses the file or breaks links; deletes that skip the trash; rewriting frontmatter the user didn't touch (key order, quoting, dates, unknown keys dropped); changed line endings, BOM, final newline, encoding or Unicode normalisation (Cyrillic file names); parsing a note and writing it back when only reading was needed; task lines such as `- [ ] #daily/code — fix the login bug [minutes::45]` mangled; autosave races; writes outside the vault; tests that touch demo-vault itself instead of a copy.",
-  },
-  {
-    key: 'security',
-    text: "security. Tauri capabilities or permissions that widen fs, shell or network access; fs scope beyond the vault; path traversal from IPC arguments or note links (`../`, absolute paths, symlinks); script injection when note Markdown, HTML or SVG is rendered (raw HTML, dangerouslySetInnerHTML, javascript: links); a weakened CSP; opening URLs or files without checks; command injection; secrets in the repo; risky new dependencies; CI workflow injection (pull_request_target, untrusted ${{ }} expressions in run:); unsafe Rust.",
-  },
-]
+// One Claude reviewer covers all three, notes first; Codex reviews beside it.
+const LENS = `three things, in this order.
+1. Anything that can lose or damage a note, or change one the user didn't ask to change. Notes are plain Markdown files that Obsidian must still open. Look for: writes that aren't atomic (temp file, then rename) or that truncate first; saving over a newer version or an outside edit; a rename or move that loses the file or breaks links; deletes that skip the trash; rewriting frontmatter the user didn't touch (key order, quoting, dates, unknown keys dropped); changed line endings, BOM, final newline, encoding or Unicode normalisation (Cyrillic file names); parsing a note and writing it back when only reading was needed; task lines such as \`- [ ] #daily/code — fix the login bug [minutes::45]\` mangled; autosave races; writes outside the vault; tests that touch demo-vault itself instead of a copy.
+2. Bugs. Wrong logic or conditions, off-by-one errors, unhandled errors and rejected promises, races, stale React state or effects, panics on user data in Rust (unwrap, indexing), types that disagree across the Tauri IPC boundary, tests that pass for the wrong reason.
+3. Security. Tauri capabilities or permissions that widen fs, shell or network access; fs scope beyond the vault; path traversal from IPC arguments or note links (\`../\`, absolute paths, symlinks); script injection when note Markdown, HTML or SVG is rendered (raw HTML, dangerouslySetInnerHTML, javascript: links); a weakened CSP; opening URLs or files without checks; command injection; secrets in the repo; risky new dependencies; CI workflow injection (pull_request_target, untrusted \${{ }} expressions in run:); unsafe Rust.`
 
-function finderPrompt(lens) {
+function finderPrompt() {
   const scope =
     A.mode === 'incremental'
       ? `Review only what changed since the last reviewed head ${short(A.sinceSha)}: ${A.diffFile}. The whole PR diff against main is ${A.fullDiffFile}; read it for context, but report only problems the new commits introduce.`
@@ -148,14 +136,14 @@ function finderPrompt(lens) {
     (FIXED.length
       ? `\n\nFixed in earlier rounds. Check that each fix holds; if the problem is still there, report it again:\n${FIXED.map((p) => `- ${p.id} ${p.file}:${p.line} ${p.title}`).join('\n')}`
       : '')
-  return `You are one of four independent reviewers of ${WHERE}
+  return `You are one of two independent reviewers of ${WHERE}
 
 ${scope}
 
 ${RULES}
 ${DATA}
 
-Your lens: ${lens}
+Look for ${LENS}
 
 - Every finding needs a file and line at the PR head as evidence, and the concrete input or state that makes it go wrong. Report what the code shows, not a guess from a name.
 - No style, formatting, naming or "consider" suggestions; they are dropped anyway.
@@ -177,12 +165,10 @@ If the command fails or prints something that isn't that JSON, return ok=false, 
 async function find() {
   phase('Find')
   const runs = await parallel([
-    ...LENSES.map((lens) => () =>
-      ask(finderPrompt(lens.text), { label: `find:${lens.key}`, phase: 'Find', schema: FINDINGS }).then((r) => ({ key: lens.key, r })),
-    ),
+    () => ask(finderPrompt(), { label: 'find:claude', phase: 'Find', schema: FINDINGS }).then((r) => ({ key: 'claude', r })),
     () => ask(CODEX_PROMPT, { label: 'find:codex', phase: 'Find', schema: CODEX }, (r) => Boolean(r && r.ok)).then((r) => ({ key: 'codex', r })),
   ])
-  const keys = [...LENSES.map((lens) => lens.key), 'codex']
+  const keys = ['claude', 'codex']
   const sources = {}
   const candidates = []
   const incomplete = []
@@ -225,7 +211,7 @@ ${JSON.stringify(FIXED, null, 1)}`,
     { label: 'merge-duplicates', phase: 'Merge duplicates', schema: GROUPS },
   )
   if (!res) {
-    log('Merging duplicates failed, so every candidate goes to the vote.')
+    log('Merging duplicates failed, so every candidate goes on as it is.')
     return { unique: candidates, repeats: [] }
   }
   const byIndex = new Map(res.items.map((item) => [item.index, item]))
@@ -261,13 +247,13 @@ ${JSON.stringify(FIXED, null, 1)}`,
   return { unique, repeats }
 }
 
-// Three voters answer the same question; each spends most of its effort on a different way a
-// finding can be wrong.
+// Two voters answer the same question; each spends most of its effort on a different way a
+// finding can be wrong. A finding stays only when both say it's real.
 const VOTER_FOCUS = [
   'Spend most of your effort tracing the path: from an entry point the user or the app actually hits, does execution reach the cited code with the input that makes it fail?',
-  'Spend most of your effort looking for what already prevents it: callers, validation, types, error handling, tests.',
-  'Spend most of your effort on whether it matters: what a user of epiZen would lose or see, and whether this is behaviour or only style.',
+  'Spend most of your effort looking for what already prevents it (callers, validation, types, error handling, tests), and on whether it matters: what a user of epiZen would lose or see.',
 ]
+const NEEDED = VOTER_FOCUS.length
 
 function votePrompt(f, k) {
   const finding = { file: f.file, line: f.line, end_line: f.end_line, title: f.title, body: f.body, evidence: f.evidence, tag: f.tag, severity: f.severity, class: f.class }
@@ -299,9 +285,9 @@ function tally(f, votes) {
   const missing = votes.length - valid.length
   const why = valid.map((v) => `${v.style_only ? 'style' : v.real ? 'real' : 'not real'}: ${v.reason}`)
   const votesText = `${yes.length}/${votes.length}`
-  // Missing votes that could still have made two "real" leave the finding undecided.
-  if (yes.length < 2 && yes.length + missing >= 2) return { keep: false, undecided: true, finding: { ...f, votes: votesText, why } }
-  if (yes.length < 2) return { keep: false, finding: { ...f, votes: votesText, reason: style >= 2 ? 'style' : 'not real', why } }
+  // Missing votes that could still have made every vote "real" leave the finding undecided.
+  if (yes.length < NEEDED && yes.length + missing >= NEEDED) return { keep: false, undecided: true, finding: { ...f, votes: votesText, why } }
+  if (yes.length < NEEDED) return { keep: false, finding: { ...f, votes: votesText, reason: style * 2 > valid.length ? 'style' : 'not real', why } }
   // Majority tag among the yes votes; a tie keeps the finder's tag, else the stricter one.
   const counts = TAGS.map((t) => [t, yes.filter((v) => v.tag === t).length])
   const best = Math.max(...counts.map(([, n]) => n))
@@ -313,12 +299,12 @@ function tally(f, votes) {
   return { keep: true, finding: { ...f, tag, severity, class: f.class || yes[0].class, votes: votesText, why } }
 }
 
-async function vote(unique) {
-  if (!unique.length) return []
+async function vote(important) {
+  if (!important.length) return []
   phase('Vote')
   return parallel(
-    unique.map((f, i) => () =>
-      parallel([0, 1, 2].map((k) => () => ask(votePrompt(f, k), { label: `vote:${i + 1}.${k + 1}`, phase: 'Vote', schema: VOTE }))).then(
+    important.map((f, i) => () =>
+      parallel(VOTER_FOCUS.map((_, k) => () => ask(votePrompt(f, k), { label: `vote:${i + 1}.${k + 1}`, phase: 'Vote', schema: VOTE }))).then(
         (votes) => tally(f, votes),
       ),
     ),
@@ -328,13 +314,16 @@ async function vote(unique) {
 async function review() {
   const { sources, candidates, incomplete } = await find()
   const { unique, repeats } = await mergeDuplicates(candidates)
-  const results = await vote(unique)
+  // Only Important findings block a merge, so only they go to the vote. Nits and Pre-existing
+  // findings go on the PR as the reviewer tagged them.
+  const important = unique.filter((f) => f.tag === 'Important')
+  const results = await vote(important)
   results.forEach((r, i) => {
-    if (!r) incomplete.push(`the vote on "${unique[i].title}" never finished`)
+    if (!r) incomplete.push(`the vote on "${important[i].title}" never finished`)
     else if (r.undecided) incomplete.push(`voters never answered on "${r.finding.title}" (${r.finding.votes} real so far)`)
   })
   const decided = results.filter((r) => r && !r.undecided)
-  const kept = decided.filter((r) => r.keep).map((r) => r.finding)
+  const kept = [...decided.filter((r) => r.keep).map((r) => r.finding), ...unique.filter((f) => f.tag !== 'Important')]
   const dropped = [...decided.filter((r) => !r.keep).map((r) => r.finding), ...repeats]
   // REVIEW.md caps the nits per review.
   const overCap = new Set(kept.filter((f) => f.tag === 'Nit').sort(bySeverity).slice(A.nitCap))
@@ -359,8 +348,11 @@ async function review() {
 
 // ── risk ─────────────────────────────────────────────────────────────────────
 
+// One agent. Besides the risk, it reads every Important finding the gate answered instead of
+// fixing, since no later round looks at those.
 async function riskCall() {
   phase('Risk')
+  const answered = A.answered || []
   const classified = await agent(
     `Classify the risk of ${WHERE}
 
@@ -372,6 +364,12 @@ The whole change against main is ${A.fullDiffFile}. Set the risk from the change
 1. Does any changed code path overwrite, rename, move or delete a note file that already exists in the user's vault? Count indirect changes too: a changed path computation, save target, rename or link-update logic, cleanup, sync or migration that ends in writing over, moving or removing an existing note. Writing a brand-new file doesn't count, and neither do test fixtures or tests that work on a copy of demo-vault. These added lines call file-writing APIs and are worth a look; they are hints, not verdicts:
 ${JSON.stringify(A.noteWriteHints, null, 1)}
 2. If not: low = docs, copy, comments or tests only, or an additive change that can't run unless the user turns it on. medium = everything else.
+3. ${
+      answered.length
+        ? `Two voters confirmed each finding below as real, and the gate answered it instead of fixing it. Check each answer against the code at the PR head. answers_hold is false if any answer doesn't hold, that is, the problem is still there; then name each such finding and why in answers_reason.
+${JSON.stringify(answered, null, 1)}`
+        : 'No finding was answered instead of fixed: answers_hold is true and answers_reason is empty.'
+    }
 
 Cite file:line for every claim.`,
     { label: 'risk:classify', phase: 'Risk', schema: RISK },
@@ -380,28 +378,8 @@ Cite file:line for every claim.`,
 
   const reasons = A.pathTriggers.map((t) => `changes ${t.what} (${t.path})`)
   if (classified.note_mutation) reasons.push(`overwrites, renames or deletes an existing note: ${classified.note_mutation_evidence}`)
-
-  let second = null
-  if (!reasons.length) {
-    second = await agent(
-      `The gate rated ${WHERE}
-
-as ${classified.level} risk: "${classified.reason}". Low and medium risk merge by themselves once CI is green, so you are the last look before this merges without Bat.
-
-${RULES}
-${DATA}
-
-Read the whole change against main (${A.fullDiffFile}) and the findings below, then decide whether Bat should see this change anyway. Say yes when, for example, it weakens or skips a check (npm run check, test or lint config, skipped tests, CI), widens what the app may touch (Tauri capabilities, fs scope, CSP, network), adds or upgrades dependencies in a way that matters, migrates or re-serialises note data, changes behaviour a user will notice in a way the PR description doesn't say, or an Important finding was answered instead of fixed and you don't accept the answer. Say no when the change is what it says it is and the checks cover it. Don't say yes just to be safe. Give the reason in one or two sentences with file:line.
-
-npm run check on this head: ${A.checkOk === true ? 'passed' : A.checkOk === false ? 'failed' : 'not run'}.
-Findings and how they were handled:
-${JSON.stringify(A.findings, null, 1)}`,
-      { label: 'risk:needs-bat', phase: 'Risk', schema: NEEDS_BAT },
-    )
-    if (!second) reasons.push('the check for whether Bat should look anyway failed to run')
-    else if (second.needs_bat) reasons.push(`a fresh reviewer says Bat should look: ${second.reason}`)
-  }
-  return { stage: 'risk', headSha: A.headSha, level: reasons.length ? 'high' : classified.level, reasons, classified, needsBat: second }
+  if (answered.length && !classified.answers_hold) reasons.push(`an answered finding is still there: ${classified.answers_reason}`)
+  return { stage: 'risk', headSha: A.headSha, level: reasons.length ? 'high' : classified.level, reasons, classified }
 }
 
 return A.stage === 'risk' ? await riskCall() : await review()

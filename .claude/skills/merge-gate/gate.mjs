@@ -14,6 +14,8 @@ const SKILL_PATH = '.claude/skills/merge-gate';
 const STATUS_CONTEXT = 'merge-gate';
 // GitHub rejects comments over 65,536 characters.
 const COMMENT_LIMIT = 60_000;
+// Round 1 reviews the PR; round 2 only the gate's fixes for it. There is never a round 3.
+const MAX_ROUNDS = 2;
 
 // A PR can be low or medium risk only when every path it changes is on this list; everything else
 // is high, so a path nobody thought of waits for Bat instead of slipping through. Paths are
@@ -292,9 +294,11 @@ function prep(args) {
   const bodyFile = path.join(dir, 'description.md');
   fs.writeFileSync(bodyFile, info.body ?? '');
 
-  // Round 1 reviews the whole diff. Later rounds review only the commits after the last
-  // reviewed head, unless history was rewritten under it or main was merged in: then the
-  // range would show main's own changes as new, so the whole diff is reviewed again.
+  // Round 1 reviews the whole diff. Round 2 reviews only the commits after the last reviewed
+  // head, unless history was rewritten under it or main was merged in: then the range would show
+  // main's own changes as new. If the PR's own change is still the patch that was reviewed, as
+  // after `gh pr update-branch`, the review carries over and only the check and the risk run on
+  // the new head; otherwise the whole diff is reviewed again.
   const mergeBase = git(where.root, 'merge-base', 'origin/main', head);
   let mode = 'full';
   let diff = fullDiff;
@@ -311,7 +315,13 @@ function prep(args) {
     diff = path.join(dir, `${short(head)}.since-${short(since)}.diff`);
     fs.writeFileSync(diff, `${git(where.root, 'diff', '--no-color', '--find-renames', since, head)}\n`);
     commits = git(where.root, 'rev-list', '--reverse', `${since}..${head}`).split('\n').filter(Boolean);
+  } else if (since && ledger.reviewedPatch && patchId(where.root, fullDiff) === ledger.reviewedPatch) {
+    mode = 'reviewed';
+    ledger.reviewedHead = head;
+    ledger.reviewedBase = mergeBase;
+    writeJson(ledgerFile(pr), ledger);
   }
+  const roundsLeft = Math.max(0, MAX_ROUNDS - ledger.rounds.length);
 
   const state = {
     ...base,
@@ -344,13 +354,17 @@ function prep(args) {
     files: files.length,
     checked,
     roundsSoFar: ledger.rounds.length,
+    roundsLeft,
     open,
     blocking: [
       ...open.map((f) => `${f.id} ${f.title}`),
       ...(checked && !checked.ok ? [`npm run check failed on ${short(head)}`] : []),
     ],
+    ...(mode !== 'reviewed' && !roundsLeft
+      ? { next: `This head needs a review, and PR ${pr} has had its ${MAX_ROUNDS} rounds. The gate never runs a third: stop as step 5 says.` }
+      : {}),
     workflowArgs:
-      mode === 'reviewed'
+      mode === 'reviewed' || !roundsLeft
         ? null
         : {
             stage: 'review',
@@ -389,6 +403,14 @@ export function changedFiles(root, range) {
     }
   }
   return files;
+}
+
+// Git's patch id ignores line numbers and whitespace, so merging main into a PR keeps it, unless
+// main changed lines the PR's own hunks show.
+function patchId(root, diffFile) {
+  const diff = fs.readFileSync(diffFile, 'utf8');
+  if (!diff.trim()) return null;
+  return run('git', ['-C', root, 'patch-id', '--stable'], { input: diff }).split(' ')[0] || null;
 }
 
 function nitCap(root) {
@@ -672,6 +694,7 @@ function post(args) {
   const round = result.round;
   const ledger = loadLedger(pr, state.title);
   if (ledger.rounds.some((r) => r.round === round)) fail(`Round ${round} is already posted on PR ${pr}.`);
+  if (round > MAX_ROUNDS) fail(`The gate never posts a round ${round}: ${MAX_ROUNDS} is the most.`);
   const kept = result.kept.map((finding, i) => ({ ...finding, id: `R${round}.${i + 1}` }));
   const dropped = result.dropped.map((finding, i) => ({ ...finding, id: `D${round}.${i + 1}` }));
 
@@ -741,6 +764,7 @@ function post(args) {
   }
   ledger.reviewedHead = state.head;
   ledger.reviewedBase = state.mergeBase;
+  ledger.reviewedPatch = patchId(state.root, state.fullDiff);
   // Saved before anything else can fail, so a rerun can't post this round twice.
   writeJson(ledgerFile(pr), ledger);
 
@@ -832,7 +856,7 @@ function findingBody(f) {
     '',
     `Evidence: ${f.evidence}`,
     '',
-    `<sub>merge-gate ${f.id} · found by ${(f.found_by ?? []).join(', ')} · ${f.votes} voters say real${f.reopens ? ` · reopens ${f.reopens}` : ''}</sub>`,
+    `<sub>merge-gate ${f.id} · found by ${(f.found_by ?? []).join(', ')} · ${f.votes ? `${f.votes} voters say real` : 'not voted on (only Important findings are)'}${f.reopens ? ` · reopens ${f.reopens}` : ''}</sub>`,
     `<!-- merge-gate:${f.id} -->`,
   ].join('\n');
 }
@@ -951,7 +975,6 @@ async function risk(args) {
     }
   }
 
-  const checked = ledger.checks[state.head];
   print({
     pathTriggers,
     noteWriteHints: noteWriteHints.length,
@@ -966,17 +989,10 @@ async function risk(args) {
       fullDiffFile: state.fullDiff,
       pathTriggers,
       noteWriteHints: noteWriteHints.slice(0, 60),
-      checkOk: checked ? checked.ok : null,
-      findings: ledger.findings.map(({ id, tag, severity, file: f, line, title, status: s, resolution }) => ({
-        id,
-        tag,
-        severity,
-        file: f,
-        line,
-        title,
-        status: s,
-        resolution,
-      })),
+      // No round reviews an answer, so the risk agent reads each one.
+      answered: ledger.findings
+        .filter((f) => f.tag === 'Important' && f.status === 'answered')
+        .map(({ id, severity, file: f, line, title, resolution }) => ({ id, severity, file: f, line, title, answer: resolution })),
     },
   });
 }
@@ -1187,7 +1203,7 @@ function cargoProblem(state) {
 
 // Takes the risk workflow's result file, so the level isn't copied by hand. It never goes below
 // high when a path trigger fired, and once any head of the PR was rated high the PR stays high:
-// the risk agents can answer differently on a rerun, and a merge from main or a no-op commit
+// the risk agent can answer differently on a rerun, and a merge from main or a no-op commit
 // doesn't remove what made it high.
 function decide(args) {
   const pr = prNumber(args);
