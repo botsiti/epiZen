@@ -7,6 +7,8 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig([
   globalIgnores(['dist', 'evidence', 'demo-vault', 'src-tauri/target', 'src-tauri/gen']),
+  // A Workflow script is the body of an async function with a top-level return, not a module.
+  globalIgnores(['.claude/skills/*/*.workflow.js']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],

@@ -7,3 +7,5 @@ src-tauri/gen/
 demo-vault/.obsidian/
 .DS_Store
 *.log
+# /merge-gate adds a line per pull request after it merges; committing it would need a commit on main each time.
+gate-log.md
