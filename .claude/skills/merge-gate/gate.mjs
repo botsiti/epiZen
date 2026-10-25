@@ -363,7 +363,7 @@ function prep(args) {
           next:
             `This head needs a review, and PR ${pr} has had its ${MAX_ROUNDS} rounds; the gate never runs a third. ` +
             (mode === 'full' && !open.length
-              ? "Nothing is open: main changed lines next to the PR's own, so its change isn't the reviewed patch any more. Stop, set the status to failure, and tell Bat."
+              ? "Nothing is open, but this head's change isn't the reviewed patch any more: new code, a rewritten history, or main changing lines next to the PR's own. Stop, set the status to failure, and tell Bat which."
               : 'Stop as step 5 says.'),
         }
       : {}),
@@ -432,7 +432,9 @@ function check(args) {
   const state = loadState(pr);
   const logFile = path.join(state.runDir, `check-${short(state.head)}.log`);
   const fd = fs.openSync(logFile, 'w');
-  const env = { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' };
+  // A session's shell may not have rustup's folder on PATH, and the check needs cargo. One already on PATH wins.
+  const PATH = [process.env.PATH, path.join(os.homedir(), '.cargo', 'bin')].filter(Boolean).join(path.delimiter);
+  const env = { ...process.env, PATH, FORCE_COLOR: '0', NO_COLOR: '1' };
   const release = waitForQuiet(path.join(path.dirname(state.runDir), 'check.lock'));
   const started = performance.now();
   let exitCode = 0;

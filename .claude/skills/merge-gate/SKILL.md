@@ -33,7 +33,7 @@ Turns on auto-merge and squash merges, and adds the `merge-gate` status to the c
    - `reviewed`: this head was already reviewed, or it only brought main in (the reviewed head is in its history), the PR's own change is the same patch (git's patch id, whitespace included) as the reviewed one, and the gate hasn't pushed fixes since. Run step 1 if `checked` doesn't cover this head and wait for it, then go to step 5 if anything blocks, else step 6.
    - `state` is `MERGED` or `CLOSED`: go to step 8 to write the log line, then stop.
 
-   When this head needs a review and the PR has had its two rounds, `roundsLeft` is 0, there are no `workflowArgs`, and `next` says so: stop as step 5 says for a second round that didn't settle it. If nothing is open and main merely changed lines next to the PR's own, say that instead of "rethink the approach".
+   When this head needs a review and the PR has had its two rounds, `roundsLeft` is 0, there are no `workflowArgs`, and `next` says so: stop as step 5 says for a second round that didn't settle it. If nothing is open, say what changed (new code, a rewritten history, or main moving lines next to the PR's own) instead of "rethink the approach".
 2. `gh pr merge <PR> --disable-auto` (an error saying auto-merge isn't enabled is fine), then `G status <PR> pending "Gate running on <sha7>"`.
 
 ## 1. Run the checks and paste them into the PR
