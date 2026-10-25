@@ -53,10 +53,9 @@ Before saying a change is done:
 1. Run `npm run check` and show its output, not a summary.
 2. For UI changes, open the new screenshots in `evidence/` and hold them against DESIGN.md.
    A new screen gets an e2e step and a screenshot.
-3. Have the `reviewer` subagent review the diff with fresh context against REVIEW.md.
-   Fix what it finds, or say why not.
-4. Open the pull request with the template filled in: Testing, Risk, How to revert.
-5. Take it to merged with `/merge-gate <PR>`. Low and medium risk merge without me once CI is
+3. Open the pull request with the template filled in: Testing, Risk, How to revert.
+4. Take it to merged with `/merge-gate <PR>`. The gate does the fresh-context review (one Claude
+   reviewer and Codex), so there is no separate review before the pull request. Low and medium risk merge without me once CI is
    green; high risk waits for me with the evidence.
 
 When a review flags the same kind of problem twice, fix it at the source: a test, a lint rule,
