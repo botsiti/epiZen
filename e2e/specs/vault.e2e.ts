@@ -101,14 +101,18 @@ describe('the demo vault', () => {
     await $('[data-testid="new-note-create"]').click();
     await $('[data-testid="editor"] .cm-content').waitForDisplayed();
     await typeInEditor('Hello from Epizen, see [[Someday maybe]] and [[Glass');
-    const suggestion = $('.cm-tooltip-autocomplete li*=Glasshouse Weather');
+    const suggestion = $('.cm-tooltip-autocomplete li');
     await suggestion.waitForDisplayed();
+    await expect(suggestion).toHaveText(expect.stringContaining('Glasshouse Weather'));
     await screenshot('13-link-autocomplete');
-    await suggestion.click();
-    await expect($('[data-testid="save-state"]')).toHaveText('Saved', { wait: 5000 });
-    expect(readFileSync(join(vaultCopy(), 'Inbox idea.md'), 'utf8')).toBe(
-      'Hello from Epizen, see [[Someday maybe]] and [[Glasshouse Weather]]',
-    );
+    // CodeMirror picks a suggestion on mousedown, which this driver's click doesn't send.
+    await browser.execute(() => {
+      document.querySelector('.cm-tooltip-autocomplete li')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    const typed = 'Hello from Epizen, see [[Someday maybe]] and [[Glasshouse Weather]]';
+    const saved = () => readFileSync(join(vaultCopy(), 'Inbox idea.md'), 'utf8');
+    await browser.waitUntil(() => saved() === typed, { timeout: 5000, timeoutMsg: 'the link was never completed and saved' });
+    await expect($('[data-testid="save-state"]')).toHaveText('Saved');
     await expect($('[data-testid="preview"]')).toHaveText(expect.stringContaining('Hello from Epizen'));
     await expect($('[data-testid="tree-note"][data-path="Inbox idea.md"]')).toBeDisplayed();
     await $('[data-testid="edit-done"]').click();

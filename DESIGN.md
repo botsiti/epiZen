@@ -57,6 +57,10 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Editor**: the note's source on the left and a live preview on the right, with space between them
   and no line. Headings and emphasis show in the source; Markdown's own marks are faint. A faint
   "Saving…" or "Saved" sits by the title.
+- **Backlinks**: under the note, after a hairline: a label with the count, then each linking note's
+  title in accent, its folder faint beside it, and the line that links, as plain text.
+- **Link suggestions**: after `[[` in the editor, a surface list with a hairline; the matched letters
+  in accent, the note's folder faint.
 - **Forms**: a label above each field in the label style. Fields are surface fills with a hairline
   that turns accent on focus.
 - **Empty and error screens**: a label, a title and one or two quiet lines. No illustrations.

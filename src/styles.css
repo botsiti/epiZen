@@ -831,38 +831,3 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* Wikilink autocomplete in the editor */
-
-.cm-tooltip.cm-tooltip-autocomplete {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.cm-tooltip.cm-tooltip-autocomplete > ul {
-  max-height: 240px;
-  font: 13.5px var(--font-ui);
-}
-
-.cm-tooltip.cm-tooltip-autocomplete > ul > li {
-  padding: var(--space-1) var(--space-3);
-  color: var(--text-muted);
-}
-
-.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
-  background: var(--accent-soft);
-  color: var(--text);
-}
-
-.cm-completionDetail {
-  margin-left: var(--space-3);
-  color: var(--text-faint);
-  font-style: normal;
-}
-
-.cm-completionMatchedText {
-  color: var(--accent);
-  text-decoration: none;
-}

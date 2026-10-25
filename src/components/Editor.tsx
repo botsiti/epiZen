@@ -50,6 +50,17 @@ const theme = EditorView.theme(
       backgroundColor: 'var(--accent-soft)',
     },
     '.cm-placeholder': { color: 'var(--text-faint)' },
+    '.cm-tooltip.cm-tooltip-autocomplete': {
+      backgroundColor: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
+      overflow: 'hidden',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--font-ui)', fontSize: '13.5px', maxHeight: '240px' },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { padding: '4px 12px', color: 'var(--text-muted)' },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--accent-soft)', color: 'var(--text)' },
+    '.cm-completionDetail': { marginLeft: '12px', color: 'var(--text-faint)', fontStyle: 'normal' },
+    '.cm-completionMatchedText': { color: 'var(--accent)', textDecoration: 'none' },
   },
   { dark: true },
 );

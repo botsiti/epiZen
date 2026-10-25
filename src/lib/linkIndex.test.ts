@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { VaultFile } from './api';
-import { buildLinkIndex } from './linkIndex';
+import { buildLinkIndex, plainLine } from './linkIndex';
 
 const files: VaultFile[] = [
   { path: 'Calendar/2026/days 2026/10.08.2026.md', kind: 'note' },
@@ -25,16 +25,26 @@ const notes = [
   },
 ];
 
+describe('plainLine', () => {
+  it('reads a line from a note the way it renders', () => {
+    expect(plainLine('> [[13.08.2026|← Yesterday]] | [[2026-W33 - 10.08.26|Week]] | **[[08.26 RPG|08.26]]**')).toBe(
+      '← Yesterday | Week | 08.26',
+    );
+    expect(plainLine('- [x] #daily/sport — gym: upper body [minutes::61]')).toBe('#daily/sport — gym: upper body [minutes::61]');
+    expect(plainLine('### Listened')).toBe('Listened');
+  });
+});
+
 describe('buildLinkIndex', () => {
   const index = buildLinkIndex(notes, files);
 
   it('lists who links to a note, once each, with the line that does', () => {
     expect(index.backlinks.get('Rating/music/Glasshouse Weather.md')).toEqual([
-      { from: 'Calendar/2026/days 2026/10.08.2026.md', context: '**Listened:** [[Glasshouse Weather]]' },
-      { from: 'Calendar/2026/months 2026/08.26 RPG.md', context: '- [[Glasshouse Weather]] — Mira Okonkwo (88)' },
+      { from: 'Calendar/2026/days 2026/10.08.2026.md', context: 'Listened: Glasshouse Weather' },
+      { from: 'Calendar/2026/months 2026/08.26 RPG.md', context: 'Glasshouse Weather — Mira Okonkwo (88)' },
     ]);
     expect(index.backlinks.get('Calendar/2026/days 2026/10.08.2026.md')).toEqual([
-      { from: 'Rating/music/Glasshouse Weather.md', context: 'Listened on [[10.08.2026]].' },
+      { from: 'Rating/music/Glasshouse Weather.md', context: 'Listened on 10.08.2026.' },
     ]);
   });
 
