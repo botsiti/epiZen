@@ -5,7 +5,7 @@ import { readNote, writeNote, type VaultFile } from '../lib/api';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
-import { flushBeforeClose } from '../lib/saving';
+import { flushBeforeClose, trackSave } from '../lib/saving';
 import { lineEnding } from '../lib/text';
 import { Editor } from './Editor';
 import { VaultImage } from './VaultImage';
@@ -108,27 +108,30 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved 
     };
   }, []);
 
+  // Writes until the note holds what is on screen: typing (or undoing) during a write is
+  // written right after it.
   const save = useCallback(() => {
     queue.current = queue.current.then(async () => {
-      const next = latest.current;
-      if (next === saved.current) return;
-      if (failure.current === undefined) {
+      while (failure.current === undefined && latest.current !== saved.current) {
+        const next = latest.current;
         if (mounted.current) setState({ kind: 'saving' });
         try {
           await writeNote(path, next, saved.current);
           saved.current = next;
           report.current.onSaved(next);
-          if (mounted.current) setState({ kind: latest.current === next ? 'saved' : 'saving' });
-          return;
+          if (mounted.current && latest.current === next) setState({ kind: 'saved' });
         } catch (err) {
           failure.current = String(err);
           if (mounted.current) setState({ kind: 'failed', message: failure.current });
         }
       }
-      if (!mounted.current) report.current.onUnsaved(next, failure.current);
+      if (failure.current !== undefined && !mounted.current && latest.current !== saved.current) {
+        report.current.onUnsaved(latest.current, failure.current);
+      }
     });
     return queue.current;
   }, [path]);
+  const unsaved = useCallback(() => (failure.current === undefined ? undefined : path), [path]);
 
   useEffect(() => {
     if (draft === saved.current) return;
@@ -136,9 +139,10 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved 
     return () => clearTimeout(timer);
   }, [draft, save]);
   // Leaving the note saves what is left, or hands it on if it can't be saved.
-  useEffect(() => () => void save(), [save]);
+  // Tracked, so a quit right after leaving waits for this save too.
+  useEffect(() => () => void trackSave(save().then(unsaved)), [save, unsaved]);
   // So does closing the window or quitting, which never unmounts the editor.
-  useEffect(() => flushBeforeClose(() => save().then(() => (failure.current === undefined ? undefined : path))), [save, path]);
+  useEffect(() => flushBeforeClose(() => save().then(unsaved)), [save, unsaved]);
 
   const change = useCallback((next: string) => {
     latest.current = next;
