@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Backlinks } from './components/Backlinks';
 import { Calendar } from './components/Calendar';
+import { GraphView } from './components/GraphView';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
 import { Home, MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
@@ -23,6 +24,7 @@ import {
 } from './lib/api';
 import type { LinkTarget } from './lib/completion';
 import { addDays, startOfMonth, today } from './lib/dates';
+import { buildGraph } from './lib/graph';
 import { buildLinkIndex } from './lib/linkIndex';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
@@ -47,6 +49,7 @@ type View =
   | { kind: 'new'; folder: string }
   | { kind: 'unsaved'; path: string; text: string; message: string }
   | { kind: 'settings' }
+  | { kind: 'graph' }
   | { kind: 'problem'; title: string; message: string };
 
 const HOME: View = { kind: 'home' };
@@ -127,6 +130,11 @@ export function App() {
   const periodicNotes = useMemo(() => periodicIndex(files, periodic), [files, periodic]);
   const go = useCallback((next: View) => setHistory((prev) => [...prev, next]), []);
   const links = useMemo(() => buildLinkIndex([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
+  const graph = useMemo(
+    () => buildGraph(files.filter((file) => file.kind === 'note').map((file) => file.path), links.outgoing),
+    [files, links],
+  );
+  const openNote = useCallback((path: string) => go({ kind: 'note', path }), [go]);
   const linkTargets = useMemo(() => {
     const titles = new Map<string, number>();
     for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
@@ -242,6 +250,7 @@ export function App() {
         onNewNote={() => go({ kind: 'new', folder: view.kind === 'note' ? noteFolder(view.path) : '' })}
         onOpenFolder={() => void chooseFolder()}
         onSettings={() => go({ kind: 'settings' })}
+        onGraph={() => go({ kind: 'graph' })}
         folderError={folderError}
         calendar={
           <Calendar
@@ -253,7 +262,7 @@ export function App() {
           />
         }
       />
-      <main className="main" ref={main}>
+      <main className={view.kind === 'graph' ? 'main is-graph' : 'main'} ref={main}>
         {view.kind === 'home' && (
           <Home
             vaultName={status.name}
@@ -279,6 +288,7 @@ export function App() {
         {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
         {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
         {view.kind === 'new' && <NewNote key={history.length} folders={folders} folder={view.folder} onCreate={create} />}
+        {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
         {view.kind === 'settings' && <SettingsScreen periodic={periodic} folders={folders} notes={notes} onSave={saveSettings} />}
         {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
       </main>

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { DEMO_VAULT, vaultCopy } from '../paths';
-import { followLink, openFolders, openNote, prepareWindow, screenshot, showMonth, typeInEditor } from '../support';
+import { followLink, nextFrame, openFolders, openNote, prepareWindow, screenshot, showMonth, typeInEditor } from '../support';
 
 const DAYS = 'Calendar/2026/days 2026';
 const title = () => $('[data-testid="note-title"]');
@@ -133,6 +133,22 @@ describe('the demo vault', () => {
     await expect(backlinks).toHaveText(expect.stringContaining('08.26 RPG'));
     await backlinks.scrollIntoView();
     await screenshot('18-backlinks');
+  });
+
+  it('draws every note and link in the graph, and lights a note and its neighbours up', async () => {
+    await $('[data-testid="open-graph"]').click();
+    const graph = $('[data-testid="graph"]');
+    await browser.waitUntil(async () => (await graph.getAttribute('data-settled')) === 'true', {
+      timeout: 20_000,
+      timeoutMsg: 'the layout never settled',
+    });
+    await screenshot('19-graph');
+    await $('[data-testid="graph-search"]').setValue('Glasshouse');
+    await expect(graph).toHaveAttribute('data-focus', 'Rating/music/Glasshouse Weather.md');
+    await nextFrame();
+    await screenshot('20-graph-focus');
+    await $('[data-testid="graph-open"]').click();
+    await expect(title()).toHaveText('Glasshouse Weather');
   });
 
   it('opens the day, week and month notes from the calendar', async () => {

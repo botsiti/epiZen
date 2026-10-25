@@ -12,6 +12,16 @@
   --accent: #8fbcaa;
   --accent-soft: rgb(143 188 170 / 12%);
 
+  /* The graph's folder colours: the accent's lightness and softness at other hues. */
+  --graph-1: #8fbcab;
+  --graph-2: #8fa4bc;
+  --graph-3: #bcac8f;
+  --graph-4: #b68fbc;
+  --graph-5: #8fb7bc;
+  --graph-6: #bc9a8f;
+  --graph-7: #b3bc8f;
+  --graph-8: #988fbc;
+
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 
@@ -830,4 +840,99 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Graph */
+
+.main.is-graph {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+}
+
+.graph {
+  position: absolute;
+  inset: 0;
+}
+
+.graph-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.graph-legend {
+  position: absolute;
+  top: var(--space-6);
+  left: var(--space-6);
+  pointer-events: none;
+}
+
+.graph-legend ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+
+.graph-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.graph-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.graph-search {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+  width: 240px;
+}
+
+.graph-search input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.graph-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.graph-search .quiet-button {
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg);
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-hint {
+  position: absolute;
+  bottom: var(--space-5);
+  left: var(--space-6);
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  pointer-events: none;
 }
