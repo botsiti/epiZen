@@ -23,6 +23,14 @@ export const listFiles = () => invoke<VaultFile[]>('list_files');
 export const readNote = (path: string) => invoke<string>('read_note', { path });
 export const readImage = (path: string) => invoke<ArrayBuffer>('read_image', { path });
 
+/** Mirrors `NoteText` in src-tauri/src/vault.rs. */
+export interface NoteText {
+  path: string;
+  text: string;
+}
+/** Every note's text in one call. A note that isn't UTF-8 text is left out. */
+export const readAllNotes = () => invoke<NoteText[]>('read_all_notes');
+
 // The only two writes. Both go through src-tauri/src/vault.rs: a new note never replaces a
 // file, and a note's text is replaced only while it still holds `expected`.
 export const createNote = (path: string, text: string) => invoke<void>('create_note', { path, text });
