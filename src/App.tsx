@@ -47,15 +47,20 @@ export function App() {
   const place = view.kind === 'note' ? view.path : view.kind;
   useEffect(() => main.current?.scrollTo(0, 0), [place]);
 
-  // A close or quit first saves what the editor holds. If that fails, the window stays open with
-  // the editor's warning and its text; closing again within a minute closes. Any later failure
-  // holds the window again.
+  // A close or quit first saves what the editor holds. If a note can't be saved, the window stays
+  // open with the editor's warning and its text. Closing again closes only when it is still those
+  // same notes; any other failure holds the window again. A request while a flush runs waits for it.
   useEffect(() => {
-    let warnedAt = -Infinity;
+    let flushing = false;
+    let warned: string | undefined;
     const stop = guardClose(() => {
-      void flushAll().then((saved) => {
-        if (saved || Date.now() - warnedAt < 60_000) void closeNow();
-        else warnedAt = Date.now();
+      if (flushing) return;
+      flushing = true;
+      void flushAll().then((unsaved) => {
+        flushing = false;
+        const notes = unsaved.join('\n');
+        if (!unsaved.length || notes === warned) void closeNow();
+        else warned = notes;
       });
     });
     return () => void stop.then((unlisten) => unlisten());

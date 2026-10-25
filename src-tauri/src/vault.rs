@@ -312,7 +312,8 @@ fn copy_metadata(from: &Path, to: &Path, file: &fs::File) -> io::Result<()> {
 }
 
 /// Trades the two paths' files in one step (macOS `renamex_np` with `RENAME_SWAP`). A volume
-/// that can't (exFAT, FAT, some network shares) gets `swap_by_rename` instead.
+/// that can't (exFAT, FAT, some network shares) gets no weaker way to save: the save fails and
+/// says why, and the note is left as it is.
 #[cfg(target_os = "macos")]
 fn swap(a: &Path, b: &Path) -> io::Result<()> {
     use std::ffi::CString;
@@ -327,22 +328,20 @@ fn swap(a: &Path, b: &Path) -> io::Result<()> {
     }
     let err = io::Error::last_os_error();
     match err.raw_os_error() {
-        Some(libc::ENOTSUP | libc::EINVAL) => swap_by_rename(a, b),
+        Some(libc::ENOTSUP | libc::EINVAL) => Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "this drive can't swap files in one step (exFAT, FAT or a network share), so Epizen doesn't save notes on it",
+        )),
         _ => Err(err),
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn swap(a: &Path, b: &Path) -> io::Result<()> {
-    swap_by_rename(a, b)
-}
-
-/// Where there is no swap: `b`'s bytes are read, `a` is renamed over `b`, and the bytes go to
-/// `a`. The check after it then sees `b` as it was just before the rename, not at it.
-fn swap_by_rename(a: &Path, b: &Path) -> io::Result<()> {
-    let current = fs::read(b)?;
-    fs::rename(a, b)?;
-    fs::write(a, current)
+fn swap(_: &Path, _: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Epizen saves notes only on macOS, where it can swap files in one step",
+    ))
 }
 
 /// A vault-relative path made only of plain names, none hidden, for a file of the given kind.
@@ -697,22 +696,6 @@ mod tests {
             assert_eq!(fs::read_to_string(leftover).unwrap(), "theirs, kept");
         }
         assert_eq!(fs::read_to_string(dir.path().join("day.md")).unwrap(), "c");
-    }
-
-    #[test]
-    fn swapping_by_rename_trades_the_two_files_bytes() {
-        let dir = tempfile::tempdir().unwrap();
-        let (a, b) = (dir.path().join("a"), dir.path().join("b"));
-        fs::write(&a, "new").unwrap();
-        fs::write(&b, "old").unwrap();
-        swap_by_rename(&a, &b).unwrap();
-        assert_eq!(
-            (
-                fs::read_to_string(&a).unwrap(),
-                fs::read_to_string(&b).unwrap()
-            ),
-            ("old".into(), "new".into())
-        );
     }
 
     /// Every file under `root`, hidden ones included, with its bytes.

@@ -138,7 +138,7 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved 
   // Leaving the note saves what is left, or hands it on if it can't be saved.
   useEffect(() => () => void save(), [save]);
   // So does closing the window or quitting, which never unmounts the editor.
-  useEffect(() => flushBeforeClose(() => save().then(() => failure.current === undefined)), [save]);
+  useEffect(() => flushBeforeClose(() => save().then(() => (failure.current === undefined ? undefined : path))), [save, path]);
 
   const change = useCallback((next: string) => {
     latest.current = next;
