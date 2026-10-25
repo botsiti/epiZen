@@ -9,6 +9,7 @@ use std::fmt;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Serialize;
 
@@ -154,12 +155,9 @@ impl Vault {
         if text == expected {
             return Ok(());
         }
-        let temp = temp_beside(&real).ok_or_else(|| VaultError::InvalidPath(path.to_owned()))?;
+        // Only a file this call creates is ever removed.
+        let (temp, mut file) = create_temp(&real)?;
         let prepared = (|| {
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temp)?;
             file.write_all(text.as_bytes())?;
             copy_metadata(&real, &temp, &file)?;
             file.sync_all()
@@ -169,7 +167,6 @@ impl Vault {
             swap(&temp, &real)
         });
         if let Err(err) = prepared {
-            // Only the temporary file this call made, never the note.
             let _ = fs::remove_file(&temp);
             return Err(err.into());
         }
@@ -271,10 +268,27 @@ impl Vault {
     }
 }
 
-/// A hidden file beside the note, which the vault listing skips.
-fn temp_beside(real: &Path) -> Option<PathBuf> {
-    let name = real.file_name()?.to_string_lossy();
-    Some(real.with_file_name(format!(".{name}.epizen-{}.tmp", std::process::id())))
+/// A new hidden file beside the note, which the vault listing skips, named for this one save.
+/// A name that exists already (left by a crash) is passed over, never opened or removed.
+fn create_temp(real: &Path) -> io::Result<(PathBuf, fs::File)> {
+    static SAVES: AtomicU64 = AtomicU64::new(0);
+    let name = real
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    loop {
+        let save = SAVES.fetch_add(1, Ordering::Relaxed);
+        let temp = real.with_file_name(format!(".{name}.epizen-{}-{save}.tmp", std::process::id()));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)
+        {
+            Ok(file) => return Ok((temp, file)),
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists && save < 1_000_000 => continue,
+            Err(err) => return Err(err),
+        }
+    }
 }
 
 /// What a note keeps across a save besides its text: extended attributes, creation date and
@@ -297,28 +311,38 @@ fn copy_metadata(from: &Path, to: &Path, file: &fs::File) -> io::Result<()> {
     file.set_permissions(metadata.permissions())
 }
 
-/// Trades the two paths' files in one step (macOS `renamex_np` with `RENAME_SWAP`).
+/// Trades the two paths' files in one step (macOS `renamex_np` with `RENAME_SWAP`). A volume
+/// that can't (exFAT, FAT, some network shares) gets `swap_by_rename` instead.
 #[cfg(target_os = "macos")]
 fn swap(a: &Path, b: &Path) -> io::Result<()> {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
-    let a = CString::new(a.as_os_str().as_bytes())?;
-    let b = CString::new(b.as_os_str().as_bytes())?;
+    let (from, to) = (
+        CString::new(a.as_os_str().as_bytes())?,
+        CString::new(b.as_os_str().as_bytes())?,
+    );
     // SAFETY: both are valid NUL-terminated paths that outlive the call; renamex_np only reads them.
-    if unsafe { libc::renamex_np(a.as_ptr(), b.as_ptr(), libc::RENAME_SWAP) } == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
+    if unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_SWAP) } == 0 {
+        return Ok(());
+    }
+    let err = io::Error::last_os_error();
+    match err.raw_os_error() {
+        Some(libc::ENOTSUP | libc::EINVAL) => swap_by_rename(a, b),
+        _ => Err(err),
     }
 }
 
-/// Elsewhere there is no swap: the new file is renamed over the note, so the check after it
-/// only sees the note's text from just before. Epizen is built for macOS.
 #[cfg(not(target_os = "macos"))]
-fn swap(temp: &Path, real: &Path) -> io::Result<()> {
-    let current = fs::read(real)?;
-    fs::rename(temp, real)?;
-    fs::write(temp, current)
+fn swap(a: &Path, b: &Path) -> io::Result<()> {
+    swap_by_rename(a, b)
+}
+
+/// Where there is no swap: `b`'s bytes are read, `a` is renamed over `b`, and the bytes go to
+/// `a`. The check after it then sees `b` as it was just before the rename, not at it.
+fn swap_by_rename(a: &Path, b: &Path) -> io::Result<()> {
+    let current = fs::read(b)?;
+    fs::rename(a, b)?;
+    fs::write(a, current)
 }
 
 /// A vault-relative path made only of plain names, none hidden, for a file of the given kind.
@@ -651,6 +675,43 @@ mod tests {
                 .unwrap()
                 .as_deref(),
             Some(&b"keep"[..])
+        );
+    }
+
+    #[test]
+    fn a_save_never_removes_a_file_it_did_not_create() {
+        let (dir, vault) = vault_with(&[("day.md", "a")]);
+        // Leftovers from an earlier run that happen to have the next saves' names.
+        let leftovers: Vec<PathBuf> = (0..4)
+            .map(|n| {
+                dir.path()
+                    .join(format!(".day.md.epizen-{}-{n}.tmp", std::process::id()))
+            })
+            .collect();
+        for leftover in &leftovers {
+            fs::write(leftover, "theirs, kept").unwrap();
+        }
+        vault.write_note("day.md", "b", "a").unwrap();
+        vault.write_note("day.md", "c", "b").unwrap();
+        for leftover in &leftovers {
+            assert_eq!(fs::read_to_string(leftover).unwrap(), "theirs, kept");
+        }
+        assert_eq!(fs::read_to_string(dir.path().join("day.md")).unwrap(), "c");
+    }
+
+    #[test]
+    fn swapping_by_rename_trades_the_two_files_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a"), dir.path().join("b"));
+        fs::write(&a, "new").unwrap();
+        fs::write(&b, "old").unwrap();
+        swap_by_rename(&a, &b).unwrap();
+        assert_eq!(
+            (
+                fs::read_to_string(&a).unwrap(),
+                fs::read_to_string(&b).unwrap()
+            ),
+            ("old".into(), "new".into())
         );
     }
 
