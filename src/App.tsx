@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Backlinks } from './components/Backlinks';
 import { Calendar } from './components/Calendar';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
@@ -12,6 +13,7 @@ import {
   guardClose,
   listFiles,
   pickVault,
+  readAllNotes,
   readNote,
   updateSettings,
   vaultStatus,
@@ -19,7 +21,9 @@ import {
   type VaultFile,
   type VaultStatus,
 } from './lib/api';
-import { startOfMonth, today } from './lib/dates';
+import type { LinkTarget } from './lib/completion';
+import { addDays, startOfMonth, today } from './lib/dates';
+import { buildLinkIndex } from './lib/linkIndex';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
   fillTemplate,
@@ -28,6 +32,7 @@ import {
   periodicSettings,
   periodKey,
   periodOf,
+  periodOfName,
   startOfPeriod,
   type Period,
   type PeriodicSettings,
@@ -62,6 +67,8 @@ export function App() {
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
   const [settings, setSettings] = useState<Settings>({});
+  // Every note's text, for links, backlinks and the graph. Saves and new notes keep it current.
+  const [texts, setTexts] = useState<ReadonlyMap<string, string>>(new Map());
   const [month, setMonth] = useState(() => startOfMonth(today()));
   const view = history.at(-1) ?? HOME;
   const main = useRef<HTMLElement>(null);
@@ -71,9 +78,11 @@ export function App() {
     const load = async () => {
       const next = await vaultStatus();
       const found = next.state === 'open' ? await listFiles() : [];
+      const read = next.state === 'open' ? await readAllNotes() : [];
       const stored = await getSettings();
       if (cancelled) return;
       setFiles(found);
+      setTexts(new Map(read.map((note) => [note.path, note.text])));
       setSettings(stored);
       setStatus(next);
     };
@@ -117,14 +126,31 @@ export function App() {
   const periodic = useMemo(() => periodicSettings(settings), [settings]);
   const periodicNotes = useMemo(() => periodicIndex(files, periodic), [files, periodic]);
   const go = useCallback((next: View) => setHistory((prev) => [...prev, next]), []);
-  const openLink = useCallback(
-    (target: string, fromPath: string) => {
-      const file = resolveLink(target, files, fromPath);
-      if (!file) go({ kind: 'missing', target });
-      else if (file.kind === 'note') go({ kind: 'note', path: file.path });
-    },
-    [files, go],
-  );
+  const links = useMemo(() => buildLinkIndex([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
+  const linkTargets = useMemo(() => {
+    const titles = new Map<string, number>();
+    for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
+    const targets: LinkTarget[] = notes.map((path) => ({
+      label: noteTitle(path),
+      detail: noteFolder(path) || undefined,
+      // Two notes with one name: link by path, as Obsidian does.
+      insert: (titles.get(noteTitle(path)) ?? 0) > 1 ? path : undefined,
+    }));
+    // Daily notes that don't exist yet can be linked too; following the link creates them.
+    const now = today();
+    for (const [offset, detail] of [[0, 'today'], [-1, 'yesterday'], [1, 'tomorrow']] as const) {
+      const path = periodicPath('day', addDays(now, offset), periodic).replace(/\.md$/i, '');
+      if (!titles.has(noteTitle(path))) targets.push({ label: noteTitle(path), detail });
+    }
+    return targets;
+  }, [notes, periodic]);
+  // Reads the vault's files and texts again after the app created a note.
+  const refresh = useCallback(async () => {
+    const [found, read] = await Promise.all([listFiles(), readAllNotes()]);
+    setFiles(found);
+    setTexts(new Map(read.map((note) => [note.path, note.text])));
+  }, []);
+  const noteSaved = useCallback((path: string, text: string) => setTexts((prev) => new Map(prev).set(path, text)), []);
   const back = history.length > 1 ? () => setHistory((prev) => prev.slice(0, -1)) : undefined;
   const setEditing = useCallback(
     (editing: boolean) => setHistory((prev) => prev.map((v, i) => (i === prev.length - 1 && v.kind === 'note' ? { ...v, editing } : v))),
@@ -147,10 +173,10 @@ export function App() {
     async (path: string) => {
       await createNote(path, '');
       go({ kind: 'note', path, editing: true });
-      // The note exists now; listing the vault again only updates the sidebar.
-      listFiles().then(setFiles, () => undefined);
+      // The note exists now; reading the vault again only updates the sidebar and links.
+      refresh().catch(() => undefined);
     },
-    [go],
+    [go, refresh],
   );
 
   // A day, week or month opens its note, or creates it in its folder from its template.
@@ -168,10 +194,10 @@ export function App() {
         // Created a moment ago, or named by a file the index doesn't know as this period's note.
         if (!String(err).includes('already exists')) throw err;
       }
-      setFiles(await listFiles());
+      await refresh();
       go({ kind: 'note', path });
     },
-    [files, go, periodic, periodicNotes],
+    [files, go, periodic, periodicNotes, refresh],
   );
   const openPeriodicOrSay = useCallback(
     (period: Period, date: Date) =>
@@ -179,6 +205,18 @@ export function App() {
         go({ kind: 'problem', title: "Couldn't create the note", message: String(err) }),
       ),
     [go, openPeriodic],
+  );
+  // A link to a missing day, week or month creates that note, like the calendar; any other
+  // missing note is only explained, never created.
+  const openLink = useCallback(
+    (target: string, fromPath: string) => {
+      const file = resolveLink(target, files, fromPath);
+      const named = file ? undefined : periodOfName(target, periodic);
+      if (named) openPeriodicOrSay(named.period, named.date);
+      else if (!file) go({ kind: 'missing', target });
+      else if (file.kind === 'note') go({ kind: 'note', path: file.path });
+    },
+    [files, go, periodic, openPeriodicOrSay],
   );
   const saveSettings = useCallback(async (next: PeriodicSettings) => setSettings(await updateSettings({ periodic: next })), []);
 
@@ -232,7 +270,10 @@ export function App() {
             onOpenLink={openLink}
             editing={Boolean(view.editing)}
             onEditingChange={setEditing}
+            onSaved={noteSaved}
             onUnsaved={(path, text, message) => go({ kind: 'unsaved', path, text, message })}
+            linkTargets={linkTargets}
+            footer={<Backlinks links={links.backlinks.get(view.path) ?? []} onOpen={(path) => go({ kind: 'note', path })} />}
           />
         )}
         {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}

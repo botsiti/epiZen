@@ -774,3 +774,95 @@ code {
   align-items: center;
   gap: var(--space-4);
 }
+
+/* Backlinks */
+
+.backlinks {
+  max-width: var(--reading-width);
+  margin: var(--space-8) auto 0;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.backlinks ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.backlink {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  margin-left: calc(-1 * var(--space-3));
+  border-radius: var(--radius);
+  text-align: left;
+  transition: background-color var(--ease);
+}
+
+.backlink:hover {
+  background: rgb(255 255 255 / 3%);
+}
+
+.backlink-title {
+  color: var(--accent);
+  font-size: 15px;
+}
+
+.backlink-folder {
+  align-self: center;
+  color: var(--text-faint);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlink-context {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Wikilink autocomplete in the editor */
+
+.cm-tooltip.cm-tooltip-autocomplete {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  max-height: 240px;
+  font: 13.5px var(--font-ui);
+}
+
+.cm-tooltip.cm-tooltip-autocomplete > ul > li {
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-muted);
+}
+
+.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.cm-completionDetail {
+  margin-left: var(--space-3);
+  color: var(--text-faint);
+  font-style: normal;
+}
+
+.cm-completionMatchedText {
+  color: var(--accent);
+  text-decoration: none;
+}

@@ -64,6 +64,15 @@ export function periodOf(path: string, settings: PeriodicSettings): { period: Pe
   return undefined;
 }
 
+/** Which day, week or month a link's target names, wherever that note is or would be. */
+export function periodOfName(name: string, settings: PeriodicSettings): { period: Period; date: Date } | undefined {
+  for (const period of PERIODS) {
+    const date = parseDate(name.trim(), settings[period].format);
+    if (date) return { period, date: startOfPeriod(period, date) };
+  }
+  return undefined;
+}
+
 export const periodKey = (period: Period, date: Date) => `${period}:${formatDate(startOfPeriod(period, date), 'YYYY-MM-DD')}`;
 
 /** Every periodic note in the vault, by `periodKey`. A note at the expected path wins over a namesake elsewhere in the folder. */

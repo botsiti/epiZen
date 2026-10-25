@@ -58,6 +58,23 @@ export function resolveLink(target: string, files: VaultFile[], fromPath?: strin
   })[0];
 }
 
+/**
+ * `resolveLink` for many links at once: the same rules, with notes looked up by name instead
+ * of scanning every file per link. For backlinks and the graph.
+ */
+export function linkResolver(files: VaultFile[]): (target: string, fromPath: string) => VaultFile | undefined {
+  const byName = new Map<string, VaultFile[]>();
+  for (const file of files) {
+    const name = baseName(normalize(file.path));
+    byName.set(name, [...(byName.get(name) ?? []), file]);
+  }
+  return (target, fromPath) => {
+    if (!target || target.includes('/')) return resolveLink(target, files, fromPath);
+    const candidates = byName.get(normalize(KNOWN_EXTENSION.test(target) ? target : `${target}.md`)) ?? [];
+    return candidates.length <= 1 ? candidates[0] : resolveLink(target, candidates, fromPath);
+  };
+}
+
 /** A note's title is its file name without `.md`, as in Obsidian. */
 export function noteTitle(path: string): string {
   return baseName(path).replace(/\.md$/i, '');

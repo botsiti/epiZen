@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { VaultFile } from './api';
 import { day } from './dates';
-import { DEFAULT_PERIODIC, fillTemplate, periodicIndex, periodicPath, periodicSettings, periodKey, periodOf, type PeriodicSettings } from './periodic';
+import {
+  DEFAULT_PERIODIC,
+  fillTemplate,
+  periodicIndex,
+  periodicPath,
+  periodicSettings,
+  periodKey,
+  periodOf,
+  periodOfName,
+  type PeriodicSettings,
+} from './periodic';
 
 // The demo vault's setup, as the e2e tests seed it.
 const DEMO: PeriodicSettings = {
@@ -33,6 +43,13 @@ describe('periodic note paths', () => {
     expect(periodOf('Calendar/2026/months 2026/08.26 RPG.md', DEMO)).toEqual({ period: 'month', date: day(2026, 7, 1) });
     expect(periodOf('Archive/14.08.2026.md', DEMO)).toBeUndefined();
     expect(periodOf('Rating/music/Glasshouse Weather.md', DEMO)).toBeUndefined();
+  });
+
+  it('reads a link target like [[24.10.2026]] as a day, week or month', () => {
+    expect(periodOfName('24.10.2026', DEMO)).toEqual({ period: 'day', date: day(2026, 9, 24) });
+    expect(periodOfName('2026-W43 - 19.10.26', DEMO)).toEqual({ period: 'week', date: day(2026, 9, 19) });
+    expect(periodOfName('10.26 RPG', DEMO)).toEqual({ period: 'month', date: day(2026, 9, 1) });
+    expect(periodOfName('Glasshouse Weather', DEMO)).toBeUndefined();
   });
 
   it('indexes the notes that exist', () => {

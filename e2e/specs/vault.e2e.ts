@@ -70,11 +70,12 @@ describe('the demo vault', () => {
     await screenshot('09-youtube');
   });
 
-  it('explains a link to a note that does not exist, and creates nothing', async () => {
+  it('creates a missing day from a link to it, from its template', async () => {
     await openNote(`${DAYS}/01.08.2026.md`);
     await followLink('31.07.2026');
-    await expect($('[data-testid="missing-note"]')).toHaveText(expect.stringContaining('31.07.2026'));
-    await screenshot('10-missing-note');
+    await expect(title()).toHaveText('31.07.2026');
+    expect(readFileSync(join(vaultCopy(), `${DAYS}/31.07.2026.md`), 'utf8')).toContain('[[01.08.2026|Tomorrow →]]');
+    await screenshot('10-day-from-link');
   });
 
   it('opens a note in the editor and leaves it as it was when nothing is typed', async () => {
@@ -99,12 +100,35 @@ describe('the demo vault', () => {
     await screenshot('12-new-note');
     await $('[data-testid="new-note-create"]').click();
     await $('[data-testid="editor"] .cm-content').waitForDisplayed();
-    await typeInEditor('# Hello from Epizen');
+    await typeInEditor('Hello from Epizen, see [[Someday maybe]] and [[Glass');
+    const suggestion = $('.cm-tooltip-autocomplete li*=Glasshouse Weather');
+    await suggestion.waitForDisplayed();
+    await screenshot('13-link-autocomplete');
+    await suggestion.click();
     await expect($('[data-testid="save-state"]')).toHaveText('Saved', { wait: 5000 });
-    await expect($('[data-testid="preview"] h1')).toHaveText('Hello from Epizen');
-    expect(readFileSync(join(vaultCopy(), 'Inbox idea.md'), 'utf8')).toBe('# Hello from Epizen');
-    await screenshot('13-new-note-editor');
+    expect(readFileSync(join(vaultCopy(), 'Inbox idea.md'), 'utf8')).toBe(
+      'Hello from Epizen, see [[Someday maybe]] and [[Glasshouse Weather]]',
+    );
+    await expect($('[data-testid="preview"]')).toHaveText(expect.stringContaining('Hello from Epizen'));
     await expect($('[data-testid="tree-note"][data-path="Inbox idea.md"]')).toBeDisplayed();
+    await $('[data-testid="edit-done"]').click();
+  });
+
+  it('explains a link to a note that does not exist, and creates nothing', async () => {
+    await followLink('Someday maybe');
+    await expect($('[data-testid="missing-note"]')).toHaveText(expect.stringContaining('Nothing was created'));
+    await screenshot('17-missing-note');
+    await $('[data-testid="missing-note"] button').click();
+  });
+
+  it('lists the notes that link to a note', async () => {
+    await followLink('Glasshouse Weather');
+    await expect(title()).toHaveText('Glasshouse Weather');
+    const backlinks = $('[data-testid="backlinks"]');
+    await expect(backlinks).toHaveText(expect.stringContaining('Inbox idea'));
+    await expect(backlinks).toHaveText(expect.stringContaining('08.26 RPG'));
+    await backlinks.scrollIntoView();
+    await screenshot('18-backlinks');
   });
 
   it('opens the day, week and month notes from the calendar', async () => {
@@ -120,12 +144,12 @@ describe('the demo vault', () => {
 
   it('creates a missing day from its template, in its folder', async () => {
     await showMonth('July 2026');
-    await $('[data-testid="calendar-day"][data-date="2026-07-31"]').click();
-    await expect(title()).toHaveText('31.07.2026');
+    await $('[data-testid="calendar-day"][data-date="2026-07-30"]').click();
+    await expect(title()).toHaveText('30.07.2026');
     await expect($('[data-testid="properties"]')).toHaveText(expect.stringContaining('Daily'));
-    const text = readFileSync(join(vaultCopy(), `${DAYS}/31.07.2026.md`), 'utf8');
-    expect(text).toMatch(/^---\ndate: 2026-07-31T\d\d:\d\d\n/);
-    expect(text).toContain('[[30.07.2026|← Yesterday]] | [[01.08.2026|Tomorrow →]] | [[2026-W31 - 27.07.26|Week]]');
+    const text = readFileSync(join(vaultCopy(), `${DAYS}/30.07.2026.md`), 'utf8');
+    expect(text).toMatch(/^---\ndate: 2026-07-30T\d\d:\d\d\n/);
+    expect(text).toContain('[[29.07.2026|← Yesterday]] | [[31.07.2026|Tomorrow →]] | [[2026-W31 - 27.07.26|Week]]');
     await screenshot('15-new-day');
   });
 
@@ -136,8 +160,9 @@ describe('the demo vault', () => {
     await screenshot('16-settings');
   });
 
-  it('changed nothing in the vault copy but the two new notes', () => {
+  it('changed nothing in the vault copy but the three new notes', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual([
+      `added: ${DAYS}/30.07.2026.md`,
       `added: ${DAYS}/31.07.2026.md`,
       'added: Inbox idea.md',
     ]);
