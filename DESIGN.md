@@ -51,6 +51,9 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Properties**: a two-column list with faint labels. An empty value shows as a faint "—".
 - **Callouts**: a surface block with a small uppercase title, no icon, no colour by type.
 - **Tasks**: accent-tinted checkboxes. They are disabled until the app can write.
+- **Calendar**: a month above the notes in the sidebar, Monday first, with faint ISO week numbers.
+  A small accent dot under a day or week that has its note; today in accent; the open note's day
+  gets the soft accent background. Days of other months are faint.
 - **Editor**: the note's source on the left and a live preview on the right, with space between them
   and no line. Headings and emphasis show in the source; Markdown's own marks are faint. A faint
   "Saving…" or "Saved" sits by the title.

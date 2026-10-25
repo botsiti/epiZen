@@ -518,4 +518,81 @@ ${[...months.keys()].map((month) => `- [[${month}|${MONTHS[Number(month.slice(0,
 `,
 );
 
+// ---------------------------------------------------------------- templates
+
+// Obsidian template syntax, as Epizen fills it when it creates a periodic note:
+// {{title}}, {{date:FORMAT}}, {{date+1d:FORMAT}} and, in a week, {{monday:FORMAT}} and the other days.
+write(
+  'Templates/Daily.md',
+  `---
+date: {{date:YYYY-MM-DDTHH:mm}}
+tags:
+  - Daily
+cssclasses:
+  - daily
+  - rpg-day
+done:
+sleep:
+focus:
+energy:
+mood:
+---
+
+***А сегодня что для завтра сделал я?***
+> [!tldr]+ **Summary of the day:**
+> 
+
+> [!navigation]+ Navigation
+> **Date Navigation**
+> [[{{date-1d:DD.MM.YYYY}}|← Yesterday]] | [[{{date+1d:DD.MM.YYYY}}|Tomorrow →]] | [[{{monday:GGGG-[W]WW - DD.MM.YY}}|Week]] | **[[{{date:MM.YY [RPG]}}|{{date:MM.YY}}]]**
+
+## {{date:dddd, MMMM Do, YYYY}}
+
+### Tasks
+- [ ] 
+
+**Gratitude practice:** 
+
+### stream of consc
+`,
+);
+
+write(
+  'Templates/Weekly.md',
+  `---
+cssclasses:
+  - rpg-week
+---
+
+##### Week Plans
+<< [[{{date-7d:GGGG-[W]WW - DD.MM.YY}}]] | [[{{date+7d:GGGG-[W]WW - DD.MM.YY}}]] >>
+
+### Days
+${['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+  .map((day) => `- [[{{${day}:DD.MM.YYYY}}]] · ${day[0].toUpperCase()}${day.slice(1)}`)
+  .join('\n')}
+
+Month: [[{{date:MM.YY [RPG]}}]]
+
+#### Plus
+
+#### Minus
+
+#### Next
+`,
+);
+
+write(
+  'Templates/Monthly.md',
+  `---
+cssclasses:
+  - rpg-month
+---
+
+### Plans for month
+
+## Month Summary
+`,
+);
+
 console.log(`Wrote the demo vault to ${out}`);

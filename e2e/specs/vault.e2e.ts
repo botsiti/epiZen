@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { DEMO_VAULT, vaultCopy } from '../paths';
-import { followLink, openFolders, openNote, prepareWindow, screenshot, typeInEditor } from '../support';
+import { followLink, openFolders, openNote, prepareWindow, screenshot, showMonth, typeInEditor } from '../support';
 
 const DAYS = 'Calendar/2026/days 2026';
 const title = () => $('[data-testid="note-title"]');
@@ -17,7 +17,7 @@ describe('the demo vault', () => {
 
   it('opens on the home screen', async () => {
     await expect($('[data-testid="vault-name"]')).toHaveText('demo-vault');
-    await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('103 notes · 9 folders · 27 images'));
+    await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('106 notes · 10 folders · 27 images'));
     await screenshot('03-home');
   });
 
@@ -83,6 +83,8 @@ describe('the demo vault', () => {
     // Waiting on the editor's text would scroll it into view, past the title.
     await $('[data-testid="note-editor"]').waitForDisplayed();
     await expect($('[data-testid="preview"]')).toHaveText(expect.stringContaining('Busy but calm.'));
+    // Reading the preview's text scrolls it into view; show the editor as it opens.
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
     await screenshot('11-editor');
     await $('[data-testid="edit-done"]').click();
     await $('[data-testid="note"]').waitForDisplayed();
@@ -105,7 +107,39 @@ describe('the demo vault', () => {
     await expect($('[data-testid="tree-note"][data-path="Inbox idea.md"]')).toBeDisplayed();
   });
 
-  it('changed nothing in the vault copy but the new note', () => {
-    expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(['added: Inbox idea.md']);
+  it('opens the day, week and month notes from the calendar', async () => {
+    await showMonth('August 2026');
+    await $('[data-testid="calendar-day"][data-date="2026-08-14"]').click();
+    await expect(title()).toHaveText('14.08.2026');
+    await screenshot('14-calendar');
+    await $('[data-testid="calendar-week"][data-week="33"]').click();
+    await expect(title()).toHaveText('2026-W33 - 10.08.26');
+    await $('[data-testid="calendar-month"]').click();
+    await expect(title()).toHaveText('08.26 RPG');
+  });
+
+  it('creates a missing day from its template, in its folder', async () => {
+    await showMonth('July 2026');
+    await $('[data-testid="calendar-day"][data-date="2026-07-31"]').click();
+    await expect(title()).toHaveText('31.07.2026');
+    await expect($('[data-testid="properties"]')).toHaveText(expect.stringContaining('Daily'));
+    const text = readFileSync(join(vaultCopy(), `${DAYS}/31.07.2026.md`), 'utf8');
+    expect(text).toMatch(/^---\ndate: 2026-07-31T\d\d:\d\d\n/);
+    expect(text).toContain('[[30.07.2026|← Yesterday]] | [[01.08.2026|Tomorrow →]] | [[2026-W31 - 27.07.26|Week]]');
+    await screenshot('15-new-day');
+  });
+
+  it('keeps the periodic notes setup in Settings', async () => {
+    await $('[data-testid="open-settings"]').click();
+    await expect($('[data-testid="settings-day-format"]')).toHaveValue('DD.MM.YYYY');
+    await expect($('[data-testid="settings-day"]')).toHaveText(expect.stringContaining('This day:'));
+    await screenshot('16-settings');
+  });
+
+  it('changed nothing in the vault copy but the two new notes', () => {
+    expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual([
+      `added: ${DAYS}/31.07.2026.md`,
+      'added: Inbox idea.md',
+    ]);
   });
 });

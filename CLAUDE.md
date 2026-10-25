@@ -26,7 +26,8 @@ Tauri 2 (Rust) with React, TypeScript and Vite. macOS first.
   in tests), never in the vault.
 - `src-tauri/src/lib.rs`: Tauri commands and startup (`--vault <folder>`, `EPIZEN_VAULT`, or the vault
   opened last time).
-- `src/`: the React UI. `src/lib/` holds parsing (frontmatter, wikilinks, callouts), tests beside it.
+- `src/`: the React UI. `src/lib/` holds parsing (frontmatter, wikilinks, callouts) and
+  dates and periodic notes (moment.js formats, templates), tests beside it.
 - `demo-vault/`: a fake vault in the real format, made by `scripts/make-demo-vault.mjs`.
   Tests only ever touch a copy. `npm run check` fails if a file in it changes.
 - `e2e/`: WebdriverIO drives the real app through `@wdio/tauri-service`.

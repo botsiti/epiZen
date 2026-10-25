@@ -1,4 +1,4 @@
-import { $, browser } from '@wdio/globals';
+import { $, browser, expect } from '@wdio/globals';
 import { join } from 'node:path';
 import { EVIDENCE } from './paths';
 
@@ -43,6 +43,20 @@ export async function typeInEditor(text: string) {
     document.querySelector<HTMLElement>('[data-testid="editor"] .cm-content')?.focus();
     document.execCommand('insertText', false, value);
   }, text);
+}
+
+/** Steps the sidebar calendar to a month, such as "August 2026". */
+export async function showMonth(label: string) {
+  const title = $('[data-testid="calendar-month"]');
+  const [name, year] = label.split(' ');
+  for (let i = 0; i < 120 && (await title.getText()) !== label; i += 1) {
+    const [shownName, shownYear] = (await title.getText()).split(' ');
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const shown = Number(shownYear) * 12 + months.indexOf(shownName ?? '');
+    const wanted = Number(year) * 12 + months.indexOf(name ?? '');
+    await $(`[data-testid="calendar-${wanted < shown ? 'prev' : 'next'}"]`).click();
+  }
+  await expect(title).toHaveText(label);
 }
 
 export async function followLink(target: string) {

@@ -33,6 +33,21 @@ export function Unsaved({ path, text, message }: { path: string; text: string; m
   );
 }
 
+export function Problem({ title, message, onBack }: { title: string; message: string; onBack?: () => void }) {
+  return (
+    <section className="screen" data-testid="problem">
+      <p className="eyebrow">Something went wrong</p>
+      <h1>{title}</h1>
+      <p className="muted">{message}</p>
+      {onBack && (
+        <button type="button" className="quiet-button" onClick={onBack}>
+          Back
+        </button>
+      )}
+    </section>
+  );
+}
+
 export function MissingNote({ target, onBack }: { target: string; onBack?: () => void }) {
   return (
     <section className="screen" data-testid="missing-note">
