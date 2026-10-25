@@ -1,23 +1,3 @@
-interface HomeProps {
-  vaultName: string;
-  notes: number;
-  folders: number;
-  images: number;
-}
-
-export function Home({ vaultName, notes, folders, images }: HomeProps) {
-  return (
-    <section className="screen" data-testid="home">
-      <p className="eyebrow">Vault</p>
-      <h1 data-testid="vault-name">{vaultName}</h1>
-      <p className="muted">
-        {notes} notes · {folders} folders · {images} images
-      </p>
-      <p className="hint">Choose a note on the left.</p>
-    </section>
-  );
-}
-
 /** Text the editor couldn't save after it was closed, kept on screen so it can be copied. */
 export function Unsaved({ path, text, message }: { path: string; text: string; message: string }) {
   return (

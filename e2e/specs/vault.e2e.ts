@@ -6,6 +6,11 @@ import { DEMO_VAULT, vaultCopy } from '../paths';
 import { followLink, nextFrame, openFolders, openNote, prepareWindow, screenshot, showMonth, typeInEditor } from '../support';
 
 const DAYS = 'Calendar/2026/days 2026';
+// Today's daily note, as the demo vault names them.
+const TODAY = (() => {
+  const now = new Date();
+  return `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
+})();
 const title = () => $('[data-testid="note-title"]');
 
 describe('the demo vault', () => {
@@ -18,7 +23,19 @@ describe('the demo vault', () => {
   it('opens on the home screen', async () => {
     await expect($('[data-testid="vault-name"]')).toHaveText('demo-vault');
     await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('106 notes · 10 folders · 27 images'));
+    await expect($('[data-testid="today-create"]')).toBeDisplayed();
+    expect(await $$('[data-testid="shelf"]').length).toBe(3);
+    expect(await $$('[data-testid="cover-card"]').length).toBe(27);
+    await expect($('[data-testid="shelf"][data-folder="Rating/music"]')).toHaveText(expect.stringContaining('88'));
+    await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 27, {
+      timeoutMsg: 'the covers never loaded',
+    });
     await screenshot('03-home');
+  });
+
+  it('opens an album from its cover on the home screen', async () => {
+    await $('[data-testid="cover-card"][data-path="Rating/music/Glasshouse Weather.md"]').click();
+    await expect(title()).toHaveText('Glasshouse Weather');
   });
 
   it('opens a daily note from the sidebar', async () => {
@@ -214,12 +231,24 @@ describe('the demo vault', () => {
     await screenshot('16-settings');
   });
 
-  it('changed nothing in the vault copy but the three new notes and the ticked day', () => {
-    expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual([
-      `added: ${DAYS}/30.07.2026.md`,
-      `added: ${DAYS}/31.07.2026.md`,
-      'added: Inbox idea.md',
-      `changed: ${DAYS}/14.08.2026.md`,
-    ]);
+  it("creates today's note from the home screen", async () => {
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="today-create"]').click();
+    await expect(title()).toHaveText(TODAY);
+    await expect($('[data-testid="dashboard"][data-period="day"]')).toBeDisplayed();
+    await $('[data-testid="sidebar-vault"]').click();
+    await expect($('[data-testid="today-open"]')).toHaveText(`Open ${TODAY}`);
+  });
+
+  it('changed nothing in the vault copy but the four new notes and the ticked day', () => {
+    expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
+      [
+        `added: ${DAYS}/30.07.2026.md`,
+        `added: ${DAYS}/31.07.2026.md`,
+        `added: ${DAYS}/${TODAY}.md`,
+        'added: Inbox idea.md',
+        `changed: ${DAYS}/14.08.2026.md`,
+      ].sort(),
+    );
   });
 });
