@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TauriCapabilities } from '@wdio/tauri-service';
+import { makeBigVault } from './big-vault';
 import { APP, COPY_PREFIX, DEMO_VAULT, EVIDENCE, PERIODIC, vaultCopy } from './paths';
 
 // Tests only ever touch a copy of the demo vault. The launcher makes the copy once;
@@ -23,6 +24,8 @@ function copyDemoVault() {
   const config = join(dirname(copy), 'config');
   mkdirSync(config);
   writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC }));
+  // A generated vault for the graph's 2,000-note check, beside the copy so it goes with it.
+  makeBigVault(join(dirname(copy), 'big-vault'));
   return copy;
 }
 
@@ -45,6 +48,7 @@ export const config: WebdriverIO.Config = {
     launch(4445, './specs/no-vault.e2e.ts', []),
     launch(4446, './specs/vault-error.e2e.ts', ['--vault', join(tmpdir(), 'epizen-no-such-vault')]),
     launch(4447, './specs/vault.e2e.ts', ['--vault', vaultCopy()]),
+    launch(4448, './specs/graph-2000.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'big-vault')]),
   ],
   services: [['@wdio/tauri-service', { driverProvider: 'embedded' }]],
   framework: 'mocha',

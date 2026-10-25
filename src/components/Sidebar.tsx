@@ -10,6 +10,7 @@ interface Props {
   onNewNote: () => void;
   onOpenFolder: () => void;
   onSettings: () => void;
+  onGraph: () => void;
   /** Why the last folder the user picked couldn't be opened. */
   folderError?: string;
   /** Shown above the notes. */
@@ -17,7 +18,7 @@ interface Props {
 }
 
 export function Sidebar(props: Props) {
-  const { vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, folderError, calendar } = props;
+  const { vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, folderError, calendar } = props;
   // Folders the user opened or closed by hand. Untouched folders open when they hold the selected note.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
   const isOpen = (path: string) => toggled.get(path) ?? Boolean(selected?.startsWith(`${path}/`));
@@ -38,6 +39,9 @@ export function Sidebar(props: Props) {
         <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isOpen} toggle={toggle} onOpenNote={onOpenNote} />
       </ul>
       <div className="sidebar-foot">
+        <button type="button" className="sidebar-action" onClick={onGraph} data-testid="open-graph">
+          Graph
+        </button>
         <button type="button" className="sidebar-action" onClick={onSettings} data-testid="open-settings">
           Settings
         </button>

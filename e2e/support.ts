@@ -15,6 +15,11 @@ export async function prepareWindow() {
   });
 }
 
+/** Waits until the page has drawn its next frame, for a canvas that redraws on the next one. */
+export async function nextFrame() {
+  await browser.execute(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+}
+
 /** Saves what the window shows to evidence/<name>.png. */
 export async function screenshot(name: string) {
   await browser.saveScreenshot(join(EVIDENCE, `${name}.png`));

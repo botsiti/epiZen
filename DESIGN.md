@@ -17,7 +17,11 @@ Tokens live in `:root` in `src/styles.css`. Use them. A new colour gets added he
 | `--text-faint` | `#5f6568` | labels, hints, empty values                |
 | `--accent`     | `#8fbcaa` | links, the selected note, focus, checkboxes |
 
-The accent is sage, and it is the only colour. No red for errors, no green for success, no
+The accent is sage, and it is the only colour, with one exception: the graph colours its dots by
+top-level folder, from `--graph-1` to `--graph-8`, the accent's own lightness and softness at
+seven other hues.
+
+The accent is sage everywhere else. No red for errors, no green for success, no
 colour per callout type. A link to a missing note is muted with a dotted underline, not red.
 Covers and other images bring their own colour; the interface doesn't.
 
@@ -51,6 +55,11 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Properties**: a two-column list with faint labels. An empty value shows as a faint "—".
 - **Callouts**: a surface block with a small uppercase title, no icon, no colour by type.
 - **Tasks**: accent-tinted checkboxes. They are disabled until the app can write.
+- **Graph**: the whole main pane, no padding. Dots in their folder's colour, sized by how many links
+  they have; links as faint hairlines that thin out as they grow in number. Pointing at a note (or
+  finding it) lights it and its neighbours up, its links in accent, and dims the rest; their names
+  show then, and for every note once zoomed in. A small legend top left, the search top right, a
+  faint hint at the bottom.
 - **Calendar**: a month above the notes in the sidebar, Monday first, with faint ISO week numbers.
   A small accent dot under a day or week that has its note; today in accent; the open note's day
   gets the soft accent background. Days of other months are faint.
