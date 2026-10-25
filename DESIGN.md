@@ -61,6 +61,9 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   tasks with their category and minutes faint beside them, and minutes by category as accent over a
   hairline-coloured planned bar. A week lists its seven days and a month its weeks, each opening its
   note; a missing one is faint.
+- **Home**: wider than a note (880px). The vault's name and counts, then today's note as one surface
+  block (its date, a quiet summary, and a button to open or create it), then a shelf per folder of
+  rated notes: covers in a grid, the title with its rating in accent beside it, the maker faint below.
 - **Graph**: the whole main pane, no padding. Dots in their folder's colour, sized by how many links
   they have; links as faint hairlines that thin out as they grow in number. Pointing at a note (or
   finding it) lights it and its neighbours up, its links in accent, and dims the rest; their names

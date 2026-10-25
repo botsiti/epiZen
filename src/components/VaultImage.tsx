@@ -14,10 +14,11 @@ interface Props {
   path: string;
   alt: string;
   width?: number;
+  className?: string;
 }
 
 /** An image from the vault, read through the backend and shown from a blob URL. */
-export function VaultImage({ path, alt, width }: Props) {
+export function VaultImage({ path, alt, width, className = 'embed' }: Props) {
   const [image, setImage] = useState<{ path: string; url?: string; failed?: boolean }>({ path });
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export function VaultImage({ path, alt, width }: Props) {
     return <span className="embed-missing">{alt}</span>;
   }
   if (image.path !== path || !image.url) {
-    return <span className="embed-loading" style={{ width, aspectRatio: '1' }} />;
+    return <span className={`${className} embed-loading`} style={{ width, aspectRatio: '1' }} />;
   }
-  return <img className="embed" src={image.url} alt={alt} width={width} data-testid="vault-image" />;
+  return <img className={className} src={image.url} alt={alt} width={width} data-testid="vault-image" />;
 }

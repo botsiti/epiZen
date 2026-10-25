@@ -5,7 +5,8 @@ import type { DashboardSpec, DayNote } from './components/Dashboard';
 import { GraphView } from './components/GraphView';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
-import { Home, MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
+import { Home } from './components/Home';
+import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { SettingsScreen } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
 import {
@@ -27,6 +28,7 @@ import type { LinkTarget } from './lib/completion';
 import { addDays, addMonths, startOfMonth, startOfWeek, today } from './lib/dates';
 import { buildGraph } from './lib/graph';
 import { buildLinkIndex } from './lib/linkIndex';
+import { collectMedia } from './lib/media';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
   fillTemplate,
@@ -136,6 +138,12 @@ export function App() {
     [files, links],
   );
   const openNote = useCallback((path: string) => go({ kind: 'note', path }), [go]);
+  const shelves = useMemo(() => collectMedia([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
+  const todayNote = useMemo(() => {
+    const date = today();
+    const path = periodicNotes.get(periodKey('day', date));
+    return { date, path, name: noteTitle(periodicPath('day', date, periodic)), text: path === undefined ? undefined : texts.get(path) };
+  }, [periodic, periodicNotes, texts]);
   // A daily note's dashboard reads the note itself; a week sums its seven days, a month its weeks.
   const notePath = view.kind === 'note' ? view.path : undefined;
   const dashboard = useMemo((): DashboardSpec | undefined => {
@@ -286,9 +294,15 @@ export function App() {
         {view.kind === 'home' && (
           <Home
             vaultName={status.name}
-            notes={files.filter((file) => file.kind === 'note').length}
-            folders={countFolders(tree)}
-            images={files.filter((file) => file.kind === 'image').length}
+            stats={{
+              notes: files.filter((file) => file.kind === 'note').length,
+              folders: countFolders(tree),
+              images: files.filter((file) => file.kind === 'image').length,
+            }}
+            today={todayNote}
+            shelves={shelves}
+            onOpen={openNote}
+            onToday={() => openPeriodicOrSay('day', todayNote.date)}
           />
         )}
         {view.kind === 'note' && (
