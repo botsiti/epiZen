@@ -54,7 +54,13 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   note gets an accent bar and a soft accent background.
 - **Properties**: a two-column list with faint labels. An empty value shows as a faint "—".
 - **Callouts**: a surface block with a small uppercase title, no icon, no colour by type.
-- **Tasks**: accent-tinted checkboxes. They are disabled until the app can write.
+- **Tasks**: accent-tinted checkboxes. In a note's text they stay disabled; a periodic note's dashboard
+  is where they are ticked, and that writes the one box back.
+- **Dashboards**: above a daily, weekly or monthly note's text, computed by the app, never code in
+  the note. Numeric properties as small meters (a large number, a 4px track with an accent fill), the
+  tasks with their category and minutes faint beside them, and minutes by category as accent over a
+  hairline-coloured planned bar. A week lists its seven days and a month its weeks, each opening its
+  note; a missing one is faint.
 - **Graph**: the whole main pane, no padding. Dots in their folder's colour, sized by how many links
   they have; links as faint hairlines that thin out as they grow in number. Pointing at a note (or
   finding it) lights it and its neighbours up, its links in accent, and dims the rest; their names

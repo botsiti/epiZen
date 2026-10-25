@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Backlinks } from './components/Backlinks';
 import { Calendar } from './components/Calendar';
+import type { DashboardSpec, DayNote } from './components/Dashboard';
 import { GraphView } from './components/GraphView';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
@@ -23,7 +24,7 @@ import {
   type VaultStatus,
 } from './lib/api';
 import type { LinkTarget } from './lib/completion';
-import { addDays, startOfMonth, today } from './lib/dates';
+import { addDays, addMonths, startOfMonth, startOfWeek, today } from './lib/dates';
 import { buildGraph } from './lib/graph';
 import { buildLinkIndex } from './lib/linkIndex';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
@@ -135,6 +136,25 @@ export function App() {
     [files, links],
   );
   const openNote = useCallback((path: string) => go({ kind: 'note', path }), [go]);
+  // A daily note's dashboard reads the note itself; a week sums its seven days, a month its weeks.
+  const notePath = view.kind === 'note' ? view.path : undefined;
+  const dashboard = useMemo((): DashboardSpec | undefined => {
+    const found = notePath === undefined ? undefined : periodOf(notePath, periodic);
+    if (!found) return undefined;
+    const dayNote = (date: Date): DayNote => {
+      const path = periodicNotes.get(periodKey('day', date));
+      return { date, path, text: path === undefined ? undefined : texts.get(path) };
+    };
+    if (found.period === 'day') return { period: 'day' };
+    if (found.period === 'week') return { period: 'week', days: Array.from({ length: 7 }, (_, i) => dayNote(addDays(found.date, i))) };
+    const end = addMonths(found.date, 1);
+    const weeks = [];
+    for (let monday = startOfWeek(found.date); monday < end; monday = addDays(monday, 7)) {
+      const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i)).filter((date) => date >= found.date && date < end);
+      weeks.push({ monday, path: periodicNotes.get(periodKey('week', monday)), days: days.map(dayNote) });
+    }
+    return { period: 'month', weeks };
+  }, [notePath, periodic, periodicNotes, texts]);
   const linkTargets = useMemo(() => {
     const titles = new Map<string, number>();
     for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
@@ -282,7 +302,9 @@ export function App() {
             onSaved={noteSaved}
             onUnsaved={(path, text, message) => go({ kind: 'unsaved', path, text, message })}
             linkTargets={linkTargets}
-            footer={<Backlinks links={links.backlinks.get(view.path) ?? []} onOpen={(path) => go({ kind: 'note', path })} />}
+            footer={<Backlinks links={links.backlinks.get(view.path) ?? []} onOpen={openNote} />}
+            dashboard={dashboard}
+            onOpenNote={openNote}
           />
         )}
         {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}

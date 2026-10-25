@@ -3,11 +3,13 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { readNote, writeNote, type VaultFile } from '../lib/api';
 import type { LinkTarget } from '../lib/completion';
+import { parseTasks, toggleTask, type Task } from '../lib/dashboard';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
 import { flushBeforeClose, trackSave } from '../lib/saving';
 import { lineEnding } from '../lib/text';
+import { Dashboard, type DashboardSpec } from './Dashboard';
 import { Editor } from './Editor';
 import { VaultImage } from './VaultImage';
 
@@ -30,12 +32,49 @@ interface ViewProps extends NoteProps {
   linkTargets: LinkTarget[];
   /** Shown under the note when reading it: its backlinks. */
   footer?: ReactNode;
+  /** A periodic note's dashboard, shown above its text when reading it. */
+  dashboard?: DashboardSpec;
+  onOpenNote: (path: string) => void;
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, dashboard, onOpenNote } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
+  const [tickError, setTickError] = useState<string>();
+  const ticks = useRef(Promise.resolve());
+  const latest = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    latest.current = note.text;
+  }, [note.text]);
+
+  // Ticking a task on the dashboard writes that one box back to the note, one tick at a time,
+  // each over the text the last one left. If the note changed on disk, it says so and reloads.
+  const toggle = useCallback(
+    (task: Task) => {
+      ticks.current = ticks.current.then(async () => {
+        const current = latest.current;
+        const target = current === undefined ? undefined : parseTasks(current).find((t) => t.line === task.line && t.done === task.done);
+        if (current === undefined || !target) return;
+        const next = toggleTask(current, target);
+        try {
+          await writeNote(path, next, current);
+          latest.current = next;
+          setNote({ path, text: next });
+          onSaved(path, next);
+          setTickError(undefined);
+        } catch (err) {
+          setTickError(`Nothing was ticked: ${String(err)}. The note is shown as it is now.`);
+          const fresh = await readNote(path).catch(() => undefined);
+          if (fresh !== undefined) {
+            latest.current = fresh;
+            setNote({ path, text: fresh });
+          }
+        }
+      });
+    },
+    [path, onSaved],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -80,9 +119,15 @@ export function NoteView(props: ViewProps) {
       Edit
     </button>
   );
+  const top = dashboard && (
+    <>
+      {tickError && <p className="note-warning">{tickError}</p>}
+      <Dashboard spec={dashboard} text={note.text} onToggle={toggle} onOpen={onOpenNote} />
+    </>
+  );
   return (
     <>
-      <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} />
+      <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} top={top} />
       {footer}
     </>
   );
@@ -209,7 +254,7 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved,
   );
 }
 
-export function NoteContent({ path, text, files, onOpenLink, actions }: NoteProps & { text: string; actions?: ReactNode }) {
+export function NoteContent({ path, text, files, onOpenLink, actions, top }: NoteProps & { text: string; actions?: ReactNode; top?: ReactNode }) {
   const folder = noteFolder(path);
   return (
     <article className="note" data-testid="note" data-path={path}>
@@ -220,6 +265,7 @@ export function NoteContent({ path, text, files, onOpenLink, actions }: NoteProp
           {actions}
         </div>
       </header>
+      {top}
       <NoteBody path={path} text={text} files={files} onOpenLink={onOpenLink} />
     </article>
   );
