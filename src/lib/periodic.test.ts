@@ -72,4 +72,11 @@ date: {{date:YYYY-MM-DDTHH:mm}}
       'Idea 2026-10-24 09:30 2026-10-25 31.10 {{unknown}}',
     );
   });
+
+  it('keeps month and year offsets inside the month, as moment does', () => {
+    const at = (date: Date) => ({ title: '', date, format: 'YYYY-MM-DD', now: new Date(2026, 0, 1) });
+    expect(fillTemplate('{{date+1M}} {{date-1M}}', at(day(2026, 0, 31)))).toBe('2026-02-28 2025-12-31');
+    expect(fillTemplate('{{date+1y}}', at(day(2028, 1, 29)))).toBe('2029-02-28');
+    expect(fillTemplate('[[{{date+1M:MM.YY [RPG]}}]]', at(day(2026, 0, 31)))).toBe('[[02.26 RPG]]');
+  });
 });

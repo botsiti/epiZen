@@ -82,6 +82,9 @@ export function formatDate(date: Date, format: string): string {
   });
 }
 
+// How many digits each numeric token has when it is padded; the rest take one or two.
+const WIDTH: Record<string, string> = { YYYY: '4', GGGG: '4', gggg: '4', YY: '2', GG: '2', gg: '2', MM: '2', DD: '2', DDDD: '3', WW: '2', ww: '2', HH: '2', hh: '2', mm: '2', ss: '2', d: '1' };
+
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
@@ -105,7 +108,8 @@ export function parseDate(text: string, format: string): Date | undefined {
     if (/^(MMMM|MMM|dddd|ddd|dd)$/.test(token)) pattern += '([A-Za-z]+)';
     else if (/^(Mo|Do)$/.test(token)) pattern += '(\\d{1,2}(?:st|nd|rd|th))';
     else if (/^(A|a)$/.test(token)) pattern += '([AaPp][Mm])';
-    else pattern += '(\\d+)';
+    // Fixed widths, so names without separators (YYYYMMDD) split the way they were made.
+    else pattern += `(\\d{${WIDTH[token] ?? '1,2'}})`;
   }
   pattern += escape(format.slice(last));
   const match = new RegExp(`^${pattern}$`).exec(text);
@@ -126,11 +130,18 @@ export function parseDate(text: string, format: string): Date | undefined {
   const date = value.get('D');
   const isoYear = twoDigit('GGGG', 'GG');
   const week = value.get('WW') ?? value.get('W');
+  const localYear = twoDigit('gggg', 'gg');
+  const localWeek = value.get('ww') ?? value.get('w');
   const dayOfYear = value.get('DDDD');
 
   let result: Date | undefined;
   if (year !== undefined && month && date !== undefined) result = day(year, month - 1, date);
   else if (isoYear !== undefined && week !== undefined) result = addDays(startOfWeek(day(isoYear, 0, 4)), (week - 1) * 7);
+  // A locale week runs Sunday to Saturday; its Monday stands for it, as the calendar's rows do.
+  else if (localYear !== undefined && localWeek !== undefined) {
+    const firstSunday = addDays(day(localYear, 0, 1), -day(localYear, 0, 1).getDay());
+    result = addDays(firstSunday, (localWeek - 1) * 7 + 1);
+  }
   else if (year !== undefined && month) result = day(year, month - 1, 1);
   else if (year !== undefined && dayOfYear !== undefined) result = day(year, 0, dayOfYear);
   return result && formatDate(result, format) === text ? result : undefined;

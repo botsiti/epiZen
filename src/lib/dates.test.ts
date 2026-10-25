@@ -35,6 +35,16 @@ describe('parseDate', () => {
     expect(parseDate('2026-10', 'YYYY-MM')).toEqual(day(2026, 9, 1));
   });
 
+  it('reads formats without separators, and locale weeks (the Periodic Notes default)', () => {
+    expect(parseDate('20261025', 'YYYYMMDD')).toEqual(day(2026, 9, 25));
+    expect(parseDate('261025', 'YYMMDD')).toEqual(day(2026, 9, 25));
+    expect(parseDate('202610', 'YYYYMM')).toEqual(day(2026, 9, 1));
+    // 2027-W01 runs Sunday 27 Dec to Saturday 2 Jan; its Monday stands for it.
+    expect(parseDate('2027-W01', 'gggg-[W]ww')).toEqual(day(2026, 11, 28));
+    expect(formatDate(day(2026, 11, 28), 'gggg-[W]ww')).toBe('2027-W01');
+    expect(parseDate('2026-W43', 'gggg-[W]ww')).toEqual(day(2026, 9, 19));
+  });
+
   it('refuses names that are not that format, or no such day', () => {
     for (const name of ['31.02.2026', '1.10.2026', '24-10-2026', '24.10.2026 notes', 'Glasshouse Weather']) {
       expect(parseDate(name, DAILY)).toBeUndefined();

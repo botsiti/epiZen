@@ -18,7 +18,7 @@ export type PeriodicSettings = Record<Period, PeriodSettings>;
 /** Obsidian's own defaults (the daily notes and periodic notes plugins). */
 export const DEFAULT_PERIODIC: PeriodicSettings = {
   day: { folder: '', format: 'YYYY-MM-DD', template: '' },
-  week: { folder: '', format: 'GGGG-[W]WW', template: '' },
+  week: { folder: '', format: 'gggg-[W]ww', template: '' },
   month: { folder: '', format: 'YYYY-MM', template: '' },
 };
 
@@ -84,8 +84,10 @@ const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 function shift(date: Date, amount: number, unit: string): Date {
   if (unit === 'd') return addDays(date, amount);
   if (unit === 'w') return addDays(date, amount * 7);
-  if (unit === 'M') return day(addMonths(date, amount).getFullYear(), addMonths(date, amount).getMonth(), date.getDate());
-  return day(date.getFullYear() + amount, date.getMonth(), date.getDate());
+  // Months and years keep the day of the month, or the month's last day when it is shorter, as moment does.
+  const target = addMonths(date, unit === 'M' ? amount : amount * 12);
+  const lastDay = day(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  return day(target.getFullYear(), target.getMonth(), Math.min(date.getDate(), lastDay));
 }
 
 interface TemplateContext {
