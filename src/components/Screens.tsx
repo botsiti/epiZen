@@ -18,6 +18,21 @@ export function Home({ vaultName, notes, folders, images }: HomeProps) {
   );
 }
 
+/** Text the editor couldn't save after it was closed, kept on screen so it can be copied. */
+export function Unsaved({ path, text, message }: { path: string; text: string; message: string }) {
+  return (
+    <section className="screen" data-testid="unsaved">
+      <p className="eyebrow">Not saved</p>
+      <h1>{path.replace(/\.md$/i, '')}</h1>
+      <p className="muted">
+        Epizen couldn't save your last edits: {message}. The note wasn't changed. Your text is below; copy it before
+        you go.
+      </p>
+      <pre className="unsaved-text">{text}</pre>
+    </section>
+  );
+}
+
 export function MissingNote({ target, onBack }: { target: string; onBack?: () => void }) {
   return (
     <section className="screen" data-testid="missing-note">
@@ -33,14 +48,25 @@ export function MissingNote({ target, onBack }: { target: string; onBack?: () =>
   );
 }
 
-export function NoVault({ message }: { message?: string }) {
+interface NoVaultProps {
+  message?: string;
+  onOpenFolder: () => void;
+  /** Why the last folder the user picked couldn't be opened. */
+  folderError?: string;
+}
+
+export function NoVault({ message, onOpenFolder, folderError }: NoVaultProps) {
   return (
     <main className="screen screen-full" data-testid={message ? 'vault-error' : 'no-vault'}>
       <p className="eyebrow">Epizen</p>
       <h1>{message ? "Couldn't open the vault" : 'No vault open'}</h1>
       {message && <p className="muted">{message}</p>}
+      <button type="button" className="quiet-button" onClick={onOpenFolder} data-testid="open-folder">
+        Open a folder of notes…
+      </button>
+      {folderError && <p className="muted">{folderError}</p>}
       <p className="hint">
-        Start Epizen with <code>--vault &lt;folder&gt;</code>, or set <code>EPIZEN_VAULT</code> to a folder of notes.
+        Epizen opens it again next time. You can also start it with <code>--vault &lt;folder&gt;</code>.
       </p>
     </main>
   );

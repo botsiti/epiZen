@@ -7,7 +7,9 @@ Tauri 2 (Rust) with React, TypeScript and Vite. macOS first.
 
 - Notes stay plain Markdown files that Obsidian can still open: frontmatter, `[[wikilinks]]`,
   `![[embeds]]`, callouts, tasks, `[key::value]` fields. No database, no sidecar files, no syntax of our own.
-- Never lose a note, and never change one the user didn't ask to change. Today the app only reads.
+- Never lose a note, and never change one the user didn't ask to change. The app writes only what the
+  user typed or asked to create: a new note never replaces a file, and a save replaces a note whole,
+  atomically, and only while it still holds what the app read.
 - Dark, calm, spacious. See DESIGN.md.
 
 ## Non-goals
@@ -15,12 +17,15 @@ Tauri 2 (Rust) with React, TypeScript and Vite. macOS first.
 - Sync, accounts, or anything over the network.
 - Running Obsidian plugins (Dataview, Templater). Their code blocks show as code.
 - Mobile, Windows and Linux builds, for now.
-- Writing to the vault, until a feature brings it in with tests that prove the round trip.
 
 ## Map
 
-- `src-tauri/src/vault.rs`: the only code that touches the disk. Every path from the UI goes through `Vault::resolve`.
-- `src-tauri/src/lib.rs`: Tauri commands (all reads) and startup (`--vault <folder>` or `EPIZEN_VAULT`).
+- `src-tauri/src/vault.rs`: the only code that touches the vault. Every path from the UI goes through
+  `Vault::resolve`, or `Vault::new_note_path` for a new note.
+- `src-tauri/src/settings.rs`: the app's own settings, a JSON file in its config folder (`EPIZEN_CONFIG_DIR`
+  in tests), never in the vault.
+- `src-tauri/src/lib.rs`: Tauri commands and startup (`--vault <folder>`, `EPIZEN_VAULT`, or the vault
+  opened last time).
 - `src/`: the React UI. `src/lib/` holds parsing (frontmatter, wikilinks, callouts), tests beside it.
 - `demo-vault/`: a fake vault in the real format, made by `scripts/make-demo-vault.mjs`.
   Tests only ever touch a copy. `npm run check` fails if a file in it changes.

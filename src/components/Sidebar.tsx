@@ -7,9 +7,13 @@ interface Props {
   selected?: string;
   onOpenNote: (path: string) => void;
   onHome: () => void;
+  onNewNote: () => void;
+  onOpenFolder: () => void;
+  /** Why the last folder the user picked couldn't be opened. */
+  folderError?: string;
 }
 
-export function Sidebar({ vaultName, tree, selected, onOpenNote, onHome }: Props) {
+export function Sidebar({ vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, folderError }: Props) {
   // Folders the user opened or closed by hand. Untouched folders open when they hold the selected note.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
   const isOpen = (path: string) => toggled.get(path) ?? Boolean(selected?.startsWith(`${path}/`));
@@ -17,12 +21,23 @@ export function Sidebar({ vaultName, tree, selected, onOpenNote, onHome }: Props
 
   return (
     <nav className="sidebar" aria-label="Notes">
-      <button type="button" className="vault-name" onClick={onHome} data-testid="sidebar-vault">
-        {vaultName}
-      </button>
+      <div className="sidebar-head">
+        <button type="button" className="vault-name" onClick={onHome} data-testid="sidebar-vault">
+          {vaultName}
+        </button>
+        <button type="button" className="icon-button" onClick={onNewNote} title="New note" aria-label="New note" data-testid="new-note-button">
+          +
+        </button>
+      </div>
       <ul className="tree" role="tree">
         <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isOpen} toggle={toggle} onOpenNote={onOpenNote} />
       </ul>
+      <div className="sidebar-foot">
+        <button type="button" className="sidebar-action" onClick={onOpenFolder} data-testid="open-folder">
+          Open another vault…
+        </button>
+        {folderError && <p className="sidebar-error">{folderError}</p>}
+      </div>
     </nav>
   );
 }
