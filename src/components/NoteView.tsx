@@ -20,10 +20,12 @@ interface NoteProps {
 interface ViewProps extends NoteProps {
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
+  /** A save failed after the editor was closed: the text that didn't reach the note. */
+  onUnsaved: (path: string, text: string, message: string) => void;
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
-export function NoteView({ path, files, onOpenLink, editing, onEditingChange }: ViewProps) {
+export function NoteView({ path, files, onOpenLink, editing, onEditingChange, onUnsaved }: ViewProps) {
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
 
   useEffect(() => {
@@ -56,6 +58,7 @@ export function NoteView({ path, files, onOpenLink, editing, onEditingChange }: 
         onOpenLink={onOpenLink}
         onSaved={(text) => setNote({ path, text })}
         onDone={() => onEditingChange(false)}
+        onUnsaved={(text, message) => onUnsaved(path, text, message)}
       />
     );
   }
@@ -73,40 +76,54 @@ interface EditorProps extends NoteProps {
   text: string;
   onSaved: (text: string) => void;
   onDone: () => void;
+  onUnsaved: (text: string, message: string) => void;
 }
 
 /**
  * The note's source beside a live preview. Edits save on their own after a short pause, one
  * save at a time, each only over the text the last one left. If the note changed on disk
- * meanwhile, saving stops and says so; nothing is overwritten.
+ * meanwhile, saving stops and says so; nothing is overwritten, and the text that wasn't saved
+ * is never dropped without a word: Done stays put, and leaving hands it to `onUnsaved`.
  */
-function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone }: EditorProps) {
-  const separator = lineEnding(text);
+function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved }: EditorProps) {
+  // Decided once: saves keep the note's line ending, so it can't change under the editor.
+  const [separator] = useState(() => lineEnding(text));
   const [draft, setDraft] = useState(text);
   const [state, setState] = useState<SaveState>({ kind: 'idle' });
   const saved = useRef(text);
   const latest = useRef(text);
   const queue = useRef(Promise.resolve());
-  const stopped = useRef(false);
-  const reportSaved = useRef(onSaved);
+  const failure = useRef<string | undefined>(undefined);
+  const mounted = useRef(true);
+  const report = useRef({ onSaved, onUnsaved });
   useEffect(() => {
-    reportSaved.current = onSaved;
-  }, [onSaved]);
+    report.current = { onSaved, onUnsaved };
+  }, [onSaved, onUnsaved]);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
 
   const save = useCallback(() => {
     queue.current = queue.current.then(async () => {
       const next = latest.current;
-      if (stopped.current || next === saved.current) return;
-      setState({ kind: 'saving' });
-      try {
-        await writeNote(path, next, saved.current);
-        saved.current = next;
-        reportSaved.current(next);
-        setState({ kind: latest.current === next ? 'saved' : 'saving' });
-      } catch (err) {
-        stopped.current = true;
-        setState({ kind: 'failed', message: String(err) });
+      if (next === saved.current) return;
+      if (failure.current === undefined) {
+        if (mounted.current) setState({ kind: 'saving' });
+        try {
+          await writeNote(path, next, saved.current);
+          saved.current = next;
+          report.current.onSaved(next);
+          if (mounted.current) setState({ kind: latest.current === next ? 'saved' : 'saving' });
+          return;
+        } catch (err) {
+          failure.current = String(err);
+          if (mounted.current) setState({ kind: 'failed', message: failure.current });
+        }
       }
+      if (!mounted.current) report.current.onUnsaved(next, failure.current);
     });
     return queue.current;
   }, [path]);
@@ -116,14 +133,18 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone }: EditorPr
     const timer = setTimeout(() => void save(), 600);
     return () => clearTimeout(timer);
   }, [draft, save]);
-  // Leaving the note saves what is left.
+  // Leaving the note saves what is left, or hands it on if it can't be saved.
   useEffect(() => () => void save(), [save]);
 
   const change = useCallback((next: string) => {
     latest.current = next;
     setDraft(next);
   }, []);
-  const done = () => void save().then(onDone);
+  // Done closes the editor only once everything typed is in the note.
+  const done = () =>
+    void save().then(() => {
+      if (failure.current === undefined) onDone();
+    });
 
   const folder = noteFolder(path);
   const label = { idle: '', saving: 'Saving…', saved: 'Saved', failed: 'Not saved' }[state.kind];

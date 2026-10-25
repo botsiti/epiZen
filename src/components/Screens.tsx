@@ -18,6 +18,21 @@ export function Home({ vaultName, notes, folders, images }: HomeProps) {
   );
 }
 
+/** Text the editor couldn't save after it was closed, kept on screen so it can be copied. */
+export function Unsaved({ path, text, message }: { path: string; text: string; message: string }) {
+  return (
+    <section className="screen" data-testid="unsaved">
+      <p className="eyebrow">Not saved</p>
+      <h1>{path.replace(/\.md$/i, '')}</h1>
+      <p className="muted">
+        Epizen couldn't save your last edits: {message}. The note wasn't changed. Your text is below; copy it before
+        you go.
+      </p>
+      <pre className="unsaved-text">{text}</pre>
+    </section>
+  );
+}
+
 export function MissingNote({ target, onBack }: { target: string; onBack?: () => void }) {
   return (
     <section className="screen" data-testid="missing-note">

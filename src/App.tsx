@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
-import { Home, MissingNote, NoVault } from './components/Screens';
+import { Home, MissingNote, NoVault, Unsaved } from './components/Screens';
 import { Sidebar } from './components/Sidebar';
 import { createNote, listFiles, openVault, pickFolder, vaultStatus, type VaultFile, type VaultStatus } from './lib/api';
 import { noteFolder, resolveLink } from './lib/links';
@@ -11,7 +11,8 @@ type View =
   | { kind: 'home' }
   | { kind: 'note'; path: string; editing?: boolean }
   | { kind: 'missing'; target: string }
-  | { kind: 'new'; folder: string };
+  | { kind: 'new'; folder: string }
+  | { kind: 'unsaved'; path: string; text: string; message: string };
 
 const HOME: View = { kind: 'home' };
 
@@ -128,9 +129,11 @@ export function App() {
             onOpenLink={openLink}
             editing={Boolean(view.editing)}
             onEditingChange={setEditing}
+            onUnsaved={(path, text, message) => go({ kind: 'unsaved', path, text, message })}
           />
         )}
         {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
+        {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
         {view.kind === 'new' && <NewNote key={history.length} folders={folders} folder={view.folder} onCreate={create} />}
       </main>
     </div>

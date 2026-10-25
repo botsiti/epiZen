@@ -630,3 +630,15 @@ code {
   border-left: 2px solid var(--accent);
   color: var(--text-muted);
 }
+
+.unsaved-text {
+  margin: var(--space-5) 0 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: 14px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
