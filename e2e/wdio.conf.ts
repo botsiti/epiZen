@@ -1,9 +1,9 @@
 import { browser } from '@wdio/globals';
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TauriCapabilities } from '@wdio/tauri-service';
-import { APP, COPY_PREFIX, DEMO_VAULT, EVIDENCE, vaultCopy } from './paths';
+import { APP, COPY_PREFIX, DEMO_VAULT, EVIDENCE, PERIODIC, vaultCopy } from './paths';
 
 // Tests only ever touch a copy of the demo vault. The launcher makes the copy once;
 // the test workers it starts inherit the path through the environment.
@@ -19,6 +19,10 @@ process.env.EPIZEN_CONFIG_DIR = join(dirname(vaultCopy()), 'config');
 function copyDemoVault() {
   const copy = join(mkdtempSync(join(tmpdir(), COPY_PREFIX)), 'demo-vault');
   cpSync(DEMO_VAULT, copy, { recursive: true });
+  // The demo vault's periodic notes, set up the way a user would in Settings.
+  const config = join(dirname(copy), 'config');
+  mkdirSync(config);
+  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC }));
   return copy;
 }
 

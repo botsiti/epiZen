@@ -84,9 +84,15 @@ describe('demo vault', () => {
     expect(notesIn('Rating/youtube').length).toBeGreaterThanOrEqual(3);
   });
 
+  it('has a template for each kind of periodic note', () => {
+    expect(notesIn('Templates').map((file) => noteTitle(file.path)).sort()).toEqual(['Daily', 'Monthly', 'Weekly']);
+    expect(read('Templates/Daily.md')).toContain('[[{{date-1d:DD.MM.YYYY}}|← Yesterday]]');
+  });
+
   it('links resolve, except the days and weeks just outside the 60 days', () => {
     const broken = new Set<string>();
-    for (const note of files.filter((file) => file.kind === 'note')) {
+    // Templates link to dates that only exist once the template is filled in.
+    for (const note of files.filter((file) => file.kind === 'note' && !file.path.startsWith('Templates/'))) {
       for (const link of findWikilinks(read(note.path))) {
         if (!resolveLink(link.target, files, note.path)) broken.add(link.target);
       }

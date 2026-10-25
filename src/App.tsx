@@ -1,10 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Calendar } from './components/Calendar';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
-import { Home, MissingNote, NoVault, Unsaved } from './components/Screens';
+import { Home, MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
+import { SettingsScreen } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
-import { closeNow, createNote, guardClose, listFiles, pickVault, vaultStatus, type VaultFile, type VaultStatus } from './lib/api';
-import { noteFolder, resolveLink } from './lib/links';
+import {
+  closeNow,
+  createNote,
+  getSettings,
+  guardClose,
+  listFiles,
+  pickVault,
+  readNote,
+  updateSettings,
+  vaultStatus,
+  type Settings,
+  type VaultFile,
+  type VaultStatus,
+} from './lib/api';
+import { startOfMonth, today } from './lib/dates';
+import { noteFolder, noteTitle, resolveLink } from './lib/links';
+import {
+  fillTemplate,
+  periodicIndex,
+  periodicPath,
+  periodicSettings,
+  periodKey,
+  periodOf,
+  startOfPeriod,
+  type Period,
+  type PeriodicSettings,
+} from './lib/periodic';
 import { flushAll } from './lib/saving';
 import { buildTree, countFolders } from './lib/tree';
 
@@ -13,9 +40,20 @@ type View =
   | { kind: 'note'; path: string; editing?: boolean }
   | { kind: 'missing'; target: string }
   | { kind: 'new'; folder: string }
-  | { kind: 'unsaved'; path: string; text: string; message: string };
+  | { kind: 'unsaved'; path: string; text: string; message: string }
+  | { kind: 'settings' }
+  | { kind: 'problem'; title: string; message: string };
 
 const HOME: View = { kind: 'home' };
+
+/** A new periodic note's text: its template filled in, or nothing when it has none. */
+async function periodicText(period: Period, date: Date, path: string, periodic: PeriodicSettings, files: VaultFile[]) {
+  const { template, format } = periodic[period];
+  if (!template.trim()) return '';
+  const file = resolveLink(template.trim(), files);
+  if (file?.kind !== 'note') throw new Error(`There is no template note “${template}”. Check it in Settings.`);
+  return fillTemplate(await readNote(file.path), { title: noteTitle(path), date: startOfPeriod(period, date), format, now: new Date() });
+}
 
 export function App() {
   const [status, setStatus] = useState<VaultStatus>();
@@ -23,6 +61,8 @@ export function App() {
   const [history, setHistory] = useState<View[]>([HOME]);
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
+  const [settings, setSettings] = useState<Settings>({});
+  const [month, setMonth] = useState(() => startOfMonth(today()));
   const view = history.at(-1) ?? HOME;
   const main = useRef<HTMLElement>(null);
 
@@ -31,8 +71,10 @@ export function App() {
     const load = async () => {
       const next = await vaultStatus();
       const found = next.state === 'open' ? await listFiles() : [];
+      const stored = await getSettings();
       if (cancelled) return;
       setFiles(found);
+      setSettings(stored);
       setStatus(next);
     };
     load().catch((err: unknown) => {
@@ -71,6 +113,9 @@ export function App() {
     () => [...new Set(files.filter((file) => file.kind === 'note').map((file) => noteFolder(file.path)))].filter(Boolean).sort(),
     [files],
   );
+  const notes = useMemo(() => files.filter((file) => file.kind === 'note').map((file) => file.path.replace(/\.md$/i, '')), [files]);
+  const periodic = useMemo(() => periodicSettings(settings), [settings]);
+  const periodicNotes = useMemo(() => periodicIndex(files, periodic), [files, periodic]);
   const go = useCallback((next: View) => setHistory((prev) => [...prev, next]), []);
   const openLink = useCallback(
     (target: string, fromPath: string) => {
@@ -108,6 +153,35 @@ export function App() {
     [go],
   );
 
+  // A day, week or month opens its note, or creates it in its folder from its template.
+  const openPeriodic = useCallback(
+    async (period: Period, date: Date) => {
+      const existing = periodicNotes.get(periodKey(period, date));
+      if (existing) {
+        go({ kind: 'note', path: existing });
+        return;
+      }
+      const path = periodicPath(period, date, periodic);
+      try {
+        await createNote(path, await periodicText(period, date, path, periodic, files));
+      } catch (err) {
+        // Created a moment ago, or named by a file the index doesn't know as this period's note.
+        if (!String(err).includes('already exists')) throw err;
+      }
+      setFiles(await listFiles());
+      go({ kind: 'note', path });
+    },
+    [files, go, periodic, periodicNotes],
+  );
+  const openPeriodicOrSay = useCallback(
+    (period: Period, date: Date) =>
+      void openPeriodic(period, date).catch((err: unknown) =>
+        go({ kind: 'problem', title: "Couldn't create the note", message: String(err) }),
+      ),
+    [go, openPeriodic],
+  );
+  const saveSettings = useCallback(async (next: PeriodicSettings) => setSettings(await updateSettings({ periodic: next })), []);
+
   if (!status) return null;
   if (status.state !== 'open') {
     return (
@@ -129,7 +203,17 @@ export function App() {
         onHome={() => go(HOME)}
         onNewNote={() => go({ kind: 'new', folder: view.kind === 'note' ? noteFolder(view.path) : '' })}
         onOpenFolder={() => void chooseFolder()}
+        onSettings={() => go({ kind: 'settings' })}
         folderError={folderError}
+        calendar={
+          <Calendar
+            month={month}
+            onMonthChange={setMonth}
+            has={(period, date) => periodicNotes.has(periodKey(period, date))}
+            selected={view.kind === 'note' ? periodOf(view.path, periodic) : undefined}
+            onOpen={openPeriodicOrSay}
+          />
+        }
       />
       <main className="main" ref={main}>
         {view.kind === 'home' && (
@@ -154,6 +238,8 @@ export function App() {
         {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
         {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
         {view.kind === 'new' && <NewNote key={history.length} folders={folders} folder={view.folder} onCreate={create} />}
+        {view.kind === 'settings' && <SettingsScreen periodic={periodic} folders={folders} notes={notes} onSave={saveSettings} />}
+        {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
       </main>
     </div>
   );

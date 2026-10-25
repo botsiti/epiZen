@@ -11,6 +11,13 @@ export const APP = join(root, 'src-tauri/target/debug/epizen');
 /** The e2e config copies the demo vault to `<tmp>/epizen-e2e-XXXXXX/demo-vault`. */
 export const COPY_PREFIX = 'epizen-e2e-';
 
+/** How the demo vault names its periodic notes; the e2e config seeds the app's settings with it. */
+export const PERIODIC = {
+  day: { folder: 'Calendar/2026/days 2026', format: 'DD.MM.YYYY', template: 'Templates/Daily' },
+  week: { folder: 'Calendar/2026/weeks', format: 'GGGG-[W]WW - DD.MM.YY', template: 'Templates/Weekly' },
+  month: { folder: 'Calendar/2026/months 2026', format: 'MM.YY [RPG]', template: 'Templates/Monthly' },
+};
+
 /** True only for a folder shaped like the copy the e2e config makes, so nothing else is ever opened or deleted. */
 export function isVaultCopy(path: string): boolean {
   const copy = resolve(path);

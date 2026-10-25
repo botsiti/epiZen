@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { TreeNode } from '../lib/tree';
 
 interface Props {
@@ -9,11 +9,15 @@ interface Props {
   onHome: () => void;
   onNewNote: () => void;
   onOpenFolder: () => void;
+  onSettings: () => void;
   /** Why the last folder the user picked couldn't be opened. */
   folderError?: string;
+  /** Shown above the notes. */
+  calendar?: ReactNode;
 }
 
-export function Sidebar({ vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, folderError }: Props) {
+export function Sidebar(props: Props) {
+  const { vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, folderError, calendar } = props;
   // Folders the user opened or closed by hand. Untouched folders open when they hold the selected note.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
   const isOpen = (path: string) => toggled.get(path) ?? Boolean(selected?.startsWith(`${path}/`));
@@ -29,10 +33,14 @@ export function Sidebar({ vaultName, tree, selected, onOpenNote, onHome, onNewNo
           +
         </button>
       </div>
+      {calendar}
       <ul className="tree" role="tree">
         <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isOpen} toggle={toggle} onOpenNote={onOpenNote} />
       </ul>
       <div className="sidebar-foot">
+        <button type="button" className="sidebar-action" onClick={onSettings} data-testid="open-settings">
+          Settings
+        </button>
         <button type="button" className="sidebar-action" onClick={onOpenFolder} data-testid="open-folder">
           Open another vault…
         </button>
