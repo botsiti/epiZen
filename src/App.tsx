@@ -3,7 +3,7 @@ import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
 import { Home, MissingNote, NoVault, Unsaved } from './components/Screens';
 import { Sidebar } from './components/Sidebar';
-import { closeNow, createNote, guardClose, listFiles, openVault, pickFolder, vaultStatus, type VaultFile, type VaultStatus } from './lib/api';
+import { closeNow, createNote, guardClose, listFiles, pickVault, vaultStatus, type VaultFile, type VaultStatus } from './lib/api';
 import { noteFolder, resolveLink } from './lib/links';
 import { flushAll } from './lib/saving';
 import { buildTree, countFolders } from './lib/tree';
@@ -89,9 +89,7 @@ export function App() {
   const chooseFolder = useCallback(async () => {
     setFolderError(undefined);
     try {
-      const path = await pickFolder();
-      if (!path) return;
-      await openVault(path);
+      if (!(await pickVault())) return;
       setHistory([HOME]);
       setLoads((n) => n + 1);
     } catch (err) {

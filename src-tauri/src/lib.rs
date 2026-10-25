@@ -111,12 +111,32 @@ fn vault_status(state: Shared<'_>) -> VaultStatus {
     )
 }
 
-/// Opens the folder the user picked and remembers it for next time. A folder that can't be
-/// opened leaves the current vault open.
+/// Shows the system's folder picker and opens the folder the user picks, remembering it for
+/// next time. The picker runs here, not in the page, so the page can never name a folder for
+/// the app to read and write. `None` when the user cancels; a folder that can't be opened
+/// leaves the current vault open.
 #[tauri::command]
-async fn open_vault(
+async fn pick_vault(
+    app: tauri::AppHandle,
     state: Shared<'_>,
     settings: State<'_, Settings>,
+) -> Result<Option<VaultStatus>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .set_title("Open a vault")
+        .blocking_pick_folder()
+    else {
+        return Ok(None);
+    };
+    let path = picked.into_path().map_err(|err| err.to_string())?;
+    open_vault(&state, &settings, path).map(Some)
+}
+
+fn open_vault(
+    state: &RwLock<VaultState>,
+    settings: &Settings,
     path: PathBuf,
 ) -> Result<VaultStatus, String> {
     let vault = Vault::open(&path).map_err(|err| format!("Couldn't open the vault: {err}"))?;
@@ -171,6 +191,9 @@ async fn update_settings(
     settings: State<'_, Settings>,
     patch: Map<String, Value>,
 ) -> Result<Map<String, Value>, String> {
+    if patch.keys().any(|key| Settings::is_private(key)) {
+        return Err("only opening a vault sets which vault opens next time".to_owned());
+    }
     settings.update(patch).map_err(|err| err.to_string())
 }
 
@@ -192,8 +215,8 @@ impl Closing {
 }
 
 #[tauri::command]
-fn guard_close(closing: State<'_, Closing>) {
-    closing.guarded.store(true, Ordering::SeqCst);
+fn guard_close(closing: State<'_, Closing>, on: bool) {
+    closing.guarded.store(on, Ordering::SeqCst);
 }
 
 #[tauri::command]
@@ -232,7 +255,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             vault_status,
-            open_vault,
+            pick_vault,
             list_files,
             read_note,
             read_image,

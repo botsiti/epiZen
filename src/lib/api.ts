@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
 
 /** Mirrors `VaultStatus` in src-tauri/src/lib.rs. */
 export type VaultStatus =
@@ -18,7 +17,8 @@ export interface VaultFile {
 export type Settings = Record<string, unknown>;
 
 export const vaultStatus = () => invoke<VaultStatus>('vault_status');
-export const openVault = (path: string) => invoke<VaultStatus>('open_vault', { path });
+/** Shows the system's folder picker and opens the folder picked. `null` when the user cancels. */
+export const pickVault = () => invoke<VaultStatus | null>('pick_vault');
 export const listFiles = () => invoke<VaultFile[]>('list_files');
 export const readNote = (path: string) => invoke<string>('read_note', { path });
 export const readImage = (path: string) => invoke<ArrayBuffer>('read_image', { path });
@@ -39,10 +39,12 @@ export const updateSettings = (patch: Settings) => invoke<Settings>('update_sett
  */
 export async function guardClose(handler: () => void): Promise<() => void> {
   const stop = await listen('epizen://close-requested', handler);
-  await invoke('guard_close');
-  return stop;
+  await invoke('guard_close', { on: true });
+  // When the page stops listening (it unmounts, or a crash takes it down), closing works as usual again.
+  return () => {
+    stop();
+    void invoke('guard_close', { on: false });
+  };
 }
 export const closeNow = () => invoke<void>('close_now');
 
-/** The system's folder picker. Resolves to `null` when the user cancels. */
-export const pickFolder = () => open({ directory: true, multiple: false, title: 'Open a vault' });

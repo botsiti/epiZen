@@ -55,6 +55,11 @@ impl Settings {
         Ok(settings)
     }
 
+    /// Keys only the backend sets: the page may not choose the folder the app opens.
+    pub fn is_private(key: &str) -> bool {
+        key == LAST_VAULT
+    }
+
     pub fn last_vault(&self) -> Option<PathBuf> {
         self.load().get(LAST_VAULT)?.as_str().map(PathBuf::from)
     }
