@@ -19,14 +19,15 @@ const COMMENT_LIMIT = 60_000;
 // is high, so a path nobody thought of waits for Bat instead of slipping through. Paths are
 // compared after folding them the way APFS does (compatibility form, any case), because macOS
 // checks `ſcripts/check.mjs` or `.Claude/x` out onto `scripts/check.mjs` and `.claude/x`.
-// Tests in test/ and e2e/specs/ are on the list; the harness that runs them (test/setup.ts,
-// e2e/wdio.conf.ts, e2e/paths.ts) is a check config and is not.
+// Tests in test/, src-tauri/tests/ and e2e/specs/ are on the list; the harness that runs them
+// (test/setup.ts, e2e/wdio.conf.ts, and e2e/paths.ts, which decides what the e2e run deletes) is a
+// check config and is not.
 const LOW_RISK_PATHS = [
   [/^src\//, 'app code'],
   [/^src-tauri\/src\//, 'app code'],
   [/^index\.html$/, 'the app page'],
   [/\.(css|scss|sass|less|png|jpe?g|gif|webp|avif|svg|ico|icns|bmp|tiff?|woff2?|ttf|otf|eot|mp3|mp4|webm|wav|ogg)$/, 'a style or asset'],
-  [/^(test\/.+\.test\.tsx?|e2e\/specs\/.+)$/, 'a test'],
+  [/^(test\/.+\.test\.tsx?|src-tauri\/tests\/.+|e2e\/specs\/.+)$/, 'a test'],
   [/^demo-vault\//, 'a demo-vault fixture'],
   [/\.md$/, 'docs'],
 ];
