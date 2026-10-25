@@ -48,13 +48,14 @@ export function App() {
   useEffect(() => main.current?.scrollTo(0, 0), [place]);
 
   // A close or quit first saves what the editor holds. If that fails, the window stays open with
-  // the editor's warning and its text; closing again closes.
+  // the editor's warning and its text; closing again within a minute closes. Any later failure
+  // holds the window again.
   useEffect(() => {
-    let warned = false;
+    let warnedAt = -Infinity;
     const stop = guardClose(() => {
       void flushAll().then((saved) => {
-        if (saved || warned) void closeNow();
-        warned = true;
+        if (saved || Date.now() - warnedAt < 60_000) void closeNow();
+        else warnedAt = Date.now();
       });
     });
     return () => void stop.then((unlisten) => unlisten());
