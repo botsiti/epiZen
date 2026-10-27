@@ -50,7 +50,7 @@ describe('periodic page writes on a copy of the demo vault', () => {
       expect(differ).toEqual([path]);
       expect(now).toHaveLength(old.length);
       const lines = now.flatMap((line, i) => (line === old[i] ? [] : [line]));
-      // The demo's moods run 4 to 9, so 1 is always a change.
+      // The demo's moods run 2 to 5, so 1 is always a change.
       expect(lines).toEqual(['mood: 1']);
       cpSync(join(original, path), join(copy, path));
     }

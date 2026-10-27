@@ -22,7 +22,7 @@ describe('the demo vault', () => {
 
   it('opens on the home screen', async () => {
     await expect($('[data-testid="vault-name"]')).toHaveText('demo-vault');
-    await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('106 notes · 10 folders · 27 images'));
+    await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('107 notes · 10 folders · 36 images'));
     await expect($('[data-testid="today-create"]')).toBeDisplayed();
     expect(await $$('[data-testid="shelf"]').length).toBe(3);
     expect(await $$('[data-testid="cover-card"]').length).toBe(27);
@@ -30,7 +30,18 @@ describe('the demo vault', () => {
     await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 27, {
       timeoutMsg: 'the covers never loaded',
     });
+    // Life XP is the demo's 60 days (12,296 XP) plus its quests, less what open quests have lost
+    // by today's date, so it moves with the clock; src/lib/home.test.ts and quests.test.ts pin the sums.
+    await expect($('[data-testid="hero-title"]')).toHaveText(expect.stringMatching(/^Level \d+$/));
+    await expect($('[data-testid="hero-stats"]')).toHaveText(expect.stringContaining('Life XP'));
+    await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Add your birth date in Settings'));
     await screenshot('03-home');
+    await $('[data-testid="spheres"]').scrollIntoView();
+    await expect($('[data-testid="lead-sphere"]')).toHaveText(expect.stringContaining('Personal Growth'));
+    await screenshot('34-home-spheres');
+    await $('[data-testid="shelf"][data-folder="Rating/music"]').scrollIntoView();
+    await screenshot('36-home-shelves');
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
   });
 
   it('opens an album from its cover on the home screen', async () => {
@@ -47,33 +58,20 @@ describe('the demo vault', () => {
     await screenshot('04-daily-note');
   });
 
-  it("shows the note's own text on the Note tab, where its tasks cannot be ticked", async () => {
-    await showTab('Note');
-    await expect($('[data-testid="properties"]')).toHaveText(expect.stringContaining('mood'));
-    const boxes = await $$('[data-testid="note"] .note-body input[type="checkbox"]').getElements();
-    expect(boxes.length).toBeGreaterThan(0);
-    for (const box of boxes) await expect(box).toBeDisabled();
-  });
-
-  it('follows a wikilink to the week', async () => {
-    await followLink('2026-W33 - 10.08.26');
+  it('goes up from the day to its week, and from the week to its month', async () => {
+    await $('[data-testid="nav-week"]').click();
     await expect(title()).toHaveText('2026-W33 - 10.08.26');
     await showTab('Overview');
     await screenshot('05-weekly-note');
-  });
-
-  it('follows a wikilink to the month', async () => {
-    await showTab('Note');
-    await followLink('08.26 RPG');
+    await $('[data-testid="nav-month"]').click();
     await expect(title()).toHaveText('08.26 RPG');
     await showTab('Overview');
+    await expect($('[data-testid="hero-title"]')).toHaveText('August 2026');
     await screenshot('06-monthly-note');
-    await showTab('Note');
-    await expect($('[data-testid="note"] table')).toBeDisplayed();
   });
 
-  it('shows an album with its cover', async () => {
-    await followLink('Glasshouse Weather');
+  it('opens an album from the covers of what the month listened to', async () => {
+    await $('[data-testid="mini-covers"] button[title="listened: Glasshouse Weather"]').click();
     await expect(title()).toHaveText('Glasshouse Weather');
     const cover = $('[data-testid="vault-image"]');
     await cover.waitForDisplayed();
@@ -94,10 +92,9 @@ describe('the demo vault', () => {
     await screenshot('09-youtube');
   });
 
-  it('creates a missing day from a link to it, from its template', async () => {
+  it('creates the missing day before from its template', async () => {
     await openNote(`${DAYS}/01.08.2026.md`);
-    await showTab('Note');
-    await followLink('31.07.2026');
+    await $('[data-testid="nav-prev"]').click();
     await expect(title()).toHaveText('31.07.2026');
     expect(readFileSync(join(vaultCopy(), `${DAYS}/31.07.2026.md`), 'utf8')).toContain('[[01.08.2026|Tomorrow →]]');
     await screenshot('10-day-from-link');
@@ -191,8 +188,6 @@ describe('the demo vault', () => {
     await showMonth('July 2026');
     await $('[data-testid="calendar-day"][data-date="2026-07-30"]').click();
     await expect(title()).toHaveText('30.07.2026');
-    await showTab('Note');
-    await expect($('[data-testid="properties"]')).toHaveText(expect.stringContaining('Daily'));
     const text = readFileSync(join(vaultCopy(), `${DAYS}/30.07.2026.md`), 'utf8');
     expect(text).toMatch(/^---\ndate: 2026-07-30T\d\d:\d\d\n/);
     expect(text).toContain('[[29.07.2026|← Yesterday]] | [[31.07.2026|Tomorrow →]] | [[2026-W31 - 27.07.26|Week]]');
@@ -203,7 +198,8 @@ describe('the demo vault', () => {
     await showMonth('August 2026');
     await $('[data-testid="calendar-day"][data-date="2026-08-14"]').click();
     await showTab('Overview');
-    await expect($('[data-testid="tile-tasks"]')).toHaveText(expect.stringContaining('3 / 5'));
+    // Plan done is the share of ticked tasks: 3 of 5.
+    await expect($('[data-testid="tile-plan"]')).toHaveText(expect.stringContaining('60%'));
     await expect($('[data-testid="tile-time"]')).toHaveText(expect.stringContaining('4h 19m'));
     await expect($('[data-testid="tile-xp"]')).toHaveText(expect.stringContaining('259'));
     await expect($('[data-testid="tile-habits"]')).toHaveText(expect.stringContaining('4 / 7'));
@@ -217,33 +213,79 @@ describe('the demo vault', () => {
     const line = before.split('\n').indexOf(task);
     expect(line).toBeGreaterThan(0);
     await $(`[data-testid="dash-task"][data-line="${line}"]`).click();
-    const ticked = before.replace(task, task.replace('[ ]', '[x]'));
+    // The tick, and the plan done it makes (4 of 5), in one write.
+    const ticked = before.replace(task, task.replace('[ ]', '[x]')).replace('\ndone: 60\n', '\ndone: 80\n');
     await browser.waitUntil(() => read() === ticked, { timeout: 5000, timeoutMsg: 'the tick never reached the note' });
-    await expect($('[data-testid="tile-tasks"]')).toHaveText(expect.stringContaining('4 / 5'));
+    await expect($('[data-testid="tile-plan"]')).toHaveText(expect.stringContaining('80%'));
 
-    // The demo's moods run to 9, so mood is out of 10; the third segment sets 3.
+    // Mood is out of 5, as in the vault; the third segment sets 3.
     await $('[data-testid="check-in"] [data-metric="mood"] [data-value="3"]').click();
-    const mood = ticked.replace('\nmood: 9\n', '\nmood: 3\n');
+    const mood = ticked.replace('\nmood: 5\n', '\nmood: 3\n');
     await browser.waitUntil(() => read() === mood, { timeout: 5000, timeoutMsg: 'the mood never reached the note' });
+
+    // The summary is written in place, into the summary callout.
+    await $('[data-testid="summary"]').click();
+    await $('[data-testid="summary-field"]').waitForDisplayed();
+    // Typed over the old words as macOS sends typing: the driver's clear doesn't reach React.
+    await browser.execute((value) => {
+      const field = document.querySelector<HTMLTextAreaElement>('[data-testid="summary-field"]');
+      field?.focus();
+      field?.select();
+      document.execCommand('insertText', false, value);
+      field?.blur();
+    }, 'Busy, calm, and the page shipped.');
+    const summarised = mood.replace('> Busy but calm.\n', '> Busy, calm, and the page shipped.\n');
+    await browser.waitUntil(() => read() === summarised, { timeout: 5000, timeoutMsg: 'the summary never reached the note' });
 
     await showTab('Tasks');
     await $('[data-testid="composer-category"][data-category="sport"]').click();
     await $('[data-testid="composer-text"]').setValue('evening run');
-    await $('[data-testid="composer-minutes"]').setValue('30');
     await $('[data-testid="composer-add"]').click();
-    const added = mood.replace('    - 16:37–17:09\n', '    - 16:37–17:09\n- [ ] #daily/sport — evening run [minutes::30]\n');
-    await browser.waitUntil(() => read() === added, { timeout: 5000, timeoutMsg: 'the new task never reached the note' });
+    // A new task has no minutes; they are set on its card once it is on the list.
+    const listed = summarised
+      .replace('    - 16:37–17:09\n', '    - 16:37–17:09\n- [ ] #daily/sport — evening run\n')
+      .replace('\ndone: 80\n', '\ndone: 67\n');
+    await browser.waitUntil(() => read() === listed, { timeout: 5000, timeoutMsg: 'the new task never reached the note' });
+    const card = $(`[data-testid="task-card"][data-line="${listed.split('\n').indexOf('- [ ] #daily/sport — evening run')}"]`);
+    await card.$('[data-testid="task-minutes"]').click();
+    await card.$('[data-testid="task-minutes-field"]').setValue('30');
+    await browser.keys('Enter');
+    // A sixth task, still open: plan done goes to 4 of 6.
+    const added = summarised
+      .replace('    - 16:37–17:09\n', '    - 16:37–17:09\n- [ ] #daily/sport — evening run [minutes::30]\n')
+      .replace('\ndone: 80\n', '\ndone: 67\n');
+    await browser.waitUntil(() => read() === added, { timeout: 5000, timeoutMsg: 'the minutes never reached the note' });
     expect(await $$('[data-testid="task-card"]').length).toBe(6);
     await screenshot('25-day-tasks');
 
-    await showTab('Timeline');
-    expect(await $$('[data-testid="time-block"]').length).toBeGreaterThan(0);
-    await screenshot('26-day-timeline');
     await showTab('Habits');
     expect(await $$('[data-testid="habit-pill"]').length).toBe(7);
     await screenshot('27-day-habits');
     await showTab('Stream');
     await screenshot('28-day-stream');
+
+    // A thought record, walked through the wizard, lands as one row in a table under the stream.
+    await $('[data-testid="hero-record"]').click();
+    await $('[data-testid="wizard-situation"]').setValue('Reviewed the day and thought I am behind');
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="shade"][data-shade="Disappointed"]').click();
+    await screenshot('40-thought-wizard');
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="trap"][data-trap="All-or-nothing"]').click();
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="wizard-balanced"]').setValue('Partial still counts.');
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="wheel-core"][data-emotion="Peaceful"]').click();
+    await $('[data-testid="shade"][data-shade="Calm"]').click();
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="wizard-continue"]').click();
+    const row = /\n\n\| \*\*situation\/self-criticism\*\*.*\n\| --- \| --- \| --- \| --- \| --- \|\n\| \[\d\d:\d\d\] Reviewed the day and thought I am behind \| Disappointed \| All-or-nothing \| Partial still counts\. \| Calm \|\n$/;
+    await browser.waitUntil(() => read().startsWith(added.replace(/\n$/, '')) && row.test(read().slice(added.length - 1)), {
+      timeout: 5000,
+      timeoutMsg: 'the thought record never reached the note',
+    });
+    expect(await $$('[data-testid="record"]').length).toBe(1);
+    await screenshot('41-thought-records');
     await showTab('Overview');
   });
 
@@ -262,6 +304,23 @@ describe('the demo vault', () => {
     await screenshot('30-week-habits');
     await showTab('Stats');
     await screenshot('31-week-stats');
+
+    // Ticking a weekly quest writes its box, its done date and today's XP stamp into the weekly note.
+    await showTab('Quests');
+    expect(await $$('[data-testid="quest-card"]').length).toBeGreaterThan(2);
+    await screenshot('42-week-quests');
+    const weekFile = join(vaultCopy(), 'Calendar/2026/weeks/2026-W33 - 10.08.26.md');
+    const weekBefore = readFileSync(weekFile, 'utf8');
+    const quest = '- [ ] #quest/weekly - Call an old friend [xp::150] [spheres::Social] [tier::common]';
+    expect(weekBefore).toContain(`${quest}\n`);
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ticked = `${quest.replace('[ ]', '[x]')} [done::${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}]\n    - ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} :: +150 XP`;
+    await $('button[aria-label="Complete Call an old friend"]').click();
+    await browser.waitUntil(() => readFileSync(weekFile, 'utf8') === weekBefore.replace(quest, ticked), {
+      timeout: 5000,
+      timeoutMsg: 'the quest never reached its weekly note',
+    });
     await showTab('Overview');
 
     await $('[data-testid="calendar-month"]').click();
@@ -274,7 +333,66 @@ describe('the demo vault', () => {
     await screenshot('32-month-weeks');
     await showTab('Stats');
     await screenshot('33-month-stats');
+    await showTab('Quests');
+    await expect($('.mythic-shelf')).toBeDisplayed();
+    await screenshot('43-month-quests');
     await showTab('Overview');
+  });
+
+  it('shows a week and a day of time blocks in the calendar', async () => {
+    await $('[data-testid="open-calendar"]').click();
+    const calendar = $('[data-testid="cal-view"]');
+    await calendar.waitForDisplayed();
+    // The calendar opens on this week; the demo's days are in August.
+    for (let i = 0; i < 60 && (await calendar.getAttribute('data-start')) !== '2026-08-10'; i += 1) {
+      const shown = (await calendar.getAttribute('data-start')) ?? '';
+      await $(`[data-testid="cal-${shown > '2026-08-10' ? 'prev' : 'next'}"]`).click();
+    }
+    await expect(calendar).toHaveAttribute('data-start', '2026-08-10');
+    await expect($('[data-testid="cal-title"]')).toHaveText('10 – 16 August');
+    expect(await $$('[data-testid="cal-col"]').length).toBe(7);
+    expect(await $$('[data-testid="cal-block"]').length).toBeGreaterThan(30);
+    await expect($('[data-testid="cal-col"][data-date="2026-08-14"]')).toHaveText(expect.stringContaining('refactor the settings screen'));
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+    await screenshot('44-calendar-week');
+
+    await $('[data-testid="cal-day-head"][data-date="2026-08-14"]').click();
+    await expect(calendar).toHaveAttribute('data-mode', 'day');
+    await expect($('[data-testid="cal-title"]')).toHaveText('14 August');
+    // The five tasks of the day and the one the day page added.
+    expect(await $$('[data-testid="cal-day-task"]').length).toBe(6);
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+    await screenshot('45-calendar-day');
+    await $('[data-testid="cal-mode-week"]').click();
+    await expect(calendar).toHaveAttribute('data-mode', 'week');
+  });
+
+  it('draws a block on a day, and writes only the new task and its block', async () => {
+    const file = join(vaultCopy(), `${DAYS}/12.08.2026.md`);
+    const before = readFileSync(file, 'utf8');
+    // Press at 19:02 and drag to 20:00 on Wednesday, as a person would with the mouse.
+    await browser.execute((date) => {
+      const column = document.querySelector(`[data-testid="cal-col"][data-date="${date}"]`);
+      if (!column) throw new Error(`no column for ${date}`);
+      const top = column.getBoundingClientRect().top;
+      const at = (minutes: number) => ({ bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, clientY: top + ((minutes - 7 * 60) / 60) * 44 });
+      column.dispatchEvent(new PointerEvent('pointerdown', at(19 * 60 + 2)));
+      window.dispatchEvent(new PointerEvent('pointermove', at(19 * 60 + 30)));
+      window.dispatchEvent(new PointerEvent('pointermove', at(20 * 60)));
+      window.dispatchEvent(new PointerEvent('pointerup', at(20 * 60)));
+    }, '2026-08-12');
+    const popover = $('[data-testid="block-popover"]');
+    await popover.waitForDisplayed();
+    await expect(popover).toHaveText(expect.stringContaining('19:00–20:00'));
+    await $('[data-testid="block-popover"] [data-testid="pick-new"]').setValue('evening run');
+    await $('[data-testid="block-popover"] [data-testid="pick-category"][data-category="sport"]').click();
+    await browser.execute(() => document.querySelector('[data-testid="block-popover"]')?.scrollIntoView({ block: 'center' }));
+    await screenshot('46-calendar-new-block');
+    await $('[data-testid="block-save"]').click();
+    const added = before.replace('    - 14:41–15:13\n', '    - 14:41–15:13\n- [ ] #daily/sport — evening run [minutes::60]\n    - 19:00–20:00\n');
+    expect(added).not.toBe(before);
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === added, { timeout: 5000, timeoutMsg: 'the block never reached the note' });
+    await expect($('[data-testid="cal-col"][data-date="2026-08-12"]')).toHaveText(expect.stringContaining('evening run'));
   });
 
   it('keeps the periodic notes setup in Settings', async () => {
@@ -284,23 +402,67 @@ describe('the demo vault', () => {
     await screenshot('16-settings');
   });
 
+  it('counts the weeks till 30 on the home screen from the birth date in Settings', async () => {
+    // Settings live next to the vault copy, never in it: this changes no note.
+    await $('[data-testid="settings-birth-date"]').setValue('1998-03-21');
+    await $('[data-testid="settings-save"]').click();
+    await $('[data-testid="settings"] .save-state').waitForDisplayed();
+    await $('[data-testid="settings-home"]').scrollIntoView();
+    await screenshot('37-settings-birth-date');
+    await $('[data-testid="sidebar-vault"]').click();
+    await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Till 30'));
+    await $('[data-testid="weeks-toggle"]').click();
+    const grid = $('[data-testid="weeks-grid"]');
+    await grid.waitForDisplayed();
+    expect(await browser.execute(() => document.querySelectorAll('[data-testid="weeks-grid"] rect').length)).toBe(1560);
+    await grid.scrollIntoView();
+    await screenshot('35-home-weeks');
+  });
+
   it("creates today's note from the home screen", async () => {
     await $('[data-testid="sidebar-vault"]').click();
     await $('[data-testid="today-create"]').click();
     await expect(title()).toHaveText(TODAY);
     await expect($('[data-testid="periodic"][data-period="day"]')).toBeDisplayed();
     await $('[data-testid="sidebar-vault"]').click();
-    await expect($('[data-testid="today-open"]')).toHaveText(`Open ${TODAY}`);
+    await expect($('[data-testid="today-open"]')).toHaveAttribute('title', `Open ${TODAY}`);
   });
 
-  it('changed nothing in the vault copy but the four new notes and the day changed from its page', () => {
+  it("times a new task of today's with the stopwatch, shown on the calendar and in the sidebar", async () => {
+    await $('[data-testid="open-calendar"]').click();
+    const back = $('[data-testid="cal-today"]');
+    if (await back.isExisting()) await back.click();
+    await $('[data-testid="timer-start"]').click();
+    await $('[data-testid="timer-setup"] [data-testid="timer-mode-stopwatch"]').click();
+    await $('[data-testid="timer-setup"] [data-testid="pick-new"]').setValue('e2e focus');
+    await $('[data-testid="timer-setup"] [data-testid="pick-category"][data-category="code"]').click();
+    await $('[data-testid="timer-go"]').click();
+    await expect($('[data-testid="timer"]')).toHaveAttribute('data-state', 'running');
+    await expect($('[data-testid="timer-pill"]')).toHaveText(expect.stringContaining('e2e focus'));
+    const today = join(vaultCopy(), `${DAYS}/${TODAY}.md`);
+    expect(readFileSync(today, 'utf8')).toContain('\n- [ ] #daily/code — e2e focus [minutes::0]\n');
+    await browser.execute(() => {
+      document.querySelector('.main')?.scrollTo(0, 0);
+      document.querySelector('.sidebar')?.scrollTo(0, 0);
+    });
+    await screenshot('47-calendar-timer');
+    // Stopped within a minute: nothing to write.
+    await $('[data-testid="timer-stop"]').click();
+    await expect($('[data-testid="timer"]')).toHaveAttribute('data-state', 'idle');
+    await expect($('[data-testid="timer-pill"]')).not.toBeExisting();
+    expect(readFileSync(today, 'utf8')).not.toMatch(/e2e focus[^\n]*\n {4}- \d\d:\d\d/);
+  });
+
+  it('changed nothing in the vault copy but the four new notes, the day changed from its page and the day drawn on', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
         `added: ${DAYS}/30.07.2026.md`,
         `added: ${DAYS}/31.07.2026.md`,
         `added: ${DAYS}/${TODAY}.md`,
         'added: Inbox idea.md',
+        `changed: ${DAYS}/12.08.2026.md`,
         `changed: ${DAYS}/14.08.2026.md`,
+        'changed: Calendar/2026/weeks/2026-W33 - 10.08.26.md',
       ].sort(),
     );
   });

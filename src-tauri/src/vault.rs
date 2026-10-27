@@ -100,6 +100,11 @@ impl Vault {
             .unwrap_or_else(|| self.root.display().to_string())
     }
 
+    /// The vault's canonical folder: which vault this is, when two share a name.
+    pub fn root(&self) -> String {
+        self.root.display().to_string()
+    }
+
     /// Every note and image, sorted by path. Hidden files and folders (`.obsidian`,
     /// `.trash`, `.git`) and symlinks are skipped.
     pub fn list_files(&self) -> Result<Vec<VaultFile>, VaultError> {
@@ -845,5 +850,19 @@ mod tests {
             Vault::open(dir.path()).unwrap().name(),
             dir.path().file_name().unwrap().to_string_lossy()
         );
+    }
+
+    #[test]
+    fn root_is_the_canonical_folder() {
+        let (dir, vault) = vault_with(&[("note.md", "")]);
+        let canonical = fs::canonicalize(dir.path()).unwrap();
+        assert_eq!(vault.root(), canonical.display().to_string());
+        // Two vaults with one name are told apart by their root.
+        let other = tempfile::tempdir().unwrap();
+        let twin = other.path().join(dir.path().file_name().unwrap());
+        fs::create_dir(&twin).unwrap();
+        let twin = Vault::open(&twin).unwrap();
+        assert_eq!(twin.name(), vault.name());
+        assert_ne!(twin.root(), vault.root());
     }
 }

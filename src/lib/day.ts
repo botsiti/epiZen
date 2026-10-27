@@ -1,4 +1,5 @@
 import { category, type Category } from './categories';
+import { parseRecords, type ThoughtRecord } from './cbt';
 import { parseTasks, type Task } from './dashboard';
 import { parseNote } from './frontmatter';
 
@@ -6,6 +7,8 @@ import { parseNote } from './frontmatter';
 export interface TimeBlock {
   start: number;
   end: number;
+  /** Zero-based line of the block in the note. */
+  line: number;
 }
 
 export interface DayTask extends Omit<Task, 'category'> {
@@ -44,8 +47,8 @@ export interface Day {
   gratitude?: string;
   /** The stream of consciousness, as paragraphs, without the thought-record table. */
   stream: string[];
-  /** Thought records: each filled row of the stream's table, cell by cell. */
-  records: string[][];
+  /** Thought records: each filled row of the stream's table. */
+  records: ThoughtRecord[];
   /** Albums and films the day links as listened to or watched. */
   media: { kind: 'listened' | 'watched'; title: string }[];
   /** Logged minutes per category, most first. */
@@ -54,23 +57,32 @@ export interface Day {
 }
 
 const BLOCK = /^[ \t]*(?:>[ \t]*)*[-*+][ \t]+(\d{1,2}):(\d{2})[ \t]*[–—-][ \t]*(\d{1,2}):(\d{2})\b/;
+const SUBTASK = /^[ \t]*(?:>[ \t]*)*(?:[-*+]|\d+[.)])[ \t]+\[[ xX]\]/;
 const indent = (line: string) => /^[ \t]*/.exec(line)?.[0].replace(/\t/g, '    ').length ?? 0;
 
-/** The time blocks listed under the task on that line, one indent deeper. */
-function blocksUnder(lines: string[], line: number): TimeBlock[] {
+/**
+ * The time blocks listed under the task on that line, one indent deeper. A subtask's blocks
+ * are its own, not its parent's too. The calendar's writes use this as well.
+ */
+export function blocksUnder(lines: string[], line: number): TimeBlock[] {
   const depth = indent(lines[line] ?? '');
   const blocks: TimeBlock[] = [];
+  let subtask: number | undefined;
   for (let i = line + 1; i < lines.length; i += 1) {
     const text = lines[i] ?? '';
     if (!text.trim()) continue;
-    if (indent(text) <= depth) break;
+    const at = indent(text);
+    if (at <= depth) break;
+    if (subtask !== undefined && at > subtask) continue;
+    subtask = SUBTASK.test(text) ? at : undefined;
+    if (subtask !== undefined) continue;
     const match = BLOCK.exec(text);
     if (!match) continue;
     const start = Number(match[1]) * 60 + Number(match[2]);
     let end = Number(match[3]) * 60 + Number(match[4]);
     // A block past midnight ends the next day.
     if (end < start) end += 24 * 60;
-    blocks.push({ start, end });
+    blocks.push({ start, end, line: i });
   }
   return blocks;
 }
@@ -94,6 +106,12 @@ function calloutText(lines: string[], type: string): string | undefined {
   return body.join('\n').trim() || undefined;
 }
 
+/** The Obsidian daily template writes "today" into the summary as a placeholder; it says nothing. */
+const summaryOf = (text: string | undefined) => (text && text.trim().toLowerCase() !== 'today' ? text : undefined);
+
+/** The share of tasks ticked, as a whole percentage; 0 when there are none. */
+export const planDone = (tasks: { done: boolean }[]) => (tasks.length ? Math.round((tasks.filter((task) => task.done).length / tasks.length) * 100) : 0);
+
 /** The lines under the first heading that matches, up to the next heading. */
 function section(lines: string[], heading: RegExp): string[] {
   const start = lines.findIndex((line) => /^#{1,6}\s/.test(line) && heading.test(line.replace(/^#{1,6}\s+/, '')));
@@ -105,30 +123,11 @@ function section(lines: string[], heading: RegExp): string[] {
 // Prompts the vault's daily template writes into the stream; they aren't the day's own words.
 const PROMPTS = [/^reflection on good thoughts:?$/i, /^recognise irrational thoughts/i];
 
-const cells = (row: string) =>
-  row
-    .trim()
-    .replace(/^\||\|$/g, '')
-    .split(/(?<!\\)\|/)
-    .map((cell) => cell.replace(/\\\|/g, '|').trim());
-
-function stream(lines: string[]): { paragraphs: string[]; records: string[][] } {
-  const body = section(lines, /^stream of consc/i);
-  const paragraphs: string[] = [];
-  const records: string[][] = [];
-  let header = true;
-  for (const raw of body) {
-    const line = raw.trim();
-    if (line.startsWith('|')) {
-      // The first row is the header and the second the |---| line; filled rows follow.
-      if (/^\|[\s:|-]+\|$/.test(line)) header = false;
-      else if (!header && cells(line).some(Boolean)) records.push(cells(line));
-      continue;
-    }
-    header = true;
-    if (line && !PROMPTS.some((prompt) => prompt.test(line))) paragraphs.push(line);
-  }
-  return { paragraphs, records };
+/** The stream of consciousness as paragraphs: its own words, not the template's prompts or the thought-record table. */
+function stream(lines: string[]): string[] {
+  return section(lines, /^stream of consc/i)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('|') && !PROMPTS.some((prompt) => prompt.test(line)));
 }
 
 const MEDIA = /^\*\*(Listened|Watched):\*\*\s*\[\[([^\]|#]+)/i;
@@ -151,6 +150,8 @@ export function parseDay(text: string): Day {
 
   const numbers: Record<string, number> = {};
   for (const [key, value] of Object.entries(properties)) if (typeof value === 'number' && Number.isFinite(value)) numbers[key] = value;
+  // Plan done is never typed: it is the share of the day's tasks that are ticked, 0 without any.
+  numbers.done = planDone(tasks);
 
   const minutes = new Map<string, { meta: Category; total: number }>();
   const totals: DayTotals = { logged: 0, main: 0, recovery: 0, xp: 0, claimed: 0, tasksDone: 0, tasks: tasks.length, habitsDone: 0, habits: habits.length };
@@ -169,18 +170,18 @@ export function parseDay(text: string): Day {
   }
   totals.habitsDone = habits.filter((habit) => habit.done).length;
 
-  const { paragraphs, records } = stream(lines);
+
   const important = typeof properties.important === 'string' ? properties.important.trim() : undefined;
   return {
     tasks,
     habits,
     numbers,
     keys: Object.keys(properties),
-    summary: calloutText(lines, 'tldr'),
+    summary: summaryOf(calloutText(lines, 'tldr')),
     important: important || undefined,
     gratitude: /^\*\*Gratitude practice:\*\*[ \t]*(.*)$/im.exec(text)?.[1]?.trim() || undefined,
-    stream: paragraphs,
-    records,
+    stream: stream(lines),
+    records: parseRecords(text),
     media: lines.flatMap((line) => {
       const match = MEDIA.exec(line.trim());
       return match ? [{ kind: (match[1] ?? '').toLowerCase() as 'listened' | 'watched', title: (match[2] ?? '').trim() }] : [];

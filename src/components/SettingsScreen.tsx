@@ -1,19 +1,26 @@
 import { useState, type FormEvent } from 'react';
 import { formatDate, parseDate, today } from '../lib/dates';
+import { parseBirthDate } from '../lib/home';
 import { PERIODS, startOfPeriod, type Period, type PeriodicSettings } from '../lib/periodic';
 
 interface Props {
   periodic: PeriodicSettings;
+  /** As stored, `YYYY-MM-DD`, or `''` when there is none. */
+  birthDate: string;
   folders: string[];
   notes: string[];
-  onSave: (periodic: PeriodicSettings) => Promise<void>;
+  onSave: (settings: { periodic: PeriodicSettings; birthDate: string }) => Promise<void>;
 }
 
 const TITLES: Record<Period, string> = { day: 'Daily notes', week: 'Weekly notes', month: 'Monthly notes' };
 
-/** Where periodic notes go, how they are named and which template they start from, as in Obsidian's daily notes settings. */
-export function SettingsScreen({ periodic, folders, notes, onSave }: Props) {
+/**
+ * Where periodic notes go, how they are named and which template they start from, as in
+ * Obsidian's daily notes settings; and the birth date the homepage counts from.
+ */
+export function SettingsScreen({ periodic, birthDate, folders, notes, onSave }: Props) {
   const [draft, setDraft] = useState(periodic);
+  const [birth, setBirth] = useState(birthDate);
   const [state, setState] = useState<{ saved?: boolean; error?: string }>({});
   const set = (period: Period, key: 'folder' | 'format' | 'template', value: string) => {
     setDraft((prev) => ({ ...prev, [period]: { ...prev[period], [key]: value } }));
@@ -33,7 +40,12 @@ export function SettingsScreen({ periodic, folders, notes, onSave }: Props) {
       setState({ error: `Epizen can't read a ${TITLES[broken].toLowerCase().replace(/s$/, '')}'s name back into a date with that format.` });
       return;
     }
-    onSave(draft).then(
+    const born = parseBirthDate(birth);
+    if (birth.trim() && (!born || born > today())) {
+      setState({ error: 'A birth date is a day that has been, written YYYY-MM-DD, like 1990-04-21.' });
+      return;
+    }
+    onSave({ periodic: draft, birthDate: birth.trim() }).then(
       () => setState({ saved: true }),
       (err: unknown) => setState({ error: String(err) }),
     );
@@ -63,6 +75,23 @@ export function SettingsScreen({ periodic, folders, notes, onSave }: Props) {
             </label>
           </fieldset>
         ))}
+        <fieldset className="settings-group" data-testid="settings-home">
+          <legend className="eyebrow">Homepage</legend>
+          <label className="field">
+            <span>Birth date</span>
+            <input
+              value={birth}
+              onChange={(e) => {
+                setBirth(e.target.value);
+                setState({});
+              }}
+              placeholder="YYYY-MM-DD"
+              inputMode="numeric"
+              data-testid="settings-birth-date"
+            />
+            <small className="field-hint">For the memento mori: the weeks till 30. It stays in Epizen’s settings, never in the vault.</small>
+          </label>
+        </fieldset>
         <datalist id="vault-folders">
           {folders.map((folder) => (
             <option key={folder} value={folder} />

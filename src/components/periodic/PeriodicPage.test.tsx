@@ -54,6 +54,8 @@ const spec = (period: PeriodicSpec['period'], date = DATE): PeriodicSpec => ({
   scales: { mood: 10, energy: 10, focus: 10, soc: 10, done: 100, sleep: 10 },
   media: new Map(),
   categories: ['code', 'sport'],
+  quests: [],
+  art: () => undefined,
 });
 const actions = (): PeriodicActions => ({
   onOpenPeriod: vi.fn(),
@@ -62,14 +64,24 @@ const actions = (): PeriodicActions => ({
   onToggle: vi.fn(),
   onSetProperty: vi.fn(),
   onAddTask: vi.fn(),
+  onSetSummary: vi.fn(),
+  onSetMinutes: vi.fn(),
+  onFocus: vi.fn(),
+  onAddRecord: vi.fn(),
+  onUpdateRecord: vi.fn(),
+  onDeleteRecord: vi.fn(),
+  onQuestToggle: vi.fn(),
+  onQuestProgress: vi.fn(),
 });
 
 describe('the day page', () => {
   it("shows the day's totals and words", () => {
-    render(<PeriodicPage spec={spec('day')} path="Calendar/14.08.2026.md" text={DAY} actions={actions()} note={<p>the note</p>} />);
+    render(<PeriodicPage spec={spec('day')} path="Calendar/14.08.2026.md" text={DAY} actions={actions()} />);
     expect(screen.getByTestId('hero-title')).toHaveTextContent('14 August');
     expect(screen.getByTestId('note-title')).toHaveTextContent('14.08.2026');
-    expect(screen.getByTestId('tile-tasks')).toHaveTextContent('1 / 2');
+    // One of the two tasks is ticked: plan done is worked out, not typed.
+    expect(screen.getByTestId('tile-plan')).toHaveTextContent('50%');
+    expect(screen.getByTestId('tile-plan')).toHaveTextContent('1 of 2 tasks');
     expect(screen.getByTestId('tile-time')).toHaveTextContent('1h 59m');
     expect(screen.getByTestId('tile-habits')).toHaveTextContent('1 / 2');
     expect(screen.getByTestId('hero')).toHaveTextContent('Busy but calm.');
@@ -78,7 +90,7 @@ describe('the day page', () => {
   it('sets a number from a tap, a typed number, and refuses one out of range', async () => {
     const user = userEvent.setup();
     const act = actions();
-    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} note={null} />);
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
     const checkIn = screen.getByTestId('check-in');
     await user.click(within(checkIn).getByRole('radio', { name: 'Mood 3' }));
     expect(act.onSetProperty).toHaveBeenCalledWith('mood', '3');
@@ -88,34 +100,94 @@ describe('the day page', () => {
     await user.type(sleep, '7,5{Enter}');
     expect(act.onSetProperty).toHaveBeenLastCalledWith('sleep', '7.5');
 
-    const done = within(checkIn).getByLabelText('Plan done');
-    await user.clear(done);
-    await user.type(done, '140{Enter}');
+    await user.clear(sleep);
+    await user.type(sleep, '30{Enter}');
     expect(act.onSetProperty).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole('alert')).toHaveTextContent('Plan done is a whole number from 0 to 100.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Sleep is a number from 0 to 24.');
+    expect(within(checkIn).queryByLabelText('Plan done')).not.toBeInTheDocument();
+  });
+
+  it('writes the summary in place: a click opens it, leaving the field saves it', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
+    await user.click(screen.getByTestId('summary'));
+    const field = screen.getByTestId('summary-field');
+    expect(field).toHaveValue('Busy but calm.');
+    await user.clear(field);
+    await user.type(field, 'Shipped the page.');
+    await user.tab();
+    expect(act.onSetSummary).toHaveBeenCalledWith('Shipped the page.');
   });
 
   it('ticks a task, and adds one in the chosen category', async () => {
     const user = userEvent.setup();
     const act = actions();
-    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} note={null} />);
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
     await user.click(screen.getAllByTestId('dash-task')[0] as HTMLElement);
     expect(act.onToggle).toHaveBeenCalledWith(expect.objectContaining({ line: 19, done: false }));
 
     await user.click(screen.getByRole('tab', { name: 'Tasks' }));
     await user.click(screen.getByRole('radio', { name: 'sport' }));
     await user.type(screen.getByTestId('composer-text'), 'evening run');
-    await user.type(screen.getByTestId('composer-minutes'), '30');
+    // A new task has no minutes yet: they go on tasks already on the list.
+    expect(screen.queryByTestId('composer-minutes')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('composer-add'));
-    expect(act.onAddTask).toHaveBeenCalledWith('sport', 'evening run', 30);
+    expect(act.onAddTask).toHaveBeenCalledWith('sport', 'evening run');
+
+    const [first] = screen.getAllByTestId('task-minutes');
+    await user.click(first as HTMLElement);
+    const field = screen.getByTestId('task-minutes-field');
+    await user.clear(field);
+    await user.type(field, '75{Enter}');
+    expect(act.onSetMinutes).toHaveBeenCalledWith(expect.objectContaining({ line: 19 }), 75);
+  });
+});
+
+describe('the thought-record wizard', () => {
+  it('walks the five steps, needs what the vault needs, and saves the record', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
+    await user.click(screen.getByTestId('hero-record'));
+    const next = () => user.click(screen.getByTestId('wizard-continue'));
+    expect(screen.getByTestId('wizard-continue')).toBeDisabled();
+    await user.type(screen.getByTestId('wizard-situation'), 'Reviewed the day | felt behind');
+    await next();
+    // Sad is open first; a shade must be picked before going on.
+    expect(screen.getByTestId('wizard-continue')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Disappointed' }));
+    await user.click(screen.getByRole('button', { name: 'Fear' }));
+    await user.click(screen.getByRole('button', { name: 'Anxious' }));
+    await next();
+    await user.click(screen.getByRole('checkbox', { name: 'All-or-nothing' }));
+    expect(screen.getByText('“If it\'s not perfect, it\'s worthless.”')).toBeInTheDocument();
+    await next();
+    await user.type(screen.getByTestId('wizard-balanced'), 'Partial still counts.');
+    await next();
+    await user.click(screen.getByRole('button', { name: 'Calm' }));
+    await next();
+    expect(screen.getByText('Nicely done.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save to my diary' }));
+    expect(act.onAddRecord).toHaveBeenCalledWith({
+      situation: 'Reviewed the day | felt behind',
+      before: ['Disappointed', 'Anxious'],
+      distortions: ['All-or-nothing'],
+      balanced: 'Partial still counts.',
+      after: ['Calm'],
+    });
+    expect(screen.queryByTestId('thought-wizard')).not.toBeInTheDocument();
   });
 
-  it('shows the note itself on the Note tab', async () => {
+  it('asks before throwing away what was typed', async () => {
     const user = userEvent.setup();
-    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={actions()} note={<p>the note</p>} />);
-    await user.click(screen.getByRole('tab', { name: 'Note' }));
-    expect(screen.getByTestId('note')).toHaveTextContent('the note');
-    await user.click(screen.getByRole('tab', { name: 'Overview' }));
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={actions()} />);
+    await user.click(screen.getByTestId('hero-record'));
+    await user.type(screen.getByTestId('wizard-situation'), 'something');
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('alertdialog', { name: 'Discard this entry?' })).toBeInTheDocument();
+    await user.click(screen.getByTestId('wizard-discard'));
+    expect(screen.queryByTestId('thought-wizard')).not.toBeInTheDocument();
   });
 });
 
@@ -124,7 +196,7 @@ describe('the week and month pages', () => {
     const user = userEvent.setup();
     const act = actions();
     const monday = addDays(DATE, -4);
-    render(<PeriodicPage spec={spec('week', monday)} path="w.md" text={'#### Plus\n- Shipped\n'} actions={act} note={null} />);
+    render(<PeriodicPage spec={spec('week', monday)} path="w.md" text={'#### Plus\n- Shipped\n'} actions={act} />);
     expect(screen.getAllByTestId('day-card')).toHaveLength(7);
     expect(screen.getByTestId('reflections')).toHaveTextContent('Shipped');
     expect(screen.getByTestId('tile-productive')).toHaveTextContent('1h 59m');
@@ -133,7 +205,7 @@ describe('the week and month pages', () => {
   });
 
   it('light a month day by day', () => {
-    render(<PeriodicPage spec={spec('month', new Date(2026, 7, 1))} path="m.md" text="" actions={actions()} note={null} />);
+    render(<PeriodicPage spec={spec('month', new Date(2026, 7, 1))} path="m.md" text="" actions={actions()} />);
     expect(screen.getAllByTestId('heatmap-day')).toHaveLength(31);
     expect(screen.getByTestId('hero-title')).toHaveTextContent('August 2026');
   });

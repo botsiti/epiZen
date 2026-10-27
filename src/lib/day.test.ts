@@ -12,13 +12,12 @@ cssclasses:
   - tuesday
 done: 83
 sleep: 7.8
-focus: 5
-energy: 4
-mood: 5
-soc: 6
+focus: 3
+energy: 2
+mood: 3
+soc: 3
 ---
 
-***А сегодня что для завтра сделал я?***
 > [!tldr]+ **Summary of the day:**
 > Rested. Did what mattered.
 
@@ -99,7 +98,7 @@ describe('parseDay', () => {
       'review a pull request',
     ]);
     expect(day.tasks[0]?.category?.name).toBe('dog');
-    expect(day.tasks[0]?.blocks).toEqual([{ start: 8 * 60 + 50, end: 9 * 60 + 31 }]);
+    expect(day.tasks[0]?.blocks).toEqual([{ start: 8 * 60 + 50, end: 9 * 60 + 31, line: expect.any(Number) as number }]);
     expect(day.tasks.every((task) => !task.habit)).toBe(true);
   });
 
@@ -127,7 +126,7 @@ describe('parseDay', () => {
   });
 
   it('reads the numbers, the summary and the words of the day', () => {
-    expect(day.numbers).toMatchObject({ done: 83, sleep: 7.8, focus: 5, energy: 4, mood: 5, soc: 6 });
+    expect(day.numbers).toMatchObject({ done: 83, sleep: 7.8, focus: 3, energy: 2, mood: 3, soc: 3 });
     expect(day.summary).toBe('Rested. Did what mattered.');
     expect(day.gratitude).toBe('rain at night');
     expect(day.stream).toEqual(['Less news, more sleep. Day 60 of the experiment.']);
@@ -137,15 +136,16 @@ describe('parseDay', () => {
   it("reads the template's own day: comments, a block past midnight, the empty task, prompts and the thought record", () => {
     const filled = parseDay(TEMPLATE_DAY);
     expect(filled.tasks.map((task) => task.label)).toEqual(['planning', 'film night']);
-    expect(filled.tasks[1]?.blocks).toEqual([{ start: 23 * 60 + 10, end: 25 * 60 + 10 }]);
+    expect(filled.tasks[1]?.blocks).toEqual([{ start: 23 * 60 + 10, end: 25 * 60 + 10, line: expect.any(Number) as number }]);
     expect(filled.totals.recovery).toBe(120);
     expect(filled.totals.main).toBe(13);
-    expect(filled.numbers).toEqual({ mood: 3 });
+    // Plan done comes from the tasks (one of two ticked), never from the typed property.
+    expect(filled.numbers).toEqual({ mood: 3, done: 50 });
     expect(filled.keys).toEqual(['done', 'mood', 'soc', 'important']);
     expect(filled.important).toBe('call the bank');
     expect(filled.gratitude).toBeUndefined();
     expect(filled.stream).toEqual(['Walked without the phone.']);
-    expect(filled.records).toEqual([['missed the gym', 'guilt', 'all-or-nothing', "one day isn't a habit", 'calm']]);
+    expect(filled.records).toMatchObject([{ situation: 'missed the gym', before: ['guilt'], distortions: ['all-or-nothing'], balanced: "one day isn't a habit", after: ['calm'] }]);
   });
 
   it('reads what the day listened to and watched', () => {
@@ -169,5 +169,17 @@ describe('formatMinutes and clock', () => {
     expect(formatMinutes(40)).toBe('40m');
     expect(clock(8 * 60 + 5)).toBe('08:05');
     expect(clock(25 * 60 + 10)).toBe('01:10');
+  });
+});
+
+describe('summary and plan done', () => {
+  it('reads the template\'s "today" placeholder as no summary', () => {
+    expect(parseDay('> [!tldr]+ **Summary of the day:**\n> today \n').summary).toBeUndefined();
+    expect(parseDay('> [!tldr]+ **Summary of the day:**\n> today I rested\n').summary).toBe('today I rested');
+  });
+
+  it('works plan done out from the tasks, 0 without any, whatever the property says', () => {
+    expect(parseDay('---\ndone: 99\n---\n### Tasks\n').numbers.done).toBe(0);
+    expect(parseDay('### Tasks\n- [x] #daily/code — a\n- [ ] #daily/code — b\n- [x] #daily/code — c\n').numbers.done).toBe(67);
   });
 });

@@ -4,7 +4,11 @@ import remarkGfm from 'remark-gfm';
 import { readNote, writeNote, type VaultFile } from '../lib/api';
 import type { LinkTarget } from '../lib/completion';
 import { parseTasks, toggleTask } from '../lib/dashboard';
-import { addTask, setProperty } from '../lib/edits';
+import { addRecord, deleteRecord, updateRecord } from '../lib/cbt';
+import { addTask, setProperty, setSummary, syncPlanDone } from '../lib/edits';
+import { setMinutes } from '../lib/timeblocks';
+import type { FocusHow } from './calendar/FocusMenu';
+import type { TaskChoice } from './calendar/types';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
@@ -39,12 +43,25 @@ interface ViewProps extends NoteProps {
   onOpenNote: (path: string) => void;
   /** Opens a day, week or month, creating its note from the template if it has none. */
   onOpenPeriod: PeriodicActions['onOpenPeriod'];
+  /** The note's text as the app knows it, which the timer, the calendar or a quest may have just written. */
+  known?: string;
+  onQuestToggle: PeriodicActions['onQuestToggle'];
+  onQuestProgress: PeriodicActions['onQuestProgress'];
+  /** Starts the timer on a task of today's note. */
+  onStartTimer: (choice: TaskChoice, how?: FocusHow) => void;
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onStartTimer } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
+  // When the app learns a new text for this note (the timer wrote a block into it while it is
+  // open), show that one and build the next change on it.
+  const [seen, setSeen] = useState(known);
+  if (known !== seen) {
+    setSeen(known);
+    if (known !== undefined && note.path === path && note.text !== undefined && known !== note.text) setNote({ path, text: known });
+  }
   const [changeError, setChangeError] = useState<string>();
   const changes = useRef(Promise.resolve());
   const latest = useRef<string | undefined>(undefined);
@@ -53,14 +70,15 @@ export function NoteView(props: ViewProps) {
   }, [note.text]);
 
   // A periodic page changes its note one change at a time (a tick, a number, a new task), each
-  // over the text the last one left. `edit` returns the new text, or `undefined` when there is
-  // nothing to do. If the note changed on disk, nothing is written: it says so and reloads.
+  // over the note as it is on disk now, so a change made elsewhere is never written over. `edit`
+  // returns the new text, or `undefined` when there is nothing to do. If the note changes on disk
+  // between the read and the write, nothing is written: it says so and shows the note as it is.
   const change = useCallback(
     (edit: (text: string) => string | undefined, failed: string) => {
       changes.current = changes.current.then(async () => {
-        const current = latest.current;
-        if (current === undefined) return;
+        if (latest.current === undefined) return;
         try {
+          const current = await readNote(path);
           const next = edit(current);
           if (next === undefined || next === current) return;
           await writeNote(path, next, current);
@@ -80,6 +98,8 @@ export function NoteView(props: ViewProps) {
     },
     [path, onSaved],
   );
+  // A line of the note as the page last showed it, to find that task again when writing.
+  const seenLine = useCallback((line: number) => (latest.current ?? '').split('\n')[line]?.replace(/\r$/, '') ?? '', []);
   const actions = useMemo(
     (): PeriodicActions => ({
       onOpenPeriod,
@@ -89,12 +109,29 @@ export function NoteView(props: ViewProps) {
       onToggle: (task) =>
         change((text) => {
           const target = parseTasks(text).find((t) => t.line === task.line && t.done === task.done);
-          return target && toggleTask(text, target);
+          // Plan done follows the ticks: the same write updates the day's `done`.
+          return target && syncPlanDone(toggleTask(text, target));
         }, 'Nothing was ticked'),
       onSetProperty: (key, value) => change((text) => setProperty(text, key, value), `${key} wasn't set`),
-      onAddTask: (category, words, minutes) => change((text) => addTask(text, category, words, minutes), 'The task wasn\'t added'),
+      onAddTask: (category, words, minutes) => change((text) => syncPlanDone(addTask(text, category, words, minutes)), 'The task wasn\'t added'),
+      onSetSummary: (summary) => change((text) => setSummary(text, summary), "The summary wasn't saved"),
+      // A task is found again by its line as the page showed it.
+      onSetMinutes: (task, minutes) => {
+        const seen = seenLine(task.line);
+        change((text) => setMinutes(text, { line: task.line, text: seen }, minutes), "The minutes weren't saved");
+      },
+      onFocus: (task, how) => onStartTimer({ kind: 'task', ref: { line: task.line, text: seenLine(task.line) }, label: task.label, category: task.category }, how),
+      onAddRecord: (input) => {
+        const now = new Date();
+        const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        change((text) => addRecord(text, input, time), "The thought record wasn't saved");
+      },
+      onUpdateRecord: (record, input) => change((text) => updateRecord(text, record, input), "The thought record wasn't changed"),
+      onDeleteRecord: (record) => change((text) => deleteRecord(text, record), "The thought record wasn't deleted"),
+      onQuestToggle,
+      onQuestProgress,
     }),
-    [change, onEditingChange, onOpenNote, onOpenPeriod],
+    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onStartTimer, seenLine],
   );
 
   useEffect(() => {
@@ -143,12 +180,6 @@ export function NoteView(props: ViewProps) {
         text={note.text}
         actions={actions}
         warning={changeError}
-        note={
-          <>
-            <NoteBody path={path} text={note.text} files={files} onOpenLink={onOpenLink} />
-            {footer}
-          </>
-        }
       />
     );
   }

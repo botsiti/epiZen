@@ -1,16 +1,21 @@
-import { useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
 import { category, habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, formatDate, isoWeek, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
 import { clock, formatMinutes, parseDay, type Day, type DayTask } from '../../lib/day';
+import type { ThoughtRecord } from '../../lib/cbt';
 import { missingFromDay } from '../../lib/rollup';
 import { Donut, Ring, Segments } from './charts';
 import { order, spark } from './effects';
 import { BlurText, CountUp } from './motion';
-import { Bar, Hero, NavButton, Section, Tabs, Tile, TimeTrack } from './parts';
+import { Bar, Hero, NavButton, Section, Tabs, Tile } from './parts';
+import { questsIn } from '../../lib/quests';
+import { QuestBoard } from './Quests';
+import { FocusMenu } from '../calendar/FocusMenu';
+import { Tags, ThoughtWizard } from './ThoughtWizard';
 import type { PeriodicActions, PeriodicSpec } from './types';
 
-const TABS = ['Overview', 'Tasks', 'Timeline', 'Habits', 'Stream', 'Note'] as const;
+const TABS = ['Overview', 'Tasks', 'Habits', 'Quests', 'Stream'] as const;
 type Tab = (typeof TABS)[number];
 // The tab last shown, so the next day opens on it too. Kept for the session only.
 let lastTab: Tab = 'Overview';
@@ -22,14 +27,14 @@ interface Props {
   /** The daily note's text as it is now. */
   text: string;
   actions: PeriodicActions;
-  /** The note itself, rendered, for the Note tab. */
-  note: ReactNode;
 }
 
 /** A daily note as a page: how the day went, from the note's own text. */
-export function DayPage({ spec, path, text, actions, note }: Props) {
+export function DayPage({ spec, path, text, actions }: Props) {
   const day = useMemo(() => parseDay(text), [text]);
   const [tab, setTab] = useState<Tab>(lastTab);
+  // The thought-record wizard: open on a record to edit it, or on nothing for a new one.
+  const [wizard, setWizard] = useState<{ record?: ThoughtRecord }>();
   const choose = (next: Tab) => {
     lastTab = next;
     setTab(next);
@@ -60,13 +65,16 @@ export function DayPage({ spec, path, text, actions, note }: Props) {
             <NavButton label={formatDate(date, 'MMMM')} title="This month's note" onClick={() => actions.onOpenPeriod('month', month)} exists={spec.exists('month', month)} testId="nav-month" />
             {!isToday && <NavButton label="Today" title="Today's note" onClick={() => actions.onOpenPeriod('day', today())} exists={spec.exists('day', today())} testId="nav-today" />}
             <span className="nav-space" />
+            <button type="button" className="nav-chip" onClick={() => setWizard({})} data-testid="hero-record">
+              Thought record
+            </button>
             <button type="button" className="nav-chip is-action" onClick={actions.onEdit} data-testid="edit-note">
               Edit note
             </button>
           </>
         }
       >
-        {day.summary ? <BlurText text={day.summary} className="hero-summary" /> : <p className="hero-summary faint">No summary of the day yet.</p>}
+        <Summary text={day.summary} onSave={actions.onSetSummary} />
         {day.important && (
           <p className="hero-important" data-testid="important">
             <span className="kicker">Important</span> {day.important}
@@ -78,18 +86,62 @@ export function DayPage({ spec, path, text, actions, note }: Props) {
 
       <Tabs tabs={TABS} active={tab} onChange={choose} />
       <div className="tab-panel" key={tab}>
-        {tab === 'Overview' && <Overview day={day} spec={spec} actions={actions} />}
-        {tab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} />}
-        {tab === 'Timeline' && <TimelineTab day={day} />}
+        {tab === 'Overview' && <Overview day={day} spec={spec} actions={actions} isToday={isToday} />}
+        {tab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} isToday={isToday} />}
         {tab === 'Habits' && <HabitsTab day={day} spec={spec} actions={actions} />}
-        {tab === 'Stream' && <StreamTab day={day} />}
-        {tab === 'Note' && (
-          <div className="note-tab" data-testid="note" data-path={path}>
-            {note}
-          </div>
+        {tab === 'Quests' && (
+          <QuestBoard quests={questsIn(spec.quests, date, addDays(date, 1))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} />
         )}
+        {tab === 'Stream' && <StreamTab day={day} actions={actions} onOpen={(record) => setWizard({ record })} />}
       </div>
+      {wizard && (
+        <ThoughtWizard
+          record={wizard.record}
+          onClose={() => setWizard(undefined)}
+          onSave={(input) => {
+            if (wizard.record) actions.onUpdateRecord(wizard.record, input);
+            else actions.onAddRecord(input);
+            setWizard(undefined);
+          }}
+        />
+      )}
     </article>
+  );
+}
+
+/**
+ * The day's summary under its date: a few words about the day, written in place. A click opens it
+ * for writing; leaving the field or ⌘↩ saves it into the note's summary callout, Escape lets it go.
+ */
+function Summary({ text, onSave }: { text?: string; onSave: (summary: string) => void }) {
+  const [draft, setDraft] = useState<string>();
+  if (draft !== undefined) {
+    const save = () => {
+      if (draft.trim() !== (text ?? '').trim()) onSave(draft.trim());
+      setDraft(undefined);
+    };
+    return (
+      <textarea
+        className="hero-summary summary-field"
+        autoFocus
+        value={draft}
+        rows={Math.max(2, draft.split('\n').length)}
+        placeholder="A few words about the day: what happened, what came to mind."
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={save}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setDraft(undefined);
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) event.currentTarget.blur();
+        }}
+        aria-label="Summary of the day"
+        data-testid="summary-field"
+      />
+    );
+  }
+  return (
+    <button type="button" className="summary-button" onClick={() => setDraft(text ?? '')} title="Write about the day" data-testid="summary">
+      {text ? <BlurText text={text} className="hero-summary" /> : <span className="hero-summary faint">Write a few words about the day…</span>}
+    </button>
   );
 }
 
@@ -110,8 +162,9 @@ function YesterdayGaps({ spec, onOpen }: { spec: PeriodicSpec; onOpen: () => voi
   );
 }
 
-function Overview({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions }) {
+function Overview({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions; isToday: boolean }) {
   const { totals } = day;
+  const [menu, setMenu] = useState<Menu>();
   return (
     <>
       <div className="tiles">
@@ -121,9 +174,20 @@ function Overview({ day, spec, actions }: { day: Day; spec: PeriodicSpec; action
         <Tile label="Time logged" i={1} testId="tile-time" meta={<SplitBar main={totals.main} recovery={totals.recovery} />}>
           <CountUp value={totals.logged} format={formatMinutes} />
         </Tile>
-        <Tile label="Tasks" i={2} testId="tile-tasks" meta={<Bar share={totals.tasks ? totals.tasksDone / totals.tasks : 0} />}>
-          <CountUp value={totals.tasksDone} />
-          <span className="of"> / {totals.tasks}</span>
+        <Tile
+          label="Plan done"
+          i={2}
+          testId="tile-plan"
+          meta={
+            <span className="split-bar-wrap">
+              <Bar share={(day.numbers.done ?? 0) / 100} />
+              <span>
+                {totals.tasksDone} of {totals.tasks} tasks
+              </span>
+            </span>
+          }
+        >
+          <CountUp value={day.numbers.done ?? 0} format={(n) => `${Math.round(n)}%`} />
         </Tile>
         <Tile label="Habits" i={3} testId="tile-habits" meta={<HabitDots habits={day.habits} />}>
           <CountUp value={totals.habitsDone} />
@@ -138,7 +202,7 @@ function Overview({ day, spec, actions }: { day: Day; spec: PeriodicSpec; action
         <Section title="Tasks" note={`${totals.tasksDone} of ${totals.tasks} done`} i={6}>
           <ul className="task-list">
             {day.tasks.map((task) => (
-              <TaskRow key={task.line} task={task} onToggle={actions.onToggle} />
+              <TaskRow key={task.line} task={task} onToggle={actions.onToggle} onMenu={menuOn(isToday, task, setMenu)} />
             ))}
           </ul>
           {day.gratitude && (
@@ -148,6 +212,7 @@ function Overview({ day, spec, actions }: { day: Day; spec: PeriodicSpec; action
           )}
         </Section>
       )}
+      {menu && <TaskMenu menu={menu} actions={actions} onClose={() => setMenu(undefined)} />}
     </>
   );
 }
@@ -205,11 +270,6 @@ function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: (k
           <span className="check-label">Sleep</span>
           <NumberField value={day.numbers.sleep} min={0} max={24} step={0.1} onCommit={(next) => onSet('sleep', next)} label="Sleep" suffix="h" />
           <span className="check-value">{day.numbers.sleep === undefined ? '—' : `${day.numbers.sleep}h`}</span>
-        </li>
-        <li data-metric="done">
-          <span className="check-label">Plan done</span>
-          <NumberField value={day.numbers.done} min={0} max={100} step={1} onCommit={(next) => onSet('done', next)} label="Plan done" suffix="%" />
-          <span className="check-value">{day.numbers.done === undefined ? '—' : `${day.numbers.done}%`}</span>
         </li>
       </ul>
     </div>
@@ -301,11 +361,34 @@ function TimeCard({ day }: { day: Day }) {
   );
 }
 
+/** Where a right-click on one of today's tasks opened the focus menu, and on which task. */
+type Menu = { x: number; y: number; task: DayTask };
+
+/** A right-click handler that opens the focus menu, on today's page only (the timer logs into today's note). */
+const menuOn = (today: boolean, task: DayTask, open: (menu: Menu) => void) =>
+  today
+    ? (event: MouseEvent) => {
+        event.preventDefault();
+        open({ x: event.clientX, y: event.clientY, task });
+      }
+    : undefined;
+
+function TaskMenu({ menu, actions, onClose }: { menu: Menu; actions: PeriodicActions; onClose: () => void }) {
+  return (
+    <FocusMenu
+      at={menu}
+      label={menu.task.label}
+      onFocus={(how) => actions.onFocus({ line: menu.task.line, label: menu.task.label, category: menu.task.category?.name }, how)}
+      onClose={onClose}
+    />
+  );
+}
+
 /** A task to tick: the tick writes that one box back to the note, with a small spark. */
-function TaskRow({ task, onToggle }: { task: DayTask; onToggle: (task: DayTask) => void }) {
+function TaskRow({ task, onToggle, onMenu }: { task: DayTask; onToggle: (task: DayTask) => void; onMenu?: (event: MouseEvent) => void }) {
   const color = task.category?.color ?? 'var(--accent)';
   return (
-    <li className={task.done ? 'task-row is-done' : 'task-row'} style={{ '--tone': color } as CSSProperties}>
+    <li className={task.done ? 'task-row is-done' : 'task-row'} style={{ '--tone': color } as CSSProperties} onContextMenu={onMenu}>
       <label>
         <input
           type="checkbox"
@@ -326,28 +409,51 @@ function TaskRow({ task, onToggle }: { task: DayTask; onToggle: (task: DayTask) 
   );
 }
 
-function TasksTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions }) {
+function TasksTab({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions; isToday: boolean }) {
+  const [menu, setMenu] = useState<Menu>();
   return (
     <>
       <Composer categories={spec.categories} onAdd={actions.onAddTask} />
       {day.tasks.length ? (
-        <div className="task-cards">
-          {day.tasks.map((task, i) => (
-            <TaskCard key={task.line} task={task} i={i} onToggle={actions.onToggle} />
-          ))}
-        </div>
+        <>
+          {isToday && <p className="tasks-hint">Right-click a task to focus on it; the time lands on the task.</p>}
+          <div className="task-cards">
+            {day.tasks.map((task, i) => (
+              <TaskCard key={task.line} task={task} i={i} onToggle={actions.onToggle} onMinutes={actions.onSetMinutes} onMenu={menuOn(isToday, task, setMenu)} />
+            ))}
+          </div>
+        </>
       ) : (
         <p className="empty-line">No tasks yet. Add one above; it goes under the note's Tasks heading.</p>
       )}
+      {menu && <TaskMenu menu={menu} actions={actions} onClose={() => setMenu(undefined)} />}
     </>
   );
 }
 
-function TaskCard({ task, i, onToggle }: { task: DayTask; i: number; onToggle: (task: DayTask) => void }) {
+function TaskCard({
+  task,
+  i,
+  onToggle,
+  onMinutes,
+  onMenu,
+}: {
+  task: DayTask;
+  i: number;
+  onToggle: (task: DayTask) => void;
+  onMinutes: (task: DayTask, minutes: number) => void;
+  onMenu?: (event: MouseEvent) => void;
+}) {
   const color = task.category?.color ?? 'var(--accent)';
   const xp = task.minutes ? Math.round(task.minutes * (task.category?.multiplier ?? 1)) : 0;
   return (
-    <div className={task.done ? 'task-card glass rise is-done' : 'task-card glass rise'} style={{ ...order(i), '--tone': color } as CSSProperties} data-testid="task-card">
+    <div
+      className={task.done ? 'task-card glass rise is-done' : 'task-card glass rise'}
+      style={{ ...order(i), '--tone': color } as CSSProperties}
+      onContextMenu={onMenu}
+      data-testid="task-card"
+      data-line={task.line}
+    >
       <div className="task-card-top">
         <input
           type="checkbox"
@@ -367,7 +473,7 @@ function TaskCard({ task, i, onToggle }: { task: DayTask; i: number; onToggle: (
       </div>
       <p className="task-card-title">{task.label || <span className="faint">untitled</span>}</p>
       <div className="task-card-foot">
-        <span>{task.minutes ? formatMinutes(task.minutes) : 'no time logged'}</span>
+        <Minutes value={task.minutes} onSet={(minutes) => onMinutes(task, minutes)} />
         {task.blocks.map((block) => (
           <span key={block.start} className="time-chip">
             {clock(block.start)}–{clock(block.end)}
@@ -378,18 +484,75 @@ function TaskCard({ task, i, onToggle }: { task: DayTask; i: number; onToggle: (
   );
 }
 
-/** Adds a task under the note's Tasks heading: a category, the words, and minutes if any were spent. */
-function Composer({ categories, onAdd }: { categories: string[]; onAdd: (category: string, words: string, minutes?: number) => void }) {
+/**
+ * The minutes spent on a task, set from its card: a click opens a field for the total, with +15,
+ * +30 and +60 beside it. The field writes on Enter or when left; Escape lets it go.
+ */
+function Minutes({ value, onSet }: { value?: number; onSet: (minutes: number) => void }) {
+  const [draft, setDraft] = useState<string>();
+  const [problem, setProblem] = useState(false);
+  const current = value ?? 0;
+  if (draft === undefined) {
+    return (
+      <button type="button" className="minutes-button" onClick={() => setDraft(current ? String(current) : '')} title="Set the minutes spent on this task" data-testid="task-minutes">
+        {current ? formatMinutes(current) : '+ minutes'}
+      </button>
+    );
+  }
+  const commit = (text: string) => {
+    const number = Number(text.trim());
+    if (text.trim() === '' || !Number.isInteger(number) || number < 0 || number > 1440) {
+      setProblem(true);
+      return;
+    }
+    setDraft(undefined);
+    setProblem(false);
+    if (number !== current) onSet(number);
+  };
+  return (
+    <span className="minutes-edit">
+      <input
+        autoFocus
+        value={draft}
+        inputMode="numeric"
+        placeholder="min"
+        aria-label="Minutes spent"
+        aria-invalid={problem || undefined}
+        title={problem ? 'Minutes are a whole number from 0 to 1440.' : undefined}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={(event) => {
+          // Leaving for one of the + buttons isn't leaving the edit.
+          if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.dataset.minutesStep) return;
+          commit(draft);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit(draft);
+          if (event.key === 'Escape') {
+            setDraft(undefined);
+            setProblem(false);
+          }
+        }}
+        data-testid="task-minutes-field"
+      />
+      <span className="faint">min</span>
+      {[15, 30, 60].map((step) => (
+        <button key={step} type="button" className="step-button" data-minutes-step={step} onClick={() => commit(String((Number(draft) || current) + step))}>
+          +{step}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/** Adds a task under the note's Tasks heading: a category and the words. Its time comes later. */
+function Composer({ categories, onAdd }: { categories: string[]; onAdd: (category: string, words: string) => void }) {
   const [chosen, setChosen] = useState(categories[0] ?? 'code');
   const [words, setWords] = useState('');
-  const [minutes, setMinutes] = useState('');
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!words.trim()) return;
-    const number = Number(minutes);
-    onAdd(chosen, words, Number.isFinite(number) && number > 0 ? number : undefined);
+    onAdd(chosen, words);
     setWords('');
-    setMinutes('');
   };
   return (
     <form className="composer glass rise" onSubmit={submit} data-testid="composer">
@@ -415,53 +578,11 @@ function Composer({ categories, onAdd }: { categories: string[]; onAdd: (categor
       </div>
       <div className="composer-row">
         <input value={words} onChange={(event) => setWords(event.target.value)} placeholder={`A ${chosen} task for today`} aria-label="Task" data-testid="composer-text" />
-        <input value={minutes} onChange={(event) => setMinutes(event.target.value)} placeholder="min" inputMode="numeric" aria-label="Minutes" className="composer-minutes" data-testid="composer-minutes" />
         <button type="submit" className="primary-button" disabled={!words.trim()} data-testid="composer-add">
           Add task
         </button>
       </div>
     </form>
-  );
-}
-
-function TimelineTab({ day }: { day: Day }) {
-  const blocks = day.tasks
-    .flatMap((task) => task.blocks.map((block) => ({ block, task })))
-    .sort((a, b) => a.block.start - b.block.start);
-  const color = (task: DayTask) => task.category?.color ?? 'var(--accent)';
-  return (
-    <>
-      <Section title="The day on one line" note={blocks.length ? `${clock(blocks[0]?.block.start ?? 0)} to ${clock(blocks.at(-1)?.block.end ?? 0)}` : undefined}>
-        <TimeTrack
-          rows={[
-            { key: 'day', label: 'Day', blocks: blocks.map(({ block, task }) => ({ block, color: color(task), title: task.label })) },
-            ...day.tasks
-              .filter((task) => task.blocks.length)
-              .map((task) => ({
-                key: String(task.line),
-                label: task.label || 'untitled',
-                blocks: task.blocks.map((block) => ({ block, color: color(task), title: task.label })),
-              })),
-          ]}
-        />
-      </Section>
-      {blocks.length > 0 && (
-        <Section title="In order" i={1}>
-          <ol className="block-list">
-            {blocks.map(({ block, task }, i) => (
-              <li key={`${block.start}-${task.line}`} className="rise" style={{ ...order(i), '--tone': color(task) } as CSSProperties}>
-                <span className="block-time">
-                  {clock(block.start)}–{clock(block.end)}
-                </span>
-                <span className="chip-dot" />
-                <span className="block-task">{task.label}</span>
-                <span className="faint">{formatMinutes(block.end - block.start)}</span>
-              </li>
-            ))}
-          </ol>
-        </Section>
-      )}
-    </>
   );
 }
 
@@ -507,9 +628,8 @@ function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actio
   );
 }
 
-function StreamTab({ day }: { day: Day }) {
-  const empty = !day.gratitude && !day.important && !day.stream.length && !day.records.length;
-  if (empty) return <p className="empty-line">Nothing written in the stream yet.</p>;
+function StreamTab({ day, actions, onOpen }: { day: Day; actions: PeriodicActions; onOpen: (record?: ThoughtRecord) => void }) {
+  const [deleting, setDeleting] = useState<number>();
   return (
     <>
       {(day.gratitude || day.important) && (
@@ -537,19 +657,64 @@ function StreamTab({ day }: { day: Day }) {
           </div>
         </Section>
       )}
-      {day.records.length > 0 && (
-        <Section title="Thought records" note="situation → emotion → distortion → rational response → after" i={3}>
+      <Section
+        title="Thought records"
+        note={
+          <button type="button" className="nav-chip is-action" onClick={() => onOpen()} data-testid="new-record">
+            + New session
+          </button>
+        }
+        i={3}
+        testId="records"
+      >
+        {day.records.length ? (
           <div className="records">
             {day.records.map((record, i) => (
-              <ol key={i} className="record glass rise" style={order(i)}>
-                {record.map((cell, c) => (
-                  <li key={c}>{cell || <span className="faint">—</span>}</li>
-                ))}
-              </ol>
+              <div key={record.line} className="record-card glass rise" style={order(i)} data-testid="record">
+                <button type="button" className="record-open" onClick={() => onOpen(record)} title="Open this session">
+                  <span className="record-top">
+                    {record.time && <span className="time-chip">{record.time}</span>}
+                    <span className="record-situation">{record.situation || <span className="faint">Untitled moment</span>}</span>
+                  </span>
+                  <span className="record-feelings">
+                    <Tags names={record.before} />
+                    <span className="done-arrow">→</span>
+                    <Tags names={record.after} />
+                  </span>
+                  {record.distortions.length > 0 && (
+                    <span className="record-traps">
+                      {record.distortions.map((name) => (
+                        <span key={name} className="trap-badge">
+                          {name}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  {record.balanced && <span className="record-balanced">{record.balanced}</span>}
+                </button>
+                <button
+                  type="button"
+                  className={deleting === record.line ? 'record-delete is-asking' : 'record-delete'}
+                  onClick={() => {
+                    if (deleting === record.line) {
+                      actions.onDeleteRecord(record);
+                      setDeleting(undefined);
+                    } else setDeleting(record.line);
+                  }}
+                  onBlur={() => setDeleting(undefined)}
+                  aria-label={deleting === record.line ? 'Click again to delete' : 'Delete this session'}
+                  title={deleting === record.line ? 'Click again to delete' : 'Delete'}
+                  data-testid="record-delete"
+                >
+                  {deleting === record.line ? 'Delete?' : '×'}
+                </button>
+              </div>
             ))}
           </div>
-        </Section>
-      )}
+        ) : (
+          <p className="empty-line">No sessions yet today. Start one when a thought keeps pulling at you.</p>
+        )}
+      </Section>
     </>
   );
 }

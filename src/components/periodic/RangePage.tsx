@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, addMonths, formatDate, isoWeek, monthGrid, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
@@ -8,10 +8,12 @@ import { Donut, LineChart, Ring, Sparkline } from './charts';
 import { order } from './effects';
 import { CountUp } from './motion';
 import { Bar, CategoryBars, Covers, HabitGrid, Hero, NavButton, Section, Tabs, Tile, TimeTrack } from './parts';
+import { questsIn } from '../../lib/quests';
+import { QuestBoard } from './Quests';
 import type { PeriodicActions, PeriodicSpec } from './types';
 
-const WEEK_TABS = ['Overview', 'Days', 'Timeline', 'Habits', 'Stats', 'Note'] as const;
-const MONTH_TABS = ['Overview', 'Weeks', 'Days', 'Habits', 'Stats', 'Note'] as const;
+const WEEK_TABS = ['Overview', 'Days', 'Quests', 'Timeline', 'Habits', 'Stats'] as const;
+const MONTH_TABS = ['Overview', 'Weeks', 'Quests', 'Days', 'Habits', 'Stats'] as const;
 type WeekTab = (typeof WEEK_TABS)[number];
 type MonthTab = (typeof MONTH_TABS)[number];
 let lastWeekTab: WeekTab = 'Overview';
@@ -24,11 +26,10 @@ interface Props {
   /** The weekly or monthly note's own text. */
   text: string;
   actions: PeriodicActions;
-  note: ReactNode;
 }
 
 /** A weekly note as a page: its seven days added up, and the week's own Plus, Minus and Next. */
-export function WeekPage({ spec, path, text, actions, note }: Props) {
+export function WeekPage({ spec, path, text, actions }: Props) {
   const monday = startOfWeek(spec.date);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => spec.dayOf(addDays(startOfWeek(spec.date), i))), [spec]);
   const sum = useMemo(() => rollup(days), [days]);
@@ -84,6 +85,9 @@ export function WeekPage({ spec, path, text, actions, note }: Props) {
           </>
         )}
         {tab === 'Days' && <DayRows days={days} actions={actions} />}
+        {tab === 'Quests' && (
+          <QuestBoard quests={questsIn(spec.quests, monday, addDays(monday, 7))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} />
+        )}
         {tab === 'Timeline' && (
           <Section title="Time logged, day by day">
             <TimeTrack
@@ -98,18 +102,13 @@ export function WeekPage({ spec, path, text, actions, note }: Props) {
         )}
         {tab === 'Habits' && <Habits sum={sum} labels={days.map((entry) => formatDate(entry.date, 'dd'))} />}
         {tab === 'Stats' && <Stats sum={sum} spec={spec} labels={days.map((entry) => formatDate(entry.date, 'ddd'))} />}
-        {tab === 'Note' && (
-          <div className="note-tab" data-testid="note" data-path={path}>
-            {note}
-          </div>
-        )}
       </div>
     </article>
   );
 }
 
 /** A monthly note as a page: its days and weeks added up. */
-export function MonthPage({ spec, path, actions, note }: Props) {
+export function MonthPage({ spec, path, actions }: Props) {
   const first = startOfMonth(spec.date);
   const next = addMonths(first, 1);
   const days = useMemo(() => {
@@ -168,14 +167,19 @@ export function MonthPage({ spec, path, actions, note }: Props) {
           </>
         )}
         {tab === 'Weeks' && <Weeks spec={spec} actions={actions} />}
+        {tab === 'Quests' && (
+          <QuestBoard
+            quests={questsIn(spec.quests, first, next)}
+            art={spec.art}
+            today={now}
+            onToggle={actions.onQuestToggle}
+            onProgress={actions.onQuestProgress}
+            groups={{ weekly: 'Weeks of the month', monthly: 'This month' }}
+          />
+        )}
         {tab === 'Days' && <DayRows days={days} actions={actions} />}
         {tab === 'Habits' && <Habits sum={sum} labels={days.map((entry) => String(entry.date.getDate()))} />}
         {tab === 'Stats' && <Stats sum={sum} spec={spec} labels={days.map((entry) => String(entry.date.getDate()))} />}
-        {tab === 'Note' && (
-          <div className="note-tab" data-testid="note" data-path={path}>
-            {note}
-          </div>
-        )}
       </div>
     </article>
   );

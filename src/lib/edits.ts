@@ -1,3 +1,4 @@
+import { parseDay, planDone } from './day';
 import { lineEnding } from './text';
 
 // The two changes a periodic page makes besides ticking a box. Each returns the note's new text,
@@ -41,6 +42,8 @@ const EMPTY_TASK = /^[ \t]*[-*+][ \t]+\[ \][ \t]*\r?$/;
 /**
  * Adds `- [ ] #daily/<category> — <words>` to the note's Tasks section, after its last task and
  * the time listed under it. The template's empty `- [ ] ` is filled in rather than left above it.
+ * With `minutes` (0 too, for a task the timer or the calendar is about to log time on) the line
+ * ends in `[minutes::N]`.
  */
 export function addTask(text: string, categoryName: string, words: string, minutes?: number): string {
   const category = categoryName.trim().toLowerCase();
@@ -62,8 +65,54 @@ export function addTask(text: string, categoryName: string, words: string, minut
     if (TASK.test(line) || (last > heading && /^[ \t]+\S/.test(line))) last = i;
     else if (line.trim()) break;
   }
-  const task = `- [ ] #daily/${category} — ${label}${minutes && minutes > 0 ? ` [minutes::${Math.round(minutes)}]` : ''}`;
+  const task = `- [ ] #daily/${category} — ${label}${minutes !== undefined && minutes >= 0 ? ` [minutes::${Math.round(minutes)}]` : ''}`;
   if (last > heading && EMPTY_TASK.test(lines[last] ?? '')) lines[last] = task;
   else lines.splice(last + 1, 0, task);
+  return lines.join(eol);
+}
+
+/**
+ * Writes the day's plan done (the share of its tasks ticked) into its `done` property, as the
+ * vault keeps it, after a change to its tasks. A note without properties, or whose `done` isn't a
+ * plain value, is left as it is: the page shows the share either way.
+ */
+export function syncPlanDone(text: string): string {
+  try {
+    return setProperty(text, 'done', String(planDone(parseDay(text).tasks)));
+  } catch {
+    return text;
+  }
+}
+
+const TLDR = /^>\s*\[!tldr\]/i;
+
+/**
+ * Sets the day's summary: the text of its `[!tldr]` callout, each line quoted, under the callout's
+ * own title line. A note without the callout gets one after its properties. `''` empties it.
+ */
+export function setSummary(text: string, summary: string): string {
+  const eol = lineEnding(text);
+  if (!eol) throw new Error("This note mixes line endings, so Epizen won't change it.");
+  const lines = text.split(eol);
+  const body = summary
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line, i, all) => line || (i > 0 && i < all.length - 1))
+    .map((line) => (line ? `> ${line}` : '>'));
+  const quoted = body.length ? body : ['> '];
+  const at = lines.findIndex((line) => TLDR.test(line));
+  if (at >= 0) {
+    let end = at + 1;
+    while (end < lines.length && (lines[end] ?? '').startsWith('>')) end += 1;
+    lines.splice(at + 1, end - at - 1, ...quoted);
+    return lines.join(eol);
+  }
+  // After the properties, or at the very top.
+  let top = 0;
+  if ((lines[0] ?? '') === '---') {
+    const close = lines.findIndex((line, i) => i > 0 && /^---[ \t]*$/.test(line));
+    if (close > 0) top = close + 1;
+  }
+  lines.splice(top, 0, ...(top ? [''] : []), '> [!tldr]+ **Summary of the day:**', ...quoted, ...(top ? [] : ['']));
   return lines.join(eol);
 }
