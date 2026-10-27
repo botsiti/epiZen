@@ -32,11 +32,19 @@ export interface NoteText {
 /** Every note's text in one call. A note that isn't UTF-8 text is left out. */
 export const readAllNotes = () => invoke<NoteText[]>('read_all_notes');
 
-// The only two writes. Both go through src-tauri/src/vault.rs: a new note never replaces a
-// file, and a note's text is replaced only while it still holds `expected`.
+// The note writes. Both go through src-tauri/src/vault.rs: a new note never replaces a file, and
+// a note's text is replaced only while it still holds `expected`. (The third write, a cover, is below.)
 export const createNote = (path: string, text: string) => invoke<void>('create_note', { path, text });
 export const writeNote = (path: string, text: string, expected: string) =>
   invoke<void>('write_note', { path, text, expected });
+
+// The library's lookups (src-tauri/src/net.rs): https only, to MusicBrainz, the Cover Art Archive,
+// iTunes and Open Library. Anything else is refused there. Nothing goes out unless the user searches.
+export const lookupJson = (url: string) => invoke<unknown>('lookup_json', { url });
+/** A cover to show in the search results; nothing is saved. */
+export const lookupImage = (url: string) => invoke<ArrayBuffer>('lookup_image', { url });
+/** Saves a cover as a new image in the vault, never over a file. Returns the path it got (its extension is what the image is). */
+export const fetchImageIntoVault = (url: string, path: string) => invoke<string>('fetch_image_into_vault', { url, path });
 
 export const getSettings = () => invoke<Settings>('get_settings');
 /** Merges by top-level key; `null` removes a key. Returns every setting. */
