@@ -24,7 +24,10 @@ seven other hues.
 The second exception is the daily, weekly and monthly pages (below): their charts colour each
 task category, daily number and habit, in the jewel set the vault's Obsidian dashboards use
 (`src/lib/categories.ts`), so time and moods can be told apart at a glance. Colour there is data,
-never decoration.
+never decoration. The homepage shares that look, and adds one set: each life sphere in its colour
+from the Obsidian homepage (`SPHERES` in the same file), wherever a sphere is meant: its row, the
+lead sphere, and the sport floor (Health/Fitness). The memento mori's bars mean no sphere, so they
+stay sage.
 
 The accent is sage everywhere else. No red for errors, no green for success, no
 colour per callout type. A link to a missing note is muted with a dotted underline, not red.
@@ -51,8 +54,8 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - Radius 6px. Borders are 1px hairlines. No shadows, gradients or blur.
 - Motion only for a change of state (hover, a folder opening), 120ms ease-out. Nothing bounces
   and nothing moves on load. `prefers-reduced-motion` turns it off.
-- The periodic pages are the exception to both, on purpose: they are where the day is reviewed,
-  and they should feel alive. See "Periodic pages".
+- The periodic pages and the homepage are the exception to both, on purpose: they are where the
+  day is reviewed, and they should feel alive. See "Periodic pages".
 
 ## Components
 
@@ -64,9 +67,16 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Tasks**: accent-tinted checkboxes. In a note's text they stay disabled; a daily note's page is
   where they are ticked, and that writes the one box back.
 - **Periodic pages**: see the section below.
-- **Home**: wider than a note (880px). The vault's name and counts, then today's note as one surface
-  block (its date, a quiet summary, and a button to open or create it), then a shelf per folder of
-  rated notes: covers in a grid, the title with its rating in accent beside it, the maker faint below.
+- **Home**: a periodic page in all but name (the frame, glass, hero and motion below), shaped like
+  the Obsidian homepage, "Kaizen cockpit". The hero: the level's title and "Kaizen profile" as the
+  kicker, `Level N` in the serif, one line, and a 2×2 block of Level (a thin bar to the next),
+  Streak, Life XP and Today; the vault's name and counts faint at its foot. Then the memento mori
+  (the year, the month and, with a birth date from Settings, life till 30, its weeks behind a click);
+  a row of three cards: the last seven days' averages, their focus as bars (pointing at a day shows
+  its categories), and today's tasks with Today, Week and Month; the life spheres, a segment per
+  level, beside the lead sphere and the week's sport floor; and a glass shelf per folder of rated
+  covers, the rating in accent, the maker faint below. Nothing on it writes to the vault, except
+  that Today, Week and Month create a missing note from its template, as the calendar does.
 - **Graph**: the whole main pane, no padding. Dots in their folder's colour, sized by how many links
   they have; links as faint hairlines that thin out as they grow in number. Pointing at a note (or
   finding it) lights it and its neighbours up, its links in accent, and dims the rest; their names

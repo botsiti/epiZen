@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeIn, artPaths, deadlineMultiplier, earned, parseQuests, penalty, setQuestProgress, tierOf, toggleQuest } from './quests';
+import { activeIn, artPaths, deadlineMultiplier, earned, parseQuests, penalty, questSphereXp, questXp, setQuestProgress, tierOf, toggleQuest } from './quests';
 
 // Quest lines in the vault's format (invented quests), as a monthly note and Custom Quests.md hold them.
 const MONTH = `### Quest XP
@@ -97,6 +97,24 @@ describe('XP', () => {
     const [novel] = parseQuests('c.md', CUSTOM);
     if (!novel) throw new Error('no quest');
     expect(artPaths(novel)[0]).toBe('Templates/quest-art/_custom epic.png');
+  });
+});
+
+describe('questXp and questSphereXp', () => {
+  const october = { from: new Date(2026, 9, 1), to: new Date(2026, 10, 1) };
+  const entries = parseQuests('m.md', MONTH).map((quest) => ({ quest, period: october }));
+
+  it('adds what quests earned, less what open ones lost past their month', () => {
+    const earnedAll = entries.reduce((sum, { quest }) => sum + earned(quest), 0);
+    expect(questXp(entries, '2026-10-15')).toBe(earnedAll);
+    // In November the open counter (epic) and the open weekly (rare) are past their month.
+    expect(questXp(entries, '2026-11-02')).toBe(earnedAll - Math.round(1000 * 0.15 * 1.5) - Math.round(300 * 0.25 * 1));
+  });
+
+  it('gives each sphere its weighted share', () => {
+    const xp = questSphereXp(entries);
+    expect(xp.get('Career/Work')).toBe(Math.round(1000 / 32) + 500);
+    expect(xp.get('Personal Growth')).toBe(Math.round(300 / 32));
   });
 });
 

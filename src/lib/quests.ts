@@ -1,3 +1,4 @@
+import { SPHERES } from './categories';
 import { addDays, formatDate } from './dates';
 import { lineEnding } from './text';
 
@@ -21,18 +22,8 @@ export const TIERS: Record<Tier, { glyph: string; color: string; xp: number; pen
 };
 export const MYTHIC = { label: 'Mythic', glyph: '✧', color: 'oklch(0.800 0.135 35)' };
 
-/** The life spheres a quest feeds, in their card colours. */
-export const SPHERES: Record<string, string> = {
-  'Career/Work': 'oklch(0.705 0.135 22)',
-  'Health/Fitness': 'oklch(0.760 0.110 158)',
-  'Personal Growth': 'oklch(0.720 0.115 248)',
-  Finance: 'oklch(0.825 0.105 92)',
-  Spiritual: 'oklch(0.725 0.130 302)',
-  'Love/Relationship': 'oklch(0.740 0.105 350)',
-  'Fun/Recreation': 'oklch(0.780 0.100 65)',
-  Social: 'oklch(0.740 0.090 205)',
-};
-export const sphereColor = (name: string) => SPHERES[name] ?? 'oklch(0.720 0.115 248)';
+/** A life sphere's colour, from the one list the homepage and categories use. */
+export const sphereColor = (name: string): string => SPHERES.find((sphere) => sphere.name === name)?.color ?? 'oklch(0.720 0.115 248)';
 
 export interface LogEntry {
   line: number;
@@ -210,6 +201,20 @@ export function questsIn(entries: QuestEntry[], from: Date, to: Date): QuestEntr
   const last = formatDate(addDays(to, -1), 'YYYY-MM-DD');
   return entries.filter(({ quest, period }) => (period ? period.from < to && period.to > from : activeIn(quest, first, last)));
 }
+
+/** What every quest has earned for each life sphere, by the sphere's weight. */
+export function questSphereXp(entries: QuestEntry[]): Map<string, number> {
+  const xp = new Map<string, number>();
+  for (const { quest } of entries) {
+    const share = Math.pow(progress(quest), 2.5) * deadlineMultiplier(quest);
+    for (const sphere of quest.spheres) xp.set(sphere.name, (xp.get(sphere.name) ?? 0) + Math.round(((quest.xp * sphere.weight) / 100) * share));
+  }
+  return xp;
+}
+
+/** The XP quests add to a life: what they earned, less what open quests lost past their time. */
+export const questXp = (entries: QuestEntry[], today: string) =>
+  entries.reduce((sum, { quest, period }) => sum + earned(quest) - penalty(quest, today, period), 0);
 
 /** `Career/Work` → `career-work`, the art file's name. */
 const slug = (name: string) =>

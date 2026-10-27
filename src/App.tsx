@@ -4,7 +4,7 @@ import { Calendar } from './components/Calendar';
 import { GraphView } from './components/GraphView';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
-import { Home } from './components/Home';
+import { Home } from './components/home/Home';
 import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { SettingsScreen } from './components/SettingsScreen';
@@ -30,6 +30,7 @@ import { METRICS } from './lib/categories';
 import { addDays, addMonths, parseDate, startOfMonth, today } from './lib/dates';
 import { parseDay, type Day } from './lib/day';
 import { buildGraph } from './lib/graph';
+import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
 import { collectMedia } from './lib/media';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
@@ -48,6 +49,7 @@ import {
 import { artPaths, parseQuests, setQuestProgress, toggleQuest, type Quest, type QuestEntry } from './lib/quests';
 import { metricScale, type DayEntry } from './lib/rollup';
 import { flushAll } from './lib/saving';
+import { useToday } from './lib/useToday';
 import { buildTree, countFolders } from './lib/tree';
 
 type View =
@@ -93,6 +95,7 @@ export function App() {
   const [month, setMonth] = useState(() => startOfMonth(today()));
   const view = history.at(-1) ?? HOME;
   const main = useRef<HTMLElement>(null);
+  const now = useToday();
 
   useEffect(() => {
     let cancelled = false;
@@ -154,11 +157,10 @@ export function App() {
   );
   const openNote = useCallback((path: string) => go({ kind: 'note', path }), [go]);
   const shelves = useMemo(() => collectMedia([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
-  const todayNote = useMemo(() => {
-    const date = today();
-    const path = periodicNotes.get(periodKey('day', date));
-    return { date, path, name: noteTitle(periodicPath('day', date, periodic)), text: path === undefined ? undefined : texts.get(path) };
-  }, [periodic, periodicNotes, texts]);
+  const todayNote = useMemo(
+    () => ({ date: now, path: periodicNotes.get(periodKey('day', now)), name: noteTitle(periodicPath('day', now, periodic)) }),
+    [now, periodic, periodicNotes],
+  );
   // Everything a daily, weekly or monthly note's page reads from the rest of the vault.
   const dayOf = useCallback(
     (date: Date): DayEntry => {
@@ -168,6 +170,16 @@ export function App() {
     },
     [periodicNotes, texts],
   );
+  // Every daily note, for the homepage's life XP, streak and spheres.
+  const dailyNotes = useMemo(
+    () =>
+      [...periodicNotes.keys()].flatMap((key) => {
+        const date = key.startsWith('day:') ? parseDate(key.slice('day:'.length), 'YYYY-MM-DD') : undefined;
+        return date ? [dayOf(date)] : [];
+      }),
+    [periodicNotes, dayOf],
+  );
+  const birthDate = useMemo(() => parseBirthDate(settings.birthDate), [settings]);
   const dailyFacts = useMemo(() => {
     const values = new Map<string, number[]>();
     const categories = new Map<string, number>();
@@ -226,13 +238,12 @@ export function App() {
       insert: (titles.get(noteTitle(path)) ?? 0) > 1 ? path : undefined,
     }));
     // Daily notes that don't exist yet can be linked too; following the link creates them.
-    const now = today();
     for (const [offset, detail] of [[0, 'today'], [-1, 'yesterday'], [1, 'tomorrow']] as const) {
       const path = periodicPath('day', addDays(now, offset), periodic).replace(/\.md$/i, '');
       if (!titles.has(noteTitle(path))) targets.push({ label: noteTitle(path), detail });
     }
     return targets;
-  }, [notes, periodic]);
+  }, [notes, periodic, now]);
   // Reads the vault's files and texts again after the app created a note.
   const refresh = useCallback(async () => {
     const [found, read] = await Promise.all([listFiles(), readAllNotes()]);
@@ -335,7 +346,12 @@ export function App() {
     },
     [files, go, periodic, openPeriodicOrSay],
   );
-  const saveSettings = useCallback(async (next: PeriodicSettings) => setSettings(await updateSettings({ periodic: next })), []);
+  // An empty birth date removes the setting rather than keeping an empty one.
+  const saveSettings = useCallback(
+    async (next: { periodic: PeriodicSettings; birthDate: string }) =>
+      setSettings(await updateSettings({ periodic: next.periodic, birthDate: next.birthDate.trim() || null })),
+    [],
+  );
 
   if (!status) return null;
   if (status.state !== 'open') {
@@ -380,10 +396,20 @@ export function App() {
               folders: countFolders(tree),
               images: files.filter((file) => file.kind === 'image').length,
             }}
-            today={todayNote}
+            today={todayNote.date}
+            todayNote={todayNote}
+            days={dailyNotes}
+            dayOf={dayOf}
+            exists={exists}
+            scales={dailyFacts.scales}
             shelves={shelves}
-            onOpen={openNote}
-            onToday={() => openPeriodicOrSay('day', todayNote.date)}
+            birthDate={birthDate}
+            onOpenNote={openNote}
+            onOpenPeriod={openPeriodicOrSay}
+            quests={quests}
+            art={art}
+            onQuestToggle={onQuestToggle}
+            onQuestProgress={onQuestProgress}
           />
         )}
         {editError && (
@@ -415,7 +441,7 @@ export function App() {
         {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
         {view.kind === 'new' && <NewNote key={history.length} folders={folders} folder={view.folder} onCreate={create} />}
         {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
-        {view.kind === 'settings' && <SettingsScreen periodic={periodic} folders={folders} notes={notes} onSave={saveSettings} />}
+        {view.kind === 'settings' && <SettingsScreen periodic={periodic} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} folders={folders} notes={notes} onSave={saveSettings} />}
         {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
       </main>
     </div>

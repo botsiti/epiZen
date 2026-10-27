@@ -30,7 +30,17 @@ describe('the demo vault', () => {
     await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 27, {
       timeoutMsg: 'the covers never loaded',
     });
+    // The demo's 60 days earn 12,296 XP; no birth date is set yet.
+    await expect($('[data-testid="hero-title"]')).toHaveText('Level 5');
+    await expect($('[data-testid="hero-stats"]')).toHaveText(expect.stringContaining('12,296'));
+    await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Add your birth date in Settings'));
     await screenshot('03-home');
+    await $('[data-testid="spheres"]').scrollIntoView();
+    await expect($('[data-testid="lead-sphere"]')).toHaveText(expect.stringContaining('Personal Growth'));
+    await screenshot('34-home-spheres');
+    await $('[data-testid="shelf"][data-folder="Rating/music"]').scrollIntoView();
+    await screenshot('36-home-shelves');
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
   });
 
   it('opens an album from its cover on the home screen', async () => {
@@ -231,7 +241,7 @@ describe('the demo vault', () => {
     await $('[data-testid="wizard-situation"]').setValue('Reviewed the day and thought I am behind');
     await $('[data-testid="wizard-continue"]').click();
     await $('[data-testid="shade"][data-shade="Disappointed"]').click();
-    await screenshot('36-thought-wizard');
+    await screenshot('40-thought-wizard');
     await $('[data-testid="wizard-continue"]').click();
     await $('[data-testid="trap"][data-trap="All-or-nothing"]').click();
     await $('[data-testid="wizard-continue"]').click();
@@ -247,7 +257,7 @@ describe('the demo vault', () => {
       timeoutMsg: 'the thought record never reached the note',
     });
     expect(await $$('[data-testid="record"]').length).toBe(1);
-    await screenshot('37-thought-records');
+    await screenshot('41-thought-records');
     await showTab('Overview');
   });
 
@@ -270,7 +280,7 @@ describe('the demo vault', () => {
     // Ticking a weekly quest writes its box, its done date and today's XP stamp into the weekly note.
     await showTab('Quests');
     expect(await $$('[data-testid="quest-card"]').length).toBeGreaterThan(2);
-    await screenshot('38-week-quests');
+    await screenshot('42-week-quests');
     const weekFile = join(vaultCopy(), 'Calendar/2026/weeks/2026-W33 - 10.08.26.md');
     const weekBefore = readFileSync(weekFile, 'utf8');
     const quest = '- [ ] #quest/weekly - Call an old friend [xp::150] [spheres::Social] [tier::common]';
@@ -297,7 +307,7 @@ describe('the demo vault', () => {
     await screenshot('33-month-stats');
     await showTab('Quests');
     await expect($('.mythic-shelf')).toBeDisplayed();
-    await screenshot('39-month-quests');
+    await screenshot('43-month-quests');
     await showTab('Overview');
   });
 
@@ -308,13 +318,30 @@ describe('the demo vault', () => {
     await screenshot('16-settings');
   });
 
+  it('counts the weeks till 30 on the home screen from the birth date in Settings', async () => {
+    // Settings live next to the vault copy, never in it: this changes no note.
+    await $('[data-testid="settings-birth-date"]').setValue('1998-03-21');
+    await $('[data-testid="settings-save"]').click();
+    await $('[data-testid="settings"] .save-state').waitForDisplayed();
+    await $('[data-testid="settings-home"]').scrollIntoView();
+    await screenshot('37-settings-birth-date');
+    await $('[data-testid="sidebar-vault"]').click();
+    await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Till 30'));
+    await $('[data-testid="weeks-toggle"]').click();
+    const grid = $('[data-testid="weeks-grid"]');
+    await grid.waitForDisplayed();
+    expect(await browser.execute(() => document.querySelectorAll('[data-testid="weeks-grid"] rect').length)).toBe(1560);
+    await grid.scrollIntoView();
+    await screenshot('35-home-weeks');
+  });
+
   it("creates today's note from the home screen", async () => {
     await $('[data-testid="sidebar-vault"]').click();
     await $('[data-testid="today-create"]').click();
     await expect(title()).toHaveText(TODAY);
     await expect($('[data-testid="periodic"][data-period="day"]')).toBeDisplayed();
     await $('[data-testid="sidebar-vault"]').click();
-    await expect($('[data-testid="today-open"]')).toHaveText(`Open ${TODAY}`);
+    await expect($('[data-testid="today-open"]')).toHaveAttribute('title', `Open ${TODAY}`);
   });
 
   it('changed nothing in the vault copy but the four new notes and the day changed from its page', () => {
