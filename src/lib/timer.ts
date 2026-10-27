@@ -167,14 +167,6 @@ export function retask(state: TimerState, path: string, before: { label: string;
   };
 }
 
-/** The live stretch for the calendar: from its start to now (or the pause), on its own day, even under a minute. */
-export function openStretch(session: Session, now: number): { day: string; start: number; end: number } {
-  const from = new Date(session.stretchStartedAt);
-  const start = from.getHours() * 60 + from.getMinutes();
-  const block = blockBetween(session.stretchStartedAt, cappedEnd(session, session.pausedAt ?? now));
-  return { day: dayKey(from), start, end: block?.end ?? start };
-}
-
 /**
  * Starts a session on the task. One session at a time: a session already running is stopped
  * first (its stretch written), and a rest ends.

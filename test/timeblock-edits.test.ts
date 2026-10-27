@@ -1,15 +1,15 @@
 // @vitest-environment node
-// The calendar's, the timer's and the task menu's writes, run on every daily note of a copy of
-// the demo vault: each changes the lines it means to (a task's minutes, one block line, a new
-// task and its block, a task's line, or a task with its blocks), in the one note it was given,
-// and nothing else in the vault.
+// The timer's, the calendar's and the task menu's writes, run on every daily note of a copy of
+// the demo vault: each changes the lines it means to (a block and the task's minutes, a new task
+// and its block, a task's line, a task with its blocks, or a planned task's focus-id), in the one
+// note it was given, and nothing else in the vault.
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseDay } from '../src/lib/day';
-import { addBlock, addTaskWithBlock, deleteBlock, deleteTask, editTask, moveBlock, type LineRef } from '../src/lib/timeblocks';
+import { addBlock, addTaskWithBlock, addTaskWithFocusId, deleteTask, editTask, withFocusId, type LineRef } from '../src/lib/timeblocks';
 
 const original = fileURLToPath(new URL('../demo-vault', import.meta.url));
 const DAYS = 'Calendar/2026/days 2026';
@@ -76,29 +76,6 @@ describe('time block writes on a copy of the demo vault', () => {
     }
   });
 
-  it('moving a block rewrites that block line only: the task keeps its minutes', () => {
-    for (const { path, text, task } of trackedTasks()) {
-      const block = task.blocks[0];
-      if (!block) continue;
-      const { differ, old, now } = run(path, (t) => moveBlock(t, ref(text, task.line), ref(text, block.line), 22 * 60, 22 * 60 + 15));
-      expect(differ).toEqual([path]);
-      expect(now).toHaveLength(old.length);
-      expect(now.flatMap((line, i) => (line === old[i] ? [] : [[i, line]]))).toEqual([[block.line, '    - 22:00–22:15']]);
-      restore(path);
-    }
-  });
-
-  it('deleting a block removes that line only: the task keeps its minutes', () => {
-    for (const { path, text, task } of trackedTasks()) {
-      const block = task.blocks[0];
-      if (!block) continue;
-      const { differ, old, now } = run(path, (t) => deleteBlock(t, ref(text, task.line), ref(text, block.line)));
-      expect(differ).toEqual([path]);
-      expect(now).toEqual(old.filter((_, i) => i !== block.line));
-      restore(path);
-    }
-  });
-
   it('editing a task rewrites its line only', () => {
     for (const { path, text, task } of trackedTasks()) {
       const { differ, old, now } = run(path, (t) => editTask(t, ref(text, task.line), { words: 'renamed', category: 'study', minutes: 5 }));
@@ -128,6 +105,28 @@ describe('time block writes on a copy of the demo vault', () => {
       expect(at).toBeGreaterThan(0);
       expect(now[at + 1]).toBe('    - 19:00–19:45');
       expect(now.filter((_, i) => i !== at && i !== at + 1)).toEqual(old);
+      restore(path);
+    }
+  });
+
+  it('planning a task gives its line a focus-id, and changes nothing else', () => {
+    for (const { path, text, task } of trackedTasks()) {
+      const day = new Date(2026, 7, 14);
+      const { differ, old, now } = run(path, (t) => withFocusId(t, ref(text, task.line), day).text);
+      expect(differ).toEqual([path]);
+      expect(now.flatMap((line, i) => (line === old[i] ? [] : [[i, line]]))).toEqual([[task.line, `${old[task.line] ?? ''} <!-- focus-id: 20260814-01 -->`]]);
+      restore(path);
+    }
+  });
+
+  it('planning a new task adds its one line, with a focus-id and no minutes', () => {
+    for (const name of days()) {
+      const path = `${DAYS}/${name}`;
+      const { differ, old, now } = run(path, (t) => addTaskWithFocusId(t, 'sport', 'evening run', new Date(2026, 7, 14)).text);
+      expect(differ).toEqual([path]);
+      const at = now.indexOf('- [ ] #daily/sport — evening run <!-- focus-id: 20260814-01 -->');
+      expect(at).toBeGreaterThan(0);
+      expect(now.filter((_, i) => i !== at)).toEqual(old);
       restore(path);
     }
   });

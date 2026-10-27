@@ -65,3 +65,57 @@ export async function guardClose(handler: () => void): Promise<() => void> {
 }
 export const closeNow = () => invoke<void>('close_now');
 
+
+// Apple Calendar, through EventKit (src-tauri/src/calendar.rs). Nothing here touches the vault.
+// Times are milliseconds since the epoch; an occurrence is an event's id and where it starts.
+
+/** Mirrors `Access` in src-tauri/src/calendar.rs. */
+export type CalendarAccess = 'unknown' | 'allowed' | 'denied';
+
+/** Mirrors `CalendarInfo`. */
+export interface CalendarInfo {
+  id: string;
+  title: string;
+  /** `#rrggbb`. */
+  color: string;
+  writable: boolean;
+  /** Where the system puts a new event. */
+  default: boolean;
+}
+
+/** Mirrors `Event`. */
+export interface CalendarEvent {
+  id: string;
+  calendar: string;
+  title: string;
+  start: number;
+  end: number;
+  allDay: boolean;
+  /** Where Senioro and Epizen put the task's words; the title is its category. */
+  notes?: string | null;
+  url?: string | null;
+  writable: boolean;
+}
+
+export interface NewCalendarEvent {
+  calendar: string;
+  title: string;
+  start: number;
+  end: number;
+  notes?: string;
+  url?: string;
+}
+
+export type Occurrence = Pick<CalendarEvent, 'id' | 'start'>;
+
+export const calendarAccess = () => invoke<CalendarAccess>('calendar_access');
+/** Shows the system's prompt the first time, and resolves with the answer. */
+export const requestCalendarAccess = () => invoke<CalendarAccess>('calendar_request_access');
+export const listCalendars = () => invoke<CalendarInfo[]>('calendar_list');
+export const calendarEvents = (from: number, to: number) => invoke<CalendarEvent[]>('calendar_events', { from, to });
+export const createEvent = (event: NewCalendarEvent) => invoke<CalendarEvent>('calendar_create', { event });
+export const updateEvent = (at: Occurrence, change: { start?: number; end?: number; title?: string; notes?: string }) =>
+  invoke<CalendarEvent>('calendar_update', { at: { id: at.id, start: at.start }, change });
+export const deleteEvent = (at: Occurrence) => invoke<void>('calendar_delete', { at: { id: at.id, start: at.start } });
+/** System Settings, at Privacy & Security, Calendars. */
+export const openCalendarSettings = () => invoke<void>('calendar_open_settings');

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- What macOS says when Epizen asks to use Calendar (src-tauri/src/eventkit.rs). -->
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Epizen shows your calendar beside the time you log, and puts the tasks you plan into it.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Epizen shows your calendar beside the time you log, and puts the tasks you plan into it.</string>
+</dict>
+</plist>

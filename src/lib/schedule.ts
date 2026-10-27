@@ -1,41 +1,9 @@
-import type { Day, DayTask } from './day';
-import { LAST_MINUTE, type LineRef } from './timeblocks';
+import { LAST_MINUTE } from './timeblocks';
 
-// How the calendar lays a day's time blocks out: each with the lines it was read from (so a
-// drag can write back to exactly those), side by side where they overlap, and cut to the hours
-// on show.
-
-export interface GridBlock {
-  key: string;
-  /** Minutes since midnight; a block past midnight stops at 24:00 here. */
-  start: number;
-  end: number;
-  /** The real end, past 24:00 for a block that ran into the next day. */
-  realEnd: number;
-  task: DayTask;
-  taskRef: LineRef;
-  blockRef: LineRef;
-}
+// How the calendar lays a day's events out: side by side where they overlap, cut to the hours on
+// show, and where a drag or a resize lands them.
 
 const DAY_END = 24 * 60;
-
-/** A daily note's time blocks, in the order of the day. */
-export function gridBlocks(day: Day, text: string): GridBlock[] {
-  const lines = text.split('\n').map((line) => line.replace(/\r$/, ''));
-  return day.tasks
-    .flatMap((task) =>
-      task.blocks.map((block) => ({
-        key: `${task.line}:${block.line}`,
-        start: block.start,
-        end: Math.min(block.end, DAY_END),
-        realEnd: block.end,
-        task,
-        taskRef: { line: task.line, text: lines[task.line] ?? '' },
-        blockRef: { line: block.line, text: lines[block.line] ?? '' },
-      })),
-    )
-    .sort((a, b) => a.start - b.start || b.end - a.end);
-}
 
 export interface Placed<T> {
   item: T;

@@ -11,3 +11,11 @@ export interface DayTaskRef {
 export type TaskChoice =
   | { kind: 'task'; ref: LineRef; label: string; category?: string }
   | { kind: 'new'; category: string; words: string };
+
+/**
+ * A task edited or deleted from its menu, once the note holds the change: the timer, if it runs
+ * on the task, and the task's plans in Calendar follow it.
+ */
+export type TaskChange =
+  | { kind: 'edited'; path: string; date: Date; focusId?: string; before: { label: string; category?: string }; after: { label: string; category?: string } }
+  | { kind: 'deleted'; path: string; date: Date; focusId?: string };

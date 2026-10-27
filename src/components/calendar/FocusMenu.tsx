@@ -25,15 +25,17 @@ interface Props {
   onOpenDay?: () => void;
   /** Changes the task's words, category or minutes. */
   onEdit?: () => void;
-  /** Deletes the block the menu was opened on. */
+  /** Deletes the block (or the plan) the menu was opened on. */
   onDelete?: () => void;
+  /** What deleting it says: "Delete block…" unless told otherwise. */
+  deleteLabel?: string;
   /** Deletes the task, with what is written under it. */
   onDeleteTask?: () => void;
   onClose: () => void;
 }
 
 /** The menu a right-click on a task or a block opens: focus on it, open its day, edit or delete it. */
-export function FocusMenu({ at, label, noFocus, running, onFocus, onOpenDay, onEdit, onDelete, onDeleteTask, onClose }: Props) {
+export function FocusMenu({ at, label, noFocus, running, onFocus, onOpenDay, onEdit, onDelete, deleteLabel = 'Delete block…', onDeleteTask, onClose }: Props) {
   useEscape(onClose);
   const menu = useRef<HTMLDivElement>(null);
   // Kept inside the window, like a system menu.
@@ -95,7 +97,7 @@ export function FocusMenu({ at, label, noFocus, running, onFocus, onOpenDay, onE
         )}
         {onDelete && (
           <button type="button" role="menuitem" onClick={pick(onDelete)} data-testid="focus-menu-delete">
-            Delete block…
+            {deleteLabel}
           </button>
         )}
         {onDeleteTask && (

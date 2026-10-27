@@ -16,7 +16,8 @@ Tauri 2 (Rust) with React, TypeScript and Vite. macOS first.
 
 - Sync, accounts, or the network for anything but the library's lookups: only when the user searches
   or saves, only to the fixed list of hosts in `src-tauri/src/net.rs` (MusicBrainz, the Cover Art Archive,
-  iTunes, Open Library), and never with an account.
+  iTunes, Open Library), and never with an account. Apple Calendar is reached through EventKit on this
+  Mac, never a server: Calendar does its own syncing.
 - Running Obsidian plugins (Dataview, Templater). Their code blocks show as code.
 - Mobile, Windows and Linux builds, for now.
 
@@ -31,6 +32,10 @@ Tauri 2 (Rust) with React, TypeScript and Vite. macOS first.
   in tests), never in the vault.
 - `src-tauri/src/lib.rs`: Tauri commands and startup (`--vault <folder>`, `EPIZEN_VAULT`, or the vault
   opened last time).
+- `src-tauri/src/calendar.rs`: Apple Calendar behind one trait. `eventkit.rs` is the real one; the `e2e`
+  build and the Rust tests use the in-memory one, so a test never reaches the user's calendars. A plan
+  on the calendar view is an event there, linked to its task by `epizen://task?vault&note&id` in its
+  URL (`src/lib/plans.ts`), never a line in the note.
 - `src/`: the React UI. `src/lib/` holds parsing (frontmatter, wikilinks, callouts) and
   dates and periodic notes (moment.js formats, templates, what a day holds, week and month
   totals), tests beside it. `src/components/periodic/` draws daily, weekly and monthly notes as pages.
