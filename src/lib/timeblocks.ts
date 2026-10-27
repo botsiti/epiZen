@@ -119,6 +119,8 @@ export function moveBlock(text: string, task: LineRef, block: LineRef, start: nu
   const blocks = blocksUnder(lines, at);
   const old = findBlock(lines, blocks, block);
   if (old.start === next.start && old.end === next.end) return text;
+  // Inside one day it can't be said again; moving it would cut it short.
+  if (old.end > 24 * 60) throw new Error('That block runs past midnight, so Epizen leaves it to the editor');
   if (blocks.some((b) => b !== old && b.start === next.start && b.end === next.end)) throw new Error(`That task already has a block at ${range(next.start, next.end)}`);
   const blockLine = lines[old.line] ?? '';
   lines[old.line] = blockLine.replace(RANGE, range(next.start, next.end));
@@ -154,9 +156,22 @@ export interface TaskSnapshot {
 const FOCUS_ID = /<!--\s*focus-id:\s*([\w-]+)\s*-->/;
 export const focusIdOf = (text: string) => FOCUS_ID.exec(text)?.[1];
 
+/** A label as the line `#daily/<category> — <label>` reads back (`taskLabel` takes one leading dash off a line). */
+const asWritten = (label: string) => taskLabel(`— ${label}`);
+
+/**
+ * The label a new task with these words will read as. Words holding a `[field::value]` or a
+ * comment are refused: the line would read differently from what was typed.
+ */
+export function newTaskLabel(words: string): string {
+  const label = asWritten(words);
+  if (label !== words.trim().replace(/\s+/g, ' ')) throw new Error('A new task’s words can’t hold a [field::value], a #daily/ tag or a comment');
+  return label;
+}
+
 /** The note's tasks that the snapshot describes: by focus-id when it has one, else by words and category. */
 function matching(text: string, want: TaskSnapshot) {
-  const label = taskLabel(want.label);
+  const label = asWritten(want.label);
   const category = want.category?.toLowerCase();
   const tasks = parseDay(text).tasks;
   return want.focusId
@@ -172,7 +187,7 @@ export function findTask(text: string, want: TaskSnapshot): LineRef {
   const matches = matching(text, want);
   const found = matches.length > 1 ? matches.filter((task) => task.line === want.line) : matches;
   const task = found.length === 1 ? found[0] : undefined;
-  const label = taskLabel(want.label);
+  const label = asWritten(want.label);
   if (!task) throw new Error(matches.length ? `Two tasks read “${label}”, so Epizen can’t tell which one is meant` : `“${label}” is no longer in the note`);
   return { line: task.line, text: (text.split('\n')[task.line] ?? '').replace(/\r$/, '') };
 }
@@ -185,7 +200,7 @@ export const hasTask = (text: string, want: TaskSnapshot) => matching(text, want
  * the block under it, in one change. When the note already has that task, the block goes under it.
  */
 export function addTaskWithBlock(text: string, category: string, words: string, start: number, end: number): string {
-  const want = { label: words, category };
+  const want = { label: newTaskLabel(words), category };
   if (hasTask(text, want)) return addBlock(text, findTask(text, want), start, end);
   const added = addTask(text, category, words, 0);
   return addBlock(added, findTask(added, want), start, end);

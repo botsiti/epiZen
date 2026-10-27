@@ -48,6 +48,8 @@ export interface TimerApi extends TimerView {
   setPrefs: (prefs: Partial<Pick<TimerPrefs, 'mode' | 'minutes'>>) => void;
   /** Tries a block that couldn't be written again, or lets it go. */
   retry: (id: string) => void;
+  /** Tries every block that couldn't be written again. */
+  retryAll: () => void;
   discard: (id: string) => void;
 }
 
@@ -160,6 +162,13 @@ class TimerRuntime {
     this.flush(this.state);
   }
 
+  retryAll() {
+    if (!this.failures.size) return;
+    this.failures.clear();
+    this.emit();
+    this.flush(this.state);
+  }
+
   discard(id: string) {
     this.failures.delete(id);
     this.emit();
@@ -197,6 +206,7 @@ export function useTimer(deps: TimerDeps, stored: unknown, ready: boolean): Time
       setRest: (seconds) => runtime.apply((state) => setRest(state, seconds)),
       setPrefs: (prefs) => runtime.apply((state) => setPrefs(state, prefs)),
       retry: (id) => runtime.retry(id),
+      retryAll: () => runtime.retryAll(),
       discard: (id) => runtime.discard(id),
     }),
     [runtime, view],

@@ -122,10 +122,12 @@ export function TimeGrid(props: Props) {
     if (event.button !== 0 || (event.target as Element).closest('.cal-block-x')) return;
     event.stopPropagation();
     if (popover) close();
+    // A block that runs past midnight can't be said inside one day: it stays where it is.
+    if (block.realEnd > 24 * 60) return;
     const edge = ((event.target as HTMLElement).dataset.edge as DragEdge | undefined) ?? 'move';
     const y0 = event.clientY;
     let moved = false;
-    const land = (e: PointerEvent) => dragged(block, edge, ((e.clientY - y0) / hourHeight) * 60, hours);
+    const land = (e: PointerEvent) => dragged(block, edge, ((e.clientY - y0) / hourHeight) * 60);
     const move = (e: PointerEvent) => {
       if (Math.abs(e.clientY - y0) > 3) moved = true;
       if (moved) setDrag({ key: block.key, ...land(e) });
@@ -230,7 +232,9 @@ export function TimeGrid(props: Props) {
                   if (drag?.key === block.key) classes.push('is-dragging');
                   if (held.has(block.key)) classes.push('is-saving');
                   if (highlight !== undefined && block.task.line === highlight) classes.push('is-lit');
-                  if (tall < 22) classes.push('is-thin');
+                  if (tall < 30) classes.push('is-thin');
+                  const overnight = block.realEnd > 24 * 60;
+                  if (overnight) classes.push('is-fixed');
                   return (
                     <div
                       key={block.key}
@@ -241,12 +245,12 @@ export function TimeGrid(props: Props) {
                         event.preventDefault();
                         askDelete(c, block);
                       }}
-                      title={`${clock(range.start)}–${clock(range.end)} · ${block.task.label}${block.task.category ? ` · ${block.task.category.name}` : ''}`}
+                      title={`${clock(range.start)}–${clock(overnight ? block.realEnd : range.end)} · ${block.task.label}${block.task.category ? ` · ${block.task.category.name}` : ''}${overnight ? ' · runs past midnight, so it is changed in the note' : ''}`}
                       data-testid="cal-block"
                       data-start={range.start}
                       data-end={range.end}
                     >
-                      <span className="cal-edge is-top" data-edge="top" />
+                      {!overnight && <span className="cal-edge is-top" data-edge="top" />}
                       {tall >= 16 && (
                         <button
                           type="button"
@@ -258,7 +262,7 @@ export function TimeGrid(props: Props) {
                           {block.task.label || 'untitled'}
                         </button>
                       )}
-                      {tall >= 36 && (
+                      {tall >= 40 && (
                         <span className="cal-block-time">
                           {clock(range.start)}–{clock(range.end)}
                           {wide && block.task.category ? <span className="cal-block-cat"> · {block.task.category.name}</span> : null}
@@ -269,7 +273,7 @@ export function TimeGrid(props: Props) {
                           ×
                         </button>
                       )}
-                      <span className="cal-edge is-bottom" data-edge="bottom" />
+                      {!overnight && <span className="cal-edge is-bottom" data-edge="bottom" />}
                     </div>
                   );
                 })}
@@ -358,7 +362,7 @@ function LiveBlock({ session, dayKey: key, hours, hourHeight }: { session: Sessi
   return (
     <div className={session.pausedAt === undefined ? 'cal-block is-live' : 'cal-block is-live is-paused'} style={{ top, height: tall, '--tone': tone } as CSSProperties} data-testid="cal-live" aria-label={`Now: ${session.task.label}`}>
       {tall >= 16 && <span className="cal-block-title">{session.task.label}</span>}
-      {tall >= 36 && (
+      {tall >= 40 && (
         <span className="cal-block-time">
           {clock(stretch.start)}–{session.pausedAt === undefined ? 'now' : clock(stretch.end)}
         </span>

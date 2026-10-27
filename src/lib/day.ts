@@ -56,16 +56,25 @@ export interface Day {
 }
 
 const BLOCK = /^[ \t]*(?:>[ \t]*)*[-*+][ \t]+(\d{1,2}):(\d{2})[ \t]*[–—-][ \t]*(\d{1,2}):(\d{2})\b/;
+const SUBTASK = /^[ \t]*(?:>[ \t]*)*(?:[-*+]|\d+[.)])[ \t]+\[[ xX]\]/;
 const indent = (line: string) => /^[ \t]*/.exec(line)?.[0].replace(/\t/g, '    ').length ?? 0;
 
-/** The time blocks listed under the task on that line, one indent deeper. The calendar's writes use this too. */
+/**
+ * The time blocks listed under the task on that line, one indent deeper. A subtask's blocks
+ * are its own, not its parent's too. The calendar's writes use this as well.
+ */
 export function blocksUnder(lines: string[], line: number): TimeBlock[] {
   const depth = indent(lines[line] ?? '');
   const blocks: TimeBlock[] = [];
+  let subtask: number | undefined;
   for (let i = line + 1; i < lines.length; i += 1) {
     const text = lines[i] ?? '';
     if (!text.trim()) continue;
-    if (indent(text) <= depth) break;
+    const at = indent(text);
+    if (at <= depth) break;
+    if (subtask !== undefined && at > subtask) continue;
+    subtask = SUBTASK.test(text) ? at : undefined;
+    if (subtask !== undefined) continue;
     const match = BLOCK.exec(text);
     if (!match) continue;
     const start = Number(match[1]) * 60 + Number(match[2]);

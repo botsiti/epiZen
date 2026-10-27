@@ -57,12 +57,17 @@ describe('the calendar’s layout', () => {
     expect(drawn(min(21, 55), min(23, 0), hours)).toEqual({ start: min(21, 45), end: min(22, 0) });
   });
 
-  it('moves a block on 15-minute marks keeping its length, and resizes it to at least 15 minutes', () => {
+  it('moves and resizes in 15-minute steps, so a block keeps its own minutes and a slip changes nothing', () => {
     const block = { start: min(10, 56), end: min(11, 9) };
-    expect(dragged(block, 'move', 20, hours)).toEqual({ start: min(11, 15), end: min(11, 28) });
-    expect(dragged(block, 'bottom', 30, hours)).toEqual({ start: min(10, 56), end: min(11, 45) });
-    expect(dragged(block, 'bottom', -30, hours)).toEqual({ start: min(10, 56), end: min(11, 11) });
-    expect(dragged(block, 'top', -50, hours)).toEqual({ start: min(10, 0), end: min(11, 9) });
-    expect(dragged(block, 'move', -600, hours)).toEqual({ start: min(7, 0), end: min(7, 13) });
+    expect(dragged(block, 'move', 5)).toEqual(block);
+    expect(dragged(block, 'move', 20)).toEqual({ start: min(11, 11), end: min(11, 24) });
+    expect(dragged(block, 'bottom', 30)).toEqual({ start: min(10, 56), end: min(11, 39) });
+    expect(dragged(block, 'top', -50)).toEqual({ start: min(10, 11), end: min(11, 9) });
+    // It stays as short as it was, at least, and inside the day.
+    expect(dragged(block, 'bottom', -30)).toEqual(block);
+    expect(dragged(block, 'top', 30)).toEqual(block);
+    expect(dragged({ start: min(10, 0), end: min(11, 0) }, 'bottom', -50)).toEqual({ start: min(10, 0), end: min(10, 15) });
+    expect(dragged(block, 'move', -900)).toEqual({ start: 0, end: 13 });
+    expect(dragged({ start: min(21, 30), end: min(22, 30) }, 'move', 180)).toEqual({ start: min(22, 59), end: min(23, 59) });
   });
 });

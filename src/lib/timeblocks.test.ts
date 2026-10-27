@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseDay } from './day';
-import { addBlock, addTaskWithBlock, deleteBlock, findTask, moveBlock, type LineRef } from './timeblocks';
+import { addBlock, addTaskWithBlock, deleteBlock, findTask, moveBlock, newTaskLabel, type LineRef } from './timeblocks';
 
 // A day as Senioro writes it (the brief's example), with a task the old way and an empty one.
 const DAY = `---
@@ -129,6 +129,34 @@ describe('moveBlock', () => {
     const crlf = DAY.replace(/\n/g, '\r\n');
     expect(moveBlock(crlf, ref(crlf, 7), ref(crlf, 8), min(16, 0), min(17, 0))).toBe(moveBlock(DAY, ref(DAY, 7), ref(DAY, 8), min(16, 0), min(17, 0)).replace(/\n/g, '\r\n'));
   });
+
+  it('leaves a block that runs past midnight to the editor, rather than cut it short', () => {
+    const late = '### Tasks\n- [ ] #daily/cinema — film night [minutes::120]\n    - 23:10–01:10\n';
+    expect(() => moveBlock(late, ref(late, 1), ref(late, 2), min(22, 10), min(23, 59))).toThrow(/past midnight/);
+  });
+});
+
+describe('subtasks', () => {
+  const NESTED = '### Tasks\n- [ ] #daily/code — parent [minutes::30]\n    - 08:00–08:10\n    - [ ] #daily/code — child [minutes::20]\n        - 09:00–09:20\n';
+
+  it('keep their blocks: the parent’s are only its own', () => {
+    expect(parseDay(NESTED).tasks.map((task) => [task.label, task.blocks.map((b) => b.line)])).toEqual([
+      ['parent', [2]],
+      ['child', [4]],
+    ]);
+  });
+
+  it('can’t lose a block through their parent', () => {
+    expect(() => deleteBlock(NESTED, ref(NESTED, 1), ref(NESTED, 4))).toThrow(/time block has changed/);
+    expect(lines(deleteBlock(NESTED, ref(NESTED, 3), ref(NESTED, 4)))[3]).toBe('    - [ ] #daily/code — child [minutes::0]');
+    // A new block for the parent goes after its own, above the subtask.
+    expect(lines(addBlock(NESTED, ref(NESTED, 1), min(10, 0), min(10, 10))).slice(1, 5)).toEqual([
+      '- [ ] #daily/code — parent [minutes::40]',
+      '    - 08:00–08:10',
+      '    - 10:00–10:10',
+      '    - [ ] #daily/code — child [minutes::20]',
+    ]);
+  });
 });
 
 describe('deleteBlock', () => {
@@ -178,6 +206,21 @@ describe('findTask and addTaskWithBlock', () => {
 
   it('puts the block under the task when the note has it already', () => {
     expect(addTaskWithBlock(DAY, 'sport', 'gym', min(7, 0), min(7, 20))).toBe(addBlock(DAY, ref(DAY, 9), min(7, 0), min(7, 20)));
+  });
+
+  it('finds a new task whose words start with a dash, so a second block joins it', () => {
+    const once = addTaskWithBlock(DAY, 'code', '- buy milk', 60, 90);
+    expect(lines(once)[11]).toBe('- [ ] #daily/code — - buy milk [minutes::30]');
+    const twice = addTaskWithBlock(once, 'code', '- buy milk', 120, 150);
+    expect(lines(twice).filter((line) => line.includes('buy milk'))).toEqual(['- [ ] #daily/code — - buy milk [minutes::60]']);
+    expect(findTask(twice, { label: newTaskLabel('- buy milk'), category: 'code' }).line).toBe(11);
+  });
+
+  it('refuses new words that the line would read differently', () => {
+    expect(newTaskLabel('  deep   work ')).toBe('deep work');
+    expect(() => addTaskWithBlock(DAY, 'code', 'x [minutes::5]', 60, 90)).toThrow(/field/);
+    expect(() => addTaskWithBlock(DAY, 'code', 'x <!-- y -->', 60, 90)).toThrow(/comment/);
+    expect(() => newTaskLabel('#daily/sport run')).toThrow(/tag/);
   });
 
   it('fills the template’s empty task', () => {

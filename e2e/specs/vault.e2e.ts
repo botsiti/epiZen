@@ -305,7 +305,7 @@ describe('the demo vault', () => {
     await expect(popover).toHaveText(expect.stringContaining('19:00–20:00'));
     await $('[data-testid="block-popover"] [data-testid="pick-new"]').setValue('evening run');
     await $('[data-testid="block-popover"] [data-testid="pick-category"][data-category="sport"]').click();
-    await popover.scrollIntoView({ block: 'center' });
+    await browser.execute(() => document.querySelector('[data-testid="block-popover"]')?.scrollIntoView({ block: 'center' }));
     await screenshot('36-calendar-new-block');
     await $('[data-testid="block-save"]').click();
     const added = before.replace('    - 14:41–15:13\n', '    - 14:41–15:13\n- [ ] #daily/sport — evening run [minutes::60]\n    - 19:00–20:00\n');
@@ -343,7 +343,10 @@ describe('the demo vault', () => {
     await expect($('[data-testid="timer-pill"]')).toHaveText(expect.stringContaining('e2e focus'));
     const today = join(vaultCopy(), `${DAYS}/${TODAY}.md`);
     expect(readFileSync(today, 'utf8')).toContain('\n- [ ] #daily/code — e2e focus [minutes::0]\n');
-    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+    await browser.execute(() => {
+      document.querySelector('.main')?.scrollTo(0, 0);
+      document.querySelector('.sidebar')?.scrollTo(0, 0);
+    });
     await screenshot('37-calendar-timer');
     // Stopped within a minute: nothing to write.
     await $('[data-testid="timer-stop"]').click();

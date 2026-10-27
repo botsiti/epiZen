@@ -33,9 +33,9 @@ import {
 import type { LinkTarget } from './lib/completion';
 import { METRICS } from './lib/categories';
 import { addDays, startOfMonth, today } from './lib/dates';
-import { parseDay, taskLabel, type Day } from './lib/day';
+import { parseDay, type Day } from './lib/day';
 import { addTask } from './lib/edits';
-import { addBlock, addTaskWithBlock, findTask, focusIdOf, hasTask } from './lib/timeblocks';
+import { addBlock, addTaskWithBlock, findTask, focusIdOf, hasTask, newTaskLabel } from './lib/timeblocks';
 import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
 import { buildLinkIndex } from './lib/linkIndex';
@@ -301,57 +301,96 @@ export function App() {
   // The calendar's and the timer's writes: one at a time, over the text the app last read.
   const changeNote = useNoteWriter(texts, noteSaved);
   const [calendarWarning, setCalendarWarning] = useState<string>();
-  const vault = status?.state === 'open' ? status.name : undefined;
+  // Which vault is open, by its folder: a timed block is only ever written into the vault it was timed in.
+  const vault = status?.state === 'open' ? status.root : undefined;
+  // Changes a day's note. A day without one gets it from its template with the change already
+  // in: if the change can't be made (a template without a Tasks heading), no note is created.
+  const changeDay = useCallback(
+    async (date: Date, edit: (text: string) => string | undefined): Promise<{ path: string; text: string }> => {
+      const existing = periodicNotes.get(periodKey('day', date));
+      if (existing) return { path: existing, text: await changeNote(existing, edit) };
+      const path = periodicPath('day', date, periodic);
+      const template = await periodicText('day', date, path, periodic, files);
+      const text = edit(template) ?? template;
+      try {
+        await createNote(path, text);
+      } catch (err) {
+        // Created a moment ago: change the note as it is.
+        if (!String(err).includes('already exists')) throw err;
+        await refresh();
+        return { path, text: await changeNote(path, edit) };
+      }
+      await refresh();
+      return { path, text };
+    },
+    [changeNote, files, periodic, periodicNotes, refresh],
+  );
   const writeDay = useCallback(
     async (date: Date, edit: (text: string) => string, failed: string) => {
       try {
-        await changeNote(await ensurePeriodic('day', date), edit);
+        await changeDay(date, edit);
         setCalendarWarning(undefined);
       } catch (err) {
         setCalendarWarning(`${failed}: ${reason(err)}. The calendar shows the note as it is now.`);
       }
     },
-    [changeNote, ensurePeriodic],
+    [changeDay],
   );
+  // The note open in the editor, if one is. The timer doesn't write into it under the editor's
+  // hands (the editor's next save would be refused); its blocks wait until Done.
+  const editingPath = view.kind === 'note' && view.editing ? view.path : undefined;
+  const editing = useRef(editingPath);
+  useEffect(() => {
+    editing.current = editingPath;
+  }, [editingPath]);
   // A finished stretch of focus goes under its task in its day's note. A stretch that began
   // after midnight goes to that day's note, under the same task, added there if it isn't yet.
   const writeBlock = useCallback(
     async (block: PendingBlock) => {
       if (!vault) throw new Error('no vault is open');
-      if (block.task.vault !== undefined && block.task.vault !== vault) throw new Error(`it was timed in the vault “${block.task.vault}”`);
+      if (block.task.vault !== vault) throw new Error('it was timed in another vault');
       const own = block.day === block.task.day;
-      const path = own ? block.task.path : await ensurePeriodic('day', dayOfKey(block.day));
-      await changeNote(path, (text) =>
+      const date = dayOfKey(block.day);
+      const target = own ? block.task.path : (periodicNotes.get(periodKey('day', date)) ?? periodicPath('day', date, periodic));
+      if (target === editing.current) throw new Error('its note is open in the editor; it goes in when you click Done');
+      const edit = (text: string) =>
         own || hasTask(text, block.task)
           ? addBlock(text, findTask(text, block.task), block.start, block.end)
-          : addTaskWithBlock(text, block.task.category ?? 'other', block.task.label, block.start, block.end),
-      );
+          : addTaskWithBlock(text, block.task.category ?? 'other', block.task.label, block.start, block.end);
+      // The task's own note is never created again if it has gone.
+      if (own) await changeNote(target, edit);
+      else await changeDay(date, edit);
     },
-    [changeNote, ensurePeriodic, vault],
+    [changeDay, changeNote, periodic, periodicNotes, vault],
   );
   const timerDeps = useMemo((): TimerDeps => ({ save: (state) => updateSettings({ timer: state }), write: writeBlock, chime }), [writeBlock]);
   const timer = useTimer(timerDeps, settings.timer, status?.state === 'open');
+  // Done in the editor: the blocks that waited for it go in now.
+  const wasEditing = useRef(editingPath);
+  useEffect(() => {
+    if (wasEditing.current !== undefined && editingPath === undefined) timer.retryAll();
+    wasEditing.current = editingPath;
+  }, [editingPath, timer]);
   // The timer starts on one of today's tasks, or on a new one added to today's note first.
   const startTimer = useCallback(
     async (choice: TaskChoice) => {
       if (!vault) return;
       const date = today();
-      const want =
-        choice.kind === 'task'
-          ? { label: choice.label, category: choice.category, line: choice.ref.line, focusId: focusIdOf(choice.ref.text) }
-          : { label: choice.words, category: choice.category };
       try {
-        const path = await ensurePeriodic('day', date);
-        const text = await changeNote(path, (t) => (choice.kind === 'new' && !hasTask(t, want) ? addTask(t, choice.category, choice.words, 0) : undefined));
+        const want =
+          choice.kind === 'task'
+            ? { label: choice.label, category: choice.category, line: choice.ref.line, focusId: focusIdOf(choice.ref.text) }
+            : { label: newTaskLabel(choice.words), category: choice.category };
+        const { path, text } = await changeDay(date, (t) => (choice.kind === 'new' && !hasTask(t, want) ? addTask(t, choice.category, choice.words, 0) : undefined));
         const found = findTask(text, want);
-        const task = { path, day: dayKey(date), line: found.line, label: taskLabel(want.label), category: want.category, focusId: focusIdOf(found.text), vault };
+        const task = { path, day: dayKey(date), line: found.line, label: want.label, category: want.category, focusId: focusIdOf(found.text), vault };
         timer.start(task, timer.state.prefs.mode, timer.state.prefs.minutes);
         setCalendarWarning(undefined);
       } catch (err) {
         setCalendarWarning(`The timer didn’t start: ${reason(err)}.`);
       }
     },
-    [changeNote, ensurePeriodic, timer, vault],
+    [changeDay, timer, vault],
   );
   const textOf = useCallback((path: string) => texts.get(path), [texts]);
   const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];

@@ -30,7 +30,7 @@ export interface TimerTask {
   label: string;
   category?: string;
   focusId?: string;
-  /** The vault's name, so a session never writes into another vault opened since. */
+  /** The vault's folder, so a session never writes into another vault opened since. */
   vault?: string;
 }
 

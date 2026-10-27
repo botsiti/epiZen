@@ -149,8 +149,10 @@ a periodic page in its look (the same glass, hero, chips, count-up numbers and s
   the time, its dot breathing.
 - **Writes**: drawing a block (a drag, or a click for half an hour, on 15-minute marks), moving or
   resizing one, or deleting one (asked once) writes those lines of that day's note, checked against
-  the text the calendar last read, as a day's page does. The timer writes each finished stretch
-  under its task.
+  the text the calendar last read, as a day's page does. A day without a note gets one from its
+  template, with the change in it, only when the change can be made. The timer writes each finished
+  stretch under its task; while that note is open in the editor, the stretch waits for Done. A block
+  that runs past midnight stays where it is (the editor changes it).
 
 ## Checking a UI change
 

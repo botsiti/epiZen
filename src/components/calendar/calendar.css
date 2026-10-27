@@ -19,6 +19,8 @@
   grid-template-columns: minmax(0, 1fr);
   align-content: space-between;
   padding: 36px 40px 22px;
+  /* Not hidden: the aurora overflows the card, and a focused chip would scroll the text away. */
+  overflow: clip;
 }
 
 .cal-title {
@@ -527,6 +529,11 @@
   opacity: 0.65;
 }
 
+/* Runs past midnight: it can't be moved inside one day. */
+.cal-block.is-fixed {
+  cursor: default;
+}
+
 .cal-block.is-lit {
   z-index: 3;
   background: color-mix(in srgb, var(--tone) 32%, transparent);
@@ -565,6 +572,7 @@
 
 .cal-block.is-thin .cal-block-title {
   font-size: 11px;
+  line-height: 1.15;
 }
 
 .cal-block-time {

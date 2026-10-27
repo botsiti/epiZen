@@ -1,5 +1,5 @@
 import type { Day, DayTask } from './day';
-import type { LineRef } from './timeblocks';
+import { LAST_MINUTE, type LineRef } from './timeblocks';
 
 // How the calendar lays a day's time blocks out: each with the lines it was read from (so a
 // drag can write back to exactly those), side by side where they overlap, and cut to the hours
@@ -111,16 +111,19 @@ export function drawn(from: number, to: number, hours: Hours): { start: number; 
 export type DragEdge = 'move' | 'top' | 'bottom';
 
 /**
- * Where a block lands after its body or an edge was dragged by `delta` minutes: a moved block
- * keeps its length with its start on a 15-minute mark; a dragged edge lands on one, and the
- * block stays at least 15 minutes. Both stay inside the hours on show.
+ * Where a block lands after its body or an edge was dragged by `delta` minutes. The drag goes
+ * in steps of 15 minutes, so a slip of the hand changes nothing and a block keeps its own
+ * minutes (10:56 moves to 11:11). A moved block keeps its length; a resized one stays at
+ * least 15 minutes (or as short as it was). Both stay inside the day.
  */
-export function dragged(block: { start: number; end: number }, edge: DragEdge, delta: number, hours: Hours): { start: number; end: number } {
+export function dragged(block: { start: number; end: number }, edge: DragEdge, delta: number): { start: number; end: number } {
+  const step = snapNear(delta);
   const length = block.end - block.start;
+  const least = Math.min(15, length);
   if (edge === 'move') {
-    const start = Math.max(hours.first, Math.min(snapNear(block.start + delta), hours.last - length));
+    const start = Math.max(0, Math.min(block.start + step, LAST_MINUTE - length));
     return { start, end: start + length };
   }
-  if (edge === 'top') return { start: Math.max(hours.first, Math.min(snapNear(block.start + delta), block.end - 15)), end: block.end };
-  return { start: block.start, end: Math.min(hours.last, Math.max(snapNear(block.end + delta), block.start + 15)) };
+  if (edge === 'top') return { start: Math.max(0, Math.min(block.start + step, block.end - least)), end: block.end };
+  return { start: block.start, end: Math.min(LAST_MINUTE, Math.max(block.end + step, block.start + least)) };
 }

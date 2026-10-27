@@ -35,6 +35,7 @@ const timer = (): TimerApi => ({
   setRest: vi.fn(),
   setPrefs: vi.fn(),
   retry: vi.fn(),
+  retryAll: vi.fn(),
   discard: vi.fn(),
 });
 
@@ -96,14 +97,14 @@ describe('the calendar', () => {
     expect(written()).toBe(addTaskWithBlock(TEXT, 'sport', 'evening run', 18 * 60, 18 * 60 + 30));
   });
 
-  it('moves a block by dragging it, on 15-minute marks', () => {
+  it('moves a block by dragging it, in 15-minute steps', () => {
     const { column, written } = setup();
     const block = within(column).getAllByTestId('cal-block')[0]!;
     fireEvent.pointerDown(block, { button: 0, clientY: y(10) });
     fireEvent.pointerMove(window, { clientY: y(11) });
     fireEvent.pointerUp(window, { clientY: y(11) });
     const ref = (line: number) => ({ line, text: TEXT.split('\n')[line] ?? '' });
-    expect(written()).toBe(moveBlock(TEXT, ref(1), ref(2), 10 * 60 + 30, 11 * 60 + 28));
+    expect(written()).toBe(moveBlock(TEXT, ref(1), ref(2), 10 * 60 + 26, 11 * 60 + 24));
   });
 
   it('deletes a block after asking once, and opens the day from a title', async () => {
