@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseDay } from './day';
-import { addBlock, addTaskWithBlock, deleteBlock, findTask, moveBlock, newTaskLabel, type LineRef } from './timeblocks';
+import { addBlock, addTaskWithBlock, deleteBlock, findTask, moveBlock, newTaskLabel, setMinutes, type LineRef } from './timeblocks';
 
 // A day as Senioro writes it (the brief's example), with a task the old way and an empty one.
 const DAY = `---
@@ -226,5 +226,22 @@ describe('findTask and addTaskWithBlock', () => {
   it('fills the template’s empty task', () => {
     const template = '### Tasks\n- [ ] \n\n**Gratitude practice:** \n';
     expect(addTaskWithBlock(template, 'code', 'spec', 60, 90)).toBe('### Tasks\n- [ ] #daily/code — spec [minutes::30]\n    - 01:00–01:30\n\n**Gratitude practice:** \n');
+  });
+});
+
+describe('setMinutes', () => {
+  it('rewrites the minutes of a task already on the list, and only that line', () => {
+    expect(changed(DAY, setMinutes(DAY, ref(DAY, 9), 55))).toEqual([[9, '- [ ] #daily/sport — gym [minutes::55]']]);
+  });
+
+  it('adds the field to a task without one, before a trailing comment, and leaves blocks alone', () => {
+    expect(changed(DAY, setMinutes(DAY, ref(DAY, 10), 30))).toEqual([[10, '- [ ] #daily/book — read [minutes::30]']]);
+    expect(changed(DAY, setMinutes(DAY, ref(DAY, 7), 120))).toEqual([[7, '- [ ] #daily/code — mrSuit skills [minutes::120] <!-- focus-id: 20261027-02 -->']]);
+  });
+
+  it('refuses a task that changed, and minutes that are not a whole number of a day', () => {
+    expect(() => setMinutes(DAY.replace('gym', 'swim'), ref(DAY, 9), 10)).toThrow(/changed/);
+    expect(() => setMinutes(DAY, ref(DAY, 9), -5)).toThrow(/whole number/);
+    expect(() => setMinutes(DAY, ref(DAY, 9), 2.5)).toThrow(/whole number/);
   });
 });

@@ -65,6 +65,8 @@ const actions = (): PeriodicActions => ({
   onSetProperty: vi.fn(),
   onAddTask: vi.fn(),
   onSetSummary: vi.fn(),
+  onSetMinutes: vi.fn(),
+  onFocus: vi.fn(),
   onAddRecord: vi.fn(),
   onUpdateRecord: vi.fn(),
   onDeleteRecord: vi.fn(),
@@ -128,9 +130,17 @@ describe('the day page', () => {
     await user.click(screen.getByRole('tab', { name: 'Tasks' }));
     await user.click(screen.getByRole('radio', { name: 'sport' }));
     await user.type(screen.getByTestId('composer-text'), 'evening run');
-    await user.type(screen.getByTestId('composer-minutes'), '30');
+    // A new task has no minutes yet: they go on tasks already on the list.
+    expect(screen.queryByTestId('composer-minutes')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('composer-add'));
-    expect(act.onAddTask).toHaveBeenCalledWith('sport', 'evening run', 30);
+    expect(act.onAddTask).toHaveBeenCalledWith('sport', 'evening run');
+
+    const [first] = screen.getAllByTestId('task-minutes');
+    await user.click(first as HTMLElement);
+    const field = screen.getByTestId('task-minutes-field');
+    await user.clear(field);
+    await user.type(field, '75{Enter}');
+    expect(act.onSetMinutes).toHaveBeenCalledWith(expect.objectContaining({ line: 19 }), 75);
   });
 });
 

@@ -3,12 +3,15 @@ import { addDays, formatDate, isoWeek, sameDay, startOfWeek, today } from '../..
 import { formatMinutes } from '../../lib/day';
 import type { DayEntry } from '../../lib/rollup';
 import { gridBlocks, shownHours, type GridBlock } from '../../lib/schedule';
+import { addTask, syncPlanDone } from '../../lib/edits';
 import { addBlock, addTaskWithBlock, deleteBlock, moveBlock } from '../../lib/timeblocks';
 import { dayKey } from '../../lib/timer';
 import { followPointer } from '../periodic/effects';
 import { CountUp } from '../periodic/motion';
 import { primeChime } from './chime';
 import { TimeGrid, type Column } from './TimeGrid';
+import { FocusMenu, type FocusHow } from './FocusMenu';
+import { NewTask } from './NewTask';
 import { TimerCard } from './Timer';
 import type { DayTaskRef, TaskChoice } from './types';
 import type { TimerApi } from './useTimer';
@@ -23,7 +26,8 @@ interface Props {
   /** The task categories the vault uses, most used first. */
   categories: string[];
   timer: TimerApi;
-  onStartTimer: (choice: TaskChoice) => void;
+  /** Starts the timer on a task: as the timer card is set, or as a right-click asked. */
+  onStartTimer: (choice: TaskChoice, how?: FocusHow) => void;
   /** Opens a day's page. */
   onOpenDay: (date: Date) => void;
   /** Changes a day's note, creating it from its template first. Rejects when nothing was written. */
@@ -57,6 +61,8 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
   const [early, setEarly] = useState(false);
   const [late, setLate] = useState(false);
   const [highlight, setHighlight] = useState<number>();
+  const [menu, setMenu] = useState<{ x: number; y: number; date: Date; item: DayTaskRef }>();
+  const [adding, setAdding] = useState(false);
   const show = (nextMode: Mode, nextDate: Date) => {
     remembered = { mode: nextMode, date: nextDate };
     setMode(nextMode);
@@ -106,6 +112,11 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
   const move = (day: Date, block: GridBlock, start: number, finish: number) =>
     onWrite(day, (text) => moveBlock(text, block.taskRef, block.blockRef, start, finish), 'The block wasn’t moved');
   const remove = (day: Date, block: GridBlock) => onWrite(day, (text) => deleteBlock(text, block.taskRef, block.blockRef), 'The block wasn’t deleted');
+  const focus = (ref: DayTaskRef['ref'], task: DayTaskRef['task'], how: FocusHow) =>
+    onStartTimer({ kind: 'task', ref, label: task.label, category: task.category?.name }, how);
+  // A new task on a day, with no time yet: time comes from blocks or the timer.
+  const addTo = (day: Date, category: string, words: string) =>
+    onWrite(day, (text) => syncPlanDone(addTask(text, category, words)), 'The task wasn’t added');
 
   const single = mode === 'day' ? columns[0] : undefined;
   return (
@@ -162,6 +173,9 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
               </button>
             )}
             <span className="nav-space" />
+            <button type="button" className="nav-chip is-action" onClick={() => setAdding(true)} data-testid="cal-new-task">
+              + New task
+            </button>
             <div className="switch" role="radiogroup" aria-label="Show">
               {(['week', 'day'] as const).map((option) => (
                 <button
@@ -198,6 +212,7 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
           onAdd={add}
           onMove={move}
           onDelete={remove}
+          onFocus={(_, block, how) => focus(block.taskRef, block.task, how)}
           onOpenDay={onOpenDay}
           onHead={(day) => (single ? onOpenDay(day) : show('day', day))}
         />
@@ -215,6 +230,10 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
                     key={ref.line}
                     className={task.done ? 'is-done' : undefined}
                     style={{ '--tone': task.category?.color ?? 'var(--accent)' } as CSSProperties}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setMenu({ x: event.clientX, y: event.clientY, date: single.date, item: { task, ref } });
+                    }}
                     onPointerEnter={() => setHighlight(task.line)}
                     onPointerLeave={() => setHighlight(undefined)}
                     data-testid="cal-day-task"
@@ -241,11 +260,34 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
                 ))}
               </ul>
             ) : (
-              <p className="empty-line">No tasks on this day yet. Draw a block on the day to add one.</p>
+              <p className="empty-line">No tasks on this day yet. Add one, or draw a block on the day.</p>
             )}
           </aside>
         )}
       </div>
+      {menu && (
+        <FocusMenu
+          at={menu}
+          label={menu.item.task.label}
+          noFocus={sameDay(menu.date, now) ? undefined : 'Focus runs on today’s tasks: the timer logs into today’s note.'}
+          running={Boolean(timer.state.session)}
+          onFocus={(how) => focus(menu.item.ref, menu.item.task, how)}
+          onOpenDay={() => onOpenDay(menu.date)}
+          onClose={() => setMenu(undefined)}
+        />
+      )}
+      {adding && (
+        <NewTask
+          days={columns.map((col) => col.date)}
+          initial={columns.find((col) => sameDay(col.date, now))?.date ?? columns[0]?.date ?? now}
+          categories={categories}
+          onCancel={() => setAdding(false)}
+          onSave={(day, category, words) => {
+            setAdding(false);
+            void addTo(day, category, words).catch(() => undefined);
+          }}
+        />
+      )}
     </div>
   );
 }

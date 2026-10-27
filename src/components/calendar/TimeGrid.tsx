@@ -4,6 +4,7 @@ import { formatDate } from '../../lib/dates';
 import { clock, formatMinutes } from '../../lib/day';
 import { clip, dragged, drawn, lanes, snapDown, type DragEdge, type GridBlock, type Hours } from '../../lib/schedule';
 import { dayKey, openStretch, type Session } from '../../lib/timer';
+import { FocusMenu, type FocusHow } from './FocusMenu';
 import { TaskPicker } from './TaskPicker';
 import type { DayTaskRef, TaskChoice } from './types';
 import { useEscape } from './useEscape';
@@ -35,6 +36,8 @@ interface Props {
   onAdd: (date: Date, start: number, end: number, choice: TaskChoice) => Promise<void>;
   onMove: (date: Date, block: GridBlock, start: number, end: number) => Promise<void>;
   onDelete: (date: Date, block: GridBlock) => Promise<void>;
+  /** A focus round on a block's task, from the right-click menu. */
+  onFocus: (date: Date, block: GridBlock, how: FocusHow) => void;
   /** A block's title: opens the day's page. */
   onOpenDay: (date: Date) => void;
   /** A day's name above its column. */
@@ -43,7 +46,8 @@ interface Props {
 
 type Popover =
   | { kind: 'new'; col: number; start: number; end: number; x: number; y: number }
-  | { kind: 'delete'; col: number; block: GridBlock; x: number; y: number };
+  | { kind: 'delete'; col: number; block: GridBlock; x: number; y: number }
+  | { kind: 'menu'; col: number; block: GridBlock; x: number; y: number };
 
 const GUTTER = 56;
 const POPOVER_WIDTH = 300;
@@ -54,7 +58,7 @@ const minuteOfDay = (time: number) => {
 
 /** Days side by side, hours down: the time blocks of each, drawn, moved, resized and deleted in place. */
 export function TimeGrid(props: Props) {
-  const { columns, hours, early, late, onFold, hourHeight, categories, session, wide, highlight, onAdd, onMove, onDelete, onOpenDay, onHead } = props;
+  const { columns, hours, early, late, onFold, hourHeight, categories, session, wide, highlight, onAdd, onMove, onDelete, onFocus, onOpenDay, onHead } = props;
   const body = useRef<HTMLDivElement>(null);
   const clicked = useRef(false);
   const [draft, setDraft] = useState<{ col: number; start: number; end: number; saving?: boolean }>();
@@ -243,7 +247,7 @@ export function TimeGrid(props: Props) {
                       onPointerDown={(event) => blockDown(event, c, block)}
                       onContextMenu={(event) => {
                         event.preventDefault();
-                        askDelete(c, block);
+                        setPopover({ kind: 'menu', col: c, block, x: event.clientX, y: event.clientY });
                       }}
                       title={`${clock(range.start)}–${clock(overnight ? block.realEnd : range.end)} · ${block.task.label}${block.task.category ? ` · ${block.task.category.name}` : ''}${overnight ? ' · runs past midnight, so it is changed in the note' : ''}`}
                       data-testid="cal-block"
@@ -299,6 +303,18 @@ export function TimeGrid(props: Props) {
             categories={categories}
             onCancel={close}
             onSave={save}
+          />
+        )}
+        {popover?.kind === 'menu' && (
+          <FocusMenu
+            at={popover}
+            label={popover.block.task.label}
+            noFocus={columns[popover.col]?.key === todayKey ? undefined : 'Focus runs on today’s tasks: the timer logs into today’s note.'}
+            running={Boolean(session)}
+            onFocus={(how) => onFocus(columns[popover.col]?.date ?? new Date(), popover.block, how)}
+            onOpenDay={() => onOpenDay(columns[popover.col]?.date ?? new Date())}
+            onDelete={() => askDelete(popover.col, popover.block)}
+            onClose={close}
           />
         )}
         {popover?.kind === 'delete' && (

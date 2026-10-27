@@ -6,6 +6,9 @@ import type { LinkTarget } from '../lib/completion';
 import { parseTasks, toggleTask } from '../lib/dashboard';
 import { addRecord, deleteRecord, updateRecord } from '../lib/cbt';
 import { addTask, setProperty, setSummary, syncPlanDone } from '../lib/edits';
+import { setMinutes } from '../lib/timeblocks';
+import type { FocusHow } from './calendar/FocusMenu';
+import type { TaskChoice } from './calendar/types';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
@@ -44,11 +47,13 @@ interface ViewProps extends NoteProps {
   known?: string;
   onQuestToggle: PeriodicActions['onQuestToggle'];
   onQuestProgress: PeriodicActions['onQuestProgress'];
+  /** Starts the timer on a task of today's note. */
+  onStartTimer: (choice: TaskChoice, how?: FocusHow) => void;
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onStartTimer } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
   // When the app learns a new text for this note (the timer wrote a block into it while it is
   // open), show that one and build the next change on it.
@@ -93,6 +98,8 @@ export function NoteView(props: ViewProps) {
     },
     [path, onSaved],
   );
+  // A line of the note as the page last showed it, to find that task again when writing.
+  const seenLine = useCallback((line: number) => (latest.current ?? '').split('\n')[line]?.replace(/\r$/, '') ?? '', []);
   const actions = useMemo(
     (): PeriodicActions => ({
       onOpenPeriod,
@@ -108,6 +115,12 @@ export function NoteView(props: ViewProps) {
       onSetProperty: (key, value) => change((text) => setProperty(text, key, value), `${key} wasn't set`),
       onAddTask: (category, words, minutes) => change((text) => syncPlanDone(addTask(text, category, words, minutes)), 'The task wasn\'t added'),
       onSetSummary: (summary) => change((text) => setSummary(text, summary), "The summary wasn't saved"),
+      // A task is found again by its line as the page showed it.
+      onSetMinutes: (task, minutes) => {
+        const seen = seenLine(task.line);
+        change((text) => setMinutes(text, { line: task.line, text: seen }, minutes), "The minutes weren't saved");
+      },
+      onFocus: (task, how) => onStartTimer({ kind: 'task', ref: { line: task.line, text: seenLine(task.line) }, label: task.label, category: task.category }, how),
       onAddRecord: (input) => {
         const now = new Date();
         const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -118,7 +131,7 @@ export function NoteView(props: ViewProps) {
       onQuestToggle,
       onQuestProgress,
     }),
-    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress],
+    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onStartTimer, seenLine],
   );
 
   useEffect(() => {

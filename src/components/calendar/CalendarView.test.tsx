@@ -137,4 +137,35 @@ describe('the calendar', () => {
     expect(within(side).getAllByTestId('cal-day-task').map((row) => row.textContent)).toEqual([expect.stringContaining('58m'), expect.stringContaining('30m')]);
     await userEvent.click(screen.getByTestId('cal-mode-week'));
   });
+
+  it('opens a menu on a right-click: focus only on today’s tasks, the day, and delete', async () => {
+    const user = userEvent.setup();
+    const { column, onStartTimer, onOpenDay } = setup();
+    const [block] = within(column).getAllByTestId('cal-block');
+    fireEvent.contextMenu(block as HTMLElement, { clientX: 200, clientY: 300 });
+    const menu = screen.getByTestId('focus-menu');
+    // Last week's block: the timer logs into today's note, so it offers no round here.
+    expect(menu).toHaveTextContent('Focus runs on today’s tasks');
+    expect(within(menu).queryByTestId('focus-start')).not.toBeInTheDocument();
+    await user.click(within(menu).getByRole('menuitem', { name: 'Open the day' }));
+    expect(onOpenDay).toHaveBeenCalledWith(DAY);
+    expect(onStartTimer).not.toHaveBeenCalled();
+
+    fireEvent.contextMenu(block as HTMLElement, { clientX: 200, clientY: 300 });
+    await user.click(screen.getByTestId('focus-menu-delete'));
+    expect(screen.getByTestId('delete-popover')).toBeInTheDocument();
+  });
+
+  it('adds a task to a day of the week, with no time yet', async () => {
+    const user = userEvent.setup();
+    const { onWrite } = setup();
+    await user.click(screen.getByTestId('cal-new-task'));
+    await user.click(document.querySelector(`[data-testid="new-task-day"][data-date="${dayKey(DAY)}"]`) as HTMLElement);
+    await user.click(screen.getByRole('radio', { name: 'book' }));
+    await user.type(screen.getByTestId('new-task-text'), 'read 30 pages');
+    await user.click(screen.getByTestId('new-task-add'));
+    const call = onWrite.mock.calls.at(-1);
+    expect(call?.[0]).toEqual(DAY);
+    expect(call?.[1](TEXT)).toBe(TEXT.replace('    - 12:30–13:00\n', '    - 12:30–13:00\n- [ ] #daily/book — read 30 pages\n'));
+  });
 });

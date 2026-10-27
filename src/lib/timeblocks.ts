@@ -108,6 +108,20 @@ export function addBlock(text: string, task: LineRef, start: number, end: number
 }
 
 /**
+ * Sets the minutes spent on a task already in the note: its `[minutes::N]` rewritten, or added
+ * when the task has none. Only that line changes; the time blocks under it stay as they are.
+ */
+export function setMinutes(text: string, task: LineRef, minutes: number): string {
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 24 * 60) throw new Error('Minutes are a whole number from 0 to 1440.');
+  const { lines, eol } = split(text);
+  const at = findLine(text, lines, task);
+  const line = lines[at] ?? '';
+  minutesOf(line, blocksUnder(lines, at));
+  lines[at] = withMinutes(line, minutes);
+  return lines.join(eol);
+}
+
+/**
  * Moves or resizes one of the task's blocks: rewrites the times on that one line, and moves the
  * task's `[minutes::N]` by the difference (never below 0). A task without the field keeps its line.
  */

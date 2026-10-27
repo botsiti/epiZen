@@ -1,4 +1,5 @@
 import type { RecordInput, ThoughtRecord } from '../../lib/cbt';
+import type { FocusHow } from '../calendar/FocusMenu';
 import type { MediaItem } from '../../lib/media';
 import type { Period } from '../../lib/periodic';
 import type { Quest, QuestEntry } from '../../lib/quests';
@@ -35,6 +36,10 @@ export interface PeriodicActions {
   onToggle: (task: { line: number; done: boolean }) => void;
   onSetProperty: (key: string, value: string) => void;
   onAddTask: (category: string, words: string, minutes?: number) => void;
+  /** The minutes spent on a task already on the day's list. */
+  onSetMinutes: (task: { line: number }, minutes: number) => void;
+  /** A focus round on one of today's tasks (the timer logs into today's note). */
+  onFocus: (task: { line: number; label: string; category?: string }, how: FocusHow) => void;
   /** The day's summary, the text of its `[!tldr]` callout. */
   onSetSummary: (summary: string) => void;
   /** Thought records in the day's stream: a new row, a rewritten row, a row taken out. */

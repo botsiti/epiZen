@@ -225,21 +225,36 @@ describe('the demo vault', () => {
 
     // The summary is written in place, into the summary callout.
     await $('[data-testid="summary"]').click();
-    await $('[data-testid="summary-field"]').setValue('Busy, calm, and the page shipped.');
-    await $('[data-testid="tile-xp"]').click();
+    await $('[data-testid="summary-field"]').waitForDisplayed();
+    // Typed over the old words as macOS sends typing: the driver's clear doesn't reach React.
+    await browser.execute((value) => {
+      const field = document.querySelector<HTMLTextAreaElement>('[data-testid="summary-field"]');
+      field?.focus();
+      field?.select();
+      document.execCommand('insertText', false, value);
+      field?.blur();
+    }, 'Busy, calm, and the page shipped.');
     const summarised = mood.replace('> Busy but calm.\n', '> Busy, calm, and the page shipped.\n');
     await browser.waitUntil(() => read() === summarised, { timeout: 5000, timeoutMsg: 'the summary never reached the note' });
 
     await showTab('Tasks');
     await $('[data-testid="composer-category"][data-category="sport"]').click();
     await $('[data-testid="composer-text"]').setValue('evening run');
-    await $('[data-testid="composer-minutes"]').setValue('30');
     await $('[data-testid="composer-add"]').click();
+    // A new task has no minutes; they are set on its card once it is on the list.
+    const listed = summarised
+      .replace('    - 16:37–17:09\n', '    - 16:37–17:09\n- [ ] #daily/sport — evening run\n')
+      .replace('\ndone: 80\n', '\ndone: 67\n');
+    await browser.waitUntil(() => read() === listed, { timeout: 5000, timeoutMsg: 'the new task never reached the note' });
+    const card = $(`[data-testid="task-card"][data-line="${listed.split('\n').indexOf('- [ ] #daily/sport — evening run')}"]`);
+    await card.$('[data-testid="task-minutes"]').click();
+    await card.$('[data-testid="task-minutes-field"]').setValue('30');
+    await browser.keys('Enter');
     // A sixth task, still open: plan done goes to 4 of 6.
     const added = summarised
       .replace('    - 16:37–17:09\n', '    - 16:37–17:09\n- [ ] #daily/sport — evening run [minutes::30]\n')
       .replace('\ndone: 80\n', '\ndone: 67\n');
-    await browser.waitUntil(() => read() === added, { timeout: 5000, timeoutMsg: 'the new task never reached the note' });
+    await browser.waitUntil(() => read() === added, { timeout: 5000, timeoutMsg: 'the minutes never reached the note' });
     expect(await $$('[data-testid="task-card"]').length).toBe(6);
     await screenshot('25-day-tasks');
 

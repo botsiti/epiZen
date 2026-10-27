@@ -520,6 +520,15 @@ code {
   color: var(--text);
 }
 
+/* The way from the sidebar's month to the big calendar. */
+.calendar-open {
+  color: var(--text-muted);
+}
+
+.calendar-open:hover {
+  color: var(--accent);
+}
+
 .sidebar-foot {
   display: grid;
   justify-items: start;

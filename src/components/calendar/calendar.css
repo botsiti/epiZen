@@ -1131,3 +1131,150 @@
   animation: none !important;
   transition: none !important;
 }
+
+/* The right-click menu on a task or a block: focus on it, open its day, delete the block. */
+
+.focus-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.focus-menu {
+  position: fixed;
+  display: grid;
+  min-width: 230px;
+  max-width: 300px;
+  padding: 6px;
+  border-color: var(--glass-line-strong);
+  border-radius: 14px;
+  background: var(--glass-face), var(--surface);
+  box-shadow:
+    var(--glass-top),
+    0 18px 44px -12px rgb(0 0 0 / 70%);
+  animation: rise 220ms var(--settle) both;
+}
+
+.focus-menu-label {
+  overflow: hidden;
+  margin: 0;
+  padding: 6px 10px 8px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.focus-menu-note {
+  margin: 0;
+  padding: 4px 10px 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.focus-menu button {
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13.5px;
+  text-align: left;
+  transition: background 120ms ease-out;
+}
+
+.focus-menu button:hover,
+.focus-menu button:focus-visible {
+  outline: none;
+  background: rgb(143 188 170 / 14%);
+}
+
+.focus-menu hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--glass-line);
+}
+
+/* A new task for a day, from the calendar's hero. */
+
+.focus-menu-backdrop.is-dim {
+  display: grid;
+  place-items: center;
+  background: rgb(8 10 12 / 55%);
+  backdrop-filter: blur(10px);
+  animation: panel 200ms ease-out both;
+}
+
+.new-task {
+  display: grid;
+  gap: var(--space-3);
+  width: min(520px, calc(100vw - 48px));
+  padding: 22px;
+  border-color: var(--glass-line-strong);
+  border-radius: 20px;
+  box-shadow:
+    var(--glass-top),
+    0 30px 80px rgb(0 0 0 / 60%);
+  animation: rise 320ms var(--settle) both;
+}
+
+.new-task .kicker {
+  margin-bottom: 2px;
+}
+
+.new-task-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.new-task-day {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition:
+    background 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.new-task-day strong {
+  color: var(--text);
+  font: 500 18px var(--display);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.new-task-day.is-chosen {
+  border-color: rgb(143 188 170 / 50%);
+  background: rgb(143 188 170 / 14%);
+  color: var(--accent);
+}
+
+.new-task-one {
+  margin: 0;
+  font: 500 20px var(--display);
+}
+
+.new-task input {
+  padding: 9px 12px;
+  border: 1px solid var(--glass-line);
+  border-radius: 10px;
+  outline: none;
+  background: rgb(0 0 0 / 22%);
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+}
+
+.new-task input:focus {
+  border-color: var(--accent);
+}

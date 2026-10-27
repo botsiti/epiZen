@@ -4,6 +4,7 @@ import { Calendar } from './components/Calendar';
 import { CalendarView } from './components/calendar/CalendarView';
 import { chime } from './components/calendar/chime';
 import { TimerPill } from './components/calendar/Timer';
+import type { FocusHow } from './components/calendar/FocusMenu';
 import type { TaskChoice } from './components/calendar/types';
 import { reason, useNoteWriter } from './components/calendar/useNoteWriter';
 import { useTimer, type TimerDeps } from './components/calendar/useTimer';
@@ -436,9 +437,10 @@ export function App() {
     if (wasEditing.current !== undefined && editingPath === undefined) timer.retryAll();
     wasEditing.current = editingPath;
   }, [editingPath, timer]);
-  // The timer starts on one of today's tasks, or on a new one added to today's note first.
+  // The timer starts on one of today's tasks, or on a new one added to today's note first:
+  // as the timer card is set, or as a right-click asked (a stopwatch, or a pomodoro round).
   const startTimer = useCallback(
-    async (choice: TaskChoice) => {
+    async (choice: TaskChoice, how?: FocusHow) => {
       if (!vault) return;
       const date = today();
       try {
@@ -449,7 +451,7 @@ export function App() {
         const { path, text } = await changeDay(date, (t) => (choice.kind === 'new' && !hasTask(t, want) ? addTask(t, choice.category, choice.words, 0) : undefined));
         const found = findTask(text, want);
         const task = { path, day: dayKey(date), line: found.line, label: want.label, category: want.category, focusId: focusIdOf(found.text), vault };
-        timer.start(task, timer.state.prefs.mode, timer.state.prefs.minutes);
+        timer.start(task, how?.mode ?? timer.state.prefs.mode, how?.minutes ?? timer.state.prefs.minutes);
         setCalendarWarning(undefined);
       } catch (err) {
         setCalendarWarning(`The timer didn’t start: ${reason(err)}.`);
@@ -493,6 +495,7 @@ export function App() {
             has={(period, date) => periodicNotes.has(periodKey(period, date))}
             selected={view.kind === 'note' ? periodOf(view.path, periodic) : undefined}
             onOpen={openPeriodicOrSay}
+            onOpenCalendar={() => go({ kind: 'calendar' })}
           />
         }
       />
@@ -543,6 +546,7 @@ export function App() {
             onQuestProgress={onQuestProgress}
             onOpenNote={openNote}
             onOpenPeriod={openPeriodicOrSay}
+            onStartTimer={(choice, how) => void startTimer(choice, how)}
             known={texts.get(view.path)}
           />
         )}
@@ -552,7 +556,7 @@ export function App() {
             textOf={textOf}
             categories={categories}
             timer={timer}
-            onStartTimer={(choice) => void startTimer(choice)}
+            onStartTimer={(choice, how) => void startTimer(choice, how)}
             onOpenDay={(date) => openPeriodicOrSay('day', date)}
             onWrite={writeDay}
             warning={calendarWarning}
