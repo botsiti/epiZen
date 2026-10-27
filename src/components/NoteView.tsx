@@ -3,14 +3,16 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { readNote, writeNote, type VaultFile } from '../lib/api';
 import type { LinkTarget } from '../lib/completion';
-import { parseTasks, toggleTask, type Task } from '../lib/dashboard';
+import { parseTasks, toggleTask } from '../lib/dashboard';
+import { addTask, setProperty } from '../lib/edits';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
 import { flushBeforeClose, trackSave } from '../lib/saving';
 import { lineEnding } from '../lib/text';
-import { Dashboard, type DashboardSpec } from './Dashboard';
 import { Editor } from './Editor';
+import { PeriodicPage } from './periodic/PeriodicPage';
+import type { PeriodicActions, PeriodicSpec } from './periodic/types';
 import { VaultImage } from './VaultImage';
 
 const remarkPlugins = [remarkGfm, remarkCallouts, remarkWikilinks];
@@ -32,39 +34,42 @@ interface ViewProps extends NoteProps {
   linkTargets: LinkTarget[];
   /** Shown under the note when reading it: its backlinks. */
   footer?: ReactNode;
-  /** A periodic note's dashboard, shown above its text when reading it. */
-  dashboard?: DashboardSpec;
+  /** For a daily, weekly or monthly note: what its page reads from the rest of the vault. */
+  periodic?: PeriodicSpec;
   onOpenNote: (path: string) => void;
+  /** Opens a day, week or month, creating its note from the template if it has none. */
+  onOpenPeriod: PeriodicActions['onOpenPeriod'];
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, dashboard, onOpenNote } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
-  const [tickError, setTickError] = useState<string>();
-  const ticks = useRef(Promise.resolve());
+  const [changeError, setChangeError] = useState<string>();
+  const changes = useRef(Promise.resolve());
   const latest = useRef<string | undefined>(undefined);
   useEffect(() => {
     latest.current = note.text;
   }, [note.text]);
 
-  // Ticking a task on the dashboard writes that one box back to the note, one tick at a time,
-  // each over the text the last one left. If the note changed on disk, it says so and reloads.
-  const toggle = useCallback(
-    (task: Task) => {
-      ticks.current = ticks.current.then(async () => {
+  // A periodic page changes its note one change at a time (a tick, a number, a new task), each
+  // over the text the last one left. `edit` returns the new text, or `undefined` when there is
+  // nothing to do. If the note changed on disk, nothing is written: it says so and reloads.
+  const change = useCallback(
+    (edit: (text: string) => string | undefined, failed: string) => {
+      changes.current = changes.current.then(async () => {
         const current = latest.current;
-        const target = current === undefined ? undefined : parseTasks(current).find((t) => t.line === task.line && t.done === task.done);
-        if (current === undefined || !target) return;
-        const next = toggleTask(current, target);
+        if (current === undefined) return;
         try {
+          const next = edit(current);
+          if (next === undefined || next === current) return;
           await writeNote(path, next, current);
           latest.current = next;
           setNote({ path, text: next });
           onSaved(path, next);
-          setTickError(undefined);
+          setChangeError(undefined);
         } catch (err) {
-          setTickError(`Nothing was ticked: ${String(err)}. The note is shown as it is now.`);
+          setChangeError(`${failed}: ${err instanceof Error ? err.message : String(err)}. The note is shown as it is now.`);
           const fresh = await readNote(path).catch(() => undefined);
           if (fresh !== undefined) {
             latest.current = fresh;
@@ -74,6 +79,22 @@ export function NoteView(props: ViewProps) {
       });
     },
     [path, onSaved],
+  );
+  const actions = useMemo(
+    (): PeriodicActions => ({
+      onOpenPeriod,
+      onOpenNote,
+      onEdit: () => onEditingChange(true),
+      // The task is found again in the text as it is now: the same line, still ticked or not as it was shown.
+      onToggle: (task) =>
+        change((text) => {
+          const target = parseTasks(text).find((t) => t.line === task.line && t.done === task.done);
+          return target && toggleTask(text, target);
+        }, 'Nothing was ticked'),
+      onSetProperty: (key, value) => change((text) => setProperty(text, key, value), `${key} wasn't set`),
+      onAddTask: (category, words, minutes) => change((text) => addTask(text, category, words, minutes), 'The task wasn\'t added'),
+    }),
+    [change, onEditingChange, onOpenNote, onOpenPeriod],
   );
 
   useEffect(() => {
@@ -114,20 +135,31 @@ export function NoteView(props: ViewProps) {
       />
     );
   }
+  if (periodic) {
+    return (
+      <PeriodicPage
+        spec={periodic}
+        path={path}
+        text={note.text}
+        actions={actions}
+        warning={changeError}
+        note={
+          <>
+            <NoteBody path={path} text={note.text} files={files} onOpenLink={onOpenLink} />
+            {footer}
+          </>
+        }
+      />
+    );
+  }
   const edit = (
     <button type="button" className="quiet-button" onClick={() => onEditingChange(true)} data-testid="edit-note">
       Edit
     </button>
   );
-  const top = dashboard && (
-    <>
-      {tickError && <p className="note-warning">{tickError}</p>}
-      <Dashboard spec={dashboard} text={note.text} onToggle={toggle} onOpen={onOpenNote} />
-    </>
-  );
   return (
     <>
-      <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} top={top} />
+      <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} />
       {footer}
     </>
   );
@@ -254,7 +286,7 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved,
   );
 }
 
-export function NoteContent({ path, text, files, onOpenLink, actions, top }: NoteProps & { text: string; actions?: ReactNode; top?: ReactNode }) {
+export function NoteContent({ path, text, files, onOpenLink, actions }: NoteProps & { text: string; actions?: ReactNode }) {
   const folder = noteFolder(path);
   return (
     <article className="note" data-testid="note" data-path={path}>
@@ -265,7 +297,6 @@ export function NoteContent({ path, text, files, onOpenLink, actions, top }: Not
           {actions}
         </div>
       </header>
-      {top}
       <NoteBody path={path} text={text} files={files} onOpenLink={onOpenLink} />
     </article>
   );

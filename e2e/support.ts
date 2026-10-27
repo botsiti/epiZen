@@ -3,14 +3,16 @@ import { join } from 'node:path';
 import { EVIDENCE } from './paths';
 
 /**
- * Same size on every machine, and no transitions: macOS pauses them in a window that
- * isn't in front, so a screenshot could catch a chevron or highlight halfway.
+ * Same size on every machine, and no transitions or animations: macOS pauses them in a window
+ * that isn't in front, so a screenshot could catch a chevron, a count or a card halfway.
+ * `data-motion="off"` tells the periodic pages to show every move's end state at once.
  */
 export async function prepareWindow() {
   await browser.setWindowSize(1280, 820);
   await browser.execute(() => {
+    document.documentElement.dataset.motion = 'off';
     const style = document.createElement('style');
-    style.textContent = '*, *::before, *::after { transition: none !important; }';
+    style.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
     document.head.append(style);
   });
 }
@@ -33,9 +35,16 @@ export async function openFolders(...paths: string[]) {
   }
 }
 
+/** Opens a note from the sidebar and waits for it: its text, or the page of a daily, weekly or monthly note. */
 export async function openNote(path: string) {
   await $(`[data-testid="tree-note"][data-path="${path}"]`).click();
-  await $(`[data-testid="note"][data-path="${path}"]`).waitForDisplayed();
+  await $(`[data-testid="note"][data-path="${path}"], [data-testid="periodic"][data-path="${path}"]`).waitForDisplayed();
+}
+
+/** Shows a tab of the open daily, weekly or monthly page, such as "Note". */
+export async function showTab(name: string) {
+  await $(`[data-testid="tab"][data-tab="${name}"]`).click();
+  await expect($(`[data-testid="tab"][data-tab="${name}"]`)).toHaveAttribute('aria-selected', 'true');
 }
 
 /**

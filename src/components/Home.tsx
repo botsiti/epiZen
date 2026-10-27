@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { combine, summarizeDay } from '../lib/dashboard';
 import { formatDate } from '../lib/dates';
+import { formatMinutes, parseDay } from '../lib/day';
 import type { Shelf } from '../lib/media';
 import { VaultImage } from './VaultImage';
 
@@ -33,8 +33,9 @@ export function Home({ vaultName, stats, today, shelves, onOpen, onToday }: Prop
 }
 
 function Today({ today, onToday }: { today: Props['today']; onToday: () => void }) {
-  const summary = useMemo(() => (today.text === undefined ? undefined : combine([summarizeDay(today.text)])), [today.text]);
-  const mood = summary?.averages.find(([key]) => key === 'mood')?.[1];
+  const day = useMemo(() => (today.text === undefined ? undefined : parseDay(today.text)), [today.text]);
+  const summary = day?.totals;
+  const mood = day?.numbers.mood || undefined;
   return (
     <div className="today" data-testid="today">
       <div>
@@ -42,7 +43,11 @@ function Today({ today, onToday }: { today: Props['today']; onToday: () => void 
         <p className="today-date">{formatDate(today.date, 'dddd, D MMMM')}</p>
         <p className="today-summary">
           {summary
-            ? [summary.tasks ? `${summary.tasksDone} of ${summary.tasks} tasks done` : 'No tasks yet', mood === undefined ? '' : `mood ${mood}`]
+            ? [
+                summary.tasks ? `${summary.tasksDone} of ${summary.tasks} tasks done` : 'No tasks yet',
+                summary.logged ? `${formatMinutes(summary.logged)} logged` : '',
+                mood === undefined ? '' : `mood ${mood}`,
+              ]
                 .filter(Boolean)
                 .join(' · ')
             : `No note yet. ${today.name} starts from its template.`}

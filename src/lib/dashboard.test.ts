@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { combine, formatMinutes, parseTasks, summarizeDay, toggleTask } from './dashboard';
+import { parseTasks, toggleTask } from './dashboard';
 
 // demo-vault/Calendar/2026/days 2026/14.08.2026.md, shortened.
 const DAY = `---
@@ -61,33 +61,5 @@ describe('toggleTask', () => {
     if (!task) throw new Error('no task');
     expect(() => toggleTask(DAY.replace('- [ ] #daily/code', '- [x] #daily/code'), task)).toThrow();
     expect(() => toggleTask('short', task)).toThrow();
-  });
-});
-
-describe('summaries', () => {
-  it('sums minutes by category and reads numeric properties', () => {
-    const day = summarizeDay(DAY);
-    expect(Object.fromEntries(day.minutes)).toEqual({
-      code: { done: 0, planned: 58 },
-      study: { done: 25, planned: 76 },
-      sport: { done: 61, planned: 61 },
-    });
-    expect(day.numbers).toEqual([
-      ['done', 60],
-      ['sleep', 6.1],
-      ['focus', 9],
-      ['mood', 9],
-    ]);
-  });
-
-  it('adds days up and averages their numbers', () => {
-    const totals = combine([summarizeDay(DAY), summarizeDay(DAY.replace('mood: 9', 'mood: 6'))]);
-    // Habits stay out of the task counts.
-    expect(totals.tasks).toBe(8);
-    expect(totals.tasksDone).toBe(4);
-    expect(totals.minutes.get('study')).toEqual({ done: 50, planned: 152 });
-    expect(totals.averages).toContainEqual(['mood', 7.5]);
-    expect(formatMinutes(125)).toBe('2h 5m');
-    expect(formatMinutes(45)).toBe('45m');
   });
 });
