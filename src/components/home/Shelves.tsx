@@ -1,22 +1,33 @@
 import { thisYear } from '../../lib/home';
+import { kindOfFolder } from '../../lib/library';
 import type { Shelf } from '../../lib/media';
 import { order } from '../periodic/effects';
 import { VaultImage } from '../VaultImage';
 
+interface Props {
+  shelves: Shelf[];
+  today: Date;
+  onOpen: (path: string) => void;
+  /** Opens the shelf's tab in the library. */
+  onSeeAll?: (folder: string) => void;
+  i: number;
+}
+
 /** Every rated album, film and video as covers, a glass shelf per folder. */
-export function Shelves({ shelves, today, onOpen, i }: { shelves: Shelf[]; today: Date; onOpen: (path: string) => void; i: number }) {
+export function Shelves({ shelves, today, onOpen, onSeeAll, i }: Props) {
   if (!shelves.length) return null;
   return (
     <div className="shelves">
       {shelves.map((shelf, n) => (
-        <ShelfCard key={shelf.folder} shelf={shelf} today={today} onOpen={onOpen} i={i + n} />
+        <ShelfCard key={shelf.folder} shelf={shelf} today={today} onOpen={onOpen} onSeeAll={onSeeAll} i={i + n} />
       ))}
     </div>
   );
 }
 
-function ShelfCard({ shelf, today, onOpen, i }: { shelf: Shelf; today: Date; onOpen: (path: string) => void; i: number }) {
-  const name = shelf.folder.split('/').pop() || 'Rated';
+function ShelfCard({ shelf, today, onOpen, onSeeAll, i }: Omit<Props, 'shelves'> & { shelf: Shelf }) {
+  const kind = kindOfFolder(shelf.folder);
+  const name = kind?.tab ?? (shelf.folder.split('/').pop() || 'Rated');
   return (
     <section className="card glass rise shelf" style={order(i)} data-testid="shelf" data-folder={shelf.folder}>
       <div className="card-head">
@@ -24,18 +35,24 @@ function ShelfCard({ shelf, today, onOpen, i }: { shelf: Shelf; today: Date; onO
         <span className="card-note">
           {shelf.items.length} rated · {thisYear(shelf.items, today)} this year
         </span>
+        <span className="nav-space" />
+        {kind && onSeeAll && (
+          <button type="button" className="shelf-all" onClick={() => onSeeAll(shelf.folder)} data-testid="shelf-see-all">
+            See all →
+          </button>
+        )}
       </div>
       <ul className="covers">
         {shelf.items.map((item) => (
           <li key={item.path}>
             <button type="button" className="cover-card" onClick={() => onOpen(item.path)} title={item.path} data-testid="cover-card" data-path={item.path}>
-              {item.cover ? <VaultImage path={item.cover} alt={item.title} className="cover-image" /> : <span className="cover-blank">{item.title}</span>}
-              <span className="cover-caption">
-                <span className="cover-title">{item.title}</span>
+              <span className="cover-frame">
+                {item.cover ? <VaultImage path={item.cover} alt={item.title} className="cover-image" /> : <span className="cover-blank">{item.title}</span>}
                 <span className="cover-rating" data-testid="cover-rating">
                   {item.rating}
                 </span>
               </span>
+              <span className="cover-title">{item.title}</span>
               {item.subtitle && <span className="cover-subtitle">{item.subtitle}</span>}
             </button>
           </li>

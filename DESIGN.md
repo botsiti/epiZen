@@ -55,8 +55,9 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - Radius 6px. Borders are 1px hairlines. No shadows, gradients or blur.
 - Motion only for a change of state (hover, a folder opening), 120ms ease-out. Nothing bounces
   and nothing moves on load. `prefers-reduced-motion` turns it off.
-- The periodic pages and the homepage are the exception to both, on purpose: they are where the
-  day is reviewed, and they should feel alive. See "Periodic pages".
+- The periodic pages, the homepage and the library are the exception to both, on purpose: they are
+  where the day is reviewed and what was loved is kept, and they should feel alive. See "Periodic
+  pages" and "Library and media pages".
 
 ## Components
 
@@ -69,6 +70,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   where they are ticked, and that writes the one box back.
 - **Periodic pages**: see the section below.
 - **Calendar and timer**: see "Calendar and timer" below.
+- **Library and media pages**: see "Library and media pages" below.
 - **Home**: a periodic page in all but name (the frame, glass, hero and motion below), shaped like
   the Obsidian homepage, "Kaizen cockpit". The hero: the level's title and "Kaizen profile" as the
   kicker, `Level N` in the serif, one line, and a 2×2 block of Level (a thin bar to the next),
@@ -77,7 +79,8 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   a row of three cards: the last seven days' averages, their focus as bars (pointing at a day shows
   its categories), and today's tasks with Today, Week and Month; the life spheres, a segment per
   level, beside the lead sphere and the week's sport floor; and a glass shelf per folder of rated
-  covers, the rating in accent, the maker faint below. Nothing on it writes to the vault, except
+  covers, the rating in accent on a small glass pill in the cover's corner, the maker faint below,
+  and "See all" to the folder's tab in the library. Nothing on it writes to the vault, except
   that Today, Week and Month create a missing note from its template, as the calendar does.
 - **Graph**: the whole main pane, no padding. Dots in their folder's colour, sized by how many links
   they have; links as faint hairlines that thin out as they grow in number. Pointing at a note (or
@@ -176,6 +179,49 @@ a periodic page in its look (the same glass, hero, chips, count-up numbers and s
   template, with the change in it, only when the change can be made. The timer writes each finished
   stretch under its task; while that note is open in the editor, the stretch waits for Done. A block
   that runs past midnight stays where it is (the editor changes it).
+
+## Library and media pages
+
+Albums, films, books, podcasts and videos: the rated notes in `Rating/music`, `kino`, `books`,
+`podcasts` and `youtube`. They are periodic pages in their look (the frame, glass, aurora, serif
+display face, count-up numbers, staggered rise and spring), opened from "Library" in the sidebar, a
+shelf's "See all", or the note itself. Their structure is Bookmory's library and book page and
+Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
+
+- **Library**: a hero with the kind's name in the serif, a line about it, "+ Add" in the primary
+  button, and on the right three numbers (in all, this year, the average in accent) over the spread
+  of ratings, a bar per tenth of the scale (Letterboxd's histogram, in sage). Word tabs below: Albums,
+  Films, Books, Podcasts, and Videos when the vault has any. Then sort chips (Recent, Rating, Title)
+  and the twelve most used genres as filter chips, each with its count; the choice is kept per tab for
+  the session. The covers in a grid, each with its rating on a small glass pill in the corner (a faint
+  dash when not rated yet), the title, and the maker and year faint. Covers lift under the pointer and
+  load as they near the view. Last, a calendar of covers (Bookmory's book calendar): the month's name in
+  the serif beside a strip of the year's twelve months, each a small bar of how many (the shown month in
+  accent, with a glow), ‹ › to step, and the month's days as a grid, Monday first, each day showing the
+  cover of what was listened to, watched or finished, "+n" when there were more. It opens on this month,
+  or the latest month that has something.
+- **Empty tab**: a glass card: a kicker, "Your first book" in the serif, one line on what Add does,
+  and the Add button. Videos aren't added from Epizen; their empty card says so.
+- **Media page**: a rated note in those folders opens as a page; Edit note opens its text in the
+  editor. The hero is the cover large, a soft backdrop of the cover itself blurred far out and veiled
+  down to the page, the title in the serif, the maker and year, the genres as glass pills, and the date
+  listened, watched or finished (a book's start date too, and how many days it took). On the right the
+  rating as a ring out of 100, after the timer's: a thin sage arc with a glowing dot at its end and a
+  faint tick every ten; drag round it or use the arrow keys (Shift for tens), or type the number below
+  it. An album's favourite tracks follow in a glass card, numbered in accent, in the serif's italic;
+  then the note's own text in a glass card (the cover embed left out, since the hero shows it), and its
+  backlinks.
+- **Add**: a dark glass sheet over the window. A large search field that asks the kind's source as
+  typing pauses (MusicBrainz and the Cover Art Archive for albums, iTunes for films and podcasts, Open
+  Library for books); result rows with their cover, the title in semibold, the maker and year muted,
+  the kind and genres faint; and a dashed "Enter it yourself". Picking one opens the form: the cover and
+  a rating ring on the left; title, maker, year, genres (pills to remove, a field to add), rating and
+  date on the right, the date set to today; the path it will be saved at, faint, and Save in the
+  primary button. Nothing goes out until something is typed, and nothing is written until Save.
+- **Writes**: on a media page, setting the rating or a date writes that one property, under the key
+  the note already uses (`rating` or `Rating`), over the note as it is on disk. Add writes a new note in
+  the vault's format for its kind and its cover as a new file in the kind's `_attachments`; neither
+  ever replaces a file.
 
 ## Checking a UI change
 

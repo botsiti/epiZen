@@ -14,14 +14,19 @@ Tauri 2 (Rust) with React, TypeScript and Vite. macOS first.
 
 ## Non-goals
 
-- Sync, accounts, or anything over the network.
+- Sync, accounts, or the network for anything but the library's lookups: only when the user searches
+  or saves, only to the fixed list of hosts in `src-tauri/src/net.rs` (MusicBrainz, the Cover Art Archive,
+  iTunes, Open Library), and never with an account.
 - Running Obsidian plugins (Dataview, Templater). Their code blocks show as code.
 - Mobile, Windows and Linux builds, for now.
 
 ## Map
 
 - `src-tauri/src/vault.rs`: the only code that touches the vault. Every path from the UI goes through
-  `Vault::resolve`, or `Vault::new_note_path` for a new note.
+  `Vault::resolve`, or `Vault::new_path` for a new note (`create_note`) or a new cover (`create_file`).
+- `src-tauri/src/net.rs`: the only code that goes on the network: the library's lookups, https to an
+  allowlist of hosts, size-capped, MusicBrainz paced to one request a second. The e2e build answers from
+  `test/fixtures/lookup/` instead.
 - `src-tauri/src/settings.rs`: the app's own settings, a JSON file in its config folder (`EPIZEN_CONFIG_DIR`
   in tests), never in the vault.
 - `src-tauri/src/lib.rs`: Tauri commands and startup (`--vault <folder>`, `EPIZEN_VAULT`, or the vault
@@ -29,6 +34,10 @@ Tauri 2 (Rust) with React, TypeScript and Vite. macOS first.
 - `src/`: the React UI. `src/lib/` holds parsing (frontmatter, wikilinks, callouts) and
   dates and periodic notes (moment.js formats, templates, what a day holds, week and month
   totals), tests beside it. `src/components/periodic/` draws daily, weekly and monthly notes as pages.
+- `src/lib/library.ts`: the library's kinds (one place maps `Rating/music`, `kino`, `books`, `podcasts`,
+  `youtube` to albums, films, books, podcasts, videos), reading their notes and writing new ones in the
+  vault's format. `src/lib/lookup.ts`: the lookup sources' URLs and parsers. `src/components/library/`
+  draws the library and a rated note's media page.
 - `demo-vault/`: a fake vault in the real format, made by `scripts/make-demo-vault.mjs`.
   Tests only ever touch a copy. `npm run check` fails if a file in it changes.
 - `e2e/`: WebdriverIO drives the real app through `@wdio/tauri-service`.

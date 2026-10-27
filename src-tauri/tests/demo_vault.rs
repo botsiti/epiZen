@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use epizen_lib::{FileKind, Vault};
+use epizen_lib::{FileKind, Vault, store_image};
 use tempfile::TempDir;
 
 fn copy_of_demo_vault() -> (TempDir, PathBuf) {
@@ -78,4 +78,34 @@ fn lists_the_demo_vault() {
     assert_eq!(count("Calendar/2026/days 2026/", FileKind::Note), 60);
     assert_eq!(count("Rating/music/", FileKind::Note), 20);
     assert_eq!(count("Rating/music/_attachments/", FileKind::Image), 20);
+    assert_eq!(count("Rating/books/", FileKind::Note), 6);
+    assert_eq!(count("Rating/books/_attachments/", FileKind::Image), 6);
+    assert_eq!(count("Rating/podcasts/", FileKind::Note), 4);
+}
+
+/// What the library's Add does, through the same calls: the cover first, then the note. On a
+/// copy of the demo vault it adds exactly those two files and changes nothing else.
+#[test]
+fn adding_an_album_writes_its_cover_and_its_note_and_nothing_else() {
+    let (_dir, copy) = copy_of_demo_vault();
+    let before = snapshot(&copy);
+    let vault = Vault::open(&copy).unwrap();
+
+    // The lookup's cover is a PNG, though asked for as .jpg: it is saved as what it is.
+    let png = include_bytes!("../../test/fixtures/lookup/cover-1.png");
+    let cover = store_image(&vault, "Rating/music/_attachments/dog-man-star.jpg", png).unwrap();
+    assert_eq!(cover, "Rating/music/_attachments/dog-man-star.png");
+    let note = "---\nArtist: Suede\nYear: 1994\nlistened: 2026-10-07\ngenre:\n  - britpop\n  - glam rock\n  - art rock\nrating: 86\nfavorite tracks:\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[dog-man-star.png|240]]\n";
+    let path = "Rating/music/Dog Man Star.md";
+    vault.create_note(path, note).unwrap();
+
+    let mut after = snapshot(&copy);
+    assert_eq!(after.remove(Path::new(&cover)).unwrap(), png);
+    assert_eq!(after.remove(Path::new(path)).unwrap(), note.as_bytes());
+    assert_eq!(after, before, "only the new note and its cover may differ");
+
+    // Adding it again replaces neither.
+    assert!(vault.create_note(path, "again").is_err());
+    assert!(store_image(&vault, &cover, png).is_err());
+    assert_eq!(fs::read(copy.join(path)).unwrap(), note.as_bytes());
 }

@@ -2,7 +2,7 @@ import { $, $$, browser, expect } from '@wdio/globals';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
-import { DEMO_VAULT, vaultCopy } from '../paths';
+import { DEMO_VAULT, FIXTURES, vaultCopy } from '../paths';
 import { followLink, nextFrame, openFolders, openNote, prepareWindow, screenshot, showMonth, showTab, typeInEditor } from '../support';
 
 const DAYS = 'Calendar/2026/days 2026';
@@ -22,12 +22,13 @@ describe('the demo vault', () => {
 
   it('opens on the home screen', async () => {
     await expect($('[data-testid="vault-name"]')).toHaveText('demo-vault');
-    await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('107 notes · 10 folders · 36 images'));
+    await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('119 notes · 12 folders · 46 images'));
     await expect($('[data-testid="today-create"]')).toBeDisplayed();
-    expect(await $$('[data-testid="shelf"]').length).toBe(3);
-    expect(await $$('[data-testid="cover-card"]').length).toBe(27);
+    // Albums, books, films, podcasts and videos: books and podcasts write `Rating`, and count too.
+    expect(await $$('[data-testid="shelf"]').length).toBe(5);
+    expect(await $$('[data-testid="cover-card"]').length).toBe(37);
     await expect($('[data-testid="shelf"][data-folder="Rating/music"]')).toHaveText(expect.stringContaining('88'));
-    await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 27, {
+    await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 37, {
       timeoutMsg: 'the covers never loaded',
     });
     // Life XP is the demo's 60 days (12,296 XP) plus its quests, less what open quests have lost
@@ -90,6 +91,105 @@ describe('the demo vault', () => {
     await openNote('Rating/youtube/How I Plan a Week in Plain Text.md');
     await $('[data-testid="vault-image"]').waitForDisplayed();
     await screenshot('09-youtube');
+  });
+
+  it('shows the library: a tab per kind with its counts, its covers, its genres and a calendar of covers', async () => {
+    await $('[data-testid="open-library"]').click();
+    const library = $('[data-testid="library"]');
+    await library.waitForDisplayed();
+    await expect(library).toHaveAttribute('data-tab', 'album');
+    expect(await $$('[data-testid="tab"]').length).toBe(5);
+    expect(await $$('[data-testid="library-card"]').length).toBe(20);
+    await expect($('[data-testid="library-total"]')).toHaveText('20');
+    await expect($('[data-testid="library-average"]')).toHaveText('77');
+    await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) >= 12, { timeoutMsg: 'the covers never loaded' });
+    await screenshot('48-library-albums');
+
+    await $('[data-testid="genre-chip"][data-genre="ambient"]').click();
+    expect(await $$('[data-testid="library-card"]').length).toBe(5);
+    await $('[data-testid="genre-chip"][data-genre=""]').click();
+    await $('[data-testid="sort"][data-sort="rating"]').click();
+    await expect($('[data-testid="library-card"]')).toHaveAttribute('data-path', 'Rating/music/Seven Bells for Nobody.md');
+    await $('[data-testid="sort"][data-sort="recent"]').click();
+    await expect($('[data-testid="library-card"]')).toHaveAttribute('data-path', 'Rating/music/Monastery Wi-Fi.md');
+
+    // The calendar opens on the latest month with something in it.
+    await $('[data-testid="cover-calendar"]').scrollIntoView();
+    await expect($('[data-testid="cover-calendar-month"]')).toHaveText('September 2026');
+    expect(await $$('[data-testid="cover-day"] .cover-day-cover').length).toBe(9);
+    await screenshot('48-library-calendar');
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+
+    await showTab('Films');
+    await expect(library).toHaveAttribute('data-tab', 'film');
+    expect(await $$('[data-testid="library-card"]').length).toBe(4);
+    await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) === 4, { timeoutMsg: 'the posters never loaded' });
+    await screenshot('49-library-films');
+    await showTab('Books');
+    expect(await $$('[data-testid="library-card"]').length).toBe(6);
+    await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) === 6, { timeoutMsg: 'the book covers never loaded' });
+    await screenshot('50-library-books');
+    await showTab('Podcasts');
+    expect(await $$('[data-testid="library-card"]').length).toBe(4);
+    await showTab('Videos');
+    expect(await $$('[data-testid="library-card"]').length).toBe(3);
+    await expect($('[data-testid="library-add"]')).not.toBeExisting();
+    await showTab('Albums');
+  });
+
+  it("opens an album as its page, and setting its rating writes that one line", async () => {
+    const path = 'Rating/music/Glasshouse Weather.md';
+    await $(`[data-testid="library-card"][data-path="${path}"]`).click();
+    await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
+    await expect(title()).toHaveText('Glasshouse Weather');
+    await expect($('[data-testid="rating-ring"]')).toHaveAttribute('data-value', '88');
+    await expect($('[data-testid="media-tracks"]')).toHaveText(expect.stringContaining('Greenhouse Effect'));
+    const cover = $('[data-testid="media-page"] [data-testid="vault-image"]');
+    await browser.waitUntil(async () => Number(await cover.getProperty('naturalWidth')) > 0, { timeoutMsg: 'the cover never loaded' });
+    await screenshot('51-media-page');
+
+    const file = join(vaultCopy(), path);
+    const before = readFileSync(file, 'utf8');
+    await $('[data-testid="rating-field"]').setValue('91');
+    // Leaving the field sets it, as a click elsewhere would.
+    await browser.execute(() => (document.activeElement as HTMLElement | null)?.blur());
+    const rated = before.replace('\nrating: 88\n', '\nrating: 91\n');
+    expect(rated).not.toBe(before);
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === rated, { timeout: 5000, timeoutMsg: 'the rating never reached the note' });
+    await expect($('[data-testid="rating-ring"]')).toHaveAttribute('data-value', '91');
+  });
+
+  it('adds an album found by a lookup: its note in the vault\'s format, and its cover beside it', async () => {
+    // The e2e build answers lookups from test/fixtures/lookup/, so nothing here goes on the network.
+    await $('[data-testid="media-library"]').click();
+    await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'album');
+    await $('[data-testid="library-add"]').click();
+    await $('[data-testid="add-search"]').setValue('dog man star');
+    await browser.waitUntil(async () => (await $$('[data-testid="add-result"]').length) === 6, { timeoutMsg: 'no results came' });
+    await browser.waitUntil(async () => (await $$('[data-testid="lookup-cover"]').length) === 6, { timeoutMsg: 'the result covers never loaded' });
+    await expect($('[data-testid="add-result"]')).toHaveText(expect.stringContaining('Suede'));
+    await screenshot('52-media-add');
+
+    await $('[data-testid="add-result"][data-id="da15737e-3eb3-31e4-97f0-fe46299f75fb"]').click();
+    await $('[data-testid="add-form"]').waitForDisplayed();
+    await expect($('[data-testid="add-title"]')).toHaveValue('Dog Man Star');
+    await expect($('[data-testid="add-maker"]')).toHaveValue('Suede');
+    await expect($('[data-testid="add-year"]')).toHaveValue('1994');
+    await $('[data-testid="add-rating"]').setValue('86');
+    await $('[data-testid="add-date"]').setValue('2026-10-07');
+    await $('[data-testid="add-form"] [data-testid="lookup-cover"]').waitForDisplayed();
+    await screenshot('53-media-add-form');
+    await $('[data-testid="add-save"]').click();
+
+    const path = 'Rating/music/Dog Man Star.md';
+    await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
+    expect(readFileSync(join(vaultCopy(), path), 'utf8')).toBe(
+      '---\nArtist: Suede\nYear: 1994\nlistened: 2026-10-07\ngenre:\n  - britpop\n  - glam rock\n  - art rock\nrating: 86\nfavorite tracks:\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[dog-man-star.png|240]]\n',
+    );
+    // The recorded cover is a PNG, so it was saved as .png though asked for as .jpg.
+    const saved = readFileSync(join(vaultCopy(), 'Rating/music/_attachments/dog-man-star.png'));
+    expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);
+    await expect($('[data-testid="rating-ring"]')).toHaveAttribute('data-value', '86');
   });
 
   it('creates the missing day before from its template', async () => {
@@ -453,13 +553,16 @@ describe('the demo vault', () => {
     expect(readFileSync(today, 'utf8')).not.toMatch(/e2e focus[^\n]*\n {4}- \d\d:\d\d/);
   });
 
-  it('changed nothing in the vault copy but the four new notes, the day changed from its page and the day drawn on', () => {
+  it('changed nothing in the vault copy but the new notes, the added album and its cover, the rating set, the day changed from its page and the day drawn on', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
         `added: ${DAYS}/30.07.2026.md`,
         `added: ${DAYS}/31.07.2026.md`,
         `added: ${DAYS}/${TODAY}.md`,
         'added: Inbox idea.md',
+        'added: Rating/music/Dog Man Star.md',
+        'added: Rating/music/_attachments/dog-man-star.png',
+        'changed: Rating/music/Glasshouse Weather.md',
         `changed: ${DAYS}/12.08.2026.md`,
         `changed: ${DAYS}/14.08.2026.md`,
         'changed: Calendar/2026/weeks/2026-W33 - 10.08.26.md',

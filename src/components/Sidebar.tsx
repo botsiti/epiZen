@@ -12,6 +12,7 @@ interface Props {
   onSettings: () => void;
   onGraph: () => void;
   onCalendar: () => void;
+  onLibrary: () => void;
   /** The focus timer while it runs, at the top. */
   timer?: ReactNode;
   /** Why the last folder the user picked couldn't be opened. */
@@ -21,7 +22,7 @@ interface Props {
 }
 
 export function Sidebar(props: Props) {
-  const { vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, onCalendar, timer, folderError, calendar } = props;
+  const { vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, onCalendar, onLibrary, timer, folderError, calendar } = props;
   // Folders the user opened or closed by hand. Untouched folders open when they hold the selected note.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
   const isOpen = (path: string) => toggled.get(path) ?? Boolean(selected?.startsWith(`${path}/`));
@@ -45,6 +46,9 @@ export function Sidebar(props: Props) {
       <div className="sidebar-foot">
         <button type="button" className="sidebar-action" onClick={onCalendar} data-testid="open-calendar">
           Calendar
+        </button>
+        <button type="button" className="sidebar-action" onClick={onLibrary} data-testid="open-library">
+          Library
         </button>
         <button type="button" className="sidebar-action" onClick={onGraph} data-testid="open-graph">
           Graph

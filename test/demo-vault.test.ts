@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { VaultFile } from '../src/lib/api';
 import { parseNote } from '../src/lib/frontmatter';
+import { findOverview, kindSpec, mediaNoteText } from '../src/lib/library';
 import { findWikilinks, noteTitle, resolveLink } from '../src/lib/links';
 
 const original = fileURLToPath(new URL('../demo-vault', import.meta.url));
@@ -99,6 +100,55 @@ describe('demo vault', () => {
   it('has a few films and YouTube videos', () => {
     expect(notesIn('Rating/kino').length).toBeGreaterThanOrEqual(3);
     expect(notesIn('Rating/youtube').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('has books with Author, Year, Genre_book, Rating, Finshed and Started, as the vault spells them, each with a cover', () => {
+    const books = notesIn('Rating/books');
+    expect(books).toHaveLength(6);
+    for (const book of books) {
+      const { properties, body } = parseNote(read(book.path));
+      expect(Object.keys(properties)).toEqual(['Author', 'Year', 'Genre_book', 'Rating', 'Finshed', 'Started']);
+      expect(properties.Genre_book).toEqual(expect.arrayContaining([expect.any(String)]));
+      expect(properties.Finshed).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(String(properties.Started) < String(properties.Finshed)).toBe(true);
+      expect(body.startsWith('[[00. Books]]\n\n![[')).toBe(true);
+      const cover = findWikilinks(body).find((link) => link.embed);
+      expect(resolveLink(cover?.target ?? '', files, book.path)?.path).toMatch(/^Rating\/books\/_attachments\/.+\.svg$/);
+    }
+  });
+
+  it('has podcasts with Author, Rating, Genre and Listened, each with a cover', () => {
+    const podcasts = notesIn('Rating/podcasts');
+    expect(podcasts).toHaveLength(4);
+    for (const podcast of podcasts) {
+      const { properties, body } = parseNote(read(podcast.path));
+      expect(Object.keys(properties)).toEqual(['Author', 'Rating', 'Genre', 'Listened']);
+      expect(body.startsWith('[[00. Podcast 2026]]\n\n![[')).toBe(true);
+    }
+  });
+
+  it("writes a new album, film, book and podcast exactly as the demo's own are written", () => {
+    // The demo's notes end in a line of free text after the cover; a new note stops at the cover.
+    const cases = [
+      ['album', 'Rating/music/Copper Wire Sermons.md', { maker: 'Ostrava Signal', year: '2016', genres: ['post-rock'], rating: '71', date: '2026-08-07' }],
+      ['film', 'Rating/kino/Static Bloom.md', { maker: '', year: '2024', genres: ['sci-fi'], rating: '68', date: '2026-09-21' }],
+      ['book', 'Rating/books/Thinking in Seasons.md', { maker: 'Ada Morrow', year: '2023', genres: ['philosophy', 'self improvement'], rating: '81', date: '2026-09-19', started: '2026-08-26' }],
+      ['podcast', 'Rating/podcasts/Why Dogs Dream.md', { maker: 'Field Notes Weekly', year: '', genres: ['science', 'animals'], rating: '85', date: '2026-08-21' }],
+    ] as const;
+    for (const [kind, path, values] of cases) {
+      const spec = kindSpec(kind);
+      const text = read(path);
+      const cover = findWikilinks(text).find((link) => link.embed)?.target ?? '';
+      const written = mediaNoteText(
+        spec,
+        { title: noteTitle(path), started: '', ...values, genres: [...values.genres] },
+        { overview: findOverview(spec, files, 2026), cover: `${spec.folder}/_attachments/${cover}` },
+      );
+      // Films in the demo predate the Director key and write `genre` and `rating` in lower case.
+      const expected = kind === 'film' ? text.replace('---\nYear', '---\nDirector:\nYear').replace('genre:', 'Genre:').replace('rating:', 'Rating:') : text;
+      expect(expected.startsWith(written), `${path}:\n${written}`).toBe(true);
+      expect(expected.slice(written.length)).toMatch(/^\n\S[^\n]*\n$/);
+    }
   });
 
   it('has a template for each kind of periodic note', () => {

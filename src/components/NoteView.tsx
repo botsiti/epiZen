@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import Markdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { readNote, writeNote, type VaultFile } from '../lib/api';
 import type { LinkTarget } from '../lib/completion';
 import { parseTasks, toggleTask } from '../lib/dashboard';
@@ -10,16 +8,15 @@ import { setMinutes } from '../lib/timeblocks';
 import type { FocusHow } from './calendar/FocusMenu';
 import type { TaskChoice } from './calendar/types';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
-import { noteFolder, noteTitle, resolveLink } from '../lib/links';
-import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
+import { isMediaNote, type KindSpec } from '../lib/library';
+import { noteFolder, noteTitle } from '../lib/links';
 import { flushBeforeClose, trackSave } from '../lib/saving';
 import { lineEnding } from '../lib/text';
 import { Editor } from './Editor';
+import { MediaPage } from './library/MediaPage';
+import { NoteMarkdown } from './NoteMarkdown';
 import { PeriodicPage } from './periodic/PeriodicPage';
 import type { PeriodicActions, PeriodicSpec } from './periodic/types';
-import { VaultImage } from './VaultImage';
-
-const remarkPlugins = [remarkGfm, remarkCallouts, remarkWikilinks];
 
 interface NoteProps {
   path: string;
@@ -40,6 +37,8 @@ interface ViewProps extends NoteProps {
   footer?: ReactNode;
   /** For a daily, weekly or monthly note: what its page reads from the rest of the vault. */
   periodic?: PeriodicSpec;
+  /** For a note in one of the library's folders: its kind. A rated one opens as a media page. */
+  media?: { spec: KindSpec; onOpenLibrary: () => void };
   onOpenNote: (path: string) => void;
   /** Opens a day, week or month, creating its note from the template if it has none. */
   onOpenPeriod: PeriodicActions['onOpenPeriod'];
@@ -53,7 +52,7 @@ interface ViewProps extends NoteProps {
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onStartTimer } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onStartTimer } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
   // When the app learns a new text for this note (the timer wrote a block into it while it is
   // open), show that one and build the next change on it.
@@ -169,6 +168,22 @@ export function NoteView(props: ViewProps) {
         onDone={() => onEditingChange(false)}
         onUnsaved={(text, message) => onUnsaved(path, text, message)}
         linkTargets={linkTargets}
+      />
+    );
+  }
+  if (media && isMediaNote(path, parseNote(note.text).properties)) {
+    return (
+      <MediaPage
+        spec={media.spec}
+        path={path}
+        text={note.text}
+        files={files}
+        onOpenLink={onOpenLink}
+        onSetProperty={actions.onSetProperty}
+        onEdit={actions.onEdit}
+        onOpenLibrary={media.onOpenLibrary}
+        warning={changeError}
+        footer={footer}
       />
     );
   }
@@ -336,57 +351,15 @@ export function NoteContent({ path, text, files, onOpenLink, actions }: NoteProp
 /** A note's properties and Markdown, rendered. */
 function NoteBody({ path, text, files, onOpenLink }: NoteProps & { text: string }) {
   const { properties, body, error } = useMemo(() => parseNote(text), [text]);
-
-  const components = useMemo<Components>(
-    () => ({
-      a({ href, children }) {
-        const link = parseVaultUrl(href);
-        if (link?.kind === 'link') {
-          const found = resolveLink(link.target, files, path);
-          // A plain link to an image has nowhere to go yet, so it shouldn't look clickable.
-          if (found?.kind === 'image') return <span className="wikilink-file">{children}</span>;
-          const open = (event: MouseEvent) => {
-            event.preventDefault();
-            onOpenLink(link.target, path);
-          };
-          return (
-            <a href="#" className={found ? 'wikilink' : 'wikilink is-missing'} data-wikilink={link.target} onClick={open}>
-              {children}
-            </a>
-          );
-        }
-        // Opening the system browser isn't wired up yet; never navigate the app window away.
-        return (
-          <a href={href} className="external" title={href} onClick={(event) => event.preventDefault()}>
-            {children}
-          </a>
-        );
-      },
-      img({ src, alt, width }) {
-        const embed = parseVaultUrl(typeof src === 'string' ? src : undefined);
-        if (embed?.kind !== 'embed') return <span className="embed-missing">{alt}</span>;
-        const file = resolveLink(embed.target, files, path);
-        if (file?.kind === 'image') {
-          return <VaultImage path={file.path} alt={alt ?? embed.target} width={width ? Number(width) : undefined} />;
-        }
-        return <EmbedLink target={embed.target} found={Boolean(file)} onOpen={() => onOpenLink(embed.target, path)} />;
-      },
-    }),
-    [files, path, onOpenLink],
-  );
-
   return (
     <>
       {error && <p className="note-warning">These properties aren't valid YAML, so the note is shown as written.</p>}
       <PropertyList properties={properties} />
-      <div className="note-body">
-        <Markdown remarkPlugins={remarkPlugins} urlTransform={urlTransform} components={components}>
-          {body}
-        </Markdown>
-      </div>
+      <NoteMarkdown path={path} body={body} files={files} onOpenLink={onOpenLink} />
     </>
   );
 }
+
 
 function PropertyList({ properties }: { properties: Properties }) {
   const entries = Object.entries(properties);
@@ -400,21 +373,5 @@ function PropertyList({ properties }: { properties: Properties }) {
         </div>
       ))}
     </dl>
-  );
-}
-
-function EmbedLink({ target, found, onOpen }: { target: string; found: boolean; onOpen: () => void }): ReactNode {
-  return (
-    <a
-      href="#"
-      className={found ? 'wikilink' : 'wikilink is-missing'}
-      data-wikilink={target}
-      onClick={(event) => {
-        event.preventDefault();
-        onOpen();
-      }}
-    >
-      {target}
-    </a>
   );
 }

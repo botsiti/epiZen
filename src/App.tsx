@@ -12,6 +12,7 @@ import { GraphView } from './components/GraphView';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
 import { Home } from './components/home/Home';
+import { LibraryView } from './components/library/LibraryView';
 import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { SettingsScreen } from './components/SettingsScreen';
@@ -42,6 +43,7 @@ import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
 import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
+import { collectLibrary, kindOfFolder, kindOfPath, type MediaKind } from './lib/library';
 import { collectMedia } from './lib/media';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
@@ -71,6 +73,7 @@ type View =
   | { kind: 'settings' }
   | { kind: 'graph' }
   | { kind: 'calendar' }
+  | { kind: 'library'; tab: MediaKind }
   | { kind: 'problem'; title: string; message: string };
 
 const HOME: View = { kind: 'home' };
@@ -168,6 +171,17 @@ export function App() {
   );
   const openNote = useCallback((path: string) => go({ kind: 'note', path }), [go]);
   const shelves = useMemo(() => collectMedia([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
+  const library = useMemo(() => collectLibrary([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
+  const openLibrary = useCallback((tab: MediaKind) => go({ kind: 'library', tab }), [go]);
+  // The library remembers its tab in its place in the history, so coming back finds it again.
+  const setLibraryTab = useCallback(
+    (tab: MediaKind) => setHistory((prev) => prev.map((v, i) => (i === prev.length - 1 && v.kind === 'library' ? { ...v, tab } : v))),
+    [],
+  );
+  const mediaPage = useMemo(() => {
+    const spec = view.kind === 'note' ? kindOfPath(view.path) : undefined;
+    return spec && { spec, onOpenLibrary: () => openLibrary(spec.kind) };
+  }, [view, openLibrary]);
   const todayNote = useMemo(
     () => ({ date: now, path: periodicNotes.get(periodKey('day', now)), name: noteTitle(periodicPath('day', now, periodic)) }),
     [now, periodic, periodicNotes],
@@ -307,6 +321,15 @@ export function App() {
       setFolderError(String(err));
     }
   }, []);
+
+  // Add in the library created a note (and maybe its cover): read the vault again, then open it.
+  const mediaCreated = useCallback(
+    async (path: string) => {
+      await refresh().catch(() => undefined);
+      go({ kind: 'note', path });
+    },
+    [go, refresh],
+  );
 
   const create = useCallback(
     async (path: string) => {
@@ -486,6 +509,7 @@ export function App() {
         onSettings={() => go({ kind: 'settings' })}
         onGraph={() => go({ kind: 'graph' })}
         onCalendar={() => go({ kind: 'calendar' })}
+        onLibrary={() => openLibrary('album')}
         timer={<TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
         folderError={folderError}
         calendar={
@@ -522,6 +546,10 @@ export function App() {
             art={art}
             onQuestToggle={onQuestToggle}
             onQuestProgress={onQuestProgress}
+            onSeeAll={(folder) => {
+              const spec = kindOfFolder(folder);
+              if (spec) openLibrary(spec.kind);
+            }}
           />
         )}
         {editError && (
@@ -542,6 +570,7 @@ export function App() {
             linkTargets={linkTargets}
             footer={<Backlinks links={links.backlinks.get(view.path) ?? []} onOpen={openNote} />}
             periodic={periodicPage}
+            media={mediaPage}
             onQuestToggle={onQuestToggle}
             onQuestProgress={onQuestProgress}
             onOpenNote={openNote}
@@ -560,6 +589,17 @@ export function App() {
             onOpenDay={(date) => openPeriodicOrSay('day', date)}
             onWrite={writeDay}
             warning={calendarWarning}
+          />
+        )}
+        {view.kind === 'library' && (
+          <LibraryView
+            library={library}
+            files={files}
+            tab={view.tab}
+            onTab={setLibraryTab}
+            today={now}
+            onOpenNote={openNote}
+            onCreated={mediaCreated}
           />
         )}
         {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}

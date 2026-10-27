@@ -634,10 +634,22 @@
 .cover-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-1);
+  gap: 2px;
   width: 100%;
   padding: 0;
   text-align: left;
+}
+
+/* The cover with its rating on it, as in the library: a small glass pill in the corner. */
+.cover-frame {
+  position: relative;
+  display: block;
+  margin-bottom: var(--space-2);
+  transition: transform 380ms var(--snap);
+}
+
+.cover-card:hover .cover-frame {
+  transform: translateY(-3px) scale(1.02);
 }
 
 .cover-image,
@@ -645,16 +657,11 @@
   display: block;
   width: 100%;
   height: auto;
-  margin-bottom: var(--space-2);
   border-radius: 12px;
   object-fit: cover;
-  box-shadow: 0 14px 30px -18px rgb(0 0 0 / 90%);
-  transition: transform 380ms var(--snap);
-}
-
-.cover-card:hover .cover-image,
-.cover-card:hover .cover-blank {
-  transform: translateY(-3px) scale(1.02);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 6%),
+    0 14px 30px -18px rgb(0 0 0 / 90%);
 }
 
 .cover-image.embed-loading,
@@ -672,26 +679,27 @@
   text-align: center;
 }
 
-.cover-caption {
-  display: flex;
-  gap: var(--space-2);
-  align-items: baseline;
+.cover-rating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 32px;
+  padding: 2px 8px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  background: rgb(12 14 15 / 62%);
+  backdrop-filter: blur(10px) saturate(1.4);
+  color: var(--accent);
+  font: 600 12.5px/1.25 var(--numbers);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .cover-title {
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.cover-rating {
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 .cover-subtitle {
@@ -700,6 +708,26 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.shelf .card-head {
+  justify-content: flex-start;
+}
+
+.shelf-all {
+  padding: 4px 12px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  transition:
+    color 160ms ease-out,
+    border-color 160ms ease-out;
+}
+
+.shelf-all:hover {
+  border-color: rgb(143 188 170 / 45%);
+  color: var(--accent);
 }
 
 /* Narrow panes */

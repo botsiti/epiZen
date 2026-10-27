@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#232931"/>
+  <path d="M 0 120.0 L 50 133.0 L 100 142.8 L 150 147.0 L 200 144.6 L 250 136.2 L 300 123.8 L 350 110.5 L 400 99.5 L 450 93.6 L 500 94.1 L 550 100.9 L 600 112.4" fill="none" stroke="#eeeeee" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 198.6 L 50 203.1 L 100 200.6 L 150 191.5 L 200 178.1 L 250 163.7 L 300 151.9 L 350 145.4 L 400 146.0 L 450 153.4 L 500 165.8 L 550 180.3 L 600 193.2" fill="none" stroke="#4ecca3" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 253.9 L 50 245.1 L 100 232.0 L 150 218.0 L 200 206.4 L 250 200.1 L 300 200.7 L 350 207.9 L 400 220.0 L 450 234.1 L 500 246.7 L 550 254.7 L 600 256.2" fill="none" stroke="#eeeeee" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 287.1 L 50 269.2 L 100 254.4 L 150 246.4 L 200 247.1 L 250 256.3 L 300 271.8 L 350 289.8 L 400 305.9 L 450 316.2 L 500 318.0 L 550 311.1 L 600 297.0" fill="none" stroke="#4ecca3" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 307.6 L 50 299.3 L 100 300.0 L 150 309.5 L 200 325.5 L 250 344.1 L 300 360.7 L 350 371.2 L 400 373.1 L 450 366.0 L 500 351.5 L 550 333.2 L 600 315.6" fill="none" stroke="#eeeeee" stroke-width="12.0" stroke-linecap="round"/>
+  <path d="M 0 364.1 L 50 371.0 L 100 382.5 L 150 395.8 L 200 407.7 L 250 415.3 L 300 416.7 L 350 411.5 L 400 401.1 L 450 388.0 L 500 375.3 L 550 366.3 L 600 363.0" fill="none" stroke="#4ecca3" stroke-width="12.0" stroke-linecap="round"/>
+  <text x="42" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#f4f1ea">Sleep Is a Skill</text>
+  <text x="42" y="577" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#f4f1ea" opacity="0.7">Night Shift Science</text>
+</svg>
