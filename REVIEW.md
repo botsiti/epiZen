@@ -1,6 +1,6 @@
 # Review guide
 
-For whoever reviews a pull request here: the `reviewer` subagent, an automated reviewer, or a person.
+For whoever reviews a pull request here.
 
 ## What failure looks like
 
