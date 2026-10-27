@@ -396,8 +396,10 @@ export function App() {
       try {
         await changeDay(date, edit);
         setCalendarWarning(undefined);
+        return true;
       } catch (err) {
         setCalendarWarning(`${failed}: ${reason(err)}. The calendar shows the note as it is now.`);
+        return false;
       }
     },
     [changeDay],
@@ -547,6 +549,7 @@ export function App() {
             onOpenNote={openNote}
             onOpenPeriod={openPeriodicOrSay}
             onStartTimer={(choice, how) => void startTimer(choice, how)}
+            onTaskEdited={timer.retask}
             known={texts.get(view.path)}
           />
         )}

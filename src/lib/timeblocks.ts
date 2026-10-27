@@ -4,14 +4,16 @@ import { addTask } from './edits';
 import { lineEnding } from './text';
 
 // The calendar's and the timer's writes: a time block added under a task, moved, resized or
-// removed. Each returns the note's new text with every other line byte for byte as it was, or
-// throws and changes nothing. They write what Senioro writes (SenioroCore's appendBlock):
+// removed, and a task edited or deleted. Each returns the note's new text with every other line
+// byte for byte as it was, or throws and changes nothing. They write what Senioro writes
+// (SenioroCore's appendBlock):
 //
 //   - [ ] #daily/code — mrSuit skills [minutes::100] <!-- focus-id: 20261027-02 -->
 //       - 16:02–17:42
 //
 // A block is `<the task's indent>    - HH:MM–HH:MM` with an en dash, after the task's other
-// blocks, and the task's `[minutes::N]` moves by the block's minutes.
+// blocks. A new block adds its minutes to the task's `[minutes::N]`; after that the minutes are
+// the task's own, so moving or deleting a block on the calendar leaves them as they are.
 
 /** A line of a note as the caller saw it: where it was, and what it said (without a `\r`). */
 export interface LineRef {
@@ -122,8 +124,8 @@ export function setMinutes(text: string, task: LineRef, minutes: number): string
 }
 
 /**
- * Moves or resizes one of the task's blocks: rewrites the times on that one line, and moves the
- * task's `[minutes::N]` by the difference (never below 0). A task without the field keeps its line.
+ * Moves or resizes one of the task's blocks: rewrites the times on that one line. The task's
+ * minutes stay as they are; the calendar only shows when the time went.
  */
 export function moveBlock(text: string, task: LineRef, block: LineRef, start: number, end: number): string {
   const next = span(start, end);
@@ -138,22 +140,73 @@ export function moveBlock(text: string, task: LineRef, block: LineRef, start: nu
   if (blocks.some((b) => b !== old && b.start === next.start && b.end === next.end)) throw new Error(`That task already has a block at ${range(next.start, next.end)}`);
   const blockLine = lines[old.line] ?? '';
   lines[old.line] = blockLine.replace(RANGE, range(next.start, next.end));
-  const line = lines[at] ?? '';
-  const { total, field } = minutesOf(line, blocks);
-  if (field) lines[at] = withMinutes(line, total + length(next) - length(old));
   return lines.join(eol);
 }
 
-/** Removes one of the task's blocks, and takes its minutes off the task's `[minutes::N]` (never below 0). */
+/** Removes one of the task's blocks. The task's minutes stay as they are. */
 export function deleteBlock(text: string, task: LineRef, block: LineRef): string {
   const { lines, eol } = split(text);
   const at = findLine(text, lines, task);
-  const blocks = blocksUnder(lines, at);
-  const old = findBlock(lines, blocks, block);
-  const line = lines[at] ?? '';
-  const { total, field } = minutesOf(line, blocks);
-  if (field) lines[at] = withMinutes(line, total - length(old));
+  const old = findBlock(lines, blocksUnder(lines, at), block);
   lines.splice(old.line, 1);
+  return lines.join(eol);
+}
+
+/** What an edit sets on a task. `category` undefined leaves a task without one that way. */
+export interface TaskEdit {
+  words: string;
+  category?: string;
+  minutes: number;
+}
+
+// A task line's list marker and box, and what follows them.
+const TASK_HEAD = /^([ \t]*(?:>[ \t]*)*(?:[-*+]|\d+[.)])[ \t]+\[[ xX]\][ \t]+)(.*)$/;
+const FIELD = /\[[\w-]+::[^\]]*\]/g;
+const COMMENT = /<!--[\s\S]*?-->/g;
+
+/**
+ * Rewrites a task's line with new words, category and minutes, as Senioro writes a task:
+ * `- [ ] #daily/<category> — <words> [minutes::N]`. The rest of the line stays: the tick, the
+ * indent, its other `[key::value]` fields and comments (Senioro's focus-id), a trailing block id.
+ * The blocks and subtasks under it stay as they are.
+ */
+export function editTask(text: string, task: LineRef, edit: TaskEdit): string {
+  const label = newTaskLabel(edit.words);
+  if (!label) throw new Error('Say what the task is.');
+  const category = edit.category?.trim().toLowerCase();
+  if (category !== undefined && !/^[\w-]+$/.test(category)) throw new Error('A category is one word, like code or sport.');
+  if (!Number.isInteger(edit.minutes) || edit.minutes < 0 || edit.minutes > 24 * 60) throw new Error('Minutes are a whole number from 0 to 1440.');
+  const { lines, eol } = split(text);
+  const at = findLine(text, lines, task);
+  const line = lines[at] ?? '';
+  const [, head = '', body = ''] = TASK_HEAD.exec(line) ?? [];
+  const { field } = minutesOf(line, blocksUnder(lines, at));
+  const blockId = /[ \t](\^[\w-]+)[ \t]*$/.exec(body)?.[1];
+  const fields = (body.match(FIELD) ?? []).filter((f) => !/^\[minutes::/.test(f));
+  const minutes = field || edit.minutes ? [`[minutes::${edit.minutes}]`] : [];
+  const parts = [category ? `#daily/${category} — ${label}` : label, ...minutes, ...fields, ...(body.match(COMMENT) ?? []), ...(blockId ? [blockId] : [])];
+  const next = head + parts.join(' ');
+  if (next === line) return text;
+  lines[at] = next;
+  return lines.join(eol);
+}
+
+/**
+ * Takes a task out of the note with everything indented under it: its time blocks, subtasks and
+ * notes. A blank line after them stays.
+ */
+export function deleteTask(text: string, task: LineRef): string {
+  const { lines, eol } = split(text);
+  const at = findLine(text, lines, task);
+  const depth = (/^[ \t]*/.exec(lines[at] ?? '')?.[0] ?? '').replace(/\t/g, '    ').length;
+  let last = at;
+  for (let i = at + 1; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    if (!line.trim()) continue;
+    if ((/^[ \t]*/.exec(line)?.[0] ?? '').replace(/\t/g, '    ').length <= depth) break;
+    last = i;
+  }
+  lines.splice(at, last - at + 1);
   return lines.join(eol);
 }
 

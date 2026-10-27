@@ -6,6 +6,7 @@ import {
   readTimer,
   restore,
   resume,
+  retask,
   setPrefs,
   setRest,
   settle,
@@ -51,6 +52,8 @@ export interface TimerApi extends TimerView {
   /** Tries every block that couldn't be written again. */
   retryAll: () => void;
   discard: (id: string) => void;
+  /** A task edited in its note: the session on it and the blocks owed to it follow it. */
+  retask: (path: string, before: { label: string; category?: string }, after: { label: string; category?: string }) => void;
 }
 
 /**
@@ -208,6 +211,7 @@ export function useTimer(deps: TimerDeps, stored: unknown, ready: boolean): Time
       retry: (id) => runtime.retry(id),
       retryAll: () => runtime.retryAll(),
       discard: (id) => runtime.discard(id),
+      retask: (path, before, after) => runtime.apply((state) => retask(state, path, before, after)),
     }),
     [runtime, view],
   );

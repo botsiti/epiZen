@@ -150,6 +150,23 @@ function seal(state: TimerState, session: Session, end: number): TimerState {
   return { ...state, pending: [...state.pending, { id, task: session.task, ...block }] };
 }
 
+/**
+ * A task edited in its note: the session on it and the blocks owed to it take its new words and
+ * category, so they still find it there. Tasks are matched as the timer would find them: by
+ * their note, words and category.
+ */
+export function retask(state: TimerState, path: string, before: { label: string; category?: string }, after: { label: string; category?: string }): TimerState {
+  const category = (name?: string) => name?.toLowerCase() ?? '';
+  const follows = (task: TimerTask) => task.path === path && task.label === before.label && category(task.category) === category(before.category);
+  if (!(state.session && follows(state.session.task)) && !state.pending.some((block) => follows(block.task))) return state;
+  const moved = (task: TimerTask): TimerTask => (follows(task) ? { ...task, label: after.label, category: after.category } : task);
+  return {
+    ...state,
+    session: state.session && { ...state.session, task: moved(state.session.task) },
+    pending: state.pending.map((block) => ({ ...block, task: moved(block.task) })),
+  };
+}
+
 /** The live stretch for the calendar: from its start to now (or the pause), on its own day, even under a minute. */
 export function openStretch(session: Session, now: number): { day: string; start: number; end: number } {
   const from = new Date(session.stretchStartedAt);

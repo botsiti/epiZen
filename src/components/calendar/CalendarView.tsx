@@ -4,7 +4,7 @@ import { formatMinutes } from '../../lib/day';
 import type { DayEntry } from '../../lib/rollup';
 import { gridBlocks, shownHours, type GridBlock } from '../../lib/schedule';
 import { addTask, syncPlanDone } from '../../lib/edits';
-import { addBlock, addTaskWithBlock, deleteBlock, moveBlock } from '../../lib/timeblocks';
+import { addBlock, addTaskWithBlock, deleteBlock, deleteTask, editTask, moveBlock, newTaskLabel, type TaskEdit } from '../../lib/timeblocks';
 import { dayKey } from '../../lib/timer';
 import { followPointer } from '../periodic/effects';
 import { CountUp } from '../periodic/motion';
@@ -12,6 +12,7 @@ import { primeChime } from './chime';
 import { TimeGrid, type Column } from './TimeGrid';
 import { FocusMenu, type FocusHow } from './FocusMenu';
 import { NewTask } from './NewTask';
+import { DeleteTask, EditTask } from './TaskDialogs';
 import { TimerCard } from './Timer';
 import type { DayTaskRef, TaskChoice } from './types';
 import type { TimerApi } from './useTimer';
@@ -30,8 +31,8 @@ interface Props {
   onStartTimer: (choice: TaskChoice, how?: FocusHow) => void;
   /** Opens a day's page. */
   onOpenDay: (date: Date) => void;
-  /** Changes a day's note, creating it from its template first. Rejects when nothing was written. */
-  onWrite: (date: Date, edit: (text: string) => string, failed: string) => Promise<void>;
+  /** Changes a day's note, creating it from its template first. True once the change is in the note. */
+  onWrite: (date: Date, edit: (text: string) => string, failed: string) => Promise<boolean>;
   /** Why the last change didn't reach its note, if it didn't. */
   warning?: string;
 }
@@ -63,6 +64,7 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
   const [highlight, setHighlight] = useState<number>();
   const [menu, setMenu] = useState<{ x: number; y: number; date: Date; item: DayTaskRef }>();
   const [adding, setAdding] = useState(false);
+  const [dialog, setDialog] = useState<{ kind: 'edit' | 'delete'; date: Date; item: DayTaskRef }>();
   const show = (nextMode: Mode, nextDate: Date) => {
     remembered = { mode: nextMode, date: nextDate };
     setMode(nextMode);
@@ -117,6 +119,14 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
   // A new task on a day, with no time yet: time comes from blocks or the timer.
   const addTo = (day: Date, category: string, words: string) =>
     onWrite(day, (text) => syncPlanDone(addTask(text, category, words)), 'The task wasn’t added');
+  // An edited task keeps the timer on it, if the timer runs on it.
+  const editOn = (day: Date, { task, ref }: DayTaskRef, edit: TaskEdit) => {
+    const path = dayOf(day).path;
+    void onWrite(day, (text) => editTask(text, ref, edit), 'The task wasn’t changed').then((written) => {
+      if (written && path) timer.retask(path, { label: task.label, category: task.category?.name }, { label: newTaskLabel(edit.words), category: edit.category?.toLowerCase() });
+    });
+  };
+  const deleteOn = (day: Date, { ref }: DayTaskRef) => void onWrite(day, (text) => syncPlanDone(deleteTask(text, ref)), 'The task wasn’t deleted');
 
   const single = mode === 'day' ? columns[0] : undefined;
   return (
@@ -213,6 +223,7 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
           onMove={move}
           onDelete={remove}
           onFocus={(_, block, how) => focus(block.taskRef, block.task, how)}
+          onEditTask={(day, block) => setDialog({ kind: 'edit', date: day, item: { task: block.task, ref: block.taskRef } })}
           onOpenDay={onOpenDay}
           onHead={(day) => (single ? onOpenDay(day) : show('day', day))}
         />
@@ -273,7 +284,30 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
           running={Boolean(timer.state.session)}
           onFocus={(how) => focus(menu.item.ref, menu.item.task, how)}
           onOpenDay={() => onOpenDay(menu.date)}
+          onEdit={() => setDialog({ kind: 'edit', date: menu.date, item: menu.item })}
+          onDeleteTask={() => setDialog({ kind: 'delete', date: menu.date, item: menu.item })}
           onClose={() => setMenu(undefined)}
+        />
+      )}
+      {dialog?.kind === 'edit' && (
+        <EditTask
+          task={dialog.item.task}
+          categories={categories}
+          onCancel={() => setDialog(undefined)}
+          onSave={(edit) => {
+            setDialog(undefined);
+            editOn(dialog.date, dialog.item, edit);
+          }}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <DeleteTask
+          task={dialog.item.task}
+          onCancel={() => setDialog(undefined)}
+          onConfirm={() => {
+            setDialog(undefined);
+            deleteOn(dialog.date, dialog.item);
+          }}
         />
       )}
       {adding && (

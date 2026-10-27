@@ -258,6 +258,36 @@ describe('the demo vault', () => {
     expect(await $$('[data-testid="task-card"]').length).toBe(6);
     await screenshot('25-day-tasks');
 
+    // A right-click edits a task in place: new words, the same category and minutes.
+    const evening = `[data-testid="task-card"][data-line="${added.split('\n').indexOf('- [ ] #daily/sport — evening run [minutes::30]')}"]`;
+    const rightClick = (selector: string) =>
+      browser.execute((css) => {
+        const box = document.querySelector(css)?.getBoundingClientRect();
+        document.querySelector(css)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: (box?.left ?? 0) + 24, clientY: (box?.top ?? 0) + 24 }));
+      }, selector);
+    await rightClick(evening);
+    await $('[data-testid="focus-menu-edit"]').click();
+    await $('[data-testid="edit-task-text"]').waitForDisplayed();
+    await browser.execute((value) => {
+      const field = document.querySelector<HTMLInputElement>('[data-testid="edit-task-text"]');
+      field?.focus();
+      field?.select();
+      document.execCommand('insertText', false, value);
+    }, 'evening run by the river');
+    await screenshot('54-edit-task');
+    await $('[data-testid="edit-task-save"]').click();
+    const edited = added.replace('evening run [minutes::30]', 'evening run by the river [minutes::30]');
+    await browser.waitUntil(() => read() === edited, { timeout: 5000, timeoutMsg: 'the edit never reached the note' });
+
+    // And deletes it, with its minutes: plan done goes back to 4 of 5.
+    await rightClick(evening);
+    await $('[data-testid="focus-menu-delete-task"]').click();
+    await $('[data-testid="delete-task"]').waitForDisplayed();
+    await screenshot('55-delete-task');
+    await $('[data-testid="delete-task-confirm"]').click();
+    await browser.waitUntil(() => read() === summarised, { timeout: 5000, timeoutMsg: 'the deletion never reached the note' });
+    expect(await $$('[data-testid="task-card"]').length).toBe(5);
+
     await showTab('Habits');
     expect(await $$('[data-testid="habit-pill"]').length).toBe(7);
     await screenshot('27-day-habits');
@@ -280,7 +310,7 @@ describe('the demo vault', () => {
     await $('[data-testid="wizard-continue"]').click();
     await $('[data-testid="wizard-continue"]').click();
     const row = /\n\n\| \*\*situation\/self-criticism\*\*.*\n\| --- \| --- \| --- \| --- \| --- \|\n\| \[\d\d:\d\d\] Reviewed the day and thought I am behind \| Disappointed \| All-or-nothing \| Partial still counts\. \| Calm \|\n$/;
-    await browser.waitUntil(() => read().startsWith(added.replace(/\n$/, '')) && row.test(read().slice(added.length - 1)), {
+    await browser.waitUntil(() => read().startsWith(summarised.replace(/\n$/, '')) && row.test(read().slice(summarised.length - 1)), {
       timeout: 5000,
       timeoutMsg: 'the thought record never reached the note',
     });
@@ -359,8 +389,8 @@ describe('the demo vault', () => {
     await $('[data-testid="cal-day-head"][data-date="2026-08-14"]').click();
     await expect(calendar).toHaveAttribute('data-mode', 'day');
     await expect($('[data-testid="cal-title"]')).toHaveText('14 August');
-    // The five tasks of the day and the one the day page added.
-    expect(await $$('[data-testid="cal-day-task"]').length).toBe(6);
+    // The day's five tasks: the one the day page added, it deleted again.
+    expect(await $$('[data-testid="cal-day-task"]').length).toBe(5);
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
     await screenshot('45-calendar-day');
     await $('[data-testid="cal-mode-week"]').click();
