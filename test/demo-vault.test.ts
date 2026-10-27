@@ -31,7 +31,7 @@ beforeAll(() => {
 afterAll(() => rmSync(join(copy, '..'), { recursive: true, force: true }));
 
 describe('demo vault', () => {
-  it('has 60 daily notes named DD.MM.YYYY with the five tracked numbers', () => {
+  it('has 60 daily notes named DD.MM.YYYY with the six tracked numbers', () => {
     const days = notesIn('Calendar/2026/days 2026');
     expect(days).toHaveLength(60);
     for (const day of days) {
@@ -41,7 +41,7 @@ describe('demo vault', () => {
       expect(properties.tags).toEqual(['Daily']);
       expect(properties.done).toBeGreaterThanOrEqual(0);
       expect(properties.done).toBeLessThanOrEqual(100);
-      for (const key of ['sleep', 'focus', 'energy', 'mood']) expect(typeof properties[key]).toBe('number');
+      for (const key of ['sleep', 'focus', 'energy', 'mood', 'soc']) expect(typeof properties[key]).toBe('number');
     }
   });
 
@@ -53,6 +53,23 @@ describe('demo vault', () => {
       for (const task of tasks) expect(task).toMatch(/^- \[[ x]\] #daily\/[a-z]+ — .+ \[minutes::\d+\]$/);
       const ticked = tasks.filter((task) => task.startsWith('- [x]')).length;
       expect(parseNote(text).properties.done).toBe(Math.round((ticked / tasks.length) * 100));
+    }
+  });
+
+  it('logs each task\'s time under it as "    - HH:MM–HH:MM" stretches that add up to its minutes', () => {
+    for (const day of notesIn('Calendar/2026/days 2026')) {
+      const lines = read(day.path).split('\n');
+      lines.forEach((line, i) => {
+        const minutes = /\[minutes::(\d+)\]$/.exec(line)?.[1];
+        if (!line.includes('#daily/') || minutes === undefined) return;
+        let logged = 0;
+        for (let next = i + 1; /^ {4}- /.test(lines[next] ?? ''); next += 1) {
+          const [, h1, m1, h2, m2] = /^ {4}- (\d{2}):(\d{2})–(\d{2}):(\d{2})$/.exec(lines[next] ?? '') ?? [];
+          expect(h1).toBeDefined();
+          logged += Number(h2) * 60 + Number(m2) - (Number(h1) * 60 + Number(m1));
+        }
+        expect(logged).toBe(Number(minutes));
+      });
     }
   });
 

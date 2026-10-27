@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Backlinks } from './components/Backlinks';
 import { Calendar } from './components/Calendar';
-import type { DashboardSpec, DayNote } from './components/Dashboard';
 import { GraphView } from './components/GraphView';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
 import { Home } from './components/Home';
+import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { SettingsScreen } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
@@ -25,7 +25,9 @@ import {
   type VaultStatus,
 } from './lib/api';
 import type { LinkTarget } from './lib/completion';
-import { addDays, addMonths, startOfMonth, startOfWeek, today } from './lib/dates';
+import { METRICS } from './lib/categories';
+import { addDays, startOfMonth, today } from './lib/dates';
+import { parseDay, type Day } from './lib/day';
 import { buildGraph } from './lib/graph';
 import { buildLinkIndex } from './lib/linkIndex';
 import { collectMedia } from './lib/media';
@@ -42,6 +44,7 @@ import {
   type Period,
   type PeriodicSettings,
 } from './lib/periodic';
+import { metricScale, type DayEntry } from './lib/rollup';
 import { flushAll } from './lib/saving';
 import { buildTree, countFolders } from './lib/tree';
 
@@ -56,6 +59,16 @@ type View =
   | { kind: 'problem'; title: string; message: string };
 
 const HOME: View = { kind: 'home' };
+
+// Each daily note parsed once per text it has had: saves and new notes bring new text.
+const parsedDays = new Map<string, { text: string; day: Day }>();
+function dayFrom(path: string, text: string): Day {
+  const cached = parsedDays.get(path);
+  if (cached?.text === text) return cached.day;
+  const day = parseDay(text);
+  parsedDays.set(path, { text, day });
+  return day;
+}
 
 /** A new periodic note's text: its template filled in, or nothing when it has none. */
 async function periodicText(period: Period, date: Date, path: string, periodic: PeriodicSettings, files: VaultFile[]) {
@@ -144,25 +157,44 @@ export function App() {
     const path = periodicNotes.get(periodKey('day', date));
     return { date, path, name: noteTitle(periodicPath('day', date, periodic)), text: path === undefined ? undefined : texts.get(path) };
   }, [periodic, periodicNotes, texts]);
-  // A daily note's dashboard reads the note itself; a week sums its seven days, a month its weeks.
-  const notePath = view.kind === 'note' ? view.path : undefined;
-  const dashboard = useMemo((): DashboardSpec | undefined => {
-    const found = notePath === undefined ? undefined : periodOf(notePath, periodic);
-    if (!found) return undefined;
-    const dayNote = (date: Date): DayNote => {
+  // Everything a daily, weekly or monthly note's page reads from the rest of the vault.
+  const dayOf = useCallback(
+    (date: Date): DayEntry => {
       const path = periodicNotes.get(periodKey('day', date));
-      return { date, path, text: path === undefined ? undefined : texts.get(path) };
-    };
-    if (found.period === 'day') return { period: 'day' };
-    if (found.period === 'week') return { period: 'week', days: Array.from({ length: 7 }, (_, i) => dayNote(addDays(found.date, i))) };
-    const end = addMonths(found.date, 1);
-    const weeks = [];
-    for (let monday = startOfWeek(found.date); monday < end; monday = addDays(monday, 7)) {
-      const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i)).filter((date) => date >= found.date && date < end);
-      weeks.push({ monday, path: periodicNotes.get(periodKey('week', monday)), days: days.map(dayNote) });
+      const text = path === undefined ? undefined : texts.get(path);
+      return { date, path, day: path === undefined || text === undefined ? undefined : dayFrom(path, text) };
+    },
+    [periodicNotes, texts],
+  );
+  const dailyFacts = useMemo(() => {
+    const values = new Map<string, number[]>();
+    const categories = new Map<string, number>();
+    for (const [key, path] of periodicNotes) {
+      const text = key.startsWith('day:') ? texts.get(path) : undefined;
+      if (text === undefined) continue;
+      const day = dayFrom(path, text);
+      for (const [name, value] of Object.entries(day.numbers)) values.set(name, [...(values.get(name) ?? []), value]);
+      for (const task of day.tasks) if (task.category) categories.set(task.category.name, (categories.get(task.category.name) ?? 0) + 1);
     }
-    return { period: 'month', weeks };
-  }, [notePath, periodic, periodicNotes, texts]);
+    const scales: Record<string, number> = {};
+    for (const key of ['done', 'sleep', ...METRICS.map((metric) => metric.key)]) scales[key] = metricScale(key, values.get(key) ?? []);
+    return { scales, categories: [...categories].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name) };
+  }, [periodicNotes, texts]);
+  const mediaByTitle = useMemo(() => new Map(shelves.flatMap((shelf) => shelf.items.map((item) => [item.title, item] as const))), [shelves]);
+  const weekOf = useCallback(
+    (monday: Date) => {
+      const path = periodicNotes.get(periodKey('week', monday));
+      return { path, text: path === undefined ? undefined : texts.get(path) };
+    },
+    [periodicNotes, texts],
+  );
+  const exists = useCallback((period: Period, date: Date) => periodicNotes.has(periodKey(period, date)), [periodicNotes]);
+  const periodicPage = useMemo((): PeriodicSpec | undefined => {
+    const found = view.kind === 'note' ? periodOf(view.path, periodic) : undefined;
+    if (!found) return undefined;
+    const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
+    return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, categories };
+  }, [view, periodic, dayOf, weekOf, exists, dailyFacts, mediaByTitle]);
   const linkTargets = useMemo(() => {
     const titles = new Map<string, number>();
     for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
@@ -317,8 +349,9 @@ export function App() {
             onUnsaved={(path, text, message) => go({ kind: 'unsaved', path, text, message })}
             linkTargets={linkTargets}
             footer={<Backlinks links={links.backlinks.get(view.path) ?? []} onOpen={openNote} />}
-            dashboard={dashboard}
+            periodic={periodicPage}
             onOpenNote={openNote}
+            onOpenPeriod={openPeriodicOrSay}
           />
         )}
         {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}

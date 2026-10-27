@@ -28,6 +28,17 @@ function rand() {
 const int = (min, max) => min + Math.floor(rand() * (max - min + 1));
 const pick = (list) => list[Math.floor(rand() * list.length)];
 
+// A second sequence for what came later (time blocks, the social number), so adding it
+// left every value drawn from the first one as it was.
+let laterSeed = 20261027;
+function later() {
+  laterSeed = (laterSeed + 0x6d2b79f5) | 0;
+  let t = Math.imul(laterSeed ^ (laterSeed >>> 15), 1 | laterSeed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const laterInt = (min, max) => min + Math.floor(later() * (max - min + 1));
+
 function write(path, text) {
   const full = join(out, path);
   mkdirSync(dirname(full), { recursive: true });
@@ -358,6 +369,21 @@ DAYS.forEach((day, i) => {
   };
   dailyStats.set(dmy(day), stats);
 
+  // The time each task took, as the vault's timer logs it under the task: "    - 10:56–11:09".
+  // One stretch, or two with a break between when it ran long; they add up to its minutes.
+  let clock = 8 * 60 + laterInt(0, 90);
+  const clockText = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+  const blocks = tasks.map((task) => {
+    const parts = task.minutes > 50 && later() < 0.5 ? [Math.round(task.minutes / 2), task.minutes - Math.round(task.minutes / 2)] : [task.minutes];
+    return parts.map((length, n) => {
+      clock += n ? laterInt(15, 40) : laterInt(10, 50);
+      const block = `    - ${clockText(clock)}–${clockText(clock + length)}`;
+      clock += length;
+      return block;
+    });
+  });
+  const social = laterInt(3, 9);
+
   const prev = addDays(day, -1);
   const next = addDays(day, 1);
   const media = [
@@ -380,6 +406,7 @@ sleep: ${stats.sleep}
 focus: ${stats.focus}
 energy: ${stats.energy}
 mood: ${stats.mood}
+soc: ${social}
 ---
 
 ***А сегодня что для завтра сделал я?***
@@ -396,7 +423,7 @@ ${HABITS.map((habit) => `> - [${rand() < 0.6 ? 'x' : ' '}] ${habit}`).join('\n')
 ## ${longDate(day)}
 
 ### Tasks
-${tasks.map((task) => `- [${task.done ? 'x' : ' '}] #daily/${task.tag} — ${task.text} [minutes::${task.minutes}]`).join('\n')}
+${tasks.map((task, n) => [`- [${task.done ? 'x' : ' '}] #daily/${task.tag} — ${task.text} [minutes::${task.minutes}]`, ...blocks[n]].join('\n')).join('\n')}
 
 ${media.length ? `${media.join('\n')}\n\n` : ''}**Gratitude practice:** ${pick(GRATITUDE)}
 
