@@ -157,6 +157,15 @@ describe('the homepage', () => {
     expect(screen.getByTestId('sport-floor')).toHaveTextContent('0 / 150 min');
   });
 
+  it('names no lead sphere before any time is logged, and still shows the sport floor', () => {
+    render(<Home {...props({ days: [], dayOf: (date) => ({ date }) })} />);
+    const lead = screen.getByTestId('lead-sphere');
+    expect(lead).toHaveTextContent('No XP yet.');
+    expect(lead).not.toHaveTextContent('Career/Work');
+    expect(screen.getByTestId('sport-floor')).toHaveTextContent('0 / 150 min');
+    expect(screen.getByTestId('hero-title')).toHaveTextContent('Level 1');
+  });
+
   it("shows the shelves with this year's count", async () => {
     const user = userEvent.setup();
     const onOpenNote = vi.fn();

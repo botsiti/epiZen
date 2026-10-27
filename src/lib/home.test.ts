@@ -113,6 +113,8 @@ describe('the demo vault on the homepage', () => {
     });
     expect(spheres.reduce((sum, sphere) => sum + sphere.xp, 0)).toBe(lifeXp(days));
     expect(leadSphere(spheres)).toMatchObject({ name: 'Personal Growth', level: 3, left: 1017 });
+    // A vault with no time logged yet has no lead sphere, rather than the first in the list.
+    expect(leadSphere(sphereXp([]))).toBeUndefined();
   });
 
   it('keeps a streak of all 60 days, and gives today grace until something is logged', () => {

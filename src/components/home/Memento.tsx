@@ -22,10 +22,8 @@ export function Memento({ today, birth, i }: { today: Date; birth?: Date; i: num
         {spans.map((span) => (
           <li key={span.label} data-span={span.label}>
             <span className="memento-label">{span.label}</span>
-            <Bar share={span.share} color={span.color} />
-            <span className="memento-share" style={{ color: span.color }}>
-              {(span.share * 100).toFixed(1)}%
-            </span>
+            <Bar share={span.share} />
+            <span className="memento-share">{(span.share * 100).toFixed(1)}%</span>
             <span className="memento-left">{thousands(span.daysLeft)}d</span>
           </li>
         ))}

@@ -66,32 +66,37 @@ const HEALTH = SPHERES.find((sphere) => sphere.name === 'Health/Fitness')?.color
 export function LeadSphere({ spheres, dayOf, today, i }: { spheres: SphereState[]; dayOf: (date: Date) => DayEntry; today: Date; i: number }) {
   const lead = leadSphere(spheres);
   const sport = useMemo(() => categoryMinutes(weekDays(dayOf, today), 'sport'), [dayOf, today]);
-  if (!lead) return null;
   return (
-    <section className="card glass rise lead-sphere" style={{ ...order(i), '--tone': lead.color } as CSSProperties} data-testid="lead-sphere">
+    <section className="card glass rise lead-sphere" style={{ ...order(i), '--tone': lead?.color ?? 'var(--accent)' } as CSSProperties} data-testid="lead-sphere">
       <div className="card-head">
         <p className="tile-label lead-label">Lead sphere</p>
-        <span className="card-note">{percent(lead.share)}</span>
+        {lead && <span className="card-note">{percent(lead.share)}</span>}
       </div>
-      <p className="lead-level">
-        Lv <CountUp value={lead.level} />
-      </p>
-      <p className="lead-name">{lead.name}</p>
-      <Bar share={lead.share} color={lead.color} />
-      <div className="lead-stats">
-        <div>
-          <p className="tile-label">Sphere XP</p>
-          <p className="lead-number" style={{ color: lead.color }}>
-            <CountUp value={lead.xp} format={thousands} />
+      {lead ? (
+        <>
+          <p className="lead-level">
+            Lv <CountUp value={lead.level} />
           </p>
-        </div>
-        <div>
-          <p className="tile-label">To next</p>
-          <p className="lead-number">
-            <CountUp value={lead.left} format={thousands} />
-          </p>
-        </div>
-      </div>
+          <p className="lead-name">{lead.name}</p>
+          <Bar share={lead.share} color={lead.color} />
+          <div className="lead-stats">
+            <div>
+              <p className="tile-label">Sphere XP</p>
+              <p className="lead-number" style={{ color: lead.color }}>
+                <CountUp value={lead.xp} format={thousands} />
+              </p>
+            </div>
+            <div>
+              <p className="tile-label">To next</p>
+              <p className="lead-number">
+                <CountUp value={lead.left} format={thousands} />
+              </p>
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="lead-empty">No XP yet. Minutes logged on a daily task, like “[minutes::30]”, grow the sphere it belongs to.</p>
+      )}
       <div className="sport-floor" style={{ '--tone': HEALTH } as CSSProperties} data-testid="sport-floor">
         <span>
           <span className="tile-label">Sport floor</span>

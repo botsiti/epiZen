@@ -181,8 +181,9 @@ export function sphereXp(days: DayEntry[]): SphereState[] {
   return SPHERES.map(({ name, color }) => ({ name, color, ...progress(xp.get(name) ?? 0) }));
 }
 
-/** The sphere with the most XP; the first of them on a tie. */
-export const leadSphere = (spheres: SphereState[]) => spheres.reduce<SphereState | undefined>((lead, sphere) => (!lead || sphere.xp > lead.xp ? sphere : lead), undefined);
+/** The sphere with the most XP, the first of them on a tie; none while no sphere has any. */
+export const leadSphere = (spheres: SphereState[]) =>
+  spheres.reduce<SphereState | undefined>((lead, sphere) => (sphere.xp > (lead?.xp ?? 0) ? sphere : lead), undefined);
 
 /** Minutes logged in one category over some days. */
 export const categoryMinutes = (days: DayEntry[], name: string) =>
@@ -205,30 +206,27 @@ export const WEEK_COLUMNS = 52;
 
 export interface Span {
   label: string;
-  color: string;
   /** How much of it has passed, 0 to 1. */
   share: number;
   daysLeft: number;
 }
 
-function span(label: string, color: string, start: Date, end: Date, today: Date): Span {
+function span(label: string, start: Date, end: Date, today: Date): Span {
   const total = daysBetween(start, end);
   const elapsed = Math.min(Math.max(daysBetween(start, today), 0), total);
-  return { label, color, share: total > 0 ? elapsed / total : 0, daysLeft: Math.max(0, daysBetween(today, end)) };
+  return { label, share: total > 0 ? elapsed / total : 0, daysLeft: Math.max(0, daysBetween(today, end)) };
 }
-
-const sphereColor = (name: Sphere) => SPHERES.find((sphere) => sphere.name === name)?.color ?? 'var(--accent)';
 
 /**
  * How much of the year, the month and (with a birth date) life up to 30 has passed. The weeks
  * are a personal year's 52 parts, birthday to birthday, so a cell is about 7.02 days, not exactly 7.
  */
 export function memento(today: Date, birth?: Date) {
-  const year = span('Year', sphereColor('Personal Growth'), day(today.getFullYear(), 0, 1), day(today.getFullYear() + 1, 0, 1), today);
-  const month = span('Month', sphereColor('Social'), startOfMonth(today), day(today.getFullYear(), today.getMonth() + 1, 1), today);
+  const year = span('Year', day(today.getFullYear(), 0, 1), day(today.getFullYear() + 1, 0, 1), today);
+  const month = span('Month', startOfMonth(today), day(today.getFullYear(), today.getMonth() + 1, 1), today);
   if (!birth) return { spans: [year, month] };
   const target = day(birth.getFullYear() + TARGET_AGE, birth.getMonth(), birth.getDate());
-  const life = span(`Till ${TARGET_AGE}`, sphereColor('Career/Work'), birth, target, today);
+  const life = span(`Till ${TARGET_AGE}`, birth, target, today);
   const cells = WEEK_COLUMNS * TARGET_AGE;
   const total = target.getTime() - birth.getTime();
   const elapsed = Math.min(Math.max(today.getTime() - birth.getTime(), 0), total);

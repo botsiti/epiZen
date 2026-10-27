@@ -47,6 +47,7 @@ import {
 } from './lib/periodic';
 import { metricScale, type DayEntry } from './lib/rollup';
 import { flushAll } from './lib/saving';
+import { useToday } from './lib/useToday';
 import { buildTree, countFolders } from './lib/tree';
 
 type View =
@@ -92,6 +93,7 @@ export function App() {
   const [month, setMonth] = useState(() => startOfMonth(today()));
   const view = history.at(-1) ?? HOME;
   const main = useRef<HTMLElement>(null);
+  const now = useToday();
 
   useEffect(() => {
     let cancelled = false;
@@ -153,10 +155,10 @@ export function App() {
   );
   const openNote = useCallback((path: string) => go({ kind: 'note', path }), [go]);
   const shelves = useMemo(() => collectMedia([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
-  const todayNote = useMemo(() => {
-    const date = today();
-    return { date, path: periodicNotes.get(periodKey('day', date)), name: noteTitle(periodicPath('day', date, periodic)) };
-  }, [periodic, periodicNotes]);
+  const todayNote = useMemo(
+    () => ({ date: now, path: periodicNotes.get(periodKey('day', now)), name: noteTitle(periodicPath('day', now, periodic)) }),
+    [now, periodic, periodicNotes],
+  );
   // Everything a daily, weekly or monthly note's page reads from the rest of the vault.
   const dayOf = useCallback(
     (date: Date): DayEntry => {
@@ -215,13 +217,12 @@ export function App() {
       insert: (titles.get(noteTitle(path)) ?? 0) > 1 ? path : undefined,
     }));
     // Daily notes that don't exist yet can be linked too; following the link creates them.
-    const now = today();
     for (const [offset, detail] of [[0, 'today'], [-1, 'yesterday'], [1, 'tomorrow']] as const) {
       const path = periodicPath('day', addDays(now, offset), periodic).replace(/\.md$/i, '');
       if (!titles.has(noteTitle(path))) targets.push({ label: noteTitle(path), detail });
     }
     return targets;
-  }, [notes, periodic]);
+  }, [notes, periodic, now]);
   // Reads the vault's files and texts again after the app created a note.
   const refresh = useCallback(async () => {
     const [found, read] = await Promise.all([listFiles(), readAllNotes()]);

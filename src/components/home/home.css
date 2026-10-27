@@ -135,6 +135,10 @@
   text-align: right;
 }
 
+.memento-share {
+  color: var(--accent);
+}
+
 .memento-left {
   color: var(--text-faint);
 }
@@ -536,6 +540,12 @@
   font-size: 13.5px;
 }
 
+.lead-empty {
+  margin: 0 0 var(--space-4);
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
 .lead-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -599,8 +609,10 @@
 
 /* Shelves: rated covers, a glass card per folder. */
 
+/* One column as wide as the page: a grid item otherwise grows to its covers' widest row. */
 .shelves {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
 

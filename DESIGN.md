@@ -25,7 +25,9 @@ The second exception is the daily, weekly and monthly pages (below): their chart
 task category, daily number and habit, in the jewel set the vault's Obsidian dashboards use
 (`src/lib/categories.ts`), so time and moods can be told apart at a glance. Colour there is data,
 never decoration. The homepage shares that look, and adds one set: each life sphere in its colour
-from the Obsidian homepage (`SPHERES` in the same file), also used for the memento mori's bars.
+from the Obsidian homepage (`SPHERES` in the same file), wherever a sphere is meant: its row, the
+lead sphere, and the sport floor (Health/Fitness). The memento mori's bars mean no sphere, so they
+stay sage.
 
 The accent is sage everywhere else. No red for errors, no green for success, no
 colour per callout type. A link to a missing note is muted with a dotted underline, not red.
