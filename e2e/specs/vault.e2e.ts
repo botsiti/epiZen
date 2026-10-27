@@ -198,7 +198,8 @@ describe('the demo vault', () => {
     await showMonth('August 2026');
     await $('[data-testid="calendar-day"][data-date="2026-08-14"]').click();
     await showTab('Overview');
-    await expect($('[data-testid="tile-tasks"]')).toHaveText(expect.stringContaining('3 / 5'));
+    // Plan done is the share of ticked tasks: 3 of 5.
+    await expect($('[data-testid="tile-plan"]')).toHaveText(expect.stringContaining('60%'));
     await expect($('[data-testid="tile-time"]')).toHaveText(expect.stringContaining('4h 19m'));
     await expect($('[data-testid="tile-xp"]')).toHaveText(expect.stringContaining('259'));
     await expect($('[data-testid="tile-habits"]')).toHaveText(expect.stringContaining('4 / 7'));
@@ -212,21 +213,32 @@ describe('the demo vault', () => {
     const line = before.split('\n').indexOf(task);
     expect(line).toBeGreaterThan(0);
     await $(`[data-testid="dash-task"][data-line="${line}"]`).click();
-    const ticked = before.replace(task, task.replace('[ ]', '[x]'));
+    // The tick, and the plan done it makes (4 of 5), in one write.
+    const ticked = before.replace(task, task.replace('[ ]', '[x]')).replace('\ndone: 60\n', '\ndone: 80\n');
     await browser.waitUntil(() => read() === ticked, { timeout: 5000, timeoutMsg: 'the tick never reached the note' });
-    await expect($('[data-testid="tile-tasks"]')).toHaveText(expect.stringContaining('4 / 5'));
+    await expect($('[data-testid="tile-plan"]')).toHaveText(expect.stringContaining('80%'));
 
     // Mood is out of 5, as in the vault; the third segment sets 3.
     await $('[data-testid="check-in"] [data-metric="mood"] [data-value="3"]').click();
     const mood = ticked.replace('\nmood: 5\n', '\nmood: 3\n');
     await browser.waitUntil(() => read() === mood, { timeout: 5000, timeoutMsg: 'the mood never reached the note' });
 
+    // The summary is written in place, into the summary callout.
+    await $('[data-testid="summary"]').click();
+    await $('[data-testid="summary-field"]').setValue('Busy, calm, and the page shipped.');
+    await $('[data-testid="tile-xp"]').click();
+    const summarised = mood.replace('> Busy but calm.\n', '> Busy, calm, and the page shipped.\n');
+    await browser.waitUntil(() => read() === summarised, { timeout: 5000, timeoutMsg: 'the summary never reached the note' });
+
     await showTab('Tasks');
     await $('[data-testid="composer-category"][data-category="sport"]').click();
     await $('[data-testid="composer-text"]').setValue('evening run');
     await $('[data-testid="composer-minutes"]').setValue('30');
     await $('[data-testid="composer-add"]').click();
-    const added = mood.replace('    - 16:37–17:09\n', '    - 16:37–17:09\n- [ ] #daily/sport — evening run [minutes::30]\n');
+    // A sixth task, still open: plan done goes to 4 of 6.
+    const added = summarised
+      .replace('    - 16:37–17:09\n', '    - 16:37–17:09\n- [ ] #daily/sport — evening run [minutes::30]\n')
+      .replace('\ndone: 80\n', '\ndone: 67\n');
     await browser.waitUntil(() => read() === added, { timeout: 5000, timeoutMsg: 'the new task never reached the note' });
     expect(await $$('[data-testid="task-card"]').length).toBe(6);
     await screenshot('25-day-tasks');

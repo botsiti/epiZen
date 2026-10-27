@@ -29,7 +29,8 @@ describe('rollup', () => {
     expect(week.average('mood')).toBe(3);
     expect(week.average('soc')).toBe(3);
     expect(week.average('sleep')).toBeUndefined();
-    expect(week.series('done')).toEqual([100, 50, undefined]);
+    // Plan done is the share of ticked tasks: Monday's two of two, Tuesday's none of one.
+    expect(week.series('done')).toEqual([100, 0, undefined]);
     expect(week.perfect).toBe(1);
   });
 

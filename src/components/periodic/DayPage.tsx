@@ -73,7 +73,7 @@ export function DayPage({ spec, path, text, actions }: Props) {
           </>
         }
       >
-        {day.summary ? <BlurText text={day.summary} className="hero-summary" /> : <p className="hero-summary faint">No summary of the day yet.</p>}
+        <Summary text={day.summary} onSave={actions.onSetSummary} />
         {day.important && (
           <p className="hero-important" data-testid="important">
             <span className="kicker">Important</span> {day.important}
@@ -108,6 +108,42 @@ export function DayPage({ spec, path, text, actions }: Props) {
   );
 }
 
+/**
+ * The day's summary under its date: a few words about the day, written in place. A click opens it
+ * for writing; leaving the field or ⌘↩ saves it into the note's summary callout, Escape lets it go.
+ */
+function Summary({ text, onSave }: { text?: string; onSave: (summary: string) => void }) {
+  const [draft, setDraft] = useState<string>();
+  if (draft !== undefined) {
+    const save = () => {
+      if (draft.trim() !== (text ?? '').trim()) onSave(draft.trim());
+      setDraft(undefined);
+    };
+    return (
+      <textarea
+        className="hero-summary summary-field"
+        autoFocus
+        value={draft}
+        rows={Math.max(2, draft.split('\n').length)}
+        placeholder="A few words about the day: what happened, what came to mind."
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={save}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setDraft(undefined);
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) event.currentTarget.blur();
+        }}
+        aria-label="Summary of the day"
+        data-testid="summary-field"
+      />
+    );
+  }
+  return (
+    <button type="button" className="summary-button" onClick={() => setDraft(text ?? '')} title="Write about the day" data-testid="summary">
+      {text ? <BlurText text={text} className="hero-summary" /> : <span className="hero-summary faint">Write a few words about the day…</span>}
+    </button>
+  );
+}
+
 /** On today's note: what yesterday's note never got, with a way back to it. */
 function YesterdayGaps({ spec, onOpen }: { spec: PeriodicSpec; onOpen: () => void }) {
   const yesterday = spec.dayOf(addDays(spec.date, -1));
@@ -136,9 +172,20 @@ function Overview({ day, spec, actions }: { day: Day; spec: PeriodicSpec; action
         <Tile label="Time logged" i={1} testId="tile-time" meta={<SplitBar main={totals.main} recovery={totals.recovery} />}>
           <CountUp value={totals.logged} format={formatMinutes} />
         </Tile>
-        <Tile label="Tasks" i={2} testId="tile-tasks" meta={<Bar share={totals.tasks ? totals.tasksDone / totals.tasks : 0} />}>
-          <CountUp value={totals.tasksDone} />
-          <span className="of"> / {totals.tasks}</span>
+        <Tile
+          label="Plan done"
+          i={2}
+          testId="tile-plan"
+          meta={
+            <span className="split-bar-wrap">
+              <Bar share={(day.numbers.done ?? 0) / 100} />
+              <span>
+                {totals.tasksDone} of {totals.tasks} tasks
+              </span>
+            </span>
+          }
+        >
+          <CountUp value={day.numbers.done ?? 0} format={(n) => `${Math.round(n)}%`} />
         </Tile>
         <Tile label="Habits" i={3} testId="tile-habits" meta={<HabitDots habits={day.habits} />}>
           <CountUp value={totals.habitsDone} />
@@ -220,11 +267,6 @@ function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: (k
           <span className="check-label">Sleep</span>
           <NumberField value={day.numbers.sleep} min={0} max={24} step={0.1} onCommit={(next) => onSet('sleep', next)} label="Sleep" suffix="h" />
           <span className="check-value">{day.numbers.sleep === undefined ? '—' : `${day.numbers.sleep}h`}</span>
-        </li>
-        <li data-metric="done">
-          <span className="check-label">Plan done</span>
-          <NumberField value={day.numbers.done} min={0} max={100} step={1} onCommit={(next) => onSet('done', next)} label="Plan done" suffix="%" />
-          <span className="check-value">{day.numbers.done === undefined ? '—' : `${day.numbers.done}%`}</span>
         </li>
       </ul>
     </div>

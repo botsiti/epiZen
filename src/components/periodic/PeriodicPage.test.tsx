@@ -64,6 +64,7 @@ const actions = (): PeriodicActions => ({
   onToggle: vi.fn(),
   onSetProperty: vi.fn(),
   onAddTask: vi.fn(),
+  onSetSummary: vi.fn(),
   onAddRecord: vi.fn(),
   onUpdateRecord: vi.fn(),
   onDeleteRecord: vi.fn(),
@@ -76,7 +77,9 @@ describe('the day page', () => {
     render(<PeriodicPage spec={spec('day')} path="Calendar/14.08.2026.md" text={DAY} actions={actions()} />);
     expect(screen.getByTestId('hero-title')).toHaveTextContent('14 August');
     expect(screen.getByTestId('note-title')).toHaveTextContent('14.08.2026');
-    expect(screen.getByTestId('tile-tasks')).toHaveTextContent('1 / 2');
+    // One of the two tasks is ticked: plan done is worked out, not typed.
+    expect(screen.getByTestId('tile-plan')).toHaveTextContent('50%');
+    expect(screen.getByTestId('tile-plan')).toHaveTextContent('1 of 2 tasks');
     expect(screen.getByTestId('tile-time')).toHaveTextContent('1h 59m');
     expect(screen.getByTestId('tile-habits')).toHaveTextContent('1 / 2');
     expect(screen.getByTestId('hero')).toHaveTextContent('Busy but calm.');
@@ -95,11 +98,24 @@ describe('the day page', () => {
     await user.type(sleep, '7,5{Enter}');
     expect(act.onSetProperty).toHaveBeenLastCalledWith('sleep', '7.5');
 
-    const done = within(checkIn).getByLabelText('Plan done');
-    await user.clear(done);
-    await user.type(done, '140{Enter}');
+    await user.clear(sleep);
+    await user.type(sleep, '30{Enter}');
     expect(act.onSetProperty).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole('alert')).toHaveTextContent('Plan done is a whole number from 0 to 100.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Sleep is a number from 0 to 24.');
+    expect(within(checkIn).queryByLabelText('Plan done')).not.toBeInTheDocument();
+  });
+
+  it('writes the summary in place: a click opens it, leaving the field saves it', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
+    await user.click(screen.getByTestId('summary'));
+    const field = screen.getByTestId('summary-field');
+    expect(field).toHaveValue('Busy but calm.');
+    await user.clear(field);
+    await user.type(field, 'Shipped the page.');
+    await user.tab();
+    expect(act.onSetSummary).toHaveBeenCalledWith('Shipped the page.');
   });
 
   it('ticks a task, and adds one in the chosen category', async () => {

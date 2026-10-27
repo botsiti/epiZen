@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addTask, setProperty } from './edits';
+import { addTask, setProperty, setSummary, syncPlanDone } from './edits';
 
 // The top of demo-vault/Calendar/2026/days 2026/29.09.2026.md, and its Tasks section.
 const DAY = `---
@@ -96,5 +96,35 @@ describe('addTask', () => {
     expect(() => addTask(DAY, 'code', '  ')).toThrow(/what the task is/);
     expect(() => addTask(DAY, 'code', 'a\nb')).toThrow(/one line/);
     expect(() => addTask('### Tasks\r\n\n', 'code', 'x')).toThrow(/mixes line endings/);
+  });
+});
+
+describe('syncPlanDone', () => {
+  it('writes the share of ticked tasks into done, and only that line', () => {
+    // One of the two tasks in DAY is ticked.
+    expect(changed(DAY, syncPlanDone(DAY))).toEqual([[4, 'done: 50']]);
+    const ticked = DAY.replace('- [ ] #daily/code — review', '- [x] #daily/code — review');
+    expect(syncPlanDone(ticked).split('\n')[4]).toBe('done: 100');
+  });
+
+  it('writes 0 for a day without tasks, and leaves a note without properties alone', () => {
+    expect(syncPlanDone('---\ndone:\n---\n### Tasks\n')).toBe('---\ndone: 0\n---\n### Tasks\n');
+    expect(syncPlanDone('### Tasks\n- [x] a\n')).toBe('### Tasks\n- [x] a\n');
+  });
+});
+
+describe('setSummary', () => {
+  const NOTE = '---\nmood: 3\n---\n\n> [!tldr]+ **Summary of the day:**\n> today\n\n## Day\n';
+
+  it('replaces the callout\'s text and keeps its title line', () => {
+    expect(setSummary(NOTE, 'Shipped it.\nSlept well.')).toBe(NOTE.replace('> today\n', '> Shipped it.\n> Slept well.\n'));
+    expect(setSummary(NOTE, '')).toBe(NOTE.replace('> today\n', '> \n'));
+  });
+
+  it('adds the callout after the properties when the note has none, and keeps CRLF', () => {
+    expect(setSummary('---\nmood: 3\n---\n## Day\n', 'Calm.')).toBe('---\nmood: 3\n---\n\n> [!tldr]+ **Summary of the day:**\n> Calm.\n## Day\n');
+    expect(setSummary('## Day\n', 'Calm.')).toBe('> [!tldr]+ **Summary of the day:**\n> Calm.\n\n## Day\n');
+    const crlf = NOTE.replace(/\n/g, '\r\n');
+    expect(setSummary(crlf, 'Calm.')).toBe(crlf.replace('> today\r\n', '> Calm.\r\n'));
   });
 });

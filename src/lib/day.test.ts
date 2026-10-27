@@ -139,7 +139,8 @@ describe('parseDay', () => {
     expect(filled.tasks[1]?.blocks).toEqual([{ start: 23 * 60 + 10, end: 25 * 60 + 10, line: expect.any(Number) as number }]);
     expect(filled.totals.recovery).toBe(120);
     expect(filled.totals.main).toBe(13);
-    expect(filled.numbers).toEqual({ mood: 3 });
+    // Plan done comes from the tasks (one of two ticked), never from the typed property.
+    expect(filled.numbers).toEqual({ mood: 3, done: 50 });
     expect(filled.keys).toEqual(['done', 'mood', 'soc', 'important']);
     expect(filled.important).toBe('call the bank');
     expect(filled.gratitude).toBeUndefined();
@@ -168,5 +169,17 @@ describe('formatMinutes and clock', () => {
     expect(formatMinutes(40)).toBe('40m');
     expect(clock(8 * 60 + 5)).toBe('08:05');
     expect(clock(25 * 60 + 10)).toBe('01:10');
+  });
+});
+
+describe('summary and plan done', () => {
+  it('reads the template\'s "today" placeholder as no summary', () => {
+    expect(parseDay('> [!tldr]+ **Summary of the day:**\n> today \n').summary).toBeUndefined();
+    expect(parseDay('> [!tldr]+ **Summary of the day:**\n> today I rested\n').summary).toBe('today I rested');
+  });
+
+  it('works plan done out from the tasks, 0 without any, whatever the property says', () => {
+    expect(parseDay('---\ndone: 99\n---\n### Tasks\n').numbers.done).toBe(0);
+    expect(parseDay('### Tasks\n- [x] #daily/code — a\n- [ ] #daily/code — b\n- [x] #daily/code — c\n').numbers.done).toBe(67);
   });
 });

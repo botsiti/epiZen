@@ -106,6 +106,12 @@ function calloutText(lines: string[], type: string): string | undefined {
   return body.join('\n').trim() || undefined;
 }
 
+/** The Obsidian daily template writes "today" into the summary as a placeholder; it says nothing. */
+const summaryOf = (text: string | undefined) => (text && text.trim().toLowerCase() !== 'today' ? text : undefined);
+
+/** The share of tasks ticked, as a whole percentage; 0 when there are none. */
+export const planDone = (tasks: { done: boolean }[]) => (tasks.length ? Math.round((tasks.filter((task) => task.done).length / tasks.length) * 100) : 0);
+
 /** The lines under the first heading that matches, up to the next heading. */
 function section(lines: string[], heading: RegExp): string[] {
   const start = lines.findIndex((line) => /^#{1,6}\s/.test(line) && heading.test(line.replace(/^#{1,6}\s+/, '')));
@@ -144,6 +150,8 @@ export function parseDay(text: string): Day {
 
   const numbers: Record<string, number> = {};
   for (const [key, value] of Object.entries(properties)) if (typeof value === 'number' && Number.isFinite(value)) numbers[key] = value;
+  // Plan done is never typed: it is the share of the day's tasks that are ticked, 0 without any.
+  numbers.done = planDone(tasks);
 
   const minutes = new Map<string, { meta: Category; total: number }>();
   const totals: DayTotals = { logged: 0, main: 0, recovery: 0, xp: 0, claimed: 0, tasksDone: 0, tasks: tasks.length, habitsDone: 0, habits: habits.length };
@@ -169,7 +177,7 @@ export function parseDay(text: string): Day {
     habits,
     numbers,
     keys: Object.keys(properties),
-    summary: calloutText(lines, 'tldr'),
+    summary: summaryOf(calloutText(lines, 'tldr')),
     important: important || undefined,
     gratitude: /^\*\*Gratitude practice:\*\*[ \t]*(.*)$/im.exec(text)?.[1]?.trim() || undefined,
     stream: stream(lines),

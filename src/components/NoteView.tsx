@@ -5,7 +5,7 @@ import { readNote, writeNote, type VaultFile } from '../lib/api';
 import type { LinkTarget } from '../lib/completion';
 import { parseTasks, toggleTask } from '../lib/dashboard';
 import { addRecord, deleteRecord, updateRecord } from '../lib/cbt';
-import { addTask, setProperty } from '../lib/edits';
+import { addTask, setProperty, setSummary, syncPlanDone } from '../lib/edits';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
@@ -102,10 +102,12 @@ export function NoteView(props: ViewProps) {
       onToggle: (task) =>
         change((text) => {
           const target = parseTasks(text).find((t) => t.line === task.line && t.done === task.done);
-          return target && toggleTask(text, target);
+          // Plan done follows the ticks: the same write updates the day's `done`.
+          return target && syncPlanDone(toggleTask(text, target));
         }, 'Nothing was ticked'),
       onSetProperty: (key, value) => change((text) => setProperty(text, key, value), `${key} wasn't set`),
-      onAddTask: (category, words, minutes) => change((text) => addTask(text, category, words, minutes), 'The task wasn\'t added'),
+      onAddTask: (category, words, minutes) => change((text) => syncPlanDone(addTask(text, category, words, minutes)), 'The task wasn\'t added'),
+      onSetSummary: (summary) => change((text) => setSummary(text, summary), "The summary wasn't saved"),
       onAddRecord: (input) => {
         const now = new Date();
         const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;

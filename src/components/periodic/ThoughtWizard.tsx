@@ -1,5 +1,4 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import bird from '../../assets/epi-bird-sage.png';
 import { DISTORTIONS, EMOTIONS, emotionOf, type RecordInput, type ThoughtRecord } from '../../lib/cbt';
 
 // A thought record, five steps at a time, as the vault's Obsidian wizard walks it (rpg-day.js):
@@ -71,13 +70,9 @@ export function ThoughtWizard({ record, onSave, onClose }: Props) {
           ) : (
             <>
               <header className="wizard-head">
-                <span className="wizard-bird">
-                  <img src={bird} alt="" />
-                </span>
-                <div>
-                  <h2>{STEPS[step]?.title}</h2>
-                  <p>{STEPS[step]?.subtitle}</p>
-                </div>
+                <p className="kicker">Thought record · {['The moment', 'Feelings', 'Thinking traps', 'A fairer view', 'Checking in'][step]}</p>
+                <h2>{STEPS[step]?.title}</h2>
+                <p>{STEPS[step]?.subtitle}</p>
               </header>
               {step === 0 && (
                 <>
@@ -112,7 +107,7 @@ export function ThoughtWizard({ record, onSave, onClose }: Props) {
         </div>
 
         <footer className="wizard-foot">
-          <span className="wizard-step">{done ? 'Complete' : `Step ${step + 1} / ${STEPS.length}`}</span>
+          <span className="wizard-step">{done ? 'Complete' : `Step ${step + 1} of ${STEPS.length}`}</span>
           <button
             type="button"
             className="wizard-continue"
@@ -259,8 +254,8 @@ function Traps({ picked, onChange }: { picked: string[]; onChange: (picked: stri
 function Summary({ input }: { input: RecordInput }) {
   return (
     <div className="wizard-done">
-      <span className="wizard-bird is-large">
-        <img src={bird} alt="" />
+      <span className="done-mark" aria-hidden="true">
+        ✓
       </span>
       <h2>Nicely done.</h2>
       <p>You stayed with something hard and looked at it clearly.</p>

@@ -13,14 +13,14 @@ export interface Emotion {
   shades: string[];
 }
 
-/** The wheel, clockwise from the top, with the Obsidian wizard's colours and shades. */
+/** The wheel, clockwise from the top, with the Obsidian wizard's shades, in the app's own jewel colours. */
 export const EMOTIONS: Emotion[] = [
-  { name: 'Happy', color: '#4F86C6', shades: ['Joyful', 'Content', 'Proud', 'Grateful', 'Excited', 'Hopeful', 'Playful'] },
-  { name: 'Fear', color: '#D0883C', shades: ['Anxious', 'Insecure', 'Overwhelmed', 'Worried', 'Scared', 'Nervous'] },
-  { name: 'Anger', color: '#C0453C', shades: ['Frustrated', 'Offended', 'Jealous', 'Irritated', 'Resentful', 'Bitter'] },
-  { name: 'Sad', color: '#9E4A44', shades: ['Lonely', 'Hurt', 'Disappointed', 'Vulnerable', 'Guilty', 'Empty', 'Ashamed'] },
-  { name: 'Surprise', color: '#9B84C4', shades: ['Amazed', 'Curious', 'Confused', 'Startled', 'Moved'] },
-  { name: 'Peaceful', color: '#74B98A', shades: ['Calm', 'Relaxed', 'Relieved', 'Secure', 'Rested', 'Centered'] },
+  { name: 'Happy', color: '#e2b356', shades: ['Joyful', 'Content', 'Proud', 'Grateful', 'Excited', 'Hopeful', 'Playful'] },
+  { name: 'Fear', color: '#e8864f', shades: ['Anxious', 'Insecure', 'Overwhelmed', 'Worried', 'Scared', 'Nervous'] },
+  { name: 'Anger', color: '#e06681', shades: ['Frustrated', 'Offended', 'Jealous', 'Irritated', 'Resentful', 'Bitter'] },
+  { name: 'Sad', color: '#6fa5e6', shades: ['Lonely', 'Hurt', 'Disappointed', 'Vulnerable', 'Guilty', 'Empty', 'Ashamed'] },
+  { name: 'Surprise', color: '#b48ede', shades: ['Amazed', 'Curious', 'Confused', 'Startled', 'Moved'] },
+  { name: 'Peaceful', color: '#63bd92', shades: ['Calm', 'Relaxed', 'Relieved', 'Secure', 'Rested', 'Centered'] },
 ];
 
 /** The core emotion a shade belongs to, if it is one of the wheel's. */
