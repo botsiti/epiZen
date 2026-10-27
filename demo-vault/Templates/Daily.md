@@ -12,7 +12,6 @@ energy:
 mood:
 ---
 
-***А сегодня что для завтра сделал я?***
 > [!tldr]+ **Summary of the day:**
 > 
 

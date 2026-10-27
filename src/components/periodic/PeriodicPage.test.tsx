@@ -66,7 +66,7 @@ const actions = (): PeriodicActions => ({
 
 describe('the day page', () => {
   it("shows the day's totals and words", () => {
-    render(<PeriodicPage spec={spec('day')} path="Calendar/14.08.2026.md" text={DAY} actions={actions()} note={<p>the note</p>} />);
+    render(<PeriodicPage spec={spec('day')} path="Calendar/14.08.2026.md" text={DAY} actions={actions()} />);
     expect(screen.getByTestId('hero-title')).toHaveTextContent('14 August');
     expect(screen.getByTestId('note-title')).toHaveTextContent('14.08.2026');
     expect(screen.getByTestId('tile-tasks')).toHaveTextContent('1 / 2');
@@ -78,7 +78,7 @@ describe('the day page', () => {
   it('sets a number from a tap, a typed number, and refuses one out of range', async () => {
     const user = userEvent.setup();
     const act = actions();
-    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} note={null} />);
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
     const checkIn = screen.getByTestId('check-in');
     await user.click(within(checkIn).getByRole('radio', { name: 'Mood 3' }));
     expect(act.onSetProperty).toHaveBeenCalledWith('mood', '3');
@@ -98,7 +98,7 @@ describe('the day page', () => {
   it('ticks a task, and adds one in the chosen category', async () => {
     const user = userEvent.setup();
     const act = actions();
-    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} note={null} />);
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
     await user.click(screen.getAllByTestId('dash-task')[0] as HTMLElement);
     expect(act.onToggle).toHaveBeenCalledWith(expect.objectContaining({ line: 19, done: false }));
 
@@ -109,14 +109,6 @@ describe('the day page', () => {
     await user.click(screen.getByTestId('composer-add'));
     expect(act.onAddTask).toHaveBeenCalledWith('sport', 'evening run', 30);
   });
-
-  it('shows the note itself on the Note tab', async () => {
-    const user = userEvent.setup();
-    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={actions()} note={<p>the note</p>} />);
-    await user.click(screen.getByRole('tab', { name: 'Note' }));
-    expect(screen.getByTestId('note')).toHaveTextContent('the note');
-    await user.click(screen.getByRole('tab', { name: 'Overview' }));
-  });
 });
 
 describe('the week and month pages', () => {
@@ -124,7 +116,7 @@ describe('the week and month pages', () => {
     const user = userEvent.setup();
     const act = actions();
     const monday = addDays(DATE, -4);
-    render(<PeriodicPage spec={spec('week', monday)} path="w.md" text={'#### Plus\n- Shipped\n'} actions={act} note={null} />);
+    render(<PeriodicPage spec={spec('week', monday)} path="w.md" text={'#### Plus\n- Shipped\n'} actions={act} />);
     expect(screen.getAllByTestId('day-card')).toHaveLength(7);
     expect(screen.getByTestId('reflections')).toHaveTextContent('Shipped');
     expect(screen.getByTestId('tile-productive')).toHaveTextContent('1h 59m');
@@ -133,7 +125,7 @@ describe('the week and month pages', () => {
   });
 
   it('light a month day by day', () => {
-    render(<PeriodicPage spec={spec('month', new Date(2026, 7, 1))} path="m.md" text="" actions={actions()} note={null} />);
+    render(<PeriodicPage spec={spec('month', new Date(2026, 7, 1))} path="m.md" text="" actions={actions()} />);
     expect(screen.getAllByTestId('heatmap-day')).toHaveLength(31);
     expect(screen.getByTestId('hero-title')).toHaveTextContent('August 2026');
   });

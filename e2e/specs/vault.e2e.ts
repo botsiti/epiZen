@@ -47,33 +47,20 @@ describe('the demo vault', () => {
     await screenshot('04-daily-note');
   });
 
-  it("shows the note's own text on the Note tab, where its tasks cannot be ticked", async () => {
-    await showTab('Note');
-    await expect($('[data-testid="properties"]')).toHaveText(expect.stringContaining('mood'));
-    const boxes = await $$('[data-testid="note"] .note-body input[type="checkbox"]').getElements();
-    expect(boxes.length).toBeGreaterThan(0);
-    for (const box of boxes) await expect(box).toBeDisabled();
-  });
-
-  it('follows a wikilink to the week', async () => {
-    await followLink('2026-W33 - 10.08.26');
+  it('goes up from the day to its week, and from the week to its month', async () => {
+    await $('[data-testid="nav-week"]').click();
     await expect(title()).toHaveText('2026-W33 - 10.08.26');
     await showTab('Overview');
     await screenshot('05-weekly-note');
-  });
-
-  it('follows a wikilink to the month', async () => {
-    await showTab('Note');
-    await followLink('08.26 RPG');
+    await $('[data-testid="nav-month"]').click();
     await expect(title()).toHaveText('08.26 RPG');
     await showTab('Overview');
+    await expect($('[data-testid="hero-title"]')).toHaveText('August 2026');
     await screenshot('06-monthly-note');
-    await showTab('Note');
-    await expect($('[data-testid="note"] table')).toBeDisplayed();
   });
 
-  it('shows an album with its cover', async () => {
-    await followLink('Glasshouse Weather');
+  it('opens an album from the covers of what the month listened to', async () => {
+    await $('[data-testid="mini-covers"] button[title="listened: Glasshouse Weather"]').click();
     await expect(title()).toHaveText('Glasshouse Weather');
     const cover = $('[data-testid="vault-image"]');
     await cover.waitForDisplayed();
@@ -94,10 +81,9 @@ describe('the demo vault', () => {
     await screenshot('09-youtube');
   });
 
-  it('creates a missing day from a link to it, from its template', async () => {
+  it('creates the missing day before from its template', async () => {
     await openNote(`${DAYS}/01.08.2026.md`);
-    await showTab('Note');
-    await followLink('31.07.2026');
+    await $('[data-testid="nav-prev"]').click();
     await expect(title()).toHaveText('31.07.2026');
     expect(readFileSync(join(vaultCopy(), `${DAYS}/31.07.2026.md`), 'utf8')).toContain('[[01.08.2026|Tomorrow →]]');
     await screenshot('10-day-from-link');
@@ -191,8 +177,6 @@ describe('the demo vault', () => {
     await showMonth('July 2026');
     await $('[data-testid="calendar-day"][data-date="2026-07-30"]').click();
     await expect(title()).toHaveText('30.07.2026');
-    await showTab('Note');
-    await expect($('[data-testid="properties"]')).toHaveText(expect.stringContaining('Daily'));
     const text = readFileSync(join(vaultCopy(), `${DAYS}/30.07.2026.md`), 'utf8');
     expect(text).toMatch(/^---\ndate: 2026-07-30T\d\d:\d\d\n/);
     expect(text).toContain('[[29.07.2026|← Yesterday]] | [[31.07.2026|Tomorrow →]] | [[2026-W31 - 27.07.26|Week]]');
@@ -221,9 +205,9 @@ describe('the demo vault', () => {
     await browser.waitUntil(() => read() === ticked, { timeout: 5000, timeoutMsg: 'the tick never reached the note' });
     await expect($('[data-testid="tile-tasks"]')).toHaveText(expect.stringContaining('4 / 5'));
 
-    // The demo's moods run to 9, so mood is out of 10; the third segment sets 3.
+    // Mood is out of 5, as in the vault; the third segment sets 3.
     await $('[data-testid="check-in"] [data-metric="mood"] [data-value="3"]').click();
-    const mood = ticked.replace('\nmood: 9\n', '\nmood: 3\n');
+    const mood = ticked.replace('\nmood: 5\n', '\nmood: 3\n');
     await browser.waitUntil(() => read() === mood, { timeout: 5000, timeoutMsg: 'the mood never reached the note' });
 
     await showTab('Tasks');
@@ -236,9 +220,6 @@ describe('the demo vault', () => {
     expect(await $$('[data-testid="task-card"]').length).toBe(6);
     await screenshot('25-day-tasks');
 
-    await showTab('Timeline');
-    expect(await $$('[data-testid="time-block"]').length).toBeGreaterThan(0);
-    await screenshot('26-day-timeline');
     await showTab('Habits');
     expect(await $$('[data-testid="habit-pill"]').length).toBe(7);
     await screenshot('27-day-habits');

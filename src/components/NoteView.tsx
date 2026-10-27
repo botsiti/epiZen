@@ -143,12 +143,6 @@ export function NoteView(props: ViewProps) {
         text={note.text}
         actions={actions}
         warning={changeError}
-        note={
-          <>
-            <NoteBody path={path} text={note.text} files={files} onOpenLink={onOpenLink} />
-            {footer}
-          </>
-        }
       />
     );
   }

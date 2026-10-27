@@ -12,13 +12,12 @@ cssclasses:
   - tuesday
 done: 83
 sleep: 7.8
-focus: 5
-energy: 4
-mood: 5
-soc: 6
+focus: 3
+energy: 2
+mood: 3
+soc: 3
 ---
 
-***А сегодня что для завтра сделал я?***
 > [!tldr]+ **Summary of the day:**
 > Rested. Did what mattered.
 
@@ -127,7 +126,7 @@ describe('parseDay', () => {
   });
 
   it('reads the numbers, the summary and the words of the day', () => {
-    expect(day.numbers).toMatchObject({ done: 83, sleep: 7.8, focus: 5, energy: 4, mood: 5, soc: 6 });
+    expect(day.numbers).toMatchObject({ done: 83, sleep: 7.8, focus: 3, energy: 2, mood: 3, soc: 3 });
     expect(day.summary).toBe('Rested. Did what mattered.');
     expect(day.gratitude).toBe('rain at night');
     expect(day.stream).toEqual(['Less news, more sleep. Day 60 of the experiment.']);

@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 import { category, habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, formatDate, isoWeek, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
@@ -7,10 +7,10 @@ import { missingFromDay } from '../../lib/rollup';
 import { Donut, Ring, Segments } from './charts';
 import { order, spark } from './effects';
 import { BlurText, CountUp } from './motion';
-import { Bar, Hero, NavButton, Section, Tabs, Tile, TimeTrack } from './parts';
+import { Bar, Hero, NavButton, Section, Tabs, Tile } from './parts';
 import type { PeriodicActions, PeriodicSpec } from './types';
 
-const TABS = ['Overview', 'Tasks', 'Timeline', 'Habits', 'Stream', 'Note'] as const;
+const TABS = ['Overview', 'Tasks', 'Habits', 'Stream'] as const;
 type Tab = (typeof TABS)[number];
 // The tab last shown, so the next day opens on it too. Kept for the session only.
 let lastTab: Tab = 'Overview';
@@ -22,12 +22,10 @@ interface Props {
   /** The daily note's text as it is now. */
   text: string;
   actions: PeriodicActions;
-  /** The note itself, rendered, for the Note tab. */
-  note: ReactNode;
 }
 
 /** A daily note as a page: how the day went, from the note's own text. */
-export function DayPage({ spec, path, text, actions, note }: Props) {
+export function DayPage({ spec, path, text, actions }: Props) {
   const day = useMemo(() => parseDay(text), [text]);
   const [tab, setTab] = useState<Tab>(lastTab);
   const choose = (next: Tab) => {
@@ -80,14 +78,8 @@ export function DayPage({ spec, path, text, actions, note }: Props) {
       <div className="tab-panel" key={tab}>
         {tab === 'Overview' && <Overview day={day} spec={spec} actions={actions} />}
         {tab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} />}
-        {tab === 'Timeline' && <TimelineTab day={day} />}
         {tab === 'Habits' && <HabitsTab day={day} spec={spec} actions={actions} />}
         {tab === 'Stream' && <StreamTab day={day} />}
-        {tab === 'Note' && (
-          <div className="note-tab" data-testid="note" data-path={path}>
-            {note}
-          </div>
-        )}
       </div>
     </article>
   );
@@ -421,47 +413,6 @@ function Composer({ categories, onAdd }: { categories: string[]; onAdd: (categor
         </button>
       </div>
     </form>
-  );
-}
-
-function TimelineTab({ day }: { day: Day }) {
-  const blocks = day.tasks
-    .flatMap((task) => task.blocks.map((block) => ({ block, task })))
-    .sort((a, b) => a.block.start - b.block.start);
-  const color = (task: DayTask) => task.category?.color ?? 'var(--accent)';
-  return (
-    <>
-      <Section title="The day on one line" note={blocks.length ? `${clock(blocks[0]?.block.start ?? 0)} to ${clock(blocks.at(-1)?.block.end ?? 0)}` : undefined}>
-        <TimeTrack
-          rows={[
-            { key: 'day', label: 'Day', blocks: blocks.map(({ block, task }) => ({ block, color: color(task), title: task.label })) },
-            ...day.tasks
-              .filter((task) => task.blocks.length)
-              .map((task) => ({
-                key: String(task.line),
-                label: task.label || 'untitled',
-                blocks: task.blocks.map((block) => ({ block, color: color(task), title: task.label })),
-              })),
-          ]}
-        />
-      </Section>
-      {blocks.length > 0 && (
-        <Section title="In order" i={1}>
-          <ol className="block-list">
-            {blocks.map(({ block, task }, i) => (
-              <li key={`${block.start}-${task.line}`} className="rise" style={{ ...order(i), '--tone': color(task) } as CSSProperties}>
-                <span className="block-time">
-                  {clock(block.start)}–{clock(block.end)}
-                </span>
-                <span className="chip-dot" />
-                <span className="block-task">{task.label}</span>
-                <span className="faint">{formatMinutes(block.end - block.start)}</span>
-              </li>
-            ))}
-          </ol>
-        </Section>
-      )}
-    </>
   );
 }
 

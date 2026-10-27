@@ -38,6 +38,9 @@ function later() {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 const laterInt = (min, max) => min + Math.floor(later() * (max - min + 1));
+// Mood, energy, focus and social are 1–5 in the vault, as its Obsidian check-in allows. They are
+// drawn on the old 1–10 range and halved, so the draws (and everything after them) stay as they were.
+const outOfFive = (n) => Math.min(5, Math.max(1, Math.round(n / 2)));
 
 function write(path, text) {
   const full = join(out, path);
@@ -362,9 +365,9 @@ DAYS.forEach((day, i) => {
   const stats = {
     done: Math.round((doneCount / tasks.length) * 100),
     sleep: Number((5.5 + rand() * 3).toFixed(1)),
-    focus: int(3, 9),
-    energy: int(3, 9),
-    mood: int(4, 9),
+    focus: outOfFive(int(3, 9)),
+    energy: outOfFive(int(3, 9)),
+    mood: outOfFive(int(4, 9)),
     tasks,
   };
   dailyStats.set(dmy(day), stats);
@@ -382,7 +385,7 @@ DAYS.forEach((day, i) => {
       return block;
     });
   });
-  const social = laterInt(3, 9);
+  const social = outOfFive(laterInt(3, 9));
 
   const prev = addDays(day, -1);
   const next = addDays(day, 1);
@@ -409,7 +412,6 @@ mood: ${stats.mood}
 soc: ${social}
 ---
 
-***А сегодня что для завтра сделал я?***
 > [!tldr]+ **Summary of the day:**
 > ${pick(SUMMARIES)}
 
@@ -565,7 +567,6 @@ energy:
 mood:
 ---
 
-***А сегодня что для завтра сделал я?***
 > [!tldr]+ **Summary of the day:**
 > 
 
