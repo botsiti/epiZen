@@ -18,6 +18,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2.8"
 xattr = "1"
+# Lookups for the library (src/net.rs): https only, to a fixed list of hosts. Pinned, with rustls
+# and the system's certificate store, and no cookies, proxies' auth or anything else.
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls"] }
+# Already in the tree through Tauri; `time` paces MusicBrainz to one request a second.
+tokio = { version = "1", features = ["sync", "time"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"

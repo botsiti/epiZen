@@ -1,6 +1,9 @@
-//! Epizen's backend. The frontend reaches the vault only through the commands below. Two of
-//! them write: `create_note` and `write_note`, both in `vault.rs`.
+//! Epizen's backend. The frontend reaches the vault only through the commands below. Three of
+//! them write: `create_note` and `write_note`, both in `vault.rs`, and `fetch_image_into_vault`,
+//! which saves a cover through `Vault::create_file`. The lookups (`lookup_json`, `lookup_image`
+//! and that one) are the only network access, in `net.rs`.
 
+mod net;
 mod settings;
 mod vault;
 
@@ -14,6 +17,7 @@ use serde_json::{Map, Value};
 use tauri::ipc::Response;
 use tauri::{Emitter, Manager, RunEvent, State, WindowEvent};
 
+pub use net::{Net, NetError, store_image};
 pub use settings::Settings;
 pub use vault::{FileKind, NoteText, Vault, VaultError, VaultFile};
 
@@ -187,6 +191,34 @@ async fn write_note(
     with_vault(state, |vault| vault.write_note(&path, &text, &expected))
 }
 
+/// A search or a details page from one of the lookup services, as JSON.
+#[tauri::command]
+async fn lookup_json(net: State<'_, Net>, url: String) -> Result<Value, String> {
+    net.json(&url).await.map_err(|err| err.to_string())
+}
+
+/// A cover to show in the search results. Nothing is saved.
+#[tauri::command]
+async fn lookup_image(net: State<'_, Net>, url: String) -> Result<Response, String> {
+    net.image(&url).await.map(Response::new).map_err(|err| err.to_string())
+}
+
+/// Downloads a cover and saves it as a new file at `path` (its extension set by what the image
+/// is), never over an existing one. Returns the path it was saved at.
+#[tauri::command]
+async fn fetch_image_into_vault(
+    net: State<'_, Net>,
+    state: Shared<'_>,
+    url: String,
+    path: String,
+) -> Result<String, String> {
+    let bytes = net.image(&url).await.map_err(|err| err.to_string())?;
+    let guard = state
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    net::store_image(guard.vault()?, &path, &bytes).map_err(|err| err.to_string())
+}
+
 #[tauri::command]
 fn get_settings(settings: State<'_, Settings>) -> Map<String, Value> {
     settings.load()
@@ -242,6 +274,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Closing::default())
+        .manage(Net::new().expect("couldn't set up the lookups' HTTP client"))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event
                 && window.state::<Closing>().hold()
@@ -275,6 +308,9 @@ pub fn run() {
             read_image,
             create_note,
             write_note,
+            lookup_json,
+            lookup_image,
+            fetch_image_into_vault,
             get_settings,
             update_settings,
             guard_close,

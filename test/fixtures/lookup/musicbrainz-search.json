@@ -1,0 +1,304 @@
+{
+  "created": "2026-10-27T20:22:12.125Z",
+  "count": 128365,
+  "offset": 0,
+  "release-groups": [
+    {
+      "id": "e87d1cc5-5872-42a5-b1c4-e5f0b19b55f2",
+      "type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "score": 100,
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "artist-credit-id": "ad8c7d5e-bb5d-470a-a596-5e4c23586074",
+      "count": 1,
+      "title": "Dog Man Star",
+      "first-release-date": "2026",
+      "primary-type": "Album",
+      "artist-credit": [
+        {
+          "name": "NERVE",
+          "artist": {
+            "id": "de1950fa-abee-45a5-a9dc-c6f0d3665040",
+            "name": "NERVE",
+            "sort-name": "NERVE",
+            "disambiguation": "Scottish alt-rock band"
+          }
+        }
+      ],
+      "releases": [
+        {
+          "id": "726ba94e-04fb-49d6-bed8-fd3cefab8d31",
+          "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+          "title": "Dog Man Star",
+          "status": "Official"
+        }
+      ]
+    },
+    {
+      "id": "da15737e-3eb3-31e4-97f0-fe46299f75fb",
+      "type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "score": 100,
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "artist-credit-id": "227d0f14-ea3e-341f-95e1-aaa064b59be4",
+      "count": 15,
+      "title": "Dog Man Star",
+      "first-release-date": "1994-10-10",
+      "primary-type": "Album",
+      "artist-credit": [
+        {
+          "name": "Suede",
+          "artist": {
+            "id": "a55c2f1b-3f3f-4d6a-aa30-5e186dbadce6",
+            "name": "Suede",
+            "sort-name": "Suede",
+            "disambiguation": "English rock band"
+          }
+        }
+      ],
+      "tags": [
+        {
+          "count": 1,
+          "name": "rock"
+        },
+        {
+          "count": -1,
+          "name": "alternative rock"
+        },
+        {
+          "count": 0,
+          "name": "alternative"
+        },
+        {
+          "count": 4,
+          "name": "britpop"
+        },
+        {
+          "count": 3,
+          "name": "glam rock"
+        },
+        {
+          "count": 1,
+          "name": "art rock"
+        },
+        {
+          "count": 0,
+          "name": "brit pop"
+        },
+        {
+          "count": 0,
+          "name": "rock and indie"
+        },
+        {
+          "count": 0,
+          "name": "alternative/indie rock"
+        }
+      ],
+      "releases": [
+        {
+          "id": "5003d5a4-d00d-4cc2-b537-0582d545db8b",
+          "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+          "title": "Dog Man Star (30th Anniversary Edition)",
+          "status": "Official"
+        },
+        {
+          "id": "fbe5f6d0-6529-4642-a13a-3a150d33c5bb",
+          "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+          "title": "Dog Man Star",
+          "status": "Official"
+        }
+      ]
+    },
+    {
+      "id": "48992a7c-d96b-31ef-9a1e-ed018bd722ae",
+      "type-id": "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0",
+      "score": 62,
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "artist-credit-id": "227d0f14-ea3e-341f-95e1-aaa064b59be4",
+      "count": 1,
+      "title": "ICA – Dog Man Star September 23, 2003",
+      "primary-type": "Album",
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "artist-credit": [
+        {
+          "name": "Suede",
+          "artist": {
+            "id": "a55c2f1b-3f3f-4d6a-aa30-5e186dbadce6",
+            "name": "Suede",
+            "sort-name": "Suede",
+            "disambiguation": "English rock band"
+          }
+        }
+      ],
+      "releases": [
+        {
+          "id": "858baa70-a09b-45e6-8fe6-e2ee4797c684",
+          "status-id": "1156806e-d06a-38bd-83f0-cf2284a808b9",
+          "title": "ICA – Dog Man Star September 23, 2003",
+          "status": "Bootleg"
+        }
+      ]
+    },
+    {
+      "id": "d8f194f0-ee27-45e6-8e2b-8874ec2df60d",
+      "type-id": "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0",
+      "score": 57,
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "artist-credit-id": "227d0f14-ea3e-341f-95e1-aaa064b59be4",
+      "count": 2,
+      "title": "Dog Man Star. 20th Anniversary Live. Royal Albert Hall.",
+      "first-release-date": "2015-09-04",
+      "primary-type": "Album",
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "artist-credit": [
+        {
+          "name": "Suede",
+          "artist": {
+            "id": "a55c2f1b-3f3f-4d6a-aa30-5e186dbadce6",
+            "name": "Suede",
+            "sort-name": "Suede",
+            "disambiguation": "English rock band"
+          }
+        }
+      ],
+      "tags": [
+        {
+          "count": 0,
+          "name": "rock"
+        },
+        {
+          "count": 2,
+          "name": "alternative rock"
+        },
+        {
+          "count": 2,
+          "name": "indie rock"
+        },
+        {
+          "count": 0,
+          "name": "britpop"
+        },
+        {
+          "count": 0,
+          "name": "glam"
+        }
+      ],
+      "releases": [
+        {
+          "id": "347b7fb1-ea25-4338-9b1c-739a3bfcabc2",
+          "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+          "title": "Dog Man Star 20th Anniversary Live - Royal Albert Hall",
+          "status": "Official"
+        },
+        {
+          "id": "adc5a4be-7150-4555-9998-50a550e6c617",
+          "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+          "title": "Dog Man Star. 20th Anniversary Live. Royal Albert Hall.",
+          "status": "Official"
+        }
+      ]
+    },
+    {
+      "id": "811be34f-b87a-3887-8528-a0d1e8d80433",
+      "type-id": "d6038452-8ee0-3f68-affc-2de9a1ede0b9",
+      "score": 50,
+      "primary-type-id": "d6038452-8ee0-3f68-affc-2de9a1ede0b9",
+      "artist-credit-id": "e6f0656b-fdb8-3ab1-941a-18b5bd8d3d5b",
+      "count": 3,
+      "title": "Dog Star Man",
+      "first-release-date": "1989",
+      "primary-type": "Single",
+      "artist-credit": [
+        {
+          "name": "Meat Beat Manifesto",
+          "artist": {
+            "id": "dcb2955e-ff59-4ff2-a608-cbb90ee3ac38",
+            "name": "Meat Beat Manifesto",
+            "sort-name": "Meat Beat Manifesto"
+          }
+        }
+      ],
+      "tags": [
+        {
+          "count": 3,
+          "name": "electronic"
+        },
+        {
+          "count": 1,
+          "name": "industrial"
+        },
+        {
+          "count": 1,
+          "name": "experimental"
+        },
+        {
+          "count": 1,
+          "name": "electro"
+        },
+        {
+          "count": 2,
+          "name": "breakbeat"
+        },
+        {
+          "count": 1,
+          "name": "abstract"
+        },
+        {
+          "count": 1,
+          "name": "trip hop"
+        }
+      ],
+      "releases": [
+        {
+          "id": "1a92ab71-0b23-477d-8092-0bd433e95617",
+          "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+          "title": "Dog Star Man",
+          "status": "Official"
+        },
+        {
+          "id": "ce2a6b17-e0d4-31dd-9285-6bab3c8bf4cc",
+          "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+          "title": "Dog Star Man",
+          "status": "Official"
+        }
+      ]
+    },
+    {
+      "id": "4c8380c8-cd06-3afc-a17d-9331b3612321",
+      "type-id": "d6038452-8ee0-3f68-affc-2de9a1ede0b9",
+      "score": 40,
+      "primary-type-id": "d6038452-8ee0-3f68-affc-2de9a1ede0b9",
+      "artist-credit-id": "e520dd30-c99d-36c4-99b9-10a0218dd6ed",
+      "count": 1,
+      "title": "DOG STAR",
+      "first-release-date": "2006-11-15",
+      "primary-type": "Single",
+      "artist-credit": [
+        {
+          "name": "THE PINK☆PANDA",
+          "artist": {
+            "id": "b3a6ae73-d535-43a8-a394-d101b99c67a0",
+            "name": "THE PINK☆PANDA",
+            "sort-name": "PINK PANDA, THE"
+          }
+        }
+      ],
+      "releases": [
+        {
+          "id": "1c018c1a-3830-4588-a8b5-38138f560a99",
+          "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+          "title": "DOG STAR",
+          "status": "Official"
+        }
+      ]
+    }
+  ]
+}
