@@ -30,9 +30,10 @@ describe('the demo vault', () => {
     await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 27, {
       timeoutMsg: 'the covers never loaded',
     });
-    // The demo's 60 days earn 12,296 XP; no birth date is set yet.
-    await expect($('[data-testid="hero-title"]')).toHaveText('Level 5');
-    await expect($('[data-testid="hero-stats"]')).toHaveText(expect.stringContaining('12,296'));
+    // Life XP is the demo's 60 days (12,296 XP) plus its quests, less what open quests have lost
+    // by today's date, so it moves with the clock; src/lib/home.test.ts and quests.test.ts pin the sums.
+    await expect($('[data-testid="hero-title"]')).toHaveText(expect.stringMatching(/^Level \d+$/));
+    await expect($('[data-testid="hero-stats"]')).toHaveText(expect.stringContaining('Life XP'));
     await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Add your birth date in Settings'));
     await screenshot('03-home');
     await $('[data-testid="spheres"]').scrollIntoView();
