@@ -76,6 +76,11 @@ describe('addTask', () => {
     expect(lines.filter((_, i) => i !== 17)).toEqual(DAY.split('\n'));
   });
 
+  it('writes [minutes::0] when asked for zero minutes, and no field without minutes', () => {
+    expect(addTask(DAY, 'code', 'plan the week', 0).split('\n')[17]).toBe('- [ ] #daily/code — plan the week [minutes::0]');
+    expect(addTask(DAY, 'code', 'plan the week').split('\n')[17]).toBe('- [ ] #daily/code — plan the week');
+  });
+
   it('fills in the template\'s empty task instead of adding below it', () => {
     const template = '### Tasks\n- [ ] \n\n**Gratitude practice:** \n';
     expect(addTask(template, 'code', 'write the spec')).toBe('### Tasks\n- [ ] #daily/code — write the spec\n\n**Gratitude practice:** \n');

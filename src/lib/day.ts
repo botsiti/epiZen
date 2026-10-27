@@ -6,6 +6,8 @@ import { parseNote } from './frontmatter';
 export interface TimeBlock {
   start: number;
   end: number;
+  /** Zero-based line of the block in the note. */
+  line: number;
 }
 
 export interface DayTask extends Omit<Task, 'category'> {
@@ -56,8 +58,8 @@ export interface Day {
 const BLOCK = /^[ \t]*(?:>[ \t]*)*[-*+][ \t]+(\d{1,2}):(\d{2})[ \t]*[–—-][ \t]*(\d{1,2}):(\d{2})\b/;
 const indent = (line: string) => /^[ \t]*/.exec(line)?.[0].replace(/\t/g, '    ').length ?? 0;
 
-/** The time blocks listed under the task on that line, one indent deeper. */
-function blocksUnder(lines: string[], line: number): TimeBlock[] {
+/** The time blocks listed under the task on that line, one indent deeper. The calendar's writes use this too. */
+export function blocksUnder(lines: string[], line: number): TimeBlock[] {
   const depth = indent(lines[line] ?? '');
   const blocks: TimeBlock[] = [];
   for (let i = line + 1; i < lines.length; i += 1) {
@@ -70,7 +72,7 @@ function blocksUnder(lines: string[], line: number): TimeBlock[] {
     let end = Number(match[3]) * 60 + Number(match[4]);
     // A block past midnight ends the next day.
     if (end < start) end += 24 * 60;
-    blocks.push({ start, end });
+    blocks.push({ start, end, line: i });
   }
   return blocks;
 }
