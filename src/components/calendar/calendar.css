@@ -1,0 +1,1125 @@
+/* The calendar and the focus timer. DESIGN.md, "Calendar and timer", says why they look like
+   this. The glass, the hero, the chips and the tokens come from ../periodic/periodic.css. */
+
+.cal-frame {
+  max-width: 1160px;
+}
+
+/* The top: the period's name, and the timer beside it */
+
+.cal-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--space-3);
+  align-items: stretch;
+  margin-bottom: var(--space-3);
+}
+
+.cal-hero {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: space-between;
+  padding: 36px 40px 22px;
+}
+
+.cal-title {
+  font-size: 52px;
+}
+
+.cal-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font: italic 18px/1.5 var(--display);
+}
+
+.cal-summary .count {
+  color: var(--text);
+  font: 600 18px var(--numbers);
+}
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.cal-legend li {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.cal-legend-name {
+  color: var(--text-muted);
+}
+
+.cal-legend-time {
+  font: 600 12.5px var(--numbers);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A choice of two, with a lit pill under the one chosen. */
+.switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 20%);
+}
+
+.switch-option {
+  padding: 5px 14px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 13px;
+  transition:
+    background 220ms ease-out,
+    color 160ms ease-out,
+    transform 380ms var(--snap);
+}
+
+.switch-option:hover {
+  color: var(--text);
+}
+
+.switch-option:active {
+  transform: scale(0.95);
+}
+
+.switch-option.is-chosen {
+  background: rgb(255 255 255 / 9%);
+  color: var(--text);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 8%),
+    0 2px 8px -2px rgb(0 0 0 / 50%);
+}
+
+/* The timer */
+
+.timer-card {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 18px 20px 20px;
+  border-radius: 24px;
+}
+
+.timer-card .tile-label {
+  align-self: flex-start;
+  margin: 0;
+}
+
+.timer-card.is-rest {
+  background:
+    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--rest) 10%, transparent), transparent 70%),
+    var(--glass-face),
+    var(--bg);
+}
+
+.dial {
+  position: relative;
+  flex: none;
+}
+
+.dial svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dial-ring {
+  fill: none;
+  stroke: rgb(255 255 255 / 10%);
+  stroke-width: 1.2;
+}
+
+.dial-trail {
+  fill: none;
+  stroke: color-mix(in srgb, var(--tone) 40%, transparent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.dial-dot {
+  transition: transform 1s linear;
+}
+
+.dial-dot-core {
+  fill: var(--tone);
+}
+
+.dial-dot-glow {
+  fill: var(--tone);
+  opacity: 0.7;
+}
+
+.dial.is-paused .dial-dot-glow {
+  opacity: 0;
+}
+
+.dial-tick {
+  stroke: rgb(255 255 255 / 12%);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.dial-tick.is-lit {
+  stroke: var(--tone);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 3px var(--tone));
+}
+
+.dial-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.dial-time {
+  color: #f3efe7;
+  font: 200 46px/1 var(--numbers);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.dial.is-paused .dial-time {
+  color: var(--text-muted);
+}
+
+.dial-label {
+  margin-top: 10px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.timer-task {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  max-width: 100%;
+  margin: 0;
+}
+
+.timer-task-label {
+  min-width: 0;
+  overflow: hidden;
+  font: 17px/1.3 var(--display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timer-since {
+  margin: -6px 0 0;
+  color: var(--text-faint);
+  font: 11.5px var(--font-mono);
+}
+
+.timer-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.timer-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.preset {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font: 500 12.5px var(--numbers);
+  font-variant-numeric: tabular-nums;
+  transition:
+    color 160ms ease-out,
+    border-color 160ms ease-out,
+    background 160ms ease-out,
+    transform 380ms var(--snap);
+}
+
+.preset:hover {
+  border-color: var(--glass-line-strong);
+  color: var(--text);
+}
+
+.preset.is-chosen {
+  border-color: rgb(143 188 170 / 45%);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.timer-card.is-rest .preset.is-chosen {
+  border-color: color-mix(in srgb, var(--rest) 45%, transparent);
+  background: color-mix(in srgb, var(--rest) 12%, transparent);
+  color: var(--rest);
+}
+
+.preset-custom input {
+  width: 52px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  outline: none;
+}
+
+.preset-custom input::placeholder {
+  color: var(--text-faint);
+}
+
+.timer-problem {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.timer-problem-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.timer-setup {
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+}
+
+.timer-setup .switch {
+  justify-self: start;
+}
+
+.timer-setup .timer-presets {
+  justify-content: flex-start;
+}
+
+/* The grid: days across, hours down */
+
+.cal-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.cal-main.is-day {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.cal-grid {
+  padding: 6px 14px 8px 0;
+  border-radius: 22px;
+}
+
+.cal-head,
+.cal-fold {
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(var(--cols), minmax(0, 1fr));
+}
+
+.cal-head {
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--glass-line);
+}
+
+.cal-day-head {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 2px 4px;
+  border-radius: 12px;
+  transition: background 160ms ease-out;
+}
+
+.cal-day-head:hover {
+  background: rgb(255 255 255 / 4%);
+}
+
+.cal-weekday {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cal-day-head:not(.is-weekend) .cal-weekday {
+  color: var(--text-muted);
+}
+
+.cal-date {
+  min-width: 36px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font: 500 23px/1.15 var(--display);
+}
+
+.cal-day-head.is-today .cal-date {
+  background: var(--accent);
+  color: #0e1012;
+  box-shadow: 0 0 22px -6px var(--accent);
+}
+
+.cal-total {
+  min-height: 15px;
+  color: var(--text-faint);
+  font: 11px var(--font-mono);
+}
+
+.cal-body {
+  position: relative;
+  margin: 12px 0;
+}
+
+.cal-hours {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--gutter);
+  pointer-events: none;
+}
+
+.cal-hour {
+  position: absolute;
+  right: 12px;
+  color: var(--text-faint);
+  font: 10.5px var(--font-mono);
+  transform: translateY(-50%);
+}
+
+.cal-hour.is-third {
+  color: var(--text-muted);
+}
+
+.cal-lines,
+.cal-cols {
+  position: absolute;
+  inset: 0 0 0 var(--gutter);
+}
+
+.cal-lines {
+  pointer-events: none;
+}
+
+.cal-line {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.cal-line.is-third {
+  background: rgb(255 255 255 / 8.5%);
+}
+
+.cal-cols {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+}
+
+.cal-col {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid rgb(255 255 255 / 3.5%);
+}
+
+.cal-col.is-today {
+  background: linear-gradient(180deg, rgb(143 188 170 / 5%), rgb(143 188 170 / 1.5%));
+}
+
+/* A block: a soft fill in its task's colour, a solid rail down its left edge. */
+
+.cal-block {
+  --inset: 3px;
+
+  position: absolute;
+  z-index: 1;
+  left: calc(var(--lane, 0) * (100% / var(--lanes, 1)) + var(--inset));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: calc(100% / var(--lanes, 1) - var(--inset) * 2);
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px 8px 4px 11px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 26%, transparent), color-mix(in srgb, var(--tone) 16%, transparent));
+  box-shadow:
+    inset 3px 0 0 var(--tone),
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 24%, transparent),
+    0 8px 18px -12px rgb(0 0 0 / 80%);
+  cursor: grab;
+  user-select: none;
+  transition:
+    background 200ms ease-out,
+    box-shadow 200ms ease-out,
+    opacity 200ms ease-out,
+    transform 380ms var(--snap);
+}
+
+.cal-block:hover {
+  z-index: 3;
+  box-shadow:
+    inset 3px 0 0 var(--tone),
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 48%, transparent),
+    0 12px 26px -14px rgb(0 0 0 / 85%),
+    0 0 20px -10px var(--tone);
+}
+
+/* Past blocks recede: the colour steps down, the words only one notch. */
+.cal-block.is-past {
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--tone) 65%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 14%, transparent);
+}
+
+.cal-block.is-past .cal-block-title {
+  color: color-mix(in srgb, var(--text) 80%, transparent);
+}
+
+.cal-block.is-past:hover {
+  background: color-mix(in srgb, var(--tone) 20%, transparent);
+}
+
+.cal-block.is-dragging {
+  z-index: 6;
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--tone) 34%, transparent);
+  transform: scale(1.02);
+  box-shadow:
+    inset 3px 0 0 var(--tone),
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 70%, transparent),
+    0 18px 36px -14px rgb(0 0 0 / 90%),
+    0 0 26px -8px var(--tone);
+}
+
+.cal-block.is-saving {
+  opacity: 0.65;
+}
+
+.cal-block.is-lit {
+  z-index: 3;
+  background: color-mix(in srgb, var(--tone) 32%, transparent);
+  box-shadow:
+    inset 3px 0 0 var(--tone),
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 60%, transparent),
+    0 0 24px -8px var(--tone);
+}
+
+.cal-block.is-thin {
+  justify-content: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.cal-block-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cal-block-title:hover {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--tone) 70%, transparent);
+  text-underline-offset: 2px;
+}
+
+.cal-block.is-thin .cal-block-title {
+  font-size: 11px;
+}
+
+.cal-block-time {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+  font: 10.5px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-grid.is-day .cal-block-title {
+  font-size: 13px;
+}
+
+.cal-grid.is-day .cal-block {
+  padding-left: 14px;
+}
+
+.cal-block-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgb(14 16 18 / 75%);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0;
+  transition:
+    opacity 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.cal-block:hover .cal-block-x {
+  opacity: 1;
+}
+
+.cal-block-x:hover {
+  color: var(--text);
+}
+
+.cal-edge {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.cal-edge.is-top {
+  top: 0;
+}
+
+.cal-edge.is-bottom {
+  bottom: 0;
+}
+
+.cal-edge::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 18px;
+  height: 3px;
+  margin-left: -9px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--tone) 70%, white);
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.cal-edge.is-top::after {
+  top: 1px;
+}
+
+.cal-edge.is-bottom::after {
+  bottom: 1px;
+}
+
+.cal-block:hover .cal-edge::after {
+  opacity: 0.55;
+}
+
+.cal-block .cal-edge:hover::after {
+  opacity: 1;
+}
+
+/* The block being drawn, and the block the timer is filling */
+
+.cal-block.is-draft,
+.cal-block.is-live {
+  right: var(--inset);
+  left: var(--inset);
+  z-index: 4;
+  width: auto;
+  cursor: default;
+}
+
+.cal-block.is-draft {
+  background: rgb(143 188 170 / 13%);
+  box-shadow:
+    inset 0 0 0 1px rgb(143 188 170 / 75%),
+    0 0 24px -8px rgb(143 188 170 / 65%);
+  animation: draft-in 240ms var(--snap) both;
+}
+
+.cal-block.is-draft .cal-block-time {
+  color: var(--accent);
+}
+
+@keyframes draft-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.9);
+  }
+}
+
+.cal-block.is-live {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 38%, transparent), color-mix(in srgb, var(--tone) 18%, transparent));
+  box-shadow:
+    inset 3px 0 0 var(--tone),
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 60%, transparent),
+    0 0 24px -6px var(--tone);
+  animation: live 2.8s ease-in-out infinite;
+}
+
+.cal-block.is-live.is-paused {
+  animation: none;
+  opacity: 0.7;
+}
+
+@keyframes live {
+  50% {
+    box-shadow:
+      inset 3px 0 0 var(--tone),
+      inset 0 0 0 1px color-mix(in srgb, var(--tone) 80%, transparent),
+      0 0 34px -4px var(--tone);
+  }
+}
+
+/* Now: a glowing line across today */
+
+.cal-now {
+  position: absolute;
+  right: 0;
+  left: -1px;
+  z-index: 7;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 10px 1px rgb(143 188 170 / 60%);
+  pointer-events: none;
+}
+
+.cal-now::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 14px 2px rgb(143 188 170 / 75%);
+}
+
+/* The night, folded into a thin band above and below the day */
+
+.cal-fold {
+  align-items: center;
+  width: 100%;
+  min-height: 22px;
+  padding: 0;
+  border-radius: 10px;
+  background: repeating-linear-gradient(135deg, rgb(255 255 255 / 2.2%) 0 6px, transparent 6px 12px);
+  color: var(--text-faint);
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.cal-fold.is-early {
+  margin-top: 8px;
+}
+
+.cal-fold:hover {
+  background-color: rgb(255 255 255 / 3%);
+  color: var(--text-muted);
+}
+
+.cal-fold.is-open {
+  min-height: 16px;
+  background: none;
+}
+
+.cal-fold-label {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  font: 9.5px var(--font-mono);
+  white-space: nowrap;
+}
+
+.cal-fold-chevron {
+  width: 5px;
+  height: 5px;
+  border: solid currentcolor;
+  border-width: 0 1.2px 1.2px 0;
+  transform: translateY(-1px) rotate(45deg);
+  transition: transform 300ms var(--snap);
+}
+
+.cal-fold.is-early .cal-fold-chevron {
+  transform: translateY(1px) rotate(-135deg);
+}
+
+.cal-fold.is-open .cal-fold-chevron {
+  transform: translateY(1px) rotate(-135deg);
+}
+
+.cal-fold.is-early.is-open .cal-fold-chevron {
+  transform: translateY(-1px) rotate(45deg);
+}
+
+.cal-fold-day {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+}
+
+.cal-fold-mark {
+  width: 14px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--tone);
+  box-shadow: 0 0 6px -1px var(--tone);
+  opacity: 0.85;
+}
+
+/* Popovers: a new block, a delete, a task for the timer */
+
+.cal-popover {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  gap: var(--space-3);
+  width: 300px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--glass-face), #15181b;
+  box-shadow:
+    var(--glass-top),
+    0 24px 60px -20px rgb(0 0 0 / 90%),
+    0 2px 8px rgb(0 0 0 / 40%);
+  cursor: default;
+  animation: pop-in 260ms var(--snap) both;
+}
+
+.cal-popover.is-small {
+  width: 260px;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+}
+
+.cal-popover .kicker {
+  font-size: 10.5px;
+}
+
+.popover-words {
+  margin: 0;
+  font-size: 14px;
+}
+
+.popover-words strong {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.popover-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.popover-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.quiet-chip {
+  padding: 6px 14px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 13px;
+  transition:
+    background 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.quiet-chip:hover {
+  background: rgb(255 255 255 / 5%);
+  color: var(--text);
+}
+
+.task-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.pick-list {
+  display: grid;
+  gap: 2px;
+  max-height: 200px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.pick-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 13.5px;
+  text-align: left;
+  transition:
+    background 160ms ease-out,
+    border-color 160ms ease-out;
+}
+
+.pick-row:hover {
+  background: rgb(255 255 255 / 4%);
+}
+
+.pick-row.is-picked {
+  border-color: color-mix(in srgb, var(--tone) 45%, transparent);
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+}
+
+.pick-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick-minutes {
+  color: var(--text-faint);
+  font: 11.5px var(--font-mono);
+}
+
+.pick-new {
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--glass-line);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 22%);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 160ms ease-out;
+}
+
+.pick-new:focus {
+  border-color: var(--accent);
+}
+
+/* The day view's side list */
+
+.cal-side {
+  padding: 18px 20px;
+  border-radius: 22px;
+}
+
+.cal-side-total {
+  margin: 0 0 var(--space-4);
+  font: 600 30px/1.1 var(--numbers);
+  letter-spacing: -0.02em;
+}
+
+.cal-side-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cal-side-list li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 40px;
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--glass-line);
+  font-size: 13.5px;
+}
+
+.cal-side-list li.is-done .cal-side-label {
+  color: var(--text-muted);
+}
+
+.cal-side-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-side-blocks {
+  color: var(--text-faint);
+  font: 11px var(--font-mono);
+}
+
+.cal-side-minutes {
+  font: 600 13px var(--numbers);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.cal-side-start {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, var(--tone) 40%, transparent);
+  border-radius: 50%;
+  transition:
+    background 160ms ease-out,
+    transform 380ms var(--snap);
+}
+
+.cal-side-start::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  border-style: solid;
+  border-width: 4.5px 0 4.5px 7px;
+  border-color: transparent transparent transparent var(--tone);
+}
+
+.cal-side-start:hover {
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+}
+
+.cal-side-start:active {
+  transform: scale(0.9);
+}
+
+/* The running timer at the top of the sidebar */
+
+.timer-pill {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  margin: 0 0 var(--space-4);
+  padding: 7px 12px 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 8%, var(--bg-sidebar));
+  text-align: left;
+  transition:
+    background 160ms ease-out,
+    border-color 160ms ease-out;
+}
+
+.timer-pill:hover {
+  border-color: color-mix(in srgb, var(--tone) 50%, var(--border));
+  background: color-mix(in srgb, var(--tone) 13%, var(--bg-sidebar));
+}
+
+.timer-pill-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 10px 1px var(--tone);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.timer-pill.is-paused .timer-pill-dot {
+  opacity: 0.5;
+  box-shadow: none;
+  animation: none;
+}
+
+.timer-pill-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timer-pill-time {
+  color: var(--text);
+  font: 500 13px -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.55;
+    transform: scale(0.82);
+  }
+}
+
+/* Narrow panes */
+
+@container (max-width: 760px) {
+  .cal-top,
+  .cal-main.is-day {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cal-title {
+    font-size: 40px;
+  }
+}
+
+/* Motion off: the end state, at once. */
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-pill-dot,
+  .dial-dot {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+:root[data-motion='off'] .timer-pill-dot,
+:root[data-motion='off'] .dial-dot {
+  animation: none !important;
+  transition: none !important;
+}

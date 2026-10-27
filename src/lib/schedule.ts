@@ -91,14 +91,6 @@ export function clip(block: { start: number; end: number }, hours: Hours): { sta
   return end > start ? { start, end } : undefined;
 }
 
-/** Blocks that reach into the early and the late fold, for its count. */
-export function folded(blocks: { start: number; end: number }[], hours: Hours): { early: number; late: number } {
-  return {
-    early: blocks.filter((block) => block.start < hours.first).length,
-    late: blocks.filter((block) => block.end > hours.last).length,
-  };
-}
-
 /** Minutes down to a 15-minute mark, and to the nearest one. */
 export const snapDown = (minutes: number, step = 15) => Math.floor(minutes / step) * step;
 export const snapNear = (minutes: number, step = 15) => Math.round(minutes / step) * step;

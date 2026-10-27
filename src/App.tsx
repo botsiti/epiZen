@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Backlinks } from './components/Backlinks';
 import { Calendar } from './components/Calendar';
+import { CalendarView } from './components/calendar/CalendarView';
+import { chime } from './components/calendar/chime';
+import { TimerPill } from './components/calendar/Timer';
+import type { TaskChoice } from './components/calendar/types';
+import { reason, useNoteWriter } from './components/calendar/useNoteWriter';
+import { useTimer, type TimerDeps } from './components/calendar/useTimer';
 import { GraphView } from './components/GraphView';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
@@ -27,7 +33,10 @@ import {
 import type { LinkTarget } from './lib/completion';
 import { METRICS } from './lib/categories';
 import { addDays, startOfMonth, today } from './lib/dates';
-import { parseDay, type Day } from './lib/day';
+import { parseDay, taskLabel, type Day } from './lib/day';
+import { addTask } from './lib/edits';
+import { addBlock, addTaskWithBlock, findTask, focusIdOf, hasTask } from './lib/timeblocks';
+import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
 import { buildLinkIndex } from './lib/linkIndex';
 import { collectMedia } from './lib/media';
@@ -56,6 +65,7 @@ type View =
   | { kind: 'unsaved'; path: string; text: string; message: string }
   | { kind: 'settings' }
   | { kind: 'graph' }
+  | { kind: 'calendar' }
   | { kind: 'problem'; title: string; message: string };
 
 const HOME: View = { kind: 'home' };
@@ -247,14 +257,12 @@ export function App() {
     [go, refresh],
   );
 
-  // A day, week or month opens its note, or creates it in its folder from its template.
-  const openPeriodic = useCallback(
-    async (period: Period, date: Date) => {
+  // A day, week or month's note: the one it has, or a new one created in its folder from its
+  // template. The calendar and the timer use this too, without opening the note.
+  const ensurePeriodic = useCallback(
+    async (period: Period, date: Date): Promise<string> => {
       const existing = periodicNotes.get(periodKey(period, date));
-      if (existing) {
-        go({ kind: 'note', path: existing });
-        return;
-      }
+      if (existing) return existing;
       const path = periodicPath(period, date, periodic);
       try {
         await createNote(path, await periodicText(period, date, path, periodic, files));
@@ -263,10 +271,12 @@ export function App() {
         if (!String(err).includes('already exists')) throw err;
       }
       await refresh();
-      go({ kind: 'note', path });
+      return path;
     },
-    [files, go, periodic, periodicNotes, refresh],
+    [files, periodic, periodicNotes, refresh],
   );
+  // A day, week or month opens its note, creating it first if it has none.
+  const openPeriodic = useCallback(async (period: Period, date: Date) => go({ kind: 'note', path: await ensurePeriodic(period, date) }), [ensurePeriodic, go]);
   const openPeriodicOrSay = useCallback(
     (period: Period, date: Date) =>
       void openPeriodic(period, date).catch((err: unknown) =>
@@ -287,6 +297,64 @@ export function App() {
     [files, go, periodic, openPeriodicOrSay],
   );
   const saveSettings = useCallback(async (next: PeriodicSettings) => setSettings(await updateSettings({ periodic: next })), []);
+
+  // The calendar's and the timer's writes: one at a time, over the text the app last read.
+  const changeNote = useNoteWriter(texts, noteSaved);
+  const [calendarWarning, setCalendarWarning] = useState<string>();
+  const vault = status?.state === 'open' ? status.name : undefined;
+  const writeDay = useCallback(
+    async (date: Date, edit: (text: string) => string, failed: string) => {
+      try {
+        await changeNote(await ensurePeriodic('day', date), edit);
+        setCalendarWarning(undefined);
+      } catch (err) {
+        setCalendarWarning(`${failed}: ${reason(err)}. The calendar shows the note as it is now.`);
+      }
+    },
+    [changeNote, ensurePeriodic],
+  );
+  // A finished stretch of focus goes under its task in its day's note. A stretch that began
+  // after midnight goes to that day's note, under the same task, added there if it isn't yet.
+  const writeBlock = useCallback(
+    async (block: PendingBlock) => {
+      if (!vault) throw new Error('no vault is open');
+      if (block.task.vault !== undefined && block.task.vault !== vault) throw new Error(`it was timed in the vault “${block.task.vault}”`);
+      const own = block.day === block.task.day;
+      const path = own ? block.task.path : await ensurePeriodic('day', dayOfKey(block.day));
+      await changeNote(path, (text) =>
+        own || hasTask(text, block.task)
+          ? addBlock(text, findTask(text, block.task), block.start, block.end)
+          : addTaskWithBlock(text, block.task.category ?? 'other', block.task.label, block.start, block.end),
+      );
+    },
+    [changeNote, ensurePeriodic, vault],
+  );
+  const timerDeps = useMemo((): TimerDeps => ({ save: (state) => updateSettings({ timer: state }), write: writeBlock, chime }), [writeBlock]);
+  const timer = useTimer(timerDeps, settings.timer, status?.state === 'open');
+  // The timer starts on one of today's tasks, or on a new one added to today's note first.
+  const startTimer = useCallback(
+    async (choice: TaskChoice) => {
+      if (!vault) return;
+      const date = today();
+      const want =
+        choice.kind === 'task'
+          ? { label: choice.label, category: choice.category, line: choice.ref.line, focusId: focusIdOf(choice.ref.text) }
+          : { label: choice.words, category: choice.category };
+      try {
+        const path = await ensurePeriodic('day', date);
+        const text = await changeNote(path, (t) => (choice.kind === 'new' && !hasTask(t, want) ? addTask(t, choice.category, choice.words, 0) : undefined));
+        const found = findTask(text, want);
+        const task = { path, day: dayKey(date), line: found.line, label: taskLabel(want.label), category: want.category, focusId: focusIdOf(found.text), vault };
+        timer.start(task, timer.state.prefs.mode, timer.state.prefs.minutes);
+        setCalendarWarning(undefined);
+      } catch (err) {
+        setCalendarWarning(`The timer didn’t start: ${reason(err)}.`);
+      }
+    },
+    [changeNote, ensurePeriodic, timer, vault],
+  );
+  const textOf = useCallback((path: string) => texts.get(path), [texts]);
+  const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
 
   if (!status) return null;
   if (status.state !== 'open') {
@@ -311,6 +379,8 @@ export function App() {
         onOpenFolder={() => void chooseFolder()}
         onSettings={() => go({ kind: 'settings' })}
         onGraph={() => go({ kind: 'graph' })}
+        onCalendar={() => go({ kind: 'calendar' })}
+        timer={<TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
         folderError={folderError}
         calendar={
           <Calendar
@@ -352,6 +422,19 @@ export function App() {
             periodic={periodicPage}
             onOpenNote={openNote}
             onOpenPeriod={openPeriodicOrSay}
+            known={texts.get(view.path)}
+          />
+        )}
+        {view.kind === 'calendar' && (
+          <CalendarView
+            dayOf={dayOf}
+            textOf={textOf}
+            categories={categories}
+            timer={timer}
+            onStartTimer={(choice) => void startTimer(choice)}
+            onOpenDay={(date) => openPeriodicOrSay('day', date)}
+            onWrite={writeDay}
+            warning={calendarWarning}
           />
         )}
         {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}

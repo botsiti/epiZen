@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseDay } from './day';
-import { clip, dragged, drawn, folded, gridBlocks, lanes, shownHours } from './schedule';
+import { clip, dragged, drawn, gridBlocks, lanes, shownHours } from './schedule';
 
 const DAY = `### Tasks
 - [ ] #daily/code — refactor the settings screen [minutes::58]
@@ -43,12 +43,11 @@ describe('the calendar’s layout', () => {
     ]);
   });
 
-  it('shows 07–22 and folds the night, counting what reaches into each fold', () => {
+  it('shows 07–22 and folds the night', () => {
     expect(hours).toEqual({ first: min(7, 0), last: min(22, 0) });
     expect(shownHours(true, true)).toEqual({ first: 0, last: 24 * 60 });
     expect(clip({ start: min(6, 30), end: min(7, 30) }, hours)).toEqual({ start: min(7, 0), end: min(7, 30) });
     expect(clip({ start: min(5, 0), end: min(6, 0) }, hours)).toBeUndefined();
-    expect(folded([{ start: min(5, 0), end: min(6, 0) }, { start: min(21, 0), end: min(23, 0) }, { start: 600, end: 660 }], hours)).toEqual({ early: 1, late: 1 });
   });
 
   it('draws from 15-minute marks, at least 15 minutes, either way', () => {

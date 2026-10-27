@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   blockBetween,
+  dayKey,
+  dayOfKey,
   formatSeconds,
   heartbeat,
   initialTimer,
@@ -166,6 +168,11 @@ describe('the timer', () => {
       ['2026-10-27', min(23, 30), min(23, 50)],
       ['2026-10-28', min(0, 10), min(0, 40)],
     ]);
+  });
+
+  it('reads a day key back into its day', () => {
+    expect(dayOfKey('2026-10-27')).toEqual(new Date(2026, 9, 27));
+    expect(dayKey(dayOfKey('2026-01-05'))).toBe('2026-01-05');
   });
 
   it('shows the open stretch as it grows, for the calendar', () => {

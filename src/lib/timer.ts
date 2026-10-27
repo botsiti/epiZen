@@ -30,6 +30,8 @@ export interface TimerTask {
   label: string;
   category?: string;
   focusId?: string;
+  /** The vault's name, so a session never writes into another vault opened since. */
+  vault?: string;
 }
 
 /** Times are milliseconds since the epoch; lengths are milliseconds unless named otherwise. */
@@ -85,6 +87,11 @@ export interface TimerState {
 export const initialTimer = (): TimerState => ({ pending: [], prefs: { mode: 'pomodoro', minutes: 25, rest: DEFAULT_REST } });
 
 export const dayKey = (date: Date) => formatDate(date, 'YYYY-MM-DD');
+/** `2026-10-27` → that day, at local midnight. */
+export function dayOfKey(key: string): Date {
+  const [year, month, day] = key.split('-').map(Number);
+  return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1);
+}
 const clampMinutes = (minutes: number) => Math.min(CUSTOM_MINUTES.max, Math.max(CUSTOM_MINUTES.min, Math.round(minutes) || CUSTOM_MINUTES.min));
 const clampRest = (seconds: number) => Math.min(2 * 60 * 60, Math.max(10, Math.round(seconds) || DEFAULT_REST));
 
@@ -277,7 +284,7 @@ function readTask(value: unknown): TimerTask | undefined {
   const line = num(value.line);
   const label = str(value.label);
   if (!path || !day || !DAY.test(day) || line === undefined || label === undefined) return undefined;
-  return { path, day, line, label, category: str(value.category), focusId: str(value.focusId) };
+  return { path, day, line, label, category: str(value.category), focusId: str(value.focusId), vault: str(value.vault) };
 }
 
 function readSession(value: unknown): Session | undefined {

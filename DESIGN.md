@@ -16,6 +16,7 @@ Tokens live in `:root` in `src/styles.css`. Use them. A new colour gets added he
 | `--text-muted` | `#9a9f9c` | secondary text, sidebar rows               |
 | `--text-faint` | `#5f6568` | labels, hints, empty values                |
 | `--accent`     | `#8fbcaa` | links, the selected note, focus, checkboxes |
+| `--rest`       | `#86d8ac` | the timer's rest, so a break never reads as focus |
 
 The accent is sage, and it is the only colour, with one exception: the graph colours its dots by
 top-level folder, from `--graph-1` to `--graph-8`, the accent's own lightness and softness at
@@ -64,6 +65,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Tasks**: accent-tinted checkboxes. In a note's text they stay disabled; a daily note's page is
   where they are ticked, and that writes the one box back.
 - **Periodic pages**: see the section below.
+- **Calendar and timer**: see "Calendar and timer" below.
 - **Home**: wider than a note (880px). The vault's name and counts, then today's note as one surface
   block (its date, a quiet summary, and a button to open or create it), then a shelf per folder of
   rated notes: covers in a grid, the title with its rating in accent beside it, the maker faint below.
@@ -123,6 +125,32 @@ content, and the moves are written here after react-bits (`src/components/period
   screenshots show end states.
 - **Writes**: only on a day's page, only what is tapped or typed: a tick, one property's value,
   or a new task under the Tasks heading. Each is checked against the text the page last read.
+
+## Calendar and timer
+
+The time blocks under the daily notes' tasks, on a week or a day, with Senioro's focus timer. It is
+a periodic page in its look (the same glass, hero, chips, count-up numbers and spring), opened from
+"Calendar" in the sidebar.
+
+- **Top**: the week's dates (or the day's) in the serif display face, a kicker with the ISO week, the
+  time logged counting up, ‹ › and Today, and a Week | Day switch. The timer's card sits beside it.
+- **Grid**: hours down, 07–22, with the night before and after folded into a thin striped band that
+  unfolds on a click and marks each block it hides. A hairline every hour, a slightly stronger one
+  every three hours, small mono hour labels. Today's column is faintly lit, and a glowing sage line
+  with a dot marks now.
+- **Blocks**: soft rounded fills in their task's category colour with a solid rail down the left,
+  side by side where they overlap; the title, and the time when tall enough. Past blocks recede (the
+  colour steps down, the words only one notch). A block lifts under the pointer and shows its edges.
+- **Day**: one wide column and, beside it, the day's tasks with their totals; pointing at one lights
+  its blocks.
+- **Timer**: a thin ring with a glowing dot that goes round once per pomodoro, or 60 ticks that fill
+  with the stopwatch's seconds, and big light tabular numerals; in the task's colour while focusing,
+  in `--rest` while resting. While it runs, a pill at the top of the sidebar carries the task and
+  the time, its dot breathing.
+- **Writes**: drawing a block (a drag, or a click for half an hour, on 15-minute marks), moving or
+  resizing one, or deleting one (asked once) writes those lines of that day's note, checked against
+  the text the calendar last read, as a day's page does. The timer writes each finished stretch
+  under its task.
 
 ## Checking a UI change
 

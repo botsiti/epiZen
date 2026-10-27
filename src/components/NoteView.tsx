@@ -39,12 +39,21 @@ interface ViewProps extends NoteProps {
   onOpenNote: (path: string) => void;
   /** Opens a day, week or month, creating its note from the template if it has none. */
   onOpenPeriod: PeriodicActions['onOpenPeriod'];
+  /** The note's text as the app knows it, which the timer or the calendar may have just written. */
+  known?: string;
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod, known } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
+  // When the app learns a new text for this note (the timer wrote a block into it while it is
+  // open), show that one and build the next change on it.
+  const [seen, setSeen] = useState(known);
+  if (known !== seen) {
+    setSeen(known);
+    if (known !== undefined && note.path === path && note.text !== undefined && known !== note.text) setNote({ path, text: known });
+  }
   const [changeError, setChangeError] = useState<string>();
   const changes = useRef(Promise.resolve());
   const latest = useRef<string | undefined>(undefined);
