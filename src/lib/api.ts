@@ -4,7 +4,8 @@ import { listen } from '@tauri-apps/api/event';
 /** Mirrors `VaultStatus` in src-tauri/src/lib.rs. */
 export type VaultStatus =
   | { state: 'none' }
-  | { state: 'open'; name: string }
+  /** `root` is the vault's canonical folder, which tells two vaults with one name apart. */
+  | { state: 'open'; name: string; root: string }
   | { state: 'error'; message: string };
 
 /** Mirrors `VaultFile` in src-tauri/src/vault.rs. Paths are vault-relative with `/`. */

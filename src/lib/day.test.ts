@@ -98,7 +98,7 @@ describe('parseDay', () => {
       'review a pull request',
     ]);
     expect(day.tasks[0]?.category?.name).toBe('dog');
-    expect(day.tasks[0]?.blocks).toEqual([{ start: 8 * 60 + 50, end: 9 * 60 + 31 }]);
+    expect(day.tasks[0]?.blocks).toEqual([{ start: 8 * 60 + 50, end: 9 * 60 + 31, line: expect.any(Number) as number }]);
     expect(day.tasks.every((task) => !task.habit)).toBe(true);
   });
 
@@ -136,7 +136,7 @@ describe('parseDay', () => {
   it("reads the template's own day: comments, a block past midnight, the empty task, prompts and the thought record", () => {
     const filled = parseDay(TEMPLATE_DAY);
     expect(filled.tasks.map((task) => task.label)).toEqual(['planning', 'film night']);
-    expect(filled.tasks[1]?.blocks).toEqual([{ start: 23 * 60 + 10, end: 25 * 60 + 10 }]);
+    expect(filled.tasks[1]?.blocks).toEqual([{ start: 23 * 60 + 10, end: 25 * 60 + 10, line: expect.any(Number) as number }]);
     expect(filled.totals.recovery).toBe(120);
     expect(filled.totals.main).toBe(13);
     expect(filled.numbers).toEqual({ mood: 3 });

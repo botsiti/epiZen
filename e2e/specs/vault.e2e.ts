@@ -311,6 +311,62 @@ describe('the demo vault', () => {
     await showTab('Overview');
   });
 
+  it('shows a week and a day of time blocks in the calendar', async () => {
+    await $('[data-testid="open-calendar"]').click();
+    const calendar = $('[data-testid="cal-view"]');
+    await calendar.waitForDisplayed();
+    // The calendar opens on this week; the demo's days are in August.
+    for (let i = 0; i < 60 && (await calendar.getAttribute('data-start')) !== '2026-08-10'; i += 1) {
+      const shown = (await calendar.getAttribute('data-start')) ?? '';
+      await $(`[data-testid="cal-${shown > '2026-08-10' ? 'prev' : 'next'}"]`).click();
+    }
+    await expect(calendar).toHaveAttribute('data-start', '2026-08-10');
+    await expect($('[data-testid="cal-title"]')).toHaveText('10 – 16 August');
+    expect(await $$('[data-testid="cal-col"]').length).toBe(7);
+    expect(await $$('[data-testid="cal-block"]').length).toBeGreaterThan(30);
+    await expect($('[data-testid="cal-col"][data-date="2026-08-14"]')).toHaveText(expect.stringContaining('refactor the settings screen'));
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+    await screenshot('44-calendar-week');
+
+    await $('[data-testid="cal-day-head"][data-date="2026-08-14"]').click();
+    await expect(calendar).toHaveAttribute('data-mode', 'day');
+    await expect($('[data-testid="cal-title"]')).toHaveText('14 August');
+    // The five tasks of the day and the one the day page added.
+    expect(await $$('[data-testid="cal-day-task"]').length).toBe(6);
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+    await screenshot('45-calendar-day');
+    await $('[data-testid="cal-mode-week"]').click();
+    await expect(calendar).toHaveAttribute('data-mode', 'week');
+  });
+
+  it('draws a block on a day, and writes only the new task and its block', async () => {
+    const file = join(vaultCopy(), `${DAYS}/12.08.2026.md`);
+    const before = readFileSync(file, 'utf8');
+    // Press at 19:02 and drag to 20:00 on Wednesday, as a person would with the mouse.
+    await browser.execute((date) => {
+      const column = document.querySelector(`[data-testid="cal-col"][data-date="${date}"]`);
+      if (!column) throw new Error(`no column for ${date}`);
+      const top = column.getBoundingClientRect().top;
+      const at = (minutes: number) => ({ bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, clientY: top + ((minutes - 7 * 60) / 60) * 44 });
+      column.dispatchEvent(new PointerEvent('pointerdown', at(19 * 60 + 2)));
+      window.dispatchEvent(new PointerEvent('pointermove', at(19 * 60 + 30)));
+      window.dispatchEvent(new PointerEvent('pointermove', at(20 * 60)));
+      window.dispatchEvent(new PointerEvent('pointerup', at(20 * 60)));
+    }, '2026-08-12');
+    const popover = $('[data-testid="block-popover"]');
+    await popover.waitForDisplayed();
+    await expect(popover).toHaveText(expect.stringContaining('19:00–20:00'));
+    await $('[data-testid="block-popover"] [data-testid="pick-new"]').setValue('evening run');
+    await $('[data-testid="block-popover"] [data-testid="pick-category"][data-category="sport"]').click();
+    await browser.execute(() => document.querySelector('[data-testid="block-popover"]')?.scrollIntoView({ block: 'center' }));
+    await screenshot('46-calendar-new-block');
+    await $('[data-testid="block-save"]').click();
+    const added = before.replace('    - 14:41–15:13\n', '    - 14:41–15:13\n- [ ] #daily/sport — evening run [minutes::60]\n    - 19:00–20:00\n');
+    expect(added).not.toBe(before);
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === added, { timeout: 5000, timeoutMsg: 'the block never reached the note' });
+    await expect($('[data-testid="cal-col"][data-date="2026-08-12"]')).toHaveText(expect.stringContaining('evening run'));
+  });
+
   it('keeps the periodic notes setup in Settings', async () => {
     await $('[data-testid="open-settings"]').click();
     await expect($('[data-testid="settings-day-format"]')).toHaveValue('DD.MM.YYYY');
@@ -344,13 +400,39 @@ describe('the demo vault', () => {
     await expect($('[data-testid="today-open"]')).toHaveAttribute('title', `Open ${TODAY}`);
   });
 
-  it('changed nothing in the vault copy but the four new notes and the day changed from its page', () => {
+  it("times a new task of today's with the stopwatch, shown on the calendar and in the sidebar", async () => {
+    await $('[data-testid="open-calendar"]').click();
+    const back = $('[data-testid="cal-today"]');
+    if (await back.isExisting()) await back.click();
+    await $('[data-testid="timer-start"]').click();
+    await $('[data-testid="timer-setup"] [data-testid="timer-mode-stopwatch"]').click();
+    await $('[data-testid="timer-setup"] [data-testid="pick-new"]').setValue('e2e focus');
+    await $('[data-testid="timer-setup"] [data-testid="pick-category"][data-category="code"]').click();
+    await $('[data-testid="timer-go"]').click();
+    await expect($('[data-testid="timer"]')).toHaveAttribute('data-state', 'running');
+    await expect($('[data-testid="timer-pill"]')).toHaveText(expect.stringContaining('e2e focus'));
+    const today = join(vaultCopy(), `${DAYS}/${TODAY}.md`);
+    expect(readFileSync(today, 'utf8')).toContain('\n- [ ] #daily/code — e2e focus [minutes::0]\n');
+    await browser.execute(() => {
+      document.querySelector('.main')?.scrollTo(0, 0);
+      document.querySelector('.sidebar')?.scrollTo(0, 0);
+    });
+    await screenshot('47-calendar-timer');
+    // Stopped within a minute: nothing to write.
+    await $('[data-testid="timer-stop"]').click();
+    await expect($('[data-testid="timer"]')).toHaveAttribute('data-state', 'idle');
+    await expect($('[data-testid="timer-pill"]')).not.toBeExisting();
+    expect(readFileSync(today, 'utf8')).not.toMatch(/e2e focus[^\n]*\n {4}- \d\d:\d\d/);
+  });
+
+  it('changed nothing in the vault copy but the four new notes, the day changed from its page and the day drawn on', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
         `added: ${DAYS}/30.07.2026.md`,
         `added: ${DAYS}/31.07.2026.md`,
         `added: ${DAYS}/${TODAY}.md`,
         'added: Inbox idea.md',
+        `changed: ${DAYS}/12.08.2026.md`,
         `changed: ${DAYS}/14.08.2026.md`,
         'changed: Calendar/2026/weeks/2026-W33 - 10.08.26.md',
       ].sort(),

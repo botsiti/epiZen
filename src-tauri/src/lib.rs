@@ -73,7 +73,8 @@ fn vault_arg(args: impl IntoIterator<Item = OsString>) -> Option<PathBuf> {
 #[serde(tag = "state", rename_all = "lowercase")]
 enum VaultStatus {
     None,
-    Open { name: String },
+    /// `root` tells two vaults with one name apart, so the timer never writes into the wrong one.
+    Open { name: String, root: String },
     Error { message: String },
 }
 
@@ -81,7 +82,7 @@ impl From<&VaultState> for VaultStatus {
     fn from(state: &VaultState) -> Self {
         match state {
             VaultState::NoVault => Self::None,
-            VaultState::Open(vault) => Self::Open { name: vault.name() },
+            VaultState::Open(vault) => Self::Open { name: vault.name(), root: vault.root() },
             VaultState::Failed(message) => Self::Error {
                 message: message.clone(),
             },
@@ -140,7 +141,7 @@ fn open_vault(
     path: PathBuf,
 ) -> Result<VaultStatus, String> {
     let vault = Vault::open(&path).map_err(|err| format!("Couldn't open the vault: {err}"))?;
-    let status = VaultStatus::Open { name: vault.name() };
+    let status = VaultStatus::Open { name: vault.name(), root: vault.root() };
     // Remembered first: if that fails, the vault that was open stays open, as the error says.
     settings
         .set_last_vault(&path)

@@ -41,6 +41,8 @@ const EMPTY_TASK = /^[ \t]*[-*+][ \t]+\[ \][ \t]*\r?$/;
 /**
  * Adds `- [ ] #daily/<category> — <words>` to the note's Tasks section, after its last task and
  * the time listed under it. The template's empty `- [ ] ` is filled in rather than left above it.
+ * With `minutes` (0 too, for a task the timer or the calendar is about to log time on) the line
+ * ends in `[minutes::N]`.
  */
 export function addTask(text: string, categoryName: string, words: string, minutes?: number): string {
   const category = categoryName.trim().toLowerCase();
@@ -62,7 +64,7 @@ export function addTask(text: string, categoryName: string, words: string, minut
     if (TASK.test(line) || (last > heading && /^[ \t]+\S/.test(line))) last = i;
     else if (line.trim()) break;
   }
-  const task = `- [ ] #daily/${category} — ${label}${minutes && minutes > 0 ? ` [minutes::${Math.round(minutes)}]` : ''}`;
+  const task = `- [ ] #daily/${category} — ${label}${minutes !== undefined && minutes >= 0 ? ` [minutes::${Math.round(minutes)}]` : ''}`;
   if (last > heading && EMPTY_TASK.test(lines[last] ?? '')) lines[last] = task;
   else lines.splice(last + 1, 0, task);
   return lines.join(eol);

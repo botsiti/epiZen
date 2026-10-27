@@ -40,16 +40,23 @@ interface ViewProps extends NoteProps {
   onOpenNote: (path: string) => void;
   /** Opens a day, week or month, creating its note from the template if it has none. */
   onOpenPeriod: PeriodicActions['onOpenPeriod'];
-  /** The note's text as App last saw it: a change made elsewhere (a quest) shows on the page at once. */
-  liveText?: string;
+  /** The note's text as the app knows it, which the timer, the calendar or a quest may have just written. */
+  known?: string;
   onQuestToggle: PeriodicActions['onQuestToggle'];
   onQuestProgress: PeriodicActions['onQuestProgress'];
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod, liveText, onQuestToggle, onQuestProgress } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
+  // When the app learns a new text for this note (the timer wrote a block into it while it is
+  // open), show that one and build the next change on it.
+  const [seen, setSeen] = useState(known);
+  if (known !== seen) {
+    setSeen(known);
+    if (known !== undefined && note.path === path && note.text !== undefined && known !== note.text) setNote({ path, text: known });
+  }
   const [changeError, setChangeError] = useState<string>();
   const changes = useRef(Promise.resolve());
   const latest = useRef<string | undefined>(undefined);
@@ -155,7 +162,7 @@ export function NoteView(props: ViewProps) {
       <PeriodicPage
         spec={periodic}
         path={path}
-        text={liveText ?? note.text}
+        text={note.text}
         actions={actions}
         warning={changeError}
       />

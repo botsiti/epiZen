@@ -11,6 +11,8 @@
   --text-faint: #5f6568;
   --accent: #8fbcaa;
   --accent-soft: rgb(143 188 170 / 12%);
+  /* The timer's rest, so a break never reads as focus. */
+  --rest: #86d8ac;
 
   /* The graph's folder colours: the accent's lightness and softness at other hues. */
   --graph-1: #8fbcab;
