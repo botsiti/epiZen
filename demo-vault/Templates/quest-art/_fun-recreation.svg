@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d0f14"/><stop offset="0.7" stop-color="#dfa163" stop-opacity="0.55"/><stop offset="1" stop-color="#dfa163"/></linearGradient>
+<radialGradient id="sun" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fff6e0"/><stop offset="0.35" stop-color="#dfa163"/><stop offset="1" stop-color="#dfa163" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="640" height="360" fill="url(#sky)"/>
+<circle cx="538" cy="126" r="2.0" fill="#fff" opacity="0.55"/><circle cx="608" cy="172" r="1.9" fill="#fff" opacity="0.26"/><circle cx="210" cy="47" r="0.6" fill="#fff" opacity="0.25"/><circle cx="144" cy="181" r="1.2" fill="#fff" opacity="0.43"/><circle cx="530" cy="104" r="0.7" fill="#fff" opacity="0.66"/><circle cx="480" cy="18" r="1.4" fill="#fff" opacity="0.84"/><circle cx="91" cy="111" r="0.7" fill="#fff" opacity="0.42"/><circle cx="387" cy="144" r="1.5" fill="#fff" opacity="0.57"/><circle cx="139" cy="172" r="2.0" fill="#fff" opacity="0.75"/><circle cx="542" cy="107" r="1.2" fill="#fff" opacity="0.33"/><circle cx="480" cy="124" r="0.7" fill="#fff" opacity="0.26"/><circle cx="218" cy="39" r="1.7" fill="#fff" opacity="0.42"/><circle cx="631" cy="185" r="1.2" fill="#fff" opacity="0.46"/><circle cx="214" cy="34" r="1.8" fill="#fff" opacity="0.29"/><circle cx="209" cy="128" r="1.5" fill="#fff" opacity="0.57"/><circle cx="169" cy="12" r="1.6" fill="#fff" opacity="0.81"/><circle cx="336" cy="51" r="1.2" fill="#fff" opacity="0.30"/><circle cx="377" cy="61" r="1.0" fill="#fff" opacity="0.70"/><circle cx="545" cy="150" r="1.9" fill="#fff" opacity="0.54"/><circle cx="377" cy="66" r="1.0" fill="#fff" opacity="0.80"/><circle cx="393" cy="75" r="1.0" fill="#fff" opacity="0.57"/><circle cx="69" cy="58" r="0.6" fill="#fff" opacity="0.48"/><circle cx="615" cy="56" r="0.7" fill="#fff" opacity="0.33"/><circle cx="203" cy="155" r="1.0" fill="#fff" opacity="0.39"/>
+<circle cx="204" cy="230" r="120" fill="url(#sun)" opacity="0.85"/>
+<path d="M0 270 Q 140 203 300 262 T 640 250 V360 H0Z" fill="#0d0f14" opacity="0.75"/>
+<path d="M0 300 Q 180 274 380 300 T 640 290 V360 H0Z" fill="#0d0f14"/>
+</svg>

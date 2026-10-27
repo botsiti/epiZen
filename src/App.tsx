@@ -18,6 +18,7 @@ import {
   pickVault,
   readAllNotes,
   readNote,
+  writeNote,
   updateSettings,
   vaultStatus,
   type Settings,
@@ -26,7 +27,7 @@ import {
 } from './lib/api';
 import type { LinkTarget } from './lib/completion';
 import { METRICS } from './lib/categories';
-import { addDays, startOfMonth, today } from './lib/dates';
+import { addDays, addMonths, parseDate, startOfMonth, today } from './lib/dates';
 import { parseDay, type Day } from './lib/day';
 import { buildGraph } from './lib/graph';
 import { buildLinkIndex } from './lib/linkIndex';
@@ -44,6 +45,7 @@ import {
   type Period,
   type PeriodicSettings,
 } from './lib/periodic';
+import { artPaths, parseQuests, setQuestProgress, toggleQuest, type Quest, type QuestEntry } from './lib/quests';
 import { metricScale, type DayEntry } from './lib/rollup';
 import { flushAll } from './lib/saving';
 import { buildTree, countFolders } from './lib/tree';
@@ -189,12 +191,31 @@ export function App() {
     [periodicNotes, texts],
   );
   const exists = useCallback((period: Period, date: Date) => periodicNotes.has(periodKey(period, date)), [periodicNotes]);
+  // Weekly quests from weekly notes, monthly ones from monthly notes, mythic ones from Custom Quests.md.
+  const quests = useMemo(() => {
+    const list: QuestEntry[] = [];
+    for (const [key, path] of periodicNotes) {
+      const [period, iso = ''] = key.split(':');
+      const text = period === 'day' ? undefined : texts.get(path);
+      const from = parseDate(iso, 'YYYY-MM-DD');
+      if (text === undefined || !from) continue;
+      const to = period === 'week' ? addDays(from, 7) : addMonths(from, 1);
+      for (const quest of parseQuests(path, text)) if (quest.scope !== 'custom') list.push({ quest, period: { from, to } });
+    }
+    for (const file of files) {
+      if (file.kind !== 'note' || noteTitle(file.path) !== 'Custom Quests') continue;
+      for (const quest of parseQuests(file.path, texts.get(file.path) ?? '')) list.push({ quest });
+    }
+    return list;
+  }, [periodicNotes, texts, files]);
+  const images = useMemo(() => new Set(files.filter((file) => file.kind === 'image').map((file) => file.path)), [files]);
+  const art = useCallback((quest: Quest) => artPaths(quest).find((path) => images.has(path)), [images]);
   const periodicPage = useMemo((): PeriodicSpec | undefined => {
     const found = view.kind === 'note' ? periodOf(view.path, periodic) : undefined;
     if (!found) return undefined;
     const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
-    return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, categories };
-  }, [view, periodic, dayOf, weekOf, exists, dailyFacts, mediaByTitle]);
+    return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, categories, quests, art };
+  }, [view, periodic, dayOf, weekOf, exists, dailyFacts, mediaByTitle, quests, art]);
   const linkTargets = useMemo(() => {
     const titles = new Map<string, number>();
     for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
@@ -219,6 +240,34 @@ export function App() {
     setTexts(new Map(read.map((note) => [note.path, note.text])));
   }, []);
   const noteSaved = useCallback((path: string, text: string) => setTexts((prev) => new Map(prev).set(path, text)), []);
+  // Changes to a note other than the open one (a quest in its weekly note or Custom Quests.md): one
+  // at a time, each over the note as it is on disk now, and written only while it still holds that.
+  const edits = useRef(Promise.resolve());
+  const [editError, setEditError] = useState<string>();
+  const editNote = useCallback(
+    (path: string, edit: (text: string) => string, failed: string) => {
+      edits.current = edits.current.then(async () => {
+        try {
+          const current = await readNote(path);
+          const next = edit(current);
+          if (next === current) return;
+          await writeNote(path, next, current);
+          noteSaved(path, next);
+          setEditError(undefined);
+        } catch (err) {
+          setEditError(`${failed}: ${err instanceof Error ? err.message : String(err)}`);
+          const fresh = await readNote(path).catch(() => undefined);
+          if (fresh !== undefined) noteSaved(path, fresh);
+        }
+      });
+    },
+    [noteSaved],
+  );
+  const onQuestToggle = useCallback((quest: Quest) => editNote(quest.path, (text) => toggleQuest(text, quest, new Date()), 'The quest wasn\'t changed'), [editNote]);
+  const onQuestProgress = useCallback(
+    (quest: Quest, value: number) => editNote(quest.path, (text) => setQuestProgress(text, quest, value, new Date()), 'The quest wasn\'t changed'),
+    [editNote],
+  );
   const back = history.length > 1 ? () => setHistory((prev) => prev.slice(0, -1)) : undefined;
   const setEditing = useCallback(
     (editing: boolean) => setHistory((prev) => prev.map((v, i) => (i === prev.length - 1 && v.kind === 'note' ? { ...v, editing } : v))),
@@ -337,6 +386,11 @@ export function App() {
             onToday={() => openPeriodicOrSay('day', todayNote.date)}
           />
         )}
+        {editError && (
+          <p className="note-warning" data-testid="edit-warning">
+            {editError}
+          </p>
+        )}
         {view.kind === 'note' && (
           <NoteView
             key={view.path}
@@ -350,6 +404,9 @@ export function App() {
             linkTargets={linkTargets}
             footer={<Backlinks links={links.backlinks.get(view.path) ?? []} onOpen={openNote} />}
             periodic={periodicPage}
+            liveText={texts.get(view.path)}
+            onQuestToggle={onQuestToggle}
+            onQuestProgress={onQuestProgress}
             onOpenNote={openNote}
             onOpenPeriod={openPeriodicOrSay}
           />

@@ -22,7 +22,7 @@ describe('the demo vault', () => {
 
   it('opens on the home screen', async () => {
     await expect($('[data-testid="vault-name"]')).toHaveText('demo-vault');
-    await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('106 notes · 10 folders · 27 images'));
+    await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('107 notes · 10 folders · 36 images'));
     await expect($('[data-testid="today-create"]')).toBeDisplayed();
     expect(await $$('[data-testid="shelf"]').length).toBe(3);
     expect(await $$('[data-testid="cover-card"]').length).toBe(27);
@@ -225,6 +225,29 @@ describe('the demo vault', () => {
     await screenshot('27-day-habits');
     await showTab('Stream');
     await screenshot('28-day-stream');
+
+    // A thought record, walked through the wizard, lands as one row in a table under the stream.
+    await $('[data-testid="hero-record"]').click();
+    await $('[data-testid="wizard-situation"]').setValue('Reviewed the day and thought I am behind');
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="shade"][data-shade="Disappointed"]').click();
+    await screenshot('36-thought-wizard');
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="trap"][data-trap="All-or-nothing"]').click();
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="wizard-balanced"]').setValue('Partial still counts.');
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="wheel-core"][data-emotion="Peaceful"]').click();
+    await $('[data-testid="shade"][data-shade="Calm"]').click();
+    await $('[data-testid="wizard-continue"]').click();
+    await $('[data-testid="wizard-continue"]').click();
+    const row = /\n\n\| \*\*situation\/self-criticism\*\*.*\n\| --- \| --- \| --- \| --- \| --- \|\n\| \[\d\d:\d\d\] Reviewed the day and thought I am behind \| Disappointed \| All-or-nothing \| Partial still counts\. \| Calm \|\n$/;
+    await browser.waitUntil(() => read().startsWith(added.replace(/\n$/, '')) && row.test(read().slice(added.length - 1)), {
+      timeout: 5000,
+      timeoutMsg: 'the thought record never reached the note',
+    });
+    expect(await $$('[data-testid="record"]').length).toBe(1);
+    await screenshot('37-thought-records');
     await showTab('Overview');
   });
 
@@ -243,6 +266,23 @@ describe('the demo vault', () => {
     await screenshot('30-week-habits');
     await showTab('Stats');
     await screenshot('31-week-stats');
+
+    // Ticking a weekly quest writes its box, its done date and today's XP stamp into the weekly note.
+    await showTab('Quests');
+    expect(await $$('[data-testid="quest-card"]').length).toBeGreaterThan(2);
+    await screenshot('38-week-quests');
+    const weekFile = join(vaultCopy(), 'Calendar/2026/weeks/2026-W33 - 10.08.26.md');
+    const weekBefore = readFileSync(weekFile, 'utf8');
+    const quest = '- [ ] #quest/weekly - Call an old friend [xp::150] [spheres::Social] [tier::common]';
+    expect(weekBefore).toContain(`${quest}\n`);
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ticked = `${quest.replace('[ ]', '[x]')} [done::${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}]\n    - ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} :: +150 XP`;
+    await $('button[aria-label="Complete Call an old friend"]').click();
+    await browser.waitUntil(() => readFileSync(weekFile, 'utf8') === weekBefore.replace(quest, ticked), {
+      timeout: 5000,
+      timeoutMsg: 'the quest never reached its weekly note',
+    });
     await showTab('Overview');
 
     await $('[data-testid="calendar-month"]').click();
@@ -255,6 +295,9 @@ describe('the demo vault', () => {
     await screenshot('32-month-weeks');
     await showTab('Stats');
     await screenshot('33-month-stats');
+    await showTab('Quests');
+    await expect($('.mythic-shelf')).toBeDisplayed();
+    await screenshot('39-month-quests');
     await showTab('Overview');
   });
 
@@ -282,6 +325,7 @@ describe('the demo vault', () => {
         `added: ${DAYS}/${TODAY}.md`,
         'added: Inbox idea.md',
         `changed: ${DAYS}/14.08.2026.md`,
+        'changed: Calendar/2026/weeks/2026-W33 - 10.08.26.md',
       ].sort(),
     );
   });

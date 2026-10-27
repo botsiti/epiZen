@@ -54,6 +54,8 @@ const spec = (period: PeriodicSpec['period'], date = DATE): PeriodicSpec => ({
   scales: { mood: 10, energy: 10, focus: 10, soc: 10, done: 100, sleep: 10 },
   media: new Map(),
   categories: ['code', 'sport'],
+  quests: [],
+  art: () => undefined,
 });
 const actions = (): PeriodicActions => ({
   onOpenPeriod: vi.fn(),
@@ -65,6 +67,8 @@ const actions = (): PeriodicActions => ({
   onAddRecord: vi.fn(),
   onUpdateRecord: vi.fn(),
   onDeleteRecord: vi.fn(),
+  onQuestToggle: vi.fn(),
+  onQuestProgress: vi.fn(),
 });
 
 describe('the day page', () => {

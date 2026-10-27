@@ -8,10 +8,12 @@ import { Donut, LineChart, Ring, Sparkline } from './charts';
 import { order } from './effects';
 import { CountUp } from './motion';
 import { Bar, CategoryBars, Covers, HabitGrid, Hero, NavButton, Section, Tabs, Tile, TimeTrack } from './parts';
+import { questsIn } from '../../lib/quests';
+import { QuestBoard } from './Quests';
 import type { PeriodicActions, PeriodicSpec } from './types';
 
-const WEEK_TABS = ['Overview', 'Days', 'Timeline', 'Habits', 'Stats'] as const;
-const MONTH_TABS = ['Overview', 'Weeks', 'Days', 'Habits', 'Stats'] as const;
+const WEEK_TABS = ['Overview', 'Days', 'Quests', 'Timeline', 'Habits', 'Stats'] as const;
+const MONTH_TABS = ['Overview', 'Weeks', 'Quests', 'Days', 'Habits', 'Stats'] as const;
 type WeekTab = (typeof WEEK_TABS)[number];
 type MonthTab = (typeof MONTH_TABS)[number];
 let lastWeekTab: WeekTab = 'Overview';
@@ -83,6 +85,9 @@ export function WeekPage({ spec, path, text, actions }: Props) {
           </>
         )}
         {tab === 'Days' && <DayRows days={days} actions={actions} />}
+        {tab === 'Quests' && (
+          <QuestBoard quests={questsIn(spec.quests, monday, addDays(monday, 7))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} />
+        )}
         {tab === 'Timeline' && (
           <Section title="Time logged, day by day">
             <TimeTrack
@@ -162,6 +167,16 @@ export function MonthPage({ spec, path, actions }: Props) {
           </>
         )}
         {tab === 'Weeks' && <Weeks spec={spec} actions={actions} />}
+        {tab === 'Quests' && (
+          <QuestBoard
+            quests={questsIn(spec.quests, first, next)}
+            art={spec.art}
+            today={now}
+            onToggle={actions.onQuestToggle}
+            onProgress={actions.onQuestProgress}
+            groups={{ weekly: 'Weeks of the month', monthly: 'This month' }}
+          />
+        )}
         {tab === 'Days' && <DayRows days={days} actions={actions} />}
         {tab === 'Habits' && <Habits sum={sum} labels={days.map((entry) => String(entry.date.getDate()))} />}
         {tab === 'Stats' && <Stats sum={sum} spec={spec} labels={days.map((entry) => String(entry.date.getDate()))} />}

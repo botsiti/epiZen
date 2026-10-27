@@ -1,6 +1,7 @@
 import type { RecordInput, ThoughtRecord } from '../../lib/cbt';
 import type { MediaItem } from '../../lib/media';
 import type { Period } from '../../lib/periodic';
+import type { Quest, QuestEntry } from '../../lib/quests';
 import type { DayEntry } from '../../lib/rollup';
 
 /** What a periodic page reads besides its own note. Built by App from the vault; nothing in the note is code. */
@@ -19,6 +20,10 @@ export interface PeriodicSpec {
   media: ReadonlyMap<string, MediaItem>;
   /** The task categories the vault uses, most used first. */
   categories: string[];
+  /** Every weekly, monthly and mythic quest in the vault. */
+  quests: QuestEntry[];
+  /** The art file for a quest, if the vault has one. */
+  art: (quest: Quest) => string | undefined;
 }
 
 export interface PeriodicActions {
@@ -34,4 +39,7 @@ export interface PeriodicActions {
   onAddRecord: (input: RecordInput) => void;
   onUpdateRecord: (record: ThoughtRecord, input: RecordInput) => void;
   onDeleteRecord: (record: ThoughtRecord) => void;
+  /** Quests live in their own notes; these write there. */
+  onQuestToggle: (quest: Quest) => void;
+  onQuestProgress: (quest: Quest, value: number) => void;
 }

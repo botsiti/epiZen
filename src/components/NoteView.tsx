@@ -40,11 +40,15 @@ interface ViewProps extends NoteProps {
   onOpenNote: (path: string) => void;
   /** Opens a day, week or month, creating its note from the template if it has none. */
   onOpenPeriod: PeriodicActions['onOpenPeriod'];
+  /** The note's text as App last saw it: a change made elsewhere (a quest) shows on the page at once. */
+  liveText?: string;
+  onQuestToggle: PeriodicActions['onQuestToggle'];
+  onQuestProgress: PeriodicActions['onQuestProgress'];
 }
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, onOpenNote, onOpenPeriod, liveText, onQuestToggle, onQuestProgress } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
   const [changeError, setChangeError] = useState<string>();
   const changes = useRef(Promise.resolve());
@@ -54,14 +58,15 @@ export function NoteView(props: ViewProps) {
   }, [note.text]);
 
   // A periodic page changes its note one change at a time (a tick, a number, a new task), each
-  // over the text the last one left. `edit` returns the new text, or `undefined` when there is
-  // nothing to do. If the note changed on disk, nothing is written: it says so and reloads.
+  // over the note as it is on disk now, so a change made elsewhere is never written over. `edit`
+  // returns the new text, or `undefined` when there is nothing to do. If the note changes on disk
+  // between the read and the write, nothing is written: it says so and shows the note as it is.
   const change = useCallback(
     (edit: (text: string) => string | undefined, failed: string) => {
       changes.current = changes.current.then(async () => {
-        const current = latest.current;
-        if (current === undefined) return;
+        if (latest.current === undefined) return;
         try {
+          const current = await readNote(path);
           const next = edit(current);
           if (next === undefined || next === current) return;
           await writeNote(path, next, current);
@@ -101,8 +106,10 @@ export function NoteView(props: ViewProps) {
       },
       onUpdateRecord: (record, input) => change((text) => updateRecord(text, record, input), "The thought record wasn't changed"),
       onDeleteRecord: (record) => change((text) => deleteRecord(text, record), "The thought record wasn't deleted"),
+      onQuestToggle,
+      onQuestProgress,
     }),
-    [change, onEditingChange, onOpenNote, onOpenPeriod],
+    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress],
   );
 
   useEffect(() => {
@@ -148,7 +155,7 @@ export function NoteView(props: ViewProps) {
       <PeriodicPage
         spec={periodic}
         path={path}
-        text={note.text}
+        text={liveText ?? note.text}
         actions={actions}
         warning={changeError}
       />

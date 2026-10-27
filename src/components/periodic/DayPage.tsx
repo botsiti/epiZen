@@ -9,10 +9,12 @@ import { Donut, Ring, Segments } from './charts';
 import { order, spark } from './effects';
 import { BlurText, CountUp } from './motion';
 import { Bar, Hero, NavButton, Section, Tabs, Tile } from './parts';
+import { questsIn } from '../../lib/quests';
+import { QuestBoard } from './Quests';
 import { Tags, ThoughtWizard } from './ThoughtWizard';
 import type { PeriodicActions, PeriodicSpec } from './types';
 
-const TABS = ['Overview', 'Tasks', 'Habits', 'Stream'] as const;
+const TABS = ['Overview', 'Tasks', 'Habits', 'Quests', 'Stream'] as const;
 type Tab = (typeof TABS)[number];
 // The tab last shown, so the next day opens on it too. Kept for the session only.
 let lastTab: Tab = 'Overview';
@@ -86,6 +88,9 @@ export function DayPage({ spec, path, text, actions }: Props) {
         {tab === 'Overview' && <Overview day={day} spec={spec} actions={actions} />}
         {tab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} />}
         {tab === 'Habits' && <HabitsTab day={day} spec={spec} actions={actions} />}
+        {tab === 'Quests' && (
+          <QuestBoard quests={questsIn(spec.quests, date, addDays(date, 1))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} />
+        )}
         {tab === 'Stream' && <StreamTab day={day} actions={actions} onOpen={(record) => setWizard({ record })} />}
       </div>
       {wizard && (

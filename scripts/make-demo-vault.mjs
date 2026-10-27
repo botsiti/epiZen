@@ -451,10 +451,45 @@ const PLUS = ['Kept the morning routine', 'Shipped on Friday', 'Slept before mid
 const MINUS = ['Too much phone in the evenings', 'Skipped two workouts', 'Meetings ate Wednesday', 'Late nights mid-week'];
 const NEXT = ['Protect two deep-work blocks', 'One day without news', 'Finish the book', 'Plan the month review'];
 
+// Quests, as the vault's Obsidian RPG scripts write them: weekly ones in weekly notes, monthly ones
+// in monthly notes, mythic ones in Calendar/Custom Quests.md. Drawn from the second sequence.
+const WEEKLY_QUESTS = [
+  ['Two long runs', 'Health/Fitness', 300, 'rare', 2],
+  ['Ship one feature', 'Career/Work, Personal Growth:30', 500, 'rare', 0],
+  ['Three deep-work mornings', 'Career/Work', 300, 'rare', 3],
+  ['Call an old friend', 'Social', 150, 'common', 0],
+  ['Read 150 pages', 'Personal Growth', 300, 'rare', 150],
+  ['Cook twice at home', 'Health/Fitness, Finance:30', 150, 'common', 2],
+];
+const LAST_DAY = DAYS[DAYS.length - 1];
+
+/** A quest line and the XP stamp under it once done, as the scripts write them. */
+function questLine(scope, [title, spheres, xp, tier, target], { done, current, doneOn }) {
+  const counter = target ? ` [target::${target}] [current::${done ? target : current}]` : '';
+  const line = `- [${done ? 'x' : ' '}] #quest/${scope} - ${title} [xp::${xp}] [spheres::${spheres}] [tier::${tier}]${counter}${done ? ` [done::${ymd(doneOn)}]` : ''}`;
+  return done ? `${line}\n    - ${dmy(doneOn)} :: +${xp} XP` : line;
+}
+
+function weekQuests(days) {
+  const monday = addDays(days[0], -((days[0].getUTCDay() + 6) % 7));
+  const sunday = addDays(monday, 6);
+  const first = laterInt(0, WEEKLY_QUESTS.length - 1);
+  const picked = [WEEKLY_QUESTS[first], WEEKLY_QUESTS[(first + laterInt(1, WEEKLY_QUESTS.length - 1)) % WEEKLY_QUESTS.length]];
+  return picked
+    .map((quest) => {
+      const past = sunday < LAST_DAY;
+      const done = past && later() < 0.65;
+      const target = quest[4];
+      return questLine('weekly', quest, { done, current: target ? laterInt(0, target - 1) : 0, doneOn: addDays(monday, laterInt(2, 6)) });
+    })
+    .join('\n');
+}
+
 weekNames.forEach((name, i) => {
   const days = weeks.get(name);
   const stats = days.map((day) => dailyStats.get(dmy(day)));
   const months = [...new Set(days.map(monthName))];
+  const quests = weekQuests(days);
   write(
     `Calendar/2026/weeks/${name}.md`,
     `---
@@ -469,6 +504,9 @@ cssclasses:
 ${days.map((day) => `- [[${dmy(day)}]] · ${WEEKDAYS[day.getUTCDay()]}`).join('\n')}
 
 Month: ${months.map((month) => `[[${month}]]`).join(', ')}
+
+### Quest XP
+${quests}
 
 #### Plus
 - ${pick(PLUS)}
@@ -487,6 +525,17 @@ Average mood ${average(stats.map((s) => s.mood))}, focus ${average(stats.map((s)
 
 const months = new Map();
 for (const day of DAYS) months.set(monthName(day), [...(months.get(monthName(day)) ?? []), day]);
+
+const MONTH_QUESTS = {
+  8: [
+    questLine('monthly', ['20 workouts', 'Health/Fitness', 1500, 'legendary', 20], { done: true, doneOn: utc(2026, 8, 30) }),
+    questLine('monthly', ['Read two books', 'Personal Growth', 1000, 'epic', 2], { done: true, doneOn: utc(2026, 8, 24) }),
+  ],
+  9: [
+    questLine('monthly', ['Launch the beta', 'Career/Work, Finance:30', 1000, 'epic', 0], { done: false }),
+    questLine('monthly', ['12 English lessons', 'Personal Growth', 700, 'epic', 12], { done: false, current: 7 }),
+  ],
+};
 
 for (const [name, days] of months) {
   const stats = days.map((day) => dailyStats.get(dmy(day)));
@@ -519,6 +568,9 @@ ${albums.map(([title, artist, , , rating]) => `- [[${title}]] — ${artist} (${r
 ### Watched
 ${films.map(([title]) => `- [[${title}]]`).join('\n') || '- nothing this month'}
 
+### Quest XP
+${(MONTH_QUESTS[monthNumber] ?? []).join('\n')}
+
 ### Plans for month
 - ${pick(NEXT)}
 
@@ -529,6 +581,48 @@ from "Calendar/2026/days 2026"
 where date.month = ${monthNumber}
 sort file.name asc
 \`\`\`
+`,
+  );
+}
+
+write(
+  'Calendar/Custom Quests.md',
+  `# Custom Quests
+
+- [ ] #quest/custom - Finish the novel draft [xp::4200] [spheres::Personal Growth] [tier::epic] [start::2026-08-01] [deadline::2026-12-31] [target::3] [current::1] [desc::Three acts, a page a day. The first act is done.]
+    - 01.08.2026 :: Started with the ending.
+    - 12.09.2026 :: Act one done.
+- [ ] #quest/custom - Run a half marathon [xp::3000] [spheres::Health/Fitness] [tier::legendary] [start::2026-08-15] [deadline::2026-11-15] [desc::Twenty-one kilometres before the cold comes.]
+`,
+);
+
+// Quest art: a dusk over hills in each sphere's colour, drawn here like the covers.
+const SPHERE_ART = {
+  'career-work': '#e06681',
+  'health-fitness': '#63bd92',
+  'personal-growth': '#6fa5e6',
+  finance: '#dcbc72',
+  spiritual: '#ab8fe0',
+  'love-relationship': '#dd8fc0',
+  'fun-recreation': '#dfa163',
+  social: '#52bfc4',
+  'custom epic': '#a98bff',
+};
+for (const [name, color] of Object.entries(SPHERE_ART)) {
+  const stars = Array.from({ length: 24 }, () => `<circle cx="${laterInt(0, 640)}" cy="${laterInt(0, 190)}" r="${(0.6 + later() * 1.4).toFixed(1)}" fill="#fff" opacity="${(0.25 + later() * 0.6).toFixed(2)}"/>`).join('');
+  write(
+    `Templates/quest-art/_${name}.svg`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d0f14"/><stop offset="0.7" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}"/></linearGradient>
+<radialGradient id="sun" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fff6e0"/><stop offset="0.35" stop-color="${color}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="640" height="360" fill="url(#sky)"/>
+${stars}
+<circle cx="${laterInt(180, 460)}" cy="230" r="120" fill="url(#sun)" opacity="0.85"/>
+<path d="M0 270 Q 140 ${laterInt(190, 240)} 300 262 T 640 ${laterInt(220, 260)} V360 H0Z" fill="#0d0f14" opacity="0.75"/>
+<path d="M0 300 Q 180 ${laterInt(250, 280)} 380 300 T 640 290 V360 H0Z" fill="#0d0f14"/>
+</svg>
 `,
   );
 }
