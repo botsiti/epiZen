@@ -144,7 +144,7 @@ describe('parseDay', () => {
     expect(filled.important).toBe('call the bank');
     expect(filled.gratitude).toBeUndefined();
     expect(filled.stream).toEqual(['Walked without the phone.']);
-    expect(filled.records).toEqual([['missed the gym', 'guilt', 'all-or-nothing', "one day isn't a habit", 'calm']]);
+    expect(filled.records).toMatchObject([{ situation: 'missed the gym', before: ['guilt'], distortions: ['all-or-nothing'], balanced: "one day isn't a habit", after: ['calm'] }]);
   });
 
   it('reads what the day listened to and watched', () => {

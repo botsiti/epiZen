@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { readNote, writeNote, type VaultFile } from '../lib/api';
 import type { LinkTarget } from '../lib/completion';
 import { parseTasks, toggleTask } from '../lib/dashboard';
+import { addRecord, deleteRecord, updateRecord } from '../lib/cbt';
 import { addTask, setProperty } from '../lib/edits';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { noteFolder, noteTitle, resolveLink } from '../lib/links';
@@ -93,6 +94,13 @@ export function NoteView(props: ViewProps) {
         }, 'Nothing was ticked'),
       onSetProperty: (key, value) => change((text) => setProperty(text, key, value), `${key} wasn't set`),
       onAddTask: (category, words, minutes) => change((text) => addTask(text, category, words, minutes), 'The task wasn\'t added'),
+      onAddRecord: (input) => {
+        const now = new Date();
+        const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        change((text) => addRecord(text, input, time), "The thought record wasn't saved");
+      },
+      onUpdateRecord: (record, input) => change((text) => updateRecord(text, record, input), "The thought record wasn't changed"),
+      onDeleteRecord: (record) => change((text) => deleteRecord(text, record), "The thought record wasn't deleted"),
     }),
     [change, onEditingChange, onOpenNote, onOpenPeriod],
   );

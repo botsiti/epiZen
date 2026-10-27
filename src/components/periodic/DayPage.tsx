@@ -3,11 +3,13 @@ import { category, habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, formatDate, isoWeek, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
 import { clock, formatMinutes, parseDay, type Day, type DayTask } from '../../lib/day';
+import type { ThoughtRecord } from '../../lib/cbt';
 import { missingFromDay } from '../../lib/rollup';
 import { Donut, Ring, Segments } from './charts';
 import { order, spark } from './effects';
 import { BlurText, CountUp } from './motion';
 import { Bar, Hero, NavButton, Section, Tabs, Tile } from './parts';
+import { Tags, ThoughtWizard } from './ThoughtWizard';
 import type { PeriodicActions, PeriodicSpec } from './types';
 
 const TABS = ['Overview', 'Tasks', 'Habits', 'Stream'] as const;
@@ -28,6 +30,8 @@ interface Props {
 export function DayPage({ spec, path, text, actions }: Props) {
   const day = useMemo(() => parseDay(text), [text]);
   const [tab, setTab] = useState<Tab>(lastTab);
+  // The thought-record wizard: open on a record to edit it, or on nothing for a new one.
+  const [wizard, setWizard] = useState<{ record?: ThoughtRecord }>();
   const choose = (next: Tab) => {
     lastTab = next;
     setTab(next);
@@ -58,6 +62,9 @@ export function DayPage({ spec, path, text, actions }: Props) {
             <NavButton label={formatDate(date, 'MMMM')} title="This month's note" onClick={() => actions.onOpenPeriod('month', month)} exists={spec.exists('month', month)} testId="nav-month" />
             {!isToday && <NavButton label="Today" title="Today's note" onClick={() => actions.onOpenPeriod('day', today())} exists={spec.exists('day', today())} testId="nav-today" />}
             <span className="nav-space" />
+            <button type="button" className="nav-chip" onClick={() => setWizard({})} data-testid="hero-record">
+              Thought record
+            </button>
             <button type="button" className="nav-chip is-action" onClick={actions.onEdit} data-testid="edit-note">
               Edit note
             </button>
@@ -79,8 +86,19 @@ export function DayPage({ spec, path, text, actions }: Props) {
         {tab === 'Overview' && <Overview day={day} spec={spec} actions={actions} />}
         {tab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} />}
         {tab === 'Habits' && <HabitsTab day={day} spec={spec} actions={actions} />}
-        {tab === 'Stream' && <StreamTab day={day} />}
+        {tab === 'Stream' && <StreamTab day={day} actions={actions} onOpen={(record) => setWizard({ record })} />}
       </div>
+      {wizard && (
+        <ThoughtWizard
+          record={wizard.record}
+          onClose={() => setWizard(undefined)}
+          onSave={(input) => {
+            if (wizard.record) actions.onUpdateRecord(wizard.record, input);
+            else actions.onAddRecord(input);
+            setWizard(undefined);
+          }}
+        />
+      )}
     </article>
   );
 }
@@ -458,9 +476,8 @@ function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actio
   );
 }
 
-function StreamTab({ day }: { day: Day }) {
-  const empty = !day.gratitude && !day.important && !day.stream.length && !day.records.length;
-  if (empty) return <p className="empty-line">Nothing written in the stream yet.</p>;
+function StreamTab({ day, actions, onOpen }: { day: Day; actions: PeriodicActions; onOpen: (record?: ThoughtRecord) => void }) {
+  const [deleting, setDeleting] = useState<number>();
   return (
     <>
       {(day.gratitude || day.important) && (
@@ -488,19 +505,64 @@ function StreamTab({ day }: { day: Day }) {
           </div>
         </Section>
       )}
-      {day.records.length > 0 && (
-        <Section title="Thought records" note="situation → emotion → distortion → rational response → after" i={3}>
+      <Section
+        title="Thought records"
+        note={
+          <button type="button" className="nav-chip is-action" onClick={() => onOpen()} data-testid="new-record">
+            + New session
+          </button>
+        }
+        i={3}
+        testId="records"
+      >
+        {day.records.length ? (
           <div className="records">
             {day.records.map((record, i) => (
-              <ol key={i} className="record glass rise" style={order(i)}>
-                {record.map((cell, c) => (
-                  <li key={c}>{cell || <span className="faint">—</span>}</li>
-                ))}
-              </ol>
+              <div key={record.line} className="record-card glass rise" style={order(i)} data-testid="record">
+                <button type="button" className="record-open" onClick={() => onOpen(record)} title="Open this session">
+                  <span className="record-top">
+                    {record.time && <span className="time-chip">{record.time}</span>}
+                    <span className="record-situation">{record.situation || <span className="faint">Untitled moment</span>}</span>
+                  </span>
+                  <span className="record-feelings">
+                    <Tags names={record.before} />
+                    <span className="done-arrow">→</span>
+                    <Tags names={record.after} />
+                  </span>
+                  {record.distortions.length > 0 && (
+                    <span className="record-traps">
+                      {record.distortions.map((name) => (
+                        <span key={name} className="trap-badge">
+                          {name}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  {record.balanced && <span className="record-balanced">{record.balanced}</span>}
+                </button>
+                <button
+                  type="button"
+                  className={deleting === record.line ? 'record-delete is-asking' : 'record-delete'}
+                  onClick={() => {
+                    if (deleting === record.line) {
+                      actions.onDeleteRecord(record);
+                      setDeleting(undefined);
+                    } else setDeleting(record.line);
+                  }}
+                  onBlur={() => setDeleting(undefined)}
+                  aria-label={deleting === record.line ? 'Click again to delete' : 'Delete this session'}
+                  title={deleting === record.line ? 'Click again to delete' : 'Delete'}
+                  data-testid="record-delete"
+                >
+                  {deleting === record.line ? 'Delete?' : '×'}
+                </button>
+              </div>
             ))}
           </div>
-        </Section>
-      )}
+        ) : (
+          <p className="empty-line">No sessions yet today. Start one when a thought keeps pulling at you.</p>
+        )}
+      </Section>
     </>
   );
 }

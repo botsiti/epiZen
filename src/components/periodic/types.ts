@@ -1,3 +1,4 @@
+import type { RecordInput, ThoughtRecord } from '../../lib/cbt';
 import type { MediaItem } from '../../lib/media';
 import type { Period } from '../../lib/periodic';
 import type { DayEntry } from '../../lib/rollup';
@@ -29,4 +30,8 @@ export interface PeriodicActions {
   onToggle: (task: { line: number; done: boolean }) => void;
   onSetProperty: (key: string, value: string) => void;
   onAddTask: (category: string, words: string, minutes?: number) => void;
+  /** Thought records in the day's stream: a new row, a rewritten row, a row taken out. */
+  onAddRecord: (input: RecordInput) => void;
+  onUpdateRecord: (record: ThoughtRecord, input: RecordInput) => void;
+  onDeleteRecord: (record: ThoughtRecord) => void;
 }

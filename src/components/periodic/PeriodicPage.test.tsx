@@ -62,6 +62,9 @@ const actions = (): PeriodicActions => ({
   onToggle: vi.fn(),
   onSetProperty: vi.fn(),
   onAddTask: vi.fn(),
+  onAddRecord: vi.fn(),
+  onUpdateRecord: vi.fn(),
+  onDeleteRecord: vi.fn(),
 });
 
 describe('the day page', () => {
@@ -108,6 +111,53 @@ describe('the day page', () => {
     await user.type(screen.getByTestId('composer-minutes'), '30');
     await user.click(screen.getByTestId('composer-add'));
     expect(act.onAddTask).toHaveBeenCalledWith('sport', 'evening run', 30);
+  });
+});
+
+describe('the thought-record wizard', () => {
+  it('walks the five steps, needs what the vault needs, and saves the record', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
+    await user.click(screen.getByTestId('hero-record'));
+    const next = () => user.click(screen.getByTestId('wizard-continue'));
+    expect(screen.getByTestId('wizard-continue')).toBeDisabled();
+    await user.type(screen.getByTestId('wizard-situation'), 'Reviewed the day | felt behind');
+    await next();
+    // Sad is open first; a shade must be picked before going on.
+    expect(screen.getByTestId('wizard-continue')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Disappointed' }));
+    await user.click(screen.getByRole('button', { name: 'Fear' }));
+    await user.click(screen.getByRole('button', { name: 'Anxious' }));
+    await next();
+    await user.click(screen.getByRole('checkbox', { name: 'All-or-nothing' }));
+    expect(screen.getByText('“If it\'s not perfect, it\'s worthless.”')).toBeInTheDocument();
+    await next();
+    await user.type(screen.getByTestId('wizard-balanced'), 'Partial still counts.');
+    await next();
+    await user.click(screen.getByRole('button', { name: 'Calm' }));
+    await next();
+    expect(screen.getByText('Nicely done.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save to my diary' }));
+    expect(act.onAddRecord).toHaveBeenCalledWith({
+      situation: 'Reviewed the day | felt behind',
+      before: ['Disappointed', 'Anxious'],
+      distortions: ['All-or-nothing'],
+      balanced: 'Partial still counts.',
+      after: ['Calm'],
+    });
+    expect(screen.queryByTestId('thought-wizard')).not.toBeInTheDocument();
+  });
+
+  it('asks before throwing away what was typed', async () => {
+    const user = userEvent.setup();
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={actions()} />);
+    await user.click(screen.getByTestId('hero-record'));
+    await user.type(screen.getByTestId('wizard-situation'), 'something');
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('alertdialog', { name: 'Discard this entry?' })).toBeInTheDocument();
+    await user.click(screen.getByTestId('wizard-discard'));
+    expect(screen.queryByTestId('thought-wizard')).not.toBeInTheDocument();
   });
 });
 

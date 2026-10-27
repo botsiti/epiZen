@@ -1,4 +1,5 @@
 import { category, type Category } from './categories';
+import { parseRecords, type ThoughtRecord } from './cbt';
 import { parseTasks, type Task } from './dashboard';
 import { parseNote } from './frontmatter';
 
@@ -44,8 +45,8 @@ export interface Day {
   gratitude?: string;
   /** The stream of consciousness, as paragraphs, without the thought-record table. */
   stream: string[];
-  /** Thought records: each filled row of the stream's table, cell by cell. */
-  records: string[][];
+  /** Thought records: each filled row of the stream's table. */
+  records: ThoughtRecord[];
   /** Albums and films the day links as listened to or watched. */
   media: { kind: 'listened' | 'watched'; title: string }[];
   /** Logged minutes per category, most first. */
@@ -105,30 +106,11 @@ function section(lines: string[], heading: RegExp): string[] {
 // Prompts the vault's daily template writes into the stream; they aren't the day's own words.
 const PROMPTS = [/^reflection on good thoughts:?$/i, /^recognise irrational thoughts/i];
 
-const cells = (row: string) =>
-  row
-    .trim()
-    .replace(/^\||\|$/g, '')
-    .split(/(?<!\\)\|/)
-    .map((cell) => cell.replace(/\\\|/g, '|').trim());
-
-function stream(lines: string[]): { paragraphs: string[]; records: string[][] } {
-  const body = section(lines, /^stream of consc/i);
-  const paragraphs: string[] = [];
-  const records: string[][] = [];
-  let header = true;
-  for (const raw of body) {
-    const line = raw.trim();
-    if (line.startsWith('|')) {
-      // The first row is the header and the second the |---| line; filled rows follow.
-      if (/^\|[\s:|-]+\|$/.test(line)) header = false;
-      else if (!header && cells(line).some(Boolean)) records.push(cells(line));
-      continue;
-    }
-    header = true;
-    if (line && !PROMPTS.some((prompt) => prompt.test(line))) paragraphs.push(line);
-  }
-  return { paragraphs, records };
+/** The stream of consciousness as paragraphs: its own words, not the template's prompts or the thought-record table. */
+function stream(lines: string[]): string[] {
+  return section(lines, /^stream of consc/i)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('|') && !PROMPTS.some((prompt) => prompt.test(line)));
 }
 
 const MEDIA = /^\*\*(Listened|Watched):\*\*\s*\[\[([^\]|#]+)/i;
@@ -169,7 +151,7 @@ export function parseDay(text: string): Day {
   }
   totals.habitsDone = habits.filter((habit) => habit.done).length;
 
-  const { paragraphs, records } = stream(lines);
+
   const important = typeof properties.important === 'string' ? properties.important.trim() : undefined;
   return {
     tasks,
@@ -179,8 +161,8 @@ export function parseDay(text: string): Day {
     summary: calloutText(lines, 'tldr'),
     important: important || undefined,
     gratitude: /^\*\*Gratitude practice:\*\*[ \t]*(.*)$/im.exec(text)?.[1]?.trim() || undefined,
-    stream: paragraphs,
-    records,
+    stream: stream(lines),
+    records: parseRecords(text),
     media: lines.flatMap((line) => {
       const match = MEDIA.exec(line.trim());
       return match ? [{ kind: (match[1] ?? '').toLowerCase() as 'listened' | 'watched', title: (match[2] ?? '').trim() }] : [];
