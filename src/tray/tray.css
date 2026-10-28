@@ -1,0 +1,464 @@
+/* The menu bar item's panel (tray.html). DESIGN.md, "Menu bar item and panel", says why it looks
+   like this. The window is clear; macOS draws its dark glass, cut to these corners
+   (src-tauri/src/tray.rs), and the page tints it and lays the cards on it. */
+
+body.tray-body {
+  overflow: hidden;
+  background: transparent;
+}
+
+.tray {
+  --tray-radius: 14px;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: var(--tray-radius);
+  background: linear-gradient(180deg, rgb(30 34 37 / 58%) 0%, rgb(14 16 18 / 80%) 45%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 7%);
+  cursor: default;
+  user-select: none;
+}
+
+.tray input {
+  user-select: text;
+}
+
+/* Today and the day's line */
+
+.tray-head {
+  flex: none;
+  padding: var(--space-5) 20px 18px;
+}
+
+.tray-title-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.tray-title {
+  margin: 0;
+  font: 500 27px/1.1 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.tray-date {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.tray-timeline {
+  position: relative;
+  margin-top: 18px;
+  padding-top: 20px;
+}
+
+.tray-bubble {
+  position: absolute;
+  top: 0;
+  left: clamp(20px, calc(var(--share) * 100%), calc(100% - 20px));
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: 600 10.5px/1.5 var(--numbers);
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+
+.tray-track {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+}
+
+.tray-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--share) * 100%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(143 188 170 / 30%), var(--accent));
+  box-shadow: 0 0 10px rgb(143 188 170 / 40%);
+}
+
+.tray-marker {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--share) * 100%);
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px 2px rgb(143 188 170 / 55%);
+}
+
+.tray-mark {
+  position: absolute;
+  top: 8px;
+  width: 1px;
+  height: 4px;
+  margin-left: -0.5px;
+  background: rgb(255 255 255 / 12%);
+}
+
+.tray-mark.is-major {
+  height: 7px;
+  background: rgb(255 255 255 / 22%);
+}
+
+.tray-hours {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 13px;
+  color: var(--text-faint);
+  font: 500 9.5px var(--numbers);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The rest of the panel scrolls between the head and the foot */
+
+.tray-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px var(--space-4) 18px;
+}
+
+.tray-warning {
+  margin: 0 0 var(--space-3);
+  padding: 10px 12px;
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* The round under way */
+
+.tray-now {
+  --tone: var(--accent);
+
+  padding: var(--space-4) 18px;
+}
+
+.tray-now-time {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  margin: 6px 0 0;
+}
+
+.tray-now-time > span:first-child {
+  font: 300 40px/1 var(--numbers);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tray-now-state {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.tray-now-task {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  margin: var(--space-3) 0 0;
+}
+
+.tray-now-words {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tray-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 10px 1px var(--tone);
+  animation: tray-breathe 2.4s ease-in-out infinite;
+}
+
+.tray-now.is-paused .tray-dot {
+  opacity: 0.5;
+  box-shadow: none;
+  animation: none;
+}
+
+.tray-progress {
+  display: block;
+  height: 2px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--tone) calc(var(--progress) * 100%), rgb(255 255 255 / 7%) 0);
+}
+
+.tray-controls {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 14px;
+}
+
+.tray-idle {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font: italic 20px/1.3 var(--display);
+}
+
+/* The day's focus */
+
+.tray-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin: 18px var(--space-1) 0;
+}
+
+.tray-stat {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.tray-stat-value {
+  font: 600 22px/1.1 var(--numbers);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tray-stat .tile-label {
+  margin: 0;
+}
+
+/* Today's tasks */
+
+.tray-tasks {
+  margin-top: var(--space-5);
+}
+
+.tray-tasks-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 var(--space-1) 10px;
+}
+
+.tray-tasks-head .tile-label {
+  margin: 0;
+}
+
+.tray-count {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.tray-none,
+.tray-empty {
+  margin: 0 var(--space-1);
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tray-empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+.tray-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tray-task {
+  padding: var(--space-3) 14px;
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  background: var(--glass-face), rgb(18 20 22 / 70%);
+  box-shadow: var(--glass-top);
+  transition:
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.tray-task.is-current {
+  border-color: color-mix(in srgb, var(--tone) 45%, transparent);
+  box-shadow:
+    var(--glass-top),
+    0 0 24px -10px var(--tone);
+}
+
+.tray-task.is-done {
+  opacity: 0.55;
+}
+
+.tray-task-top {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tray-task-minutes {
+  color: var(--text-faint);
+  font: 500 11.5px var(--numbers);
+  font-variant-numeric: tabular-nums;
+}
+
+.tray-task-label {
+  display: -webkit-box;
+  margin: var(--space-2) 0 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.tray-starts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: var(--space-3);
+}
+
+.tray-start {
+  padding: 5px 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-muted);
+  font: 500 12.5px var(--numbers);
+  font-variant-numeric: tabular-nums;
+  transition:
+    color 160ms ease-out,
+    border-color 160ms ease-out,
+    background 160ms ease-out,
+    transform 380ms var(--snap);
+}
+
+.tray-start:hover {
+  border-color: var(--glass-line-strong);
+  background: rgb(255 255 255 / 6%);
+  color: var(--text);
+}
+
+.tray-start:active {
+  transform: scale(0.96);
+}
+
+.tray-start.is-first {
+  border-color: rgb(143 188 170 / 40%);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tray-running {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-3);
+}
+
+.tray-running-time {
+  font: 300 24px/1 var(--numbers);
+  font-variant-numeric: tabular-nums;
+}
+
+.tray-running .tray-controls {
+  margin: 0 0 0 auto;
+}
+
+.tray-custom {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-3);
+}
+
+.tray-custom-field {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  align-items: baseline;
+  padding: 5px var(--space-3);
+  border: 1px solid rgb(143 188 170 / 45%);
+  border-radius: 999px;
+  background: var(--accent-soft);
+}
+
+.tray-custom-field input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: 500 13px var(--numbers);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.tray-custom-field input::placeholder {
+  color: var(--text-faint);
+}
+
+/* The foot: back to the app, or out of it */
+
+.tray-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4) 14px;
+  border-top: 1px solid rgb(255 255 255 / 6%);
+}
+
+.tray-quit {
+  padding: 6px var(--space-3);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 13px;
+  transition:
+    background 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.tray-quit:hover {
+  background: rgb(255 255 255 / 5%);
+  color: var(--text);
+}
+
+@keyframes tray-breathe {
+  50% {
+    opacity: 0.55;
+    transform: scale(0.82);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tray * {
+    transition: none !important;
+  }
+}

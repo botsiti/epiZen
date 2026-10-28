@@ -20,6 +20,7 @@
     "security": {
       "capabilities": [
         "default",
+        "tray",
         {
           "identifier": "e2e",
           "description": "Test-only: lets WebdriverIO drive the window. Only in `npm run build:e2e`.",

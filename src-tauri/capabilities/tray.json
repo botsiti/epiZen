@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "tray",
+  "description": "What the menu bar item's panel may do: hear what the main window publishes (src-tauri/src/tray.rs)",
+  "windows": ["tray"],
+  "permissions": ["core:event:default"]
+}
