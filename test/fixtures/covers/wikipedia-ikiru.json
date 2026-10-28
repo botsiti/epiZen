@@ -1,0 +1,109 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "pages": [
+   {
+    "pageid": 18995,
+    "title": "Martin Scorsese",
+    "index": 8,
+    "description": "American filmmaker (born 1942)",
+    "thumbnail": {
+     "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/54/Martin_Scorsese-68749.jpg/500px-Martin_Scorsese-68749.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "width": 500,
+     "height": 667
+    },
+    "pageprops": {
+     "wikibase_item": "Q41148"
+    }
+   },
+   {
+    "pageid": 172094,
+    "title": "1952 in film",
+    "index": 3,
+    "description": "",
+    "pageprops": {
+     "wikibase_item": "Q755658"
+    }
+   },
+   {
+    "pageid": 235331,
+    "title": "Red Beard",
+    "index": 7,
+    "description": "1965 Japanese film",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/c/c1/Kurobarberousse.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 270,
+     "height": 385
+    },
+    "pageprops": {
+     "wikibase_item": "Q847709"
+    }
+   },
+   {
+    "pageid": 294423,
+    "title": "Takashi Shimura",
+    "index": 4,
+    "description": "Japanese actor (1905–1982)",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/commons/d/d6/Shimura_Takashi.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 366,
+     "height": 463
+    },
+    "pageprops": {
+     "wikibase_item": "Q40070"
+    }
+   },
+   {
+    "pageid": 714228,
+    "title": "Ikiru",
+    "index": 1,
+    "description": "1952 Japanese drama film by Akira Kurosawa",
+    "thumbnail": {
+     "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3a/Ikiru_poster.jpg/500px-Ikiru_poster.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "width": 500,
+     "height": 703
+    },
+    "pageprops": {
+     "wikibase_item": "Q152105"
+    }
+   },
+   {
+    "pageid": 11566003,
+    "title": "Gondola no Uta",
+    "index": 6,
+    "description": "1915 Japanese romantic ballad",
+    "pageprops": {
+     "wikibase_item": "Q5581471"
+    }
+   },
+   {
+    "pageid": 14811132,
+    "title": "List of Japanese films of 1952",
+    "index": 5,
+    "description": "",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/commons/7/7a/Ochazuke_no_aji_poster.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 211,
+     "height": 300
+    },
+    "pageprops": {
+     "wikibase_item": "Q6575086"
+    }
+   },
+   {
+    "pageid": 66905014,
+    "title": "Living (2022 film)",
+    "index": 2,
+    "description": "Film by Oliver Hermanus",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/1/18/Living_poster.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 253,
+     "height": 375
+    },
+    "pageprops": {
+     "wikibase_item": "Q107304169"
+    }
+   }
+  ]
+ }
+}

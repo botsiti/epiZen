@@ -1,0 +1,109 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "pages": [
+   {
+    "pageid": 20312,
+    "title": "Hayao Miyazaki",
+    "index": 3,
+    "description": "Japanese animator and artist (born 1941)",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/commons/f/ff/HayaoMiyazakiCCJuly09.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 342,
+     "height": 519
+    },
+    "pageprops": {
+     "wikibase_item": "Q55400"
+    }
+   },
+   {
+    "pageid": 205508,
+    "title": "Quincy Jones",
+    "index": 6,
+    "description": "American record producer and musician (1933–2024)",
+    "thumbnail": {
+     "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Quincy_jones_1980_%28cropped%29.jpg/500px-Quincy_jones_1980_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "width": 500,
+     "height": 620
+    },
+    "pageprops": {
+     "wikibase_item": "Q193645"
+    }
+   },
+   {
+    "pageid": 324138,
+    "title": "Agnès Varda",
+    "index": 1,
+    "description": "French filmmaker and photographer (1928–2019)",
+    "thumbnail": {
+     "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Agn%C3%A8s_Varda_%28Berlinale_2019%29_%28cropped%29.jpg/500px-Agn%C3%A8s_Varda_%28Berlinale_2019%29_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "width": 500,
+     "height": 650
+    },
+    "pageprops": {
+     "wikibase_item": "Q229990"
+    }
+   },
+   {
+    "pageid": 1343434,
+    "title": "Cinema of Iran",
+    "index": 7,
+    "description": "",
+    "thumbnail": {
+     "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/39/Iran_film_clapperboard.svg/500px-Iran_film_clapperboard.svg.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "width": 500,
+     "height": 500
+    },
+    "pageprops": {
+     "wikibase_item": "Q1472444"
+    }
+   },
+   {
+    "pageid": 4322639,
+    "title": "Nausicaa (disambiguation)",
+    "index": 2,
+    "description": "Topics referred to by the same term",
+    "pageprops": {
+     "wikibase_item": "Q1972038"
+    }
+   },
+   {
+    "pageid": 37868077,
+    "title": "Myriam Boyer",
+    "index": 8,
+    "description": "French actress (born 1948)",
+    "thumbnail": {
+     "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/Miriam_Boyer_Cannes_2017.jpg/500px-Miriam_Boyer_Cannes_2017.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "width": 500,
+     "height": 705
+    },
+    "pageprops": {
+     "wikibase_item": "Q658160"
+    }
+   },
+   {
+    "pageid": 53212261,
+    "title": "Gérard Depardieu filmography",
+    "index": 4,
+    "description": "",
+    "thumbnail": {
+     "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9f/G%C3%A9rard_Depardieu_Cannes_2010.jpg/500px-G%C3%A9rard_Depardieu_Cannes_2010.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "width": 500,
+     "height": 707
+    },
+    "pageprops": {
+     "wikibase_item": "Q25401815"
+    }
+   },
+   {
+    "pageid": 67893961,
+    "title": "Modernist film",
+    "index": 5,
+    "description": "Film genre",
+    "pageprops": {
+     "wikibase_item": "Q107324856"
+    }
+   }
+  ]
+ }
+}

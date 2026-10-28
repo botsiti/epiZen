@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
-import { lookupImage } from '../../lib/api';
-import { imageType, isDate, isoDate } from '../../lib/library';
+import { isDate, isoDate } from '../../lib/library';
 import { DateField } from '../DateField';
 import { CountUp } from '../periodic/motion';
+import { remoteImage } from './remoteImage';
 
 const TAU = Math.PI * 2;
 
@@ -219,22 +219,6 @@ export function ValueField({
       )}
     </label>
   );
-}
-
-// Covers from a lookup, read once per URL for the whole session.
-const fetched = new Map<string, Promise<string | undefined>>();
-function remoteImage(url: string): Promise<string | undefined> {
-  let found = fetched.get(url);
-  if (!found) {
-    found = lookupImage(url)
-      .then((bytes) => {
-        const view = new Uint8Array(bytes);
-        return URL.createObjectURL(new Blob([view], { type: imageType(view) ?? 'image/jpeg' }));
-      })
-      .catch(() => undefined);
-    fetched.set(url, found);
-  }
-  return found;
 }
 
 /**

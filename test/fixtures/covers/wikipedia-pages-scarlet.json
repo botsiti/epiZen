@@ -1,0 +1,46 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "pages": [
+   {
+    "pageid": 12949731,
+    "title": "Scarlet Sails (tradition)",
+    "description": "Celebration in St. Petersburg, Russia",
+    "thumbnail": {
+     "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9b/Alyye_parusa.jpg/500px-Alyye_parusa.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+     "width": 500,
+     "height": 333
+    },
+    "pageprops": {
+     "wikibase_item": "Q542095"
+    }
+   },
+   {
+    "pageid": 14428799,
+    "title": "Scarlet Sails (film)",
+    "description": "1961 Soviet film",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/b/ba/1961_alye_parusa.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 200,
+     "height": 283
+    },
+    "pageprops": {
+     "wikibase_item": "Q1171515"
+    }
+   },
+   {
+    "pageid": 74271839,
+    "title": "Scarlet Sails (novel)",
+    "description": "Novel by Alexander Grin",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/commons/6/69/Scarlet_Sails_first_edition_cover.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 390,
+     "height": 600
+    },
+    "pageprops": {
+     "wikibase_item": "Q1277317"
+    }
+   }
+  ]
+ }
+}

@@ -1,0 +1,45 @@
+{
+ "entities": {
+  "Q465640": {
+   "type": "item",
+   "id": "Q465640",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "Aleksandr Ptushko"
+    }
+   }
+  },
+  "Q1054574": {
+   "type": "item",
+   "id": "Q1054574",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "romance film"
+    }
+   }
+  },
+  "Q157394": {
+   "type": "item",
+   "id": "Q157394",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "fantasy film"
+    }
+   }
+  },
+  "Q130232": {
+   "type": "item",
+   "id": "Q130232",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "drama film"
+    }
+   }
+  }
+ },
+ "success": 1
+}

@@ -40,7 +40,7 @@ interface ViewProps extends NoteProps {
   /** For a daily, weekly or monthly note: what its page reads from the rest of the vault. */
   periodic?: PeriodicSpec;
   /** For a note in one of the library's folders: its kind. A rated one opens as a media page. */
-  media?: { spec: KindSpec; onOpenLibrary: () => void };
+  media?: { spec: KindSpec; onOpenLibrary: () => void; onCoverSaved: () => Promise<void> };
   onOpenNote: (path: string) => void;
   /** Opens a day, week or month, creating its note from the template if it has none. */
   onOpenPeriod: PeriodicActions['onOpenPeriod'];
@@ -230,6 +230,7 @@ export function NoteView(props: ViewProps) {
         linkTargets={linkTargets}
         onEdit={actions.onEdit}
         onOpenLibrary={media.onOpenLibrary}
+        onCoverSaved={media.onCoverSaved}
         warning={changeError}
       />
     );

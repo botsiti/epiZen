@@ -1,7 +1,7 @@
 import type { NoteText, VaultFile } from './api';
 import { parseNote } from './frontmatter';
-import { field, kindOfFolder, kindSpec, LIBRARY_ROOT, type MediaKind } from './library';
-import { findWikilinks, linkResolver, noteFolder, noteTitle } from './links';
+import { coverEmbed, field, kindOfFolder, kindSpec, LIBRARY_ROOT, type MediaKind } from './library';
+import { linkResolver, noteFolder, noteTitle } from './links';
 
 export interface MediaItem {
   path: string;
@@ -9,7 +9,7 @@ export interface MediaItem {
   /** Who made it, or when: the artist, channel, director or year. */
   subtitle?: string;
   rating: number;
-  /** The cover image's vault path: the note's first embedded image. */
+  /** The cover image's vault path: the note's first embedded image, before its text (library.ts, `coverEmbed`). */
   cover?: string;
   /** When it was listened to or watched, for the order on the shelf. */
   date?: string;
@@ -40,10 +40,7 @@ export function collectMedia(notes: NoteText[], files: VaultFile[]): Shelf[] {
     const value = field(properties, 'rating');
     const rating = Number(value);
     if (value === undefined || value === null || value === '' || typeof value === 'boolean' || !Number.isFinite(rating)) continue;
-    const cover = findWikilinks(body)
-      .filter((link) => link.embed)
-      .map((link) => resolve(link.target, path))
-      .find((file) => file?.kind === 'image');
+    const cover = coverEmbed(body, path, resolve)?.file;
     const item: MediaItem = {
       path,
       title: noteTitle(path),

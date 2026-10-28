@@ -1,11 +1,14 @@
-import { useCallback, useMemo, useRef, type CSSProperties, type PointerEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import type { VaultFile } from '../../lib/api';
 import type { LinkTarget } from '../../lib/completion';
 import { parseNote } from '../../lib/frontmatter';
 import { coverEmbed, keyIn, readEntry, type KindSpec } from '../../lib/library';
 import { linkResolver } from '../../lib/links';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { followPointer, order } from '../periodic/effects';
 import { useVaultImage } from '../useVaultImage';
+import { FindCover } from './FindCover';
 import { RatingRing, ValueField } from './parts';
 import { Thoughts } from './Thoughts';
 import '../periodic/periodic.css';
@@ -29,6 +32,8 @@ interface Props {
   onOpenLibrary: () => void;
   /** Why the last change didn't reach the note, if it didn't. */
   warning?: string;
+  /** A cover was found and saved for it (the note and a new image): read the vault again. */
+  onCoverSaved?: () => Promise<void>;
 }
 
 const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
@@ -41,7 +46,7 @@ const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.par
  * is written right there.
  */
 export function MediaPage(props: Props) {
-  const { spec, path, text, files, onOpenLink, onSetProperty, onSaveThoughts, onUnsavedThoughts, linkTargets, onEdit, onOpenLibrary, warning } = props;
+  const { spec, path, text, files, onOpenLink, onSetProperty, onSaveThoughts, onUnsavedThoughts, linkTargets, onEdit, onOpenLibrary, warning, onCoverSaved } = props;
   const resolve = useMemo(() => linkResolver(files), [files]);
   const { properties, body } = useMemo(() => parseNote(text), [text]);
   const entry = useMemo(() => readEntry(path, text, resolve), [path, text, resolve]);
@@ -53,6 +58,8 @@ export function MediaPage(props: Props) {
     flushThoughts.current = flush;
   }, []);
   const edit = () => void (flushThoughts.current?.() ?? Promise.resolve(true)).then((saved) => saved && onEdit());
+  // Finding a cover for it, or another one.
+  const [finding, setFinding] = useState(false);
   if (!entry) return null;
 
   // A value is written under the key the note already uses (`rating` or `Rating`), or the vault's usual one.
@@ -84,13 +91,27 @@ export function MediaPage(props: Props) {
         )}
         <div className="media-veil" aria-hidden="true" />
 
-        <div className="media-cover-slot" style={{ '--aspect': spec.aspect } as CSSProperties}>
+        <div className={cover ? 'media-cover-slot has-cover' : 'media-cover-slot'} style={{ '--aspect': spec.aspect } as CSSProperties}>
           {image.url ? (
             <img className="media-cover" src={image.url} alt={entry.title} data-testid="vault-image" />
           ) : (
             <span className="media-cover is-blank">{entry.title}</span>
           )}
+          {spec.source && onCoverSaved && (
+            <button type="button" className="nav-chip media-cover-find" onClick={() => setFinding(true)} data-testid="find-cover-open">
+              {cover ? 'Change cover' : 'Find cover'}
+            </button>
+          )}
         </div>
+        {finding &&
+          spec.source &&
+          onCoverSaved &&
+          createPortal(
+            <ErrorBoundary label="Finding a cover" frame={(message) => <div className="add-backdrop" onMouseDown={() => setFinding(false)}>{message}</div>}>
+              <FindCover spec={{ ...spec, source: spec.source }} path={path} text={text} files={files} change={Boolean(cover)} onClose={() => setFinding(false)} onSaved={onCoverSaved} />
+            </ErrorBoundary>,
+            document.body,
+          )}
 
         <div className="media-main">
           <p className="kicker">

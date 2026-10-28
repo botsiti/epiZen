@@ -1,0 +1,104 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "pages": [
+   {
+    "pageid": 92689,
+    "title": "Nausicaä of the Valley of the Wind (film)",
+    "index": 1,
+    "description": "1984 film by Hayao Miyazaki",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/b/bc/Nausicaaposter.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 265,
+     "height": 376
+    },
+    "pageprops": {
+     "wikibase_item": "Q8885676"
+    }
+   },
+   {
+    "pageid": 3903364,
+    "title": "Howl's Moving Castle (film)",
+    "index": 6,
+    "description": "2004 film by Hayao Miyazaki",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/a/a0/Howls-moving-castleposter.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 267,
+     "height": 373
+    },
+    "pageprops": {
+     "wikibase_item": "Q29011"
+    }
+   },
+   {
+    "pageid": 5355594,
+    "title": "Nausicaä of the Valley of the Wind (manga)",
+    "index": 2,
+    "description": "Manga series by Hayao Miyazaki",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/c/c3/NausicaaCoverTankobon1.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 250,
+     "height": 355
+    },
+    "pageprops": {
+     "wikibase_item": "Q95047"
+    }
+   },
+   {
+    "pageid": 13264461,
+    "title": "Ulysses (1954 film)",
+    "index": 8,
+    "description": "1954 film by Mario Camerini",
+    "pageprops": {
+     "wikibase_item": "Q958327"
+    }
+   },
+   {
+    "pageid": 20100279,
+    "title": "Nausicaä (Nausicaä of the Valley of the Wind)",
+    "index": 3,
+    "description": "Fictional character created by Hayao Miyazaki",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/2/24/Nausica%C3%A4_2_cropped.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 300,
+     "height": 349
+    },
+    "pageprops": {
+     "wikibase_item": "Q3337177"
+    }
+   },
+   {
+    "pageid": 22936772,
+    "title": "List of Nausicaä of the Valley of the Wind characters",
+    "index": 4,
+    "description": "",
+    "pageprops": {
+     "wikibase_item": "Q3013956"
+    }
+   },
+   {
+    "pageid": 32980925,
+    "title": "Nausicaä of the Valley of the Wind",
+    "index": 5,
+    "description": "Topics referred to by the same term",
+    "pageprops": {
+     "wikibase_item": "Q3588686"
+    }
+   },
+   {
+    "pageid": 83784352,
+    "title": "The Odyssey (1987 film)",
+    "index": 7,
+    "description": "1987 Australian film",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/c/c0/The_Odyssey_1987.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 260,
+     "height": 390
+    },
+    "pageprops": {
+     "wikibase_item": "Q140700565"
+    }
+   }
+  ]
+ }
+}

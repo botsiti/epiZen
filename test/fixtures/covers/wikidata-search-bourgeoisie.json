@@ -1,0 +1,14 @@
+{
+ "search": [
+  {
+   "id": "Q308920",
+   "label": "The Discreet Charm of the Bourgeoisie",
+   "description": "1972 film by Luis Buñuel",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Скромное обаяние буржуазии"
+   }
+  }
+ ]
+}

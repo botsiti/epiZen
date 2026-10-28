@@ -510,15 +510,26 @@ export function mediaNoteText(spec: KindSpec, draft: MediaDraft, links: { overvi
   return `${lines.join('\n')}\n${body.length ? `${body.join('\n\n')}\n` : ''}`;
 }
 
-/** The note's cover: its first embed that is an image, and the file it shows. */
+/**
+ * The note's cover, and the file it shows: its first embedded image, when nothing but links (the
+ * overview's), other images' embeds and blank lines come before it, as the vault's notes and new
+ * ones have it. An image further down, after a heading or some text, is a page of the note, not
+ * its cover: two of the vault's books embed their notes' pages so.
+ */
 export function coverEmbed(
   body: string,
   path: string,
   resolve: (target: string, from: string) => VaultFile | undefined,
 ): { link: WikilinkMatch; file: VaultFile } | undefined {
+  let from = 0;
   for (const link of findWikilinks(body)) {
-    const file = link.embed ? resolve(link.target, path) : undefined;
+    if (body.slice(from, link.index).trim()) return undefined;
+    from = link.index + link.length;
+    if (!link.embed) continue;
+    const file = resolve(link.target, path);
     if (file?.kind === 'image') return { link, file };
+    // An image that isn't in the vault may come before the cover; anything else embedded is the note's own.
+    if (!IMAGE.test(link.target)) return undefined;
   }
   return undefined;
 }

@@ -202,10 +202,6 @@ export function App() {
     (id: number, tab: LibraryTab) => update((prev) => replaceView(prev, (v) => (v.kind === 'library' ? { ...v, tab } : v), id)),
     [update],
   );
-  const mediaPage = useMemo(() => {
-    const spec = view.kind === 'note' ? kindOfPath(view.path) : undefined;
-    return spec && { spec, onOpenLibrary: () => openLibrary(spec.kind) };
-  }, [view, openLibrary]);
   const todayNote = useMemo(
     () => ({ date: now, path: periodicNotes.get(periodKey('day', now)), name: noteTitle(periodicPath('day', now, periodic)) }),
     [now, periodic, periodicNotes],
@@ -299,6 +295,11 @@ export function App() {
     setFiles(found);
     setTexts(new Map(read.map((note) => [note.path, note.text])));
   }, []);
+  // A library note opens as its media page; finding it a cover reads the vault again, for the note and its new image.
+  const mediaPage = useMemo(() => {
+    const spec = view.kind === 'note' ? kindOfPath(view.path) : undefined;
+    return spec && { spec, onOpenLibrary: () => openLibrary(spec.kind), onCoverSaved: refresh };
+  }, [view, openLibrary, refresh]);
   const noteSaved = useCallback((path: string, text: string) => setTexts((prev) => new Map(prev).set(path, text)), []);
   // Changes to a note other than the open one (a quest in its weekly note or Custom Quests.md): one
   // at a time, each over the note as it is on disk now, and written only while it still holds that.
@@ -754,6 +755,7 @@ export function App() {
                 today={now}
                 onOpenNote={openNote}
                 onCreated={mediaCreated}
+                onChanged={refresh}
               />
             )}
             {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}

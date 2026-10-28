@@ -1,0 +1,20 @@
+{
+ "batchcomplete": true,
+ "query": {
+  "pages": [
+   {
+    "pageid": 346569,
+    "title": "The Discreet Charm of the Bourgeoisie",
+    "description": "1972 film by Luis Buñuel",
+    "thumbnail": {
+     "source": "https://upload.wikimedia.org/wikipedia/en/d/d3/Discreet-charm-poster.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+     "width": 274,
+     "height": 364
+    },
+    "pageprops": {
+     "wikibase_item": "Q308920"
+    }
+   }
+  ]
+ }
+}
