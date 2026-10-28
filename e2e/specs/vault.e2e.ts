@@ -7,6 +7,8 @@ import {
   clickAs,
   clickCanvas,
   closeOtherTabs,
+  closeTool,
+  filterBy,
   foldersOf,
   followLink,
   frontTab,
@@ -14,12 +16,14 @@ import {
   openFolders,
   openNote,
   openPanel,
+  openTool,
   pinTab,
   pointAtNode,
   prepareWindow,
   pressCommand,
   screenshot,
   setRightSidebar,
+  showLibraryAs,
   showMonth,
   showTab,
   tabTitles,
@@ -167,17 +171,22 @@ describe('the demo vault', () => {
     await screenshot('09-youtube');
   });
 
-  it('opens the library on All: every album, film, book and podcast together, narrowed by kind', async () => {
+  it('opens the library on All: the latest of every album, film, book and podcast together as covers, narrowed by kind', async () => {
     await $('[data-testid="open-library"]').click();
     const library = $('[data-testid="library"]');
     await library.waitForDisplayed();
     await expect(library).toHaveAttribute('data-tab', 'all');
+    await expect(library).toHaveAttribute('data-layout', 'covers');
     await expect($('[data-testid="hero-title"]')).toHaveText('Library');
     // 20 albums, 4 films, 6 books and 4 podcasts; videos are read as pages, not shelved.
     expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library"] [role="tab"]')].map((tab) => tab.textContent))).toEqual(['All', 'Albums', 'Films', 'Books', 'Podcasts']);
     await expect($('[data-testid="library-total"]')).toHaveText('34');
-    expect(await $$('[data-testid="library-card"]').length).toBe(34);
-    expect(await $$('[data-testid="library-card-kind"]').length).toBe(34);
+    // The covers are the latest 15, the latest first; the list has them all.
+    expect(await $$('[data-testid="library-card"]').length).toBe(15);
+    expect(await $$('[data-testid="library-card-kind"]').length).toBe(15);
+    await expect($('[data-testid="library-card"]')).toHaveAttribute('data-path', 'Rating/music/Monastery Wi-Fi.md');
+    await expect($('[data-testid="library-count"]')).toHaveText('The latest 15 of 34');
+    await expect($('[data-testid="library-see-all"]')).toHaveText('See all 34 in the list');
     // An Add for every kind, on every tab.
     expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-add"]')].map((button) => button.getAttribute('data-kind')))).toEqual(['album', 'film', 'book', 'podcast']);
     // Covers load as they come near the screen: the first row's, at least.
@@ -186,15 +195,18 @@ describe('the demo vault', () => {
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
     await screenshot('80-library-all');
 
-    await $('[data-testid="kind-chip"][data-kind="film"]').click();
-    await $('[data-testid="kind-chip"][data-kind="book"]').click();
+    await filterBy('[data-testid="kind-chip"][data-kind="film"]');
+    await filterBy('[data-testid="kind-chip"][data-kind="book"]');
+    await closeTool('library-filter');
     expect(await $$('[data-testid="library-card"]').length).toBe(10);
     expect(new Set(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-card"]')].map((card) => card.getAttribute('data-kind'))))).toEqual(new Set(['film', 'book']));
+    await expect($('[data-testid="library-filters"]')).toHaveText('Films · Books');
+    await expect($('[data-testid="library-count"]')).toHaveText('10 results');
     await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) === 10, { timeoutMsg: 'the film and book covers never loaded' });
     await screenshot('81-library-all-kinds');
-    await $('[data-testid="kind-chip"][data-kind="film"]').click();
-    await $('[data-testid="kind-chip"][data-kind="book"]').click();
-    expect(await $$('[data-testid="library-card"]').length).toBe(34);
+    await filterBy('[data-testid="filter-clear"]');
+    await closeTool('library-filter');
+    expect(await $$('[data-testid="library-card"]').length).toBe(15);
   });
 
   it('shows the library: a tab per kind with its counts, its covers, its genres and a calendar of covers', async () => {
@@ -202,18 +214,18 @@ describe('the demo vault', () => {
     await showTab('Albums');
     await expect(library).toHaveAttribute('data-tab', 'album');
     expect(await $$('[data-testid="tab"]').length).toBe(5);
-    expect(await $$('[data-testid="library-card"]').length).toBe(20);
+    // The latest 15 of the 20.
+    expect(await $$('[data-testid="library-card"]').length).toBe(15);
     await expect($('[data-testid="library-total"]')).toHaveText('20');
     await expect($('[data-testid="library-average"]')).toHaveText('77');
     await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) >= 12, { timeoutMsg: 'the covers never loaded' });
     await screenshot('48-library-albums');
 
-    await $('[data-testid="genre-chip"][data-genre="ambient"]').click();
+    await filterBy('[data-testid="genre-chip"][data-genre="ambient"]');
     expect(await $$('[data-testid="library-card"]').length).toBe(5);
-    await $('[data-testid="genre-chip"][data-genre=""]').click();
-    await $('[data-testid="sort"][data-sort="rating"]').click();
-    await expect($('[data-testid="library-card"]')).toHaveAttribute('data-path', 'Rating/music/Seven Bells for Nobody.md');
-    await $('[data-testid="sort"][data-sort="recent"]').click();
+    await filterBy('[data-testid="genre-chip"][data-genre=""]');
+    await closeTool('library-filter');
+    expect(await $$('[data-testid="library-card"]').length).toBe(15);
     await expect($('[data-testid="library-card"]')).toHaveAttribute('data-path', 'Rating/music/Monastery Wi-Fi.md');
 
     // The calendar opens on the latest month with something in it.
@@ -239,46 +251,77 @@ describe('the demo vault', () => {
     await showTab('Albums');
   });
 
-  it('shows the library as a list beside its covers: a row per note, sorted from its headers, the choice kept in the settings', async () => {
+  it("shows the library as a list from Covers or List, after a base's table: sorted, filtered, searched, its columns picked, kept in the settings", async () => {
     const heads = () => browser.execute(() => [...document.querySelectorAll('[data-testid="list-head"]')].map((head) => head.getAttribute('aria-label') ?? head.textContent));
+    const kinds = () => browser.execute(() => [...new Set([...document.querySelectorAll('[data-testid="library-row"]')].map((row) => row.getAttribute('data-kind')))]);
     const firstRow = () => $('[data-testid="library-row"]');
+    const settings = join(dirname(vaultCopy()), 'config', 'settings.json');
+    const kept = (key: string) => (JSON.parse(readFileSync(settings, 'utf8')) as Record<string, unknown>)[key];
     await showTab('All');
+    await openTool('library-view-menu');
+    await expect($('[data-testid="library-view"][data-view="covers"]')).toHaveAttribute('aria-checked', 'true');
+    await screenshot('97-library-view-menu');
     await $('[data-testid="library-view"][data-view="list"]').click();
     await $('[data-testid="library-list"]').waitForDisplayed();
-    await expect($('[data-testid="library-view"][data-view="list"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect($('[data-testid="library"]')).toHaveAttribute('data-layout', 'list');
+    await expect($('[data-testid="library-view-menu-menu"]')).not.toBeExisting();
     expect(await $$('[data-testid="library-card"]').length).toBe(0);
     expect(await $$('[data-testid="library-row"]').length).toBe(34);
+    await expect($('[data-testid="library-count"]')).toHaveText('34 results');
     expect(await heads()).toEqual(['Cover', 'Title', 'By', 'Year', 'Kind', 'Genres', 'Rating', 'Date']);
     // Kept in the app's settings, beside the vault copy, never in the vault.
-    const settings = join(dirname(vaultCopy()), 'config', 'settings.json');
-    await browser.waitUntil(() => (JSON.parse(readFileSync(settings, 'utf8')) as { libraryLayout?: string }).libraryLayout === 'list', { timeout: 5000, timeoutMsg: 'the list was never kept in the settings' });
+    await browser.waitUntil(() => kept('libraryLayout') === 'list', { timeout: 5000, timeoutMsg: 'the list was never kept in the settings' });
     // Its covers small, loading as they come near the screen.
-    await browser.waitUntil(async () => (await $$('[data-testid="library-row"] [data-testid="vault-image"]').length) >= 8, { timeoutMsg: 'the rows\' covers never loaded' });
+    await browser.waitUntil(async () => (await $$('[data-testid="library-row"] [data-testid="vault-image"]').length) >= 8, { timeoutMsg: "the rows' covers never loaded" });
     await expect(firstRow()).toHaveAttribute('data-path', 'Rating/music/Monastery Wi-Fi.md');
-    await screenshot('97-library-list');
+    await screenshot('98-library-list');
 
-    // The headers sort, and the chips follow.
-    await $('[data-testid="list-sort"][data-sort="rating"]').click();
-    await expect($('[data-testid="sort"][data-sort="rating"]')).toHaveAttribute('aria-pressed', 'true');
+    // Sort, and the headers with it.
+    await openTool('library-sort');
+    await $('[data-testid="sort"][data-sort="rating"]').click();
+    await expect($('[data-testid="library-sort-menu"]')).not.toBeExisting();
     await expect($('[data-testid="list-head"][data-column="rating"]')).toHaveAttribute('aria-sort', 'descending');
     await expect(firstRow()).toHaveAttribute('data-path', 'Rating/music/Seven Bells for Nobody.md');
     await $('[data-testid="list-sort"][data-sort="title"]').click();
-    await expect($('[data-testid="sort"][data-sort="title"]')).toHaveAttribute('aria-pressed', 'true');
     await expect($('[data-testid="list-head"][data-column="title"]')).toHaveAttribute('aria-sort', 'ascending');
     await $('[data-testid="list-sort"][data-sort="recent"]').click();
-    await expect($('[data-testid="sort"][data-sort="recent"]')).toHaveAttribute('aria-pressed', 'true');
-    // The kind chips and the genres narrow it as they do the covers.
-    await $('[data-testid="kind-chip"][data-kind="book"]').click();
-    expect(new Set(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-row"]')].map((row) => row.getAttribute('data-kind'))))).toEqual(new Set(['book']));
-    await $('[data-testid="kind-chip"][data-kind="book"]').click();
+    await expect($('[data-testid="list-head"][data-column="date"]')).toHaveAttribute('aria-sort', 'descending');
+
+    // Filter: the kinds and the genres, as for the covers.
+    await filterBy('[data-testid="kind-chip"][data-kind="book"]');
+    await closeTool('library-filter');
+    expect(await kinds()).toEqual(['book']);
+    expect(await $$('[data-testid="library-row"]').length).toBe(6);
+    await filterBy('[data-testid="filter-clear"]');
+    await closeTool('library-filter');
     expect(await $$('[data-testid="library-row"]').length).toBe(34);
+
+    // Search: titles, makers and genres.
+    await $('[data-testid="library-search-open"]').click();
+    await $('[data-testid="library-search"]').setValue('tbilisi');
+    await browser.waitUntil(async () => (await $$('[data-testid="library-row"]').length) === 2, { timeoutMsg: 'the search never narrowed the list' });
+    expect(new Set(await kinds())).toEqual(new Set(['album', 'book']));
+    await expect($('[data-testid="library-count"]')).toHaveText('2 results');
+    await $('[data-testid="library-search-clear"]').click();
+    await browser.waitUntil(async () => (await $$('[data-testid="library-row"]').length) === 34, { timeoutMsg: 'the search was never cleared' });
+
+    // Properties: the columns, kept in the settings.
+    await openTool('library-columns');
+    await $('[data-testid="column"][data-column="genres"]').click();
+    expect(await heads()).toEqual(['Cover', 'Title', 'By', 'Year', 'Kind', 'Rating', 'Date']);
+    await browser.waitUntil(() => JSON.stringify(kept('libraryHidden')) === '["genres"]', { timeout: 5000, timeoutMsg: 'the hidden column was never kept in the settings' });
+    await $('[data-testid="column"][data-column="genres"]').click();
+    expect(await heads()).toEqual(['Cover', 'Title', 'By', 'Year', 'Kind', 'Genres', 'Rating', 'Date']);
+    await closeTool('library-columns');
 
     // A kind's tab names its own columns, and the list stays the list there.
     await showTab('Films');
     expect(await $$('[data-testid="library-row"]').length).toBe(4);
     expect(await heads()).toEqual(['Cover', 'Title', 'Director', 'Year', 'Genres', 'Rating', 'Watched']);
     await browser.waitUntil(async () => (await $$('[data-testid="library-row"] [data-testid="vault-image"]').length) === 4, { timeoutMsg: 'the posters never loaded' });
-    await screenshot('98-library-list-films');
+    await openTool('library-columns');
+    await screenshot('99-library-list-films');
+    await closeTool('library-columns');
 
     // A row opens the note's page.
     const film = (await firstRow().getAttribute('data-path')) ?? '';
@@ -288,16 +331,19 @@ describe('the demo vault', () => {
     await $('[data-testid="library-list"]').waitForDisplayed();
     await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'film');
 
-    // Back to the covers, for the steps after this one.
-    await $('[data-testid="library-view"][data-view="covers"]').click();
+    // Back to the covers, from the same menu.
+    await showLibraryAs('covers');
     await $('[data-testid="library-grid"]').waitForDisplayed();
-    await browser.waitUntil(() => (JSON.parse(readFileSync(settings, 'utf8')) as { libraryLayout?: string }).libraryLayout === 'covers', { timeout: 5000, timeoutMsg: 'the covers were never kept in the settings' });
+    await browser.waitUntil(() => kept('libraryLayout') === 'covers', { timeout: 5000, timeoutMsg: 'the covers were never kept in the settings' });
     await showTab('Albums');
   });
 
   it("opens an album as its page, and setting its rating writes that one line", async () => {
     const path = 'Rating/music/Glasshouse Weather.md';
-    await $(`[data-testid="library-card"][data-path="${path}"]`).click();
+    // Older than the latest 15 the covers show: it is in the list.
+    await expect($(`[data-testid="library-card"][data-path="${path}"]`)).not.toBeExisting();
+    await showLibraryAs('list');
+    await $(`[data-testid="library-row"][data-path="${path}"]`).click();
     await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
     await expect(title()).toHaveText('Glasshouse Weather');
     await expect($('[data-testid="rating-ring"]')).toHaveAttribute('data-value', '88');
@@ -511,6 +557,8 @@ describe('the demo vault', () => {
   it("shows everything listened to, watched and finished in All's calendar, several covers on a day, narrowed by kind", async () => {
     await $('[data-testid="open-library"]').click();
     await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'all');
+    // The calendar is under the covers; the album was opened from the list.
+    await showLibraryAs('covers');
     await $('[data-testid="cover-calendar"]').scrollIntoView();
     // September, from the year's strip: the 21st has an album, the new episode and a film.
     await $$('[data-testid="year-month"]')[8]?.click();
@@ -522,10 +570,12 @@ describe('the demo vault', () => {
     await browser.waitUntil(async () => (await $$('.cover-day-image[data-testid="vault-image"]').length) >= 17, { timeoutMsg: 'the calendar covers never loaded' });
     await screenshot('85-library-all-calendar');
 
-    await $('[data-testid="kind-chip"][data-kind="podcast"]').click();
+    await filterBy('[data-testid="kind-chip"][data-kind="podcast"]');
+    await closeTool('library-filter');
     await expect(day21).toHaveAttribute('data-count', '1');
     expect(await $$('[data-testid="cover-day"][data-count]').length).toBe(3);
-    await $('[data-testid="kind-chip"][data-kind="podcast"]').click();
+    await filterBy('[data-testid="kind-chip"][data-kind="podcast"]');
+    await closeTool('library-filter');
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
   });
 

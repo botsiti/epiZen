@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { VaultFile } from '../../lib/api';
-import { collectLibrary, type LibraryLayout, type LibraryTab } from '../../lib/library';
+import { collectLibrary, type LibraryLayout, type LibraryTab, type ListColumn } from '../../lib/library';
 import { LibraryView } from './LibraryView';
 
 vi.mock('../../lib/api', () => ({
@@ -28,19 +28,26 @@ const notes = [
 const files: VaultFile[] = notes.map((note) => ({ path: note.path, kind: 'note' }));
 const library = collectLibrary(notes, files);
 
-function renderLibrary(tab: LibraryTab = 'all', layout: LibraryLayout = 'covers', shelved = library) {
+function renderLibrary(tab: LibraryTab = 'all', layout: LibraryLayout = 'covers', shelved = library, hidden: ListColumn[] = []) {
   const onTab = vi.fn();
   const onLayout = vi.fn();
+  const onHidden = vi.fn();
   const onOpenNote = vi.fn();
-  const view = render(
-    <LibraryView library={shelved} files={files} tab={tab} onTab={onTab} layout={layout} onLayout={onLayout} today={new Date(2026, 9, 28)} onOpenNote={onOpenNote} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />,
-  );
-  return { onTab, onLayout, onOpenNote, view };
+  const props = { library: shelved, files, tab, onTab, layout, onLayout, hidden, onHidden, today: new Date(2026, 9, 28), onOpenNote, onCreated: vi.fn(() => Promise.resolve()), onChanged: vi.fn(() => Promise.resolve()) };
+  const view = render(<LibraryView {...props} />);
+  return { onTab, onLayout, onHidden, onOpenNote, view, props };
 }
 
-const cards = () => screen.getAllByTestId('library-card').map((card) => card.getAttribute('data-path'));
+const cards = () => screen.queryAllByTestId('library-card').map((card) => card.getAttribute('data-path'));
+const byData = (testId: string, name: string, value: string) => screen.getAllByTestId(testId).find((found) => found.getAttribute(name) === value)!;
+/** Opens a toolbar menu (Covers or List, Sort, Filter, Properties) unless it is open. */
+async function openTool(user: ReturnType<typeof userEvent.setup>, testId: string) {
+  const button = screen.getByTestId(testId);
+  if (button.getAttribute('aria-expanded') !== 'true') await user.click(button);
+  return screen.getByTestId(`${testId}-menu`);
+}
 
-describe('the library\'s All tab', () => {
+describe("the library's All tab", () => {
   it('opens on everything together: All first among the tabs, the counts of all of it, each card with its kind', () => {
     renderLibrary();
     expect(screen.getByTestId('library')).toHaveAttribute('data-tab', 'all');
@@ -49,24 +56,34 @@ describe('the library\'s All tab', () => {
     // Videos are read as pages, not shelved.
     expect(screen.getByTestId('library-total')).toHaveTextContent('5');
     expect(cards()).toHaveLength(5);
+    expect(screen.getByTestId('library-count')).toHaveTextContent('5 results');
+    // The latest first.
+    expect(cards()[0]).toBe('Rating/music/Monastery Wi-Fi.md');
     expect(screen.getAllByTestId('library-card-kind').map((kind) => kind.textContent)).toEqual(['album', 'album', 'film', 'podcast', 'book']);
   });
 
-  it('narrows the grid and the calendar by kind, several at once', async () => {
+  it('narrows the covers and the calendar by kind from Filter, several at once', async () => {
     const user = userEvent.setup();
     renderLibrary();
-    const chip = (kind: string) => screen.getAllByTestId('kind-chip').find((found) => found.getAttribute('data-kind') === kind)!;
-    expect(screen.getAllByTestId('kind-chip').map((found) => found.textContent)).toEqual(['Albums 2', 'Films 1', 'Books 1', 'Podcasts 1']);
-    await user.click(chip('film'));
-    await user.click(chip('book'));
-    expect(chip('film')).toHaveAttribute('aria-pressed', 'true');
+    const menu = await openTool(user, 'library-filter');
+    expect(within(menu).getAllByTestId('kind-chip').map((found) => found.textContent)).toEqual(['Albums2', 'Films1', 'Books1', 'Podcasts1']);
+    await user.click(byData('kind-chip', 'data-kind', 'film'));
+    await user.click(byData('kind-chip', 'data-kind', 'book'));
+    // Filters stay open to pick more.
+    expect(byData('kind-chip', 'data-kind', 'film')).toHaveAttribute('aria-checked', 'true');
     expect(cards().sort()).toEqual(['Rating/books/Thinking in Seasons.md', 'Rating/kino/Static Bloom.md']);
+    expect(screen.getByTestId('library-filter')).toHaveTextContent('Filter2');
+    expect(screen.getByTestId('library-filters')).toHaveTextContent('Films · Books');
     // The hero still counts everything.
     expect(screen.getByTestId('library-total')).toHaveTextContent('5');
-    await user.click(chip('film'));
+    await user.click(byData('kind-chip', 'data-kind', 'film'));
     expect(cards()).toEqual(['Rating/books/Thinking in Seasons.md']);
-    await user.click(chip('book'));
+    await user.click(screen.getByTestId('filter-clear'));
     expect(cards()).toHaveLength(5);
+    expect(screen.queryByTestId('library-filters')).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('library-filter-menu')).not.toBeInTheDocument();
+    expect(screen.getByTestId('library-filter')).toHaveFocus();
   });
 
   it('draws several covers on a day of the calendar, the best rated in front', () => {
@@ -80,9 +97,9 @@ describe('the library\'s All tab', () => {
     expect(within(day(27)).getAllByTestId('cover-day-cover')).toHaveLength(1);
   });
 
-  it('has an Add for every kind in the hero, on every tab, the tab\'s own first, in the primary button', async () => {
+  it("has an Add for every kind in the hero, on every tab, the tab's own first, in the primary button", async () => {
     const user = userEvent.setup();
-    const { view } = renderLibrary();
+    const { view, props } = renderLibrary();
     const adds = () => screen.getAllByTestId('library-add').map((button) => [button.getAttribute('data-kind'), button.textContent, button.className.includes('primary-button')]);
     expect(adds()).toEqual([
       ['album', '+ Album', false],
@@ -90,7 +107,7 @@ describe('the library\'s All tab', () => {
       ['book', '+ Book', false],
       ['podcast', '+ Episode', false],
     ]);
-    view.rerender(<LibraryView library={library} files={files} tab="film" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
+    view.rerender(<LibraryView {...props} tab="film" />);
     expect(screen.getByTestId('library')).toHaveAttribute('data-tab', 'film');
     expect(adds()).toEqual([
       ['film', '+ Add film', true],
@@ -104,7 +121,7 @@ describe('the library\'s All tab', () => {
     expect(screen.getByTestId('add-search')).toHaveAttribute('placeholder', 'Show or host');
   });
 
-  it('goes to a kind\'s tab from the tabs', async () => {
+  it("goes to a kind's tab from the tabs", async () => {
     const user = userEvent.setup();
     const { onTab } = renderLibrary();
     await user.click(screen.getByRole('tab', { name: 'Podcasts' }));
@@ -113,33 +130,41 @@ describe('the library\'s All tab', () => {
 });
 
 const rows = () => screen.getAllByTestId('library-row').map((row) => row.getAttribute('data-path'));
-const row = (path: string) => screen.getAllByTestId('library-row').find((found) => found.getAttribute('data-path') === path)!;
+const row = (path: string) => byData('library-row', 'data-path', path);
 const cells = (path: string) => within(row(path)).getAllByRole('cell').map((cell) => cell.textContent);
 const heads = () => screen.getAllByRole('columnheader').map((head) => head.getAttribute('aria-label') ?? head.textContent);
 const sorted = () => screen.getAllByRole('columnheader').filter((head) => head.hasAttribute('aria-sort')).map((head) => [head.textContent, head.getAttribute('aria-sort')]);
-const pressedSort = () => screen.getAllByTestId('sort').filter((chip) => chip.getAttribute('aria-pressed') === 'true').map((chip) => chip.textContent);
+const header = (name: string) => within(screen.getAllByRole('columnheader').find((head) => head.textContent === name)!).getByRole('button');
 
 describe("the library's list", () => {
-  it('switches between the covers and the list, the choice handed up to be kept in the settings', async () => {
+  it('switches between the covers and the list from Covers or List, the choice handed up to be kept in the settings', async () => {
     const user = userEvent.setup();
     const { onLayout, view } = renderLibrary();
     expect(screen.getByTestId('library-grid')).toBeInTheDocument();
-    expect(screen.getAllByTestId('library-view').map((option) => [option.textContent, option.getAttribute('aria-pressed')])).toEqual([
-      ['Covers', 'true'],
-      ['List', 'false'],
+    expect(screen.getByTestId('library-view-menu')).toHaveTextContent('Covers');
+    const menu = await openTool(user, 'library-view-menu');
+    expect(within(menu).getAllByTestId('library-view').map((option) => [option.textContent, option.getAttribute('aria-checked')])).toEqual([
+      ['Coversthe latest 15', 'true'],
+      ['Listall of them, as a table', 'false'],
     ]);
-    await user.click(screen.getByRole('button', { name: 'List' }));
+    // The menu takes the focus on the chosen one; the arrows move in it.
+    expect(byData('library-view', 'data-view', 'covers')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(byData('library-view', 'data-view', 'list')).toHaveFocus();
+    await user.keyboard('{Enter}');
     expect(onLayout).toHaveBeenLastCalledWith('list');
+    expect(screen.queryByTestId('library-view-menu-menu')).not.toBeInTheDocument();
     view.unmount();
 
     renderLibrary('all', 'list');
     expect(screen.queryByTestId('library-grid')).not.toBeInTheDocument();
-    expect(screen.queryAllByTestId('library-card')).toHaveLength(0);
+    expect(screen.queryByTestId('cover-calendar')).not.toBeInTheDocument();
     expect(rows()).toHaveLength(5);
-    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('library-view-menu')).toHaveTextContent('List');
+    expect(screen.getByTestId('library-count')).toHaveTextContent('5 results');
   });
 
-  it('shows each note as a row: its cover, title, maker, year, kind on All, genres, rating and day', () => {
+  it('shows each note as a row: its cover, title, maker, year, kind on All, genres as chips, rating and day', () => {
     renderLibrary('all', 'list');
     expect(heads()).toEqual(['Cover', 'Title', 'By', 'Year', 'Kind', 'Genres', 'Rating', 'Date']);
     expect(cells('Rating/books/Thinking in Seasons.md')).toEqual(['T', 'Thinking in Seasons', 'Ada Morrow', '2023', 'book', 'philosophy', '81', '3 Sep 2026']);
@@ -155,28 +180,88 @@ describe("the library's list", () => {
     expect(rows()).toEqual(['Rating/kino/Static Bloom.md']);
   });
 
-  it('sorts from its headers, in step with the sort chips', async () => {
+  it('hides and shows columns from Properties, the choice handed up to be kept in the settings', async () => {
     const user = userEvent.setup();
-    renderLibrary('all', 'list');
+    const { onHidden, view } = renderLibrary('all', 'list');
+    const menu = await openTool(user, 'library-columns');
+    expect(within(menu).getAllByTestId('column').map((item) => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
+      ['Titlealways', 'true'],
+      ['Cover', 'true'],
+      ['By', 'true'],
+      ['Year', 'true'],
+      ['Kind', 'true'],
+      ['Genres', 'true'],
+      ['Rating', 'true'],
+      ['Date', 'true'],
+    ]);
+    expect(byData('column', 'data-column', 'title')).toBeDisabled();
+    await user.click(byData('column', 'data-column', 'genres'));
+    expect(onHidden).toHaveBeenLastCalledWith(['genres']);
+    view.unmount();
+
+    renderLibrary('all', 'list', library, ['genres', 'year']);
+    expect(heads()).toEqual(['Cover', 'Title', 'By', 'Kind', 'Rating', 'Date']);
+    expect(cells('Rating/books/Thinking in Seasons.md')).toEqual(['T', 'Thinking in Seasons', 'Ada Morrow', 'book', '81', '3 Sep 2026']);
+  });
+
+  it('sorts from Sort and from its headers, in step', async () => {
+    const user = userEvent.setup();
+    const { view } = renderLibrary('all', 'list');
     expect(sorted()).toEqual([['Date', 'descending']]);
-    expect(pressedSort()).toEqual(['Recent']);
     expect(rows()[0]).toBe('Rating/music/Monastery Wi-Fi.md');
 
-    await user.click(within(screen.getAllByRole('columnheader').find((head) => head.textContent === 'Rating')!).getByRole('button'));
+    await user.click(header('Rating'));
     expect(sorted()).toEqual([['Rating', 'descending']]);
-    expect(pressedSort()).toEqual(['Rating']);
     expect(rows()[0]).toBe('Rating/podcasts/Why Dogs Dream.md');
-
-    await user.click(screen.getAllByTestId('sort').find((chip) => chip.textContent === 'Title')!);
+    const menu = await openTool(user, 'library-sort');
+    expect(within(menu).getAllByTestId('sort').map((item) => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
+      ['Recentlatest first', 'false'],
+      ['Ratingbest first', 'true'],
+      ['TitleA to Z', 'false'],
+      ['ByA to Z', 'false'],
+      ['Yearnewest first', 'false'],
+    ]);
+    await user.click(byData('sort', 'data-sort', 'title'));
+    expect(screen.queryByTestId('library-sort-menu')).not.toBeInTheDocument();
     expect(sorted()).toEqual([['Title', 'ascending']]);
     expect(rows()).toEqual(['Rating/music/Monastery Wi-Fi.md', 'Rating/music/Salt & Graphite.md', 'Rating/kino/Static Bloom.md', 'Rating/books/Thinking in Seasons.md', 'Rating/podcasts/Why Dogs Dream.md']);
 
-    // By maker, A to Z, the film without a director last; no chip is that sort.
-    await user.click(within(screen.getAllByRole('columnheader').find((head) => head.textContent === 'By')!).getByRole('button'));
+    // By maker, A to Z, the film without a director last.
+    await user.click(header('By'));
     expect(sorted()).toEqual([['By', 'ascending']]);
-    expect(pressedSort()).toEqual([]);
     expect(rows().at(-1)).toBe('Rating/kino/Static Bloom.md');
     expect(rows()[0]).toBe('Rating/books/Thinking in Seasons.md');
+    view.unmount();
+
+    // The covers are the latest, whatever the list is sorted by; the list keeps its sort.
+    const covers = renderLibrary('all', 'covers');
+    expect(screen.queryByTestId('library-sort')).not.toBeInTheDocument();
+    expect(cards()[0]).toBe('Rating/music/Monastery Wi-Fi.md');
+    covers.view.unmount();
+    renderLibrary('all', 'list');
+    expect(sorted()).toEqual([['By', 'ascending']]);
+    // Back to the day, for the tests after this one: the choice is kept for the session.
+    await user.click(header('Date'));
+    expect(sorted()).toEqual([['Date', 'descending']]);
+  });
+
+  it('searches titles, makers and genres, and says so when nothing matches', async () => {
+    const user = userEvent.setup();
+    renderLibrary('all', 'list');
+    await user.click(screen.getByTestId('library-search-open'));
+    expect(screen.getByTestId('library-search')).toHaveFocus();
+    await user.keyboard('ada');
+    expect(rows()).toEqual(['Rating/books/Thinking in Seasons.md']);
+    expect(screen.getByTestId('library-count')).toHaveTextContent('1 result');
+    await user.clear(screen.getByTestId('library-search'));
+    await user.keyboard('ambient');
+    expect(rows()).toEqual(['Rating/music/Monastery Wi-Fi.md']);
+    await user.keyboard(' nothing');
+    expect(screen.queryAllByTestId('library-row')).toHaveLength(0);
+    expect(screen.getByTestId('library-none')).toHaveTextContent('Nothing here matches “ambient nothing”. Clear the search');
+    await user.keyboard('{Escape}');
+    expect(rows()).toHaveLength(5);
+    expect(screen.queryByTestId('library-search')).not.toBeInTheDocument();
   });
 
   it("opens a row's page from a click anywhere on it, or from the keyboard, ↑ and ↓ going from row to row", async () => {
@@ -204,11 +289,14 @@ describe("the library's list", () => {
     const user = userEvent.setup();
     renderLibrary('all', 'list');
     expect(screen.getByTestId('library-missing')).toHaveTextContent('5 without a cover · Find covers');
-    await user.click(screen.getAllByTestId('kind-chip').find((chip) => chip.getAttribute('data-kind') === 'album')!);
+    await openTool(user, 'library-filter');
+    await user.click(byData('kind-chip', 'data-kind', 'album'));
     expect(rows()).toEqual(['Rating/music/Monastery Wi-Fi.md', 'Rating/music/Salt & Graphite.md']);
     expect(screen.getByTestId('library-missing')).toHaveTextContent('2 without a cover · Find covers');
-    await user.click(screen.getAllByTestId('genre-chip').find((chip) => chip.getAttribute('data-genre') === 'ambient')!);
+    await user.click(byData('genre-chip', 'data-genre', 'ambient'));
     expect(rows()).toEqual(['Rating/music/Monastery Wi-Fi.md']);
+    await user.click(screen.getByTestId('filter-clear'));
+    expect(rows()).toHaveLength(5);
   });
 });
 
@@ -217,17 +305,25 @@ describe('a long library', () => {
   const many = Array.from({ length: 40 }, (_, i) => ({ path: `Rating/music/Album ${i + 1}.md`, text: `---\nArtist: Band ${i}\nlistened: 2026-09-${String((i % 28) + 1).padStart(2, '0')}\nrating: ${50 + i}\n---\n` }));
   const shelved = collectLibrary(many, many.map((note) => ({ path: note.path, kind: 'note' as const })));
 
-  it('puts its first screens on the page at once and the rest just after, only the first screen rising into place', async () => {
-    const { view } = renderLibrary('album', 'covers', shelved);
-    const rising = (items: Element[]) => items.map((item) => item.classList.contains('rise'));
-    expect(screen.getAllByTestId('library-card')).toHaveLength(36);
-    await waitFor(() => expect(screen.getAllByTestId('library-card')).toHaveLength(40));
-    const cardItems = screen.getAllByTestId('library-card').map((card) => card.closest('li')!);
-    expect(rising(cardItems)).toEqual(Array.from({ length: 40 }, (_, i) => i < 24));
-    // Every note in view is offered to Find covers, put on the page yet or not.
+  it('shows the latest 15 as covers, and the rest a click away in the list', async () => {
+    const user = userEvent.setup();
+    const { onLayout } = renderLibrary('album', 'covers', shelved);
+    expect(cards()).toHaveLength(15);
+    // The latest first, album 28 on the 28th, each rising in.
+    expect(cards()[0]).toBe('Rating/music/Album 28.md');
+    expect(screen.getAllByTestId('library-card').every((card) => card.closest('li')?.classList.contains('rise'))).toBe(true);
+    expect(screen.getByTestId('library-count')).toHaveTextContent('The latest 15 of 40');
+    // Every note in view is offered to Find covers, not only the latest.
     expect(screen.getByTestId('library-missing')).toHaveTextContent('40 without a cover');
-    view.unmount();
+    await user.click(screen.getByTestId('library-see-all'));
+    expect(screen.getByTestId('library-see-all')).toHaveTextContent('See all 40 in the list');
+    expect(onLayout).toHaveBeenLastCalledWith('list');
+  });
+
+  it('puts the list on the page a few screens at once and the rest just after, only the first screen rising into place', async () => {
     renderLibrary('album', 'list', shelved);
+    const rising = (items: Element[]) => items.map((item) => item.classList.contains('rise'));
+    expect(screen.getAllByTestId('library-row')).toHaveLength(36);
     await waitFor(() => expect(screen.getAllByTestId('library-row')).toHaveLength(40));
     expect(rising(screen.getAllByTestId('library-row'))).toEqual(Array.from({ length: 40 }, (_, i) => i < 24));
   });

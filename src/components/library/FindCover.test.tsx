@@ -56,7 +56,7 @@ describe('Find covers, in the library', () => {
   it('offers the notes in view without a cover, finds them, ticks the sure ones and saves those ticked', async () => {
     const user = userEvent.setup();
     const onChanged = vi.fn(() => Promise.resolve());
-    render(<LibraryView library={collectLibrary(notes, files)} files={files} tab="all" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={onChanged} />);
+    render(<LibraryView library={collectLibrary(notes, files)} files={files} tab="all" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={onChanged} />);
     expect(screen.getByTestId('library-missing')).toHaveTextContent('2 without a cover · Find covers');
     await user.click(screen.getByTestId('find-covers-open'));
     expect(screen.getByRole('dialog', { name: 'Find covers' })).toHaveTextContent('2 notes without a cover');
@@ -86,7 +86,7 @@ describe('Find covers, in the library', () => {
 
   it('asks before closing with ticked covers unsaved, and skips a note', async () => {
     const user = userEvent.setup();
-    render(<LibraryView library={collectLibrary(notes, files)} files={files} tab="album" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
+    render(<LibraryView library={collectLibrary(notes, files)} files={files} tab="album" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
     await user.click(screen.getByTestId('find-covers-open'));
     expect(screen.getByRole('dialog', { name: 'Find covers' })).toHaveTextContent('Find covers · Albums1 note without a cover');
     await waitFor(() => expect(row('Antics')).toHaveAttribute('data-ticked', 'true'), { timeout: 5000 });

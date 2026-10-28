@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { useMemo, useState, type CSSProperties, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { VaultFile } from '../../lib/api';
 import { formatDate, monthGrid } from '../../lib/dates';
@@ -8,9 +8,11 @@ import {
   genreCounts,
   kindCounts,
   kindSpec,
+  LATEST,
   libraryStats,
   monthCounts,
   monthCovers,
+  searchEntries,
   SHELVED_KINDS,
   sortEntries,
   toggleKind,
@@ -18,6 +20,7 @@ import {
   type KindSpec,
   type LibraryLayout,
   type LibraryTab,
+  type ListColumn,
   type MediaEntry,
   type MediaKind,
   type SortOrder,
@@ -31,8 +34,8 @@ import { VaultImage } from '../VaultImage';
 import { AddMedia } from './AddMedia';
 import { FindCovers } from './FindCovers';
 import { LibraryList } from './LibraryList';
-import { KindMark } from './marks';
-import { useInBatches } from './useInBatches';
+import { LibraryToolbar } from './LibraryToolbar';
+import { KindMark, ToolMark } from './marks';
 import '../periodic/periodic.css';
 import './library.css';
 
@@ -41,9 +44,11 @@ interface Props {
   files: VaultFile[];
   tab: LibraryTab;
   onTab: (tab: LibraryTab) => void;
-  /** Covers or the list: kept in the app's settings, never the vault. */
+  /** Covers or the list, and the list's hidden columns: kept in the app's settings, never the vault. */
   layout: LibraryLayout;
   onLayout: (layout: LibraryLayout) => void;
+  hidden: readonly ListColumn[];
+  onHidden: (hidden: ListColumn[]) => void;
   today: Date;
   onOpenNote: (path: string) => void;
   /** A new note was created by Add: read the vault again and open it. */
@@ -65,13 +70,16 @@ const NONE: MediaEntry[] = [];
 const ALL = 'All';
 
 interface Choice {
+  /** The list's sort; the covers show the latest. */
   sort: SortOrder;
   genre?: string;
-  /** The All tab's kind chips; none on shows every kind. */
+  /** The All tab's kinds; none on shows every kind. */
   kinds?: ReadonlySet<MediaKind>;
+  /** What the list is searched for. */
+  search?: string;
 }
 
-// The sort, the genre and the kinds chosen on each tab, for the session.
+// The sort, the filters and the search chosen on each tab, for the session.
 const chosen = new Map<LibraryTab, Choice>();
 
 const MONTH_LETTERS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
@@ -79,21 +87,24 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 /** At most this many covers fan out on one day of the calendar; the rest is "+n". */
 const FAN = 3;
 /**
- * The cards and rows that rise into place as the library opens: those on its first screen. The
- * hundreds below it come in still; animating them too (with a blur) stalled the opening.
+ * The list's rows that rise into place as it opens: those on its first screen. The hundreds below
+ * come in still; animating them too (with a blur) stalled the opening.
  */
 const RISING = 24;
 
 const a = (word: string) => `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}`;
 const capital = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+const results = (n: number) => `${n} ${n === 1 ? 'result' : 'results'}`;
 
 /**
  * The library, after Bookmory's: everything together on "All", where it opens, then a tab per kind
- * (albums, films, books and podcasts), each with its counts and the spread of its ratings, a grid
- * of covers to sort and filter by genre (and on All by kind), and a calendar of covers by the day
- * they were listened to, watched or finished. The hero has an Add for every kind on every tab.
+ * (albums, films, books and podcasts), each with its counts and the spread of its ratings. Under
+ * the tabs a toolbar, after Obsidian's bases: the latest fifteen as covers, with a calendar of
+ * covers by the day they were listened to, watched or finished, or all of them as a list to sort,
+ * search and pick the columns of. Both filter by genre, and on All by kind. The hero has an Add
+ * for every kind on every tab.
  */
-export function LibraryView({ library, files, tab, onTab, layout, onLayout, today, onOpenNote, onCreated, onChanged }: Props) {
+export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidden, onHidden, today, onOpenNote, onCreated, onChanged }: Props) {
   // Videos are read as pages, not shelved here: the library is what is rated and added.
   const kinds = SHELVED_KINDS.map(kindSpec);
   const spec = tab === 'all' ? undefined : kinds.find((candidate) => candidate.kind === tab);
@@ -116,18 +127,25 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, toda
   const everything = useMemo(() => allEntries(library), [library]);
   const onKinds = choice.kinds ?? new Set<MediaKind>();
   const entries = spec ? (library.get(spec.kind) ?? NONE) : everything;
-  // On All, the kind chips narrow the grid and the calendar; the hero counts everything.
+  // On All, the kinds narrow the covers, the list and the calendar; the hero counts everything.
   const listed = spec ? entries : allEntries(library, onKinds);
   const stats = libraryStats(entries, today);
   const genres = genreCounts(listed).slice(0, 12);
   const genre = choice.genre && genres.some(([name]) => name === choice.genre) ? choice.genre : undefined;
-  const shown = sortEntries(withGenre(listed, genre), choice.sort);
+  const filtered = withGenre(listed, genre);
+  const list = layout === 'list';
+  const search = choice.search ?? '';
+  // The covers are the latest few; the list is all of them, sorted and searched.
+  const shown = list ? sortEntries(searchEntries(filtered, search), choice.sort) : sortEntries(filtered, 'recent');
+  const latest = list ? NONE : shown.slice(0, LATEST);
   const adder = adding ? kindSpec(adding) : undefined;
-  // Those in view a cover can be looked up for.
+  // Those in view a cover can be looked up for: all that are filtered (and searched) to, not only the latest.
   const coverless = shown.filter((entry) => !entry.cover && kindSpec(entry.kind).source);
+  const count = list ? results(shown.length) : shown.length > LATEST ? `The latest ${LATEST} of ${shown.length}` : results(shown.length);
+  const summary = [...onKinds].map((kind) => kindSpec(kind).tab).concat(genre ? [genre] : []).join(' · ') || undefined;
 
   return (
-    <div className="periodic-frame library-frame" data-testid="library" data-tab={shownTab} onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
+    <div className="periodic-frame library-frame" data-testid="library" data-tab={shownTab} data-layout={layout} onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
       <header className="hero glass library-hero rise" style={order(0)} data-testid="library-hero">
         <div className="hero-aurora" aria-hidden="true" />
         <div className="hero-main">
@@ -155,74 +173,36 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, toda
         <Stats stats={stats} />
       </header>
 
-      <div className="library-bar">
-        <Tabs
-          tabs={[ALL, ...kinds.map((candidate) => candidate.tab)]}
-          active={spec?.tab ?? ALL}
-          onChange={(name) => onTab(kinds.find((candidate) => candidate.tab === name)?.kind ?? 'all')}
-        />
-        {entries.length > 0 && <LayoutSwitch layout={layout} onLayout={onLayout} />}
-      </div>
+      <Tabs
+        tabs={[ALL, ...kinds.map((candidate) => candidate.tab)]}
+        active={spec?.tab ?? ALL}
+        onChange={(name) => onTab(kinds.find((candidate) => candidate.tab === name)?.kind ?? 'all')}
+      />
 
       {entries.length === 0 ? (
         spec ? <Empty spec={spec} onAdd={() => setAdding(spec.kind)} /> : <EmptyAll onAdd={setAdding} />
       ) : (
         <div className="tab-panel" key={shownTab}>
-          {!spec && (
-            <div className="library-kinds" role="group" aria-label="Kinds">
-              {kindCounts(library).map(([kind, count]) => (
-                <button
-                  key={kind}
-                  type="button"
-                  className={onKinds.has(kind) ? 'chip-filter library-kind is-on' : 'chip-filter library-kind'}
-                  onClick={() => choose({ ...choice, kinds: toggleKind(onKinds, kind) })}
-                  aria-pressed={onKinds.has(kind)}
-                  disabled={!count}
-                  data-testid="kind-chip"
-                  data-kind={kind}
-                >
-                  <KindMark kind={kind} />
-                  {kindSpec(kind).tab} <span className="faint">{count}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="library-tools">
-            <div className="library-sorts" role="group" aria-label="Sort">
-              {(['recent', 'rating', 'title'] as const).map((sort) => (
-                <button
-                  key={sort}
-                  type="button"
-                  className={choice.sort === sort ? 'chip-filter is-on' : 'chip-filter'}
-                  onClick={() => choose({ ...choice, sort })}
-                  aria-pressed={choice.sort === sort}
-                  data-testid="sort"
-                  data-sort={sort}
-                >
-                  {{ recent: 'Recent', rating: 'Rating', title: 'Title' }[sort]}
-                </button>
-              ))}
-            </div>
-            {genres.length > 0 && (
-              <div className="library-genres" role="group" aria-label="Genre">
-                <button type="button" className={genre ? 'chip-filter' : 'chip-filter is-on'} onClick={() => choose({ ...choice, genre: undefined })} data-testid="genre-chip" data-genre="">
-                  All <span className="faint">{listed.length}</span>
-                </button>
-                {genres.map(([name, count]) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className={genre === name ? 'chip-filter is-on' : 'chip-filter'}
-                    onClick={() => choose({ ...choice, genre: genre === name ? undefined : name })}
-                    data-testid="genre-chip"
-                    data-genre={name}
-                  >
-                    {name} <span className="faint">{count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <LibraryToolbar
+            layout={layout}
+            onLayout={onLayout}
+            count={count}
+            summary={summary}
+            spec={spec}
+            kinds={kindCounts(library)}
+            onKinds={onKinds}
+            onToggleKind={(kind) => choose({ ...choice, kinds: toggleKind(onKinds, kind) })}
+            genres={genres}
+            genre={genre}
+            onGenre={(next) => choose({ ...choice, genre: next })}
+            onClear={() => choose({ ...choice, kinds: undefined, genre: undefined })}
+            sort={choice.sort}
+            onSort={(sort) => choose({ ...choice, sort })}
+            hidden={hidden}
+            onHidden={onHidden}
+            search={search}
+            onSearch={(next) => choose({ ...choice, search: next })}
+          />
 
           {coverless.length > 0 && (
             <p className="library-missing" data-testid="library-missing">
@@ -236,13 +216,35 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, toda
             </p>
           )}
 
-          {layout === 'list' ? (
-            <LibraryList entries={shown} spec={spec} sort={choice.sort} onSort={(sort) => choose({ ...choice, sort })} onOpen={onOpenNote} rising={RISING} />
+          {list ? (
+            shown.length ? (
+              <LibraryList entries={shown} spec={spec} sort={choice.sort} onSort={(sort) => choose({ ...choice, sort })} hidden={hidden} onOpen={onOpenNote} rising={RISING} />
+            ) : (
+              <p className="library-none" data-testid="library-none">
+                Nothing here matches “{search.trim()}”.{' '}
+                <button type="button" className="library-find" onClick={() => choose({ ...choice, search: '' })}>
+                  Clear the search
+                </button>
+              </p>
+            )
           ) : (
-            <CoverGrid entries={shown} mixed={!spec} onOpen={onOpenNote} />
+            <>
+              <ul className={spec ? 'library-grid' : 'library-grid is-mixed'} data-testid="library-grid">
+                {latest.map((entry, i) => (
+                  <li key={entry.path} className="rise" style={{ ...order(i + 1), '--aspect': kindSpec(entry.kind).aspect } as CSSProperties}>
+                    <Card entry={entry} mixed={!spec} onOpen={onOpenNote} />
+                  </li>
+                ))}
+              </ul>
+              {shown.length > LATEST && (
+                <button type="button" className="library-more" onClick={() => onLayout('list')} data-testid="library-see-all">
+                  See all {shown.length} in the list
+                  <ToolMark name="arrow" />
+                </button>
+              )}
+              <CoverCalendar key={shownTab} spec={spec} entries={listed} today={today} onOpen={onOpenNote} />
+            </>
           )}
-
-          <CoverCalendar key={shownTab} spec={spec} entries={listed} today={today} onOpen={onOpenNote} />
         </div>
       )}
 
@@ -303,74 +305,6 @@ function Stats({ stats }: { stats: ReturnType<typeof libraryStats> }) {
   );
 }
 
-/** Covers or List, beside the tabs: the same notes, sorts and filters either way. */
-function LayoutSwitch({ layout, onLayout }: { layout: LibraryLayout; onLayout: (layout: LibraryLayout) => void }) {
-  const names: Record<LibraryLayout, string> = { covers: 'Covers', list: 'List' };
-  return (
-    <div className="layout-switch" role="group" aria-label="Show as">
-      {(['covers', 'list'] as const).map((name) => (
-        <button
-          key={name}
-          type="button"
-          className={layout === name ? 'layout-option is-on' : 'layout-option'}
-          onClick={() => onLayout(name)}
-          aria-pressed={layout === name}
-          data-testid="library-view"
-          data-view={name}
-        >
-          <LayoutMark layout={name} />
-          {names[name]}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function LayoutMark({ layout }: { layout: LibraryLayout }) {
-  const paths: Record<LibraryLayout, string> = {
-    covers: 'M2.75 2.75h4v4h-4zM9.25 2.75h4v4h-4zM2.75 9.25h4v4h-4zM9.25 9.25h4v4h-4z',
-    list: 'M2.75 3.75h1.5M6.75 3.75h6.5M2.75 8h1.5M6.75 8h6.5M2.75 12.25h1.5M6.75 12.25h6.5',
-  };
-  return (
-    <svg className="kind-mark" viewBox="0 0 16 16" aria-hidden="true">
-      <path d={paths[layout]} />
-    </svg>
-  );
-}
-
-/**
- * The covers in a grid, put on the page in batches (`useInBatches`). Each card is drawn only near
- * the view (`content-visibility`): with all of them drawn, every cover that came in laid the whole
- * grid out again, and a first scroll through 600 of them stalled on every frame. Off screen, a
- * card keeps the height it last had, or one worked out from the first card's.
- */
-function CoverGrid({ entries, mixed, onOpen }: { entries: MediaEntry[]; mixed: boolean; onOpen: (path: string) => void }) {
-  const grid = useRef<HTMLUListElement>(null);
-  const count = useInBatches(entries.length);
-  const first = entries[0];
-  useEffect(() => {
-    const card = grid.current?.firstElementChild;
-    if (!card || !first || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([seen]) => {
-      if (!seen || !grid.current) return;
-      const { width, height } = seen.contentRect;
-      grid.current.style.setProperty('--cover-w', `${width}px`);
-      grid.current.style.setProperty('--card-text', `${Math.max(0, height - width / kindSpec(first.kind).aspect)}px`);
-    });
-    observer.observe(card);
-    return () => observer.disconnect();
-  }, [first]);
-  return (
-    <ul ref={grid} className={mixed ? 'library-grid is-mixed' : 'library-grid'} data-testid="library-grid">
-      {entries.slice(0, count).map((entry, i) => (
-        <li key={entry.path} className={i < RISING ? 'rise' : undefined} style={{ ...(i < RISING ? order(i + 1) : {}), '--aspect': kindSpec(entry.kind).aspect } as CSSProperties} data-drawn-near>
-          <Card entry={entry} mixed={mixed} onOpen={onOpen} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 function Card({ entry, mixed, onOpen }: { entry: MediaEntry; mixed?: boolean; onOpen: (path: string) => void }) {
   const spec = kindSpec(entry.kind);
   return (
@@ -378,7 +312,8 @@ function Card({ entry, mixed, onOpen }: { entry: MediaEntry; mixed?: boolean; on
       type="button"
       className="library-card"
       onClick={() => onOpen(entry.path)}
-      title={entry.path}
+      // The whole title where the card's ends in "…"; never the file's path.
+      title={entry.title}
       data-testid="library-card"
       data-path={entry.path}
       data-kind={entry.kind}

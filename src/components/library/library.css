@@ -9,63 +9,299 @@
   margin-top: var(--space-3);
 }
 
-/* The tabs, and Covers | List at their right, on one hairline. */
-.library-bar {
-  display: flex;
-  gap: var(--space-4);
-  align-items: center;
+.library-frame > .tabs {
   margin-top: var(--space-6);
+}
+
+/* Under the tabs, after the toolbar of Obsidian's bases in Epizen's look: Covers or List in a
+   hairline pill and the count beside it, then Sort, Filter, Properties and Search as quiet words
+   with their marks. Each opens a small glass menu under it. */
+.library-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: var(--space-5);
-  border-bottom: 1px solid var(--glass-line);
 }
 
-.library-bar .tabs {
-  flex: 1;
+.toolbar-start,
+.toolbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
   min-width: 0;
-  margin: 0;
-  border-bottom: 0;
 }
 
-/* Covers or List: two quiet segments in one hairline pill, the chosen one lit softly. */
-.layout-switch {
-  display: inline-flex;
-  flex: none;
+.toolbar-end {
   gap: 2px;
-  margin-bottom: 4px;
-  padding: 2px;
-  border: 1px solid var(--glass-line);
-  border-radius: 999px;
+  margin-left: auto;
 }
 
-.layout-option {
+.toolbar-count {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar-summary {
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.tool {
+  position: relative;
+}
+
+.tool-button {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  padding: 4px 12px 4px 10px;
-  border-radius: 999px;
-  color: var(--text-faint);
-  font-size: 12.5px;
-  transition:
-    background 160ms ease-out,
-    color 160ms ease-out;
-}
-
-.layout-option:hover {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
   color: var(--text-muted);
+  font-size: 13px;
+  transition:
+    background 120ms ease-out,
+    color 120ms ease-out;
 }
 
-.layout-option.is-on {
-  background: rgb(255 255 255 / 7%);
+.tool-button:hover,
+.tool-button[aria-expanded='true'] {
+  background: rgb(255 255 255 / 5%);
   color: var(--text);
 }
 
-.layout-option.is-on .kind-mark {
+.tool-button .kind-mark {
+  width: 13px;
+  height: 13px;
+}
+
+.tool-button.is-on .kind-mark {
   stroke: var(--accent);
 }
 
-.layout-option .kind-mark {
+/* Covers or List: the one that changes the page, in a hairline pill. */
+.tool-button.is-view {
+  padding: 0 12px 0 11px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 999px;
+  color: var(--text);
+}
+
+.tool-button.is-view .kind-mark {
+  stroke: var(--accent);
+}
+
+.tool-button.is-view::after {
+  content: '';
+  width: 8px;
+  height: 10px;
+  margin-left: 2px;
+  background: currentColor;
+  opacity: 0.5;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 10'%3E%3Cpath d='M1.5 3.5 4 1l2.5 2.5M1.5 6.5 4 9l2.5-2.5' fill='none' stroke='black' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.tool-badge {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgb(143 188 170 / 16%);
+  color: var(--accent);
+  font: 600 11px/1.4 var(--numbers);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* A menu: the pages' glass, small, over what is under it. */
+.tool-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 1px;
+  min-width: 220px;
+  max-height: min(440px, 70vh);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 14px;
+  background: var(--glass-face), var(--bg);
+  box-shadow: var(--glass-top), 0 24px 48px -16px rgb(0 0 0 / 85%), 0 2px 8px -2px rgb(0 0 0 / 50%);
+  animation: panel 160ms ease-out both;
+}
+
+.toolbar-end .tool-menu {
+  right: 0;
+  left: auto;
+}
+
+.tool-group + .tool-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--glass-line);
+}
+
+.tool-label {
+  margin: 4px 10px 4px 32px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tool-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px 0 8px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tool-item:hover,
+.tool-item:focus-visible {
+  outline: none;
+  background: rgb(255 255 255 / 6%);
+  color: var(--text);
+}
+
+.tool-item[aria-checked='true'] {
+  color: var(--text);
+}
+
+.tool-item:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.tool-check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+}
+
+.tool-check .kind-mark {
   width: 13px;
   height: 13px;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+
+.tool-item > .kind-mark {
+  width: 13px;
+  height: 13px;
+}
+
+.tool-item-name {
+  flex: 1;
+}
+
+.tool-item-hint {
+  color: var(--text-faint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-clear {
+  margin-top: 6px;
+  padding: 8px 10px 4px 32px;
+  border-top: 1px solid var(--glass-line);
+  color: var(--accent);
+  font-size: 13px;
+  text-align: left;
+}
+
+/* Search: the word opens a field in its place; Escape empties and closes it. */
+.tool-search {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 30px;
+  margin-left: 4px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: border-color 160ms ease-out;
+}
+
+.tool-search:focus-within {
+  border-color: rgb(143 188 170 / 55%);
+}
+
+.tool-search .kind-mark {
+  width: 13px;
+  height: 13px;
+}
+
+.tool-search input {
+  width: 180px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.tool-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.tool-search-clear {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  color: var(--text-faint);
+}
+
+.tool-search-clear:hover {
+  color: var(--text);
+}
+
+.tool-search-clear .kind-mark {
+  width: 11px;
+  height: 11px;
+}
+
+/* Under the latest covers: the rest is in the list. */
+.library-more {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: var(--space-5);
+  color: var(--accent);
+  font-size: 13.5px;
+}
+
+.library-more .kind-mark {
+  width: 13px;
+  height: 13px;
+  transition: transform 120ms ease-out;
+}
+
+.library-more:hover .kind-mark {
+  transform: translateX(3px);
+}
+
+.library-none {
+  margin: var(--space-6) 0;
+  color: var(--text-muted);
+  font-size: 13.5px;
 }
 
 .library-hero {
@@ -93,41 +329,6 @@
 .library-add.is-quiet:hover {
   border-color: rgb(143 188 170 / 40%);
   color: var(--accent);
-}
-
-/* The All tab's kind chips: several can be on; none on is all of them. */
-.library-kinds {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: var(--space-4);
-}
-
-.library-kind {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  padding: 6px 14px 6px 11px;
-  font-size: 13px;
-}
-
-.library-kind .faint {
-  font-variant-numeric: tabular-nums;
-}
-
-.library-kind.is-on {
-  border-color: rgb(143 188 170 / 45%);
-  background: rgb(143 188 170 / 10%);
-  color: var(--text);
-}
-
-.library-kind.is-on .kind-mark {
-  stroke: var(--accent);
-}
-
-.library-kind:disabled {
-  cursor: default;
-  opacity: 0.4;
 }
 
 .kind-mark {
@@ -223,27 +424,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.library-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-5);
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-5);
-}
-
-.library-sorts,
-.library-genres {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.library-genres .faint {
-  margin-left: 2px;
-  font-variant-numeric: tabular-nums;
-}
-
 .library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
@@ -261,16 +441,6 @@
 .library-grid > li,
 .library-card {
   min-width: 0;
-}
-
-/* A card is drawn only near the view: off screen it keeps the height it last had, or one worked
-   out from the first card's (LibraryView's CoverGrid). Drawn, its paint is clipped to the item,
-   so the item reaches 8px past the card for the lift and its ring under the pointer. */
-.library-grid > li {
-  content-visibility: auto;
-  contain-intrinsic-size: auto calc(var(--cover-w, 160px) / var(--aspect, 1) + var(--card-text, 50px));
-  margin: -8px -8px 0;
-  padding: 8px 8px 0;
 }
 
 .library-card {
@@ -1798,14 +1968,10 @@
 
 /* A row per note, the columns the same in every row, on the page without a card: hairlines
    between rows, a header that stays at the top as the list scrolls. */
+/* The columns are set on the list from what Properties shows and how wide the pane is. */
 .library-list {
-  --list-columns: 44px minmax(0, 2.2fr) minmax(0, 1.5fr) 48px minmax(0, 1.4fr) 116px 96px;
   margin: 0 calc(var(--space-3) * -1);
   font-size: 13.5px;
-}
-
-.library-list.is-mixed {
-  --list-columns: 44px minmax(0, 2.2fr) minmax(0, 1.5fr) 48px 78px minmax(0, 1.4fr) 116px 96px;
 }
 
 .library-list-row {
@@ -1816,9 +1982,11 @@
   padding: 0 var(--space-3);
 }
 
+/* WebKit holds a sticky box inside the main pane's padding: the negative top takes it up to the
+   pane's very top, so no row shows above it. */
 .library-list-head {
   position: sticky;
-  top: 0;
+  top: calc(var(--space-9) * -1);
   z-index: 2;
   background: var(--bg);
 }
@@ -1901,15 +2069,14 @@
   opacity: 1;
 }
 
-/* Off screen a row isn't drawn; it is always this tall, so the list keeps its length. */
 .library-row {
   position: relative;
   height: 64px;
   border-radius: 10px;
   color: var(--text-muted);
-  content-visibility: auto;
-  contain-intrinsic-size: auto 64px;
   cursor: pointer;
+  /* A row the keys move to is scrolled clear of the header that stays on top. */
+  scroll-margin-top: 40px;
   transition: background 120ms ease-out;
 }
 
@@ -1961,14 +2128,14 @@
   font: 17px/1 var(--display);
 }
 
+/* The title in the serif, as the pages and the covers' blanks have it. */
 .row-open {
   display: block;
   max-width: 100%;
   overflow: hidden;
   padding: 0;
   color: var(--text);
-  font-size: 14px;
-  font-weight: 500;
+  font: 16px/1.3 var(--display);
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1996,12 +2163,29 @@
   height: 12px;
 }
 
-.row-genres {
-  font-size: 12.5px;
+.library-row > .row-genres {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
-.row-genre-dot {
+.row-genre {
+  min-width: 0;
+  overflow: hidden;
+  padding: 3px 10px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.row-genre-more {
+  flex: none;
   color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The rating: a thin sage bar out of 100, the number in accent beside it. */
@@ -2046,42 +2230,10 @@
 
 /* Narrow panes */
 
-@container (max-width: 860px) {
-  /* The list lets its genres go first, then the kind. */
-  .library-list {
-    --list-columns: 44px minmax(0, 2fr) minmax(0, 1.4fr) 48px 116px 96px;
-  }
-
-  .library-list.is-mixed {
-    --list-columns: 44px minmax(0, 2fr) minmax(0, 1.4fr) 48px 78px 116px 96px;
-  }
-
-  .row-genres,
-  .list-head.is-genres {
-    display: none !important;
-  }
-}
-
 @container (max-width: 760px) {
   .library-hero,
   .media-hero {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .library-list,
-  .library-list.is-mixed {
-    --list-columns: 44px minmax(0, 2fr) minmax(0, 1.4fr) 76px 88px;
-  }
-
-  .row-kind,
-  .row-year,
-  .list-head.is-kind,
-  .list-head.is-year {
-    display: none !important;
-  }
-
-  .row-meter {
-    display: none;
   }
 
   .covers-row {

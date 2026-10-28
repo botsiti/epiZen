@@ -16,6 +16,7 @@ import {
   field,
   findOverview,
   genreCounts,
+  hiddenColumns,
   imageType,
   isLibraryLayout,
   isLibraryTab,
@@ -31,6 +32,7 @@ import {
   monthCovers,
   noteFileName,
   notePath,
+  searchEntries,
   sortEntries,
   toggleKind,
   withGenre,
@@ -167,6 +169,14 @@ describe('collectLibrary', () => {
     expect(sortEntries(all, 'year').map((entry) => entry.year)).toEqual(['2021', '1999', '1994']);
     expect(sortEntries([...all, { ...all[0]!, path: 'x.md', title: 'No year', year: undefined }], 'year').at(-1)?.title).toBe('No year');
     expect(isLibraryLayout('list') && isLibraryLayout('covers') && !isLibraryLayout('grid') && !isLibraryLayout(undefined)).toBe(true);
+    expect(hiddenColumns(['genres', 'nonsense', 'year'])).toEqual(['year', 'genres']);
+    expect(hiddenColumns('genres')).toEqual([]);
+    // Search: every word, in title, maker or genre, any case; a decomposed "й" (as macOS writes names) finds a composed one.
+    expect(searchEntries(all, 'suede').map((entry) => entry.title)).toEqual(['Dog Man Star']);
+    expect(searchEntries(all, 'DRAMA elect').map((entry) => entry.title)).toEqual(['Election']);
+    expect(searchEntries(all, '  ')).toHaveLength(3);
+    const cyrillic = { ...all[0]!, title: 'Пепел и йод', maker: undefined, genres: [] };
+    expect(searchEntries([cyrillic], 'йод'.normalize('NFD'))).toHaveLength(1);
     expect(genreCounts(all)[0]).toEqual(['alternative rock', 1]);
     expect(withGenre(all, 'drama').map((entry) => entry.title)).toEqual(['Election']);
     expect(withGenre(all)).toHaveLength(3);

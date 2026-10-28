@@ -51,7 +51,7 @@ import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
 import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
-import { collectLibrary, isLibraryLayout, kindOfFolder, kindOfPath, type LibraryLayout, type LibraryTab } from './lib/library';
+import { collectLibrary, hiddenColumns, isLibraryLayout, kindOfFolder, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
 import { collectMedia } from './lib/media';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
@@ -207,6 +207,12 @@ export function App() {
   const setLibraryLayout = useCallback((layout: LibraryLayout) => {
     setSettings((prev) => ({ ...prev, libraryLayout: layout }));
     void updateSettings({ libraryLayout: layout }).catch(() => undefined);
+  }, []);
+  // And the list's columns hidden from its Properties.
+  const libraryHidden = useMemo(() => hiddenColumns(settings.libraryHidden), [settings]);
+  const setLibraryHidden = useCallback((hidden: ListColumn[]) => {
+    setSettings((prev) => ({ ...prev, libraryHidden: hidden }));
+    void updateSettings({ libraryHidden: hidden }).catch(() => undefined);
   }, []);
   const todayNote = useMemo(
     () => ({ date: now, path: periodicNotes.get(periodKey('day', now)), name: noteTitle(periodicPath('day', now, periodic)) }),
@@ -760,6 +766,8 @@ export function App() {
                 onTab={(shown) => setLibraryTab(tab.id, shown)}
                 layout={libraryLayout}
                 onLayout={setLibraryLayout}
+                hidden={libraryHidden}
+                onHidden={setLibraryHidden}
                 today={now}
                 onOpenNote={openNote}
                 onCreated={mediaCreated}

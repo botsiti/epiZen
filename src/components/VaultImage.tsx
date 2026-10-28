@@ -73,18 +73,13 @@ function whenNear(element: Element, near: () => void): () => void {
   };
 }
 
-/**
- * True once the element has come within a screen of the view (at once where that can't be told).
- * Inside an item drawn only near the view (`content-visibility: auto`, marked `data-drawn-near`),
- * the item is watched: what is in it has no box while it isn't drawn, so it would never be seen
- * coming near, only arriving.
- */
+/** True once the element has come within a screen of the view (at once where that can't be told). */
 function useNearView(on: boolean) {
   const ref = useRef<HTMLElement>(null);
   const [near, setNear] = useState(!on || typeof IntersectionObserver === 'undefined');
   useEffect(() => {
     if (near || !ref.current) return;
-    return whenNear(ref.current.closest('[data-drawn-near]') ?? ref.current, () => setNear(true));
+    return whenNear(ref.current, () => setNear(true));
   }, [near]);
   return { ref, near };
 }

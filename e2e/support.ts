@@ -217,3 +217,32 @@ export async function openPanel(panel: string) {
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 }
+
+/** Opens a menu of the library's toolbar (Covers or List, Sort, Filter, Properties) unless it is open. */
+export async function openTool(name: string) {
+  const button = $(`[data-testid="${name}"]`);
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+  await $(`[data-testid="${name}-menu"]`).waitForDisplayed();
+}
+
+/** Closes a menu of the library's toolbar, as a second click on its word does. */
+export async function closeTool(name: string) {
+  const button = $(`[data-testid="${name}"]`);
+  if ((await button.getAttribute('aria-expanded')) === 'true') await button.click();
+  await $(`[data-testid="${name}-menu"]`).waitForExist({ reverse: true });
+}
+
+/** Turns one of the library's filters on or off from Filter (a kind, a genre, or Clear), leaving the menu open. */
+export async function filterBy(selector: string) {
+  await openTool('library-filter');
+  await $(selector).click();
+}
+
+/** Shows the library as covers or as a list, from Covers or List, unless it is shown so already. */
+export async function showLibraryAs(layout: 'covers' | 'list') {
+  const library = $('[data-testid="library"]');
+  if ((await library.getAttribute('data-layout')) === layout) return;
+  await openTool('library-view-menu');
+  await $(`[data-testid="library-view"][data-view="${layout}"]`).click();
+  await expect(library).toHaveAttribute('data-layout', layout);
+}

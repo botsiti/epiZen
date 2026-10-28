@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 
-/** Cards or rows put on the page at once: a few screens' worth. */
+/** Rows put on the page at once: a few screens' worth. */
 const FIRST = 36;
 /** And how many more after each frame, until all of them are there. */
 const STEP = 48;
 
 /**
- * How many of `total` cards or rows to put on the page: the first few screens at once, then more
- * after each frame until all of them are there. WebKit spends about 0.4 ms on each card it is
- * handed, drawn or not, so 600 at once held the library's first frame for a third of a second;
- * in batches it shows at once and fills in below the fold within a few frames.
+ * How many of `total` rows to put on the page: the first few screens at once, then more after each
+ * frame until all of them are there. WebKit spent about 0.4 ms on each of the library's 600 cards
+ * before its first frame, a third of a second; in batches the list shows at once and fills in
+ * below the fold within a few frames.
  */
 export function useInBatches(total: number): number {
   const [count, setCount] = useState(FIRST);

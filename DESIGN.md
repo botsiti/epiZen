@@ -257,40 +257,51 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   quiet chips beside it: "+ Album", "+ Book", "+ Episode"), and on the right three numbers (in all,
   this year, the average in accent) over the spread of ratings, a bar per tenth of the scale
   (Letterboxd's histogram, in sage). Word tabs below: All, where the library opens, then Albums,
-  Films, Books and Podcasts. Then sort chips (Recent, Rating, Title) and the twelve most used genres
-  as filter chips, each with its count; the choice is kept per tab for the session.
-- **All**: every album, film, book and podcast together. The hero counts all of them. Above the
-  sorts, a chip per kind with its line-drawn mark (a record, a strip of film, a book, a microphone)
-  and its count; several can be on, and none on is all of them. They narrow the grid and the
-  calendar. Each card says its kind, faint, before the maker, and posters and square covers stand on
-  one line with their titles level. The covers in a grid, each with its rating on a small glass pill in the corner (a faint
-  dash when not rated yet), the title, and the maker and year faint. Covers lift under the pointer and
-  load as they near the view. Last, a calendar of covers (Bookmory's book calendar): the month's name in
-  the serif beside a strip of the year's twelve months, each a small bar of how many (the shown month in
-  accent, with a glow), ‹ › to step, and the month's days as a grid, Monday first, each day showing the
-  covers of what was listened to, watched or finished: up to three fanned like cards in a hand, the
-  best rated in front and the others tilted behind, a little darker, spreading when pointed at; "+n"
-  when there were more. It opens on this month, or the latest month that has something.
-- **Covers or List**: at the right of the word tabs, on their hairline, a small pill of two quiet
-  segments, a line-drawn grid and "Covers", three lines and "List", the chosen one softly lit with
-  its mark in accent. The choice is the app's (its settings), not the vault's, and holds on every tab.
-- **List**: the same notes, sorts and filters as the covers, as a table after Obsidian's, on the page
-  without a card: a header in the label style that stays at the top as the list scrolls, then a
+  Films, Books and Podcasts. Then the toolbar, and the latest as covers or all of it as a list.
+- **Toolbar**: after the one on Obsidian's bases, in Epizen's look. On the left, Covers or List: its
+  mark in accent, the word and a faint ⌃⌄, in a hairline pill, opening a menu of the two ("the
+  latest 15", "all of them, as a table"); then the count, muted ("The latest 15 of 533", "533
+  results") and, faint, the filters on ("Films · ambient"). On the right, quiet words with their
+  line-drawn marks: Sort, Filter, Properties and Search on the list, Filter alone on the covers.
+  Each opens a small menu under it in the pages' glass, radius 14px: a check in accent by what is
+  chosen, hints faint at the right. Sort: Recent (latest first), Rating (best first), Title (A to
+  Z), the maker (A to Z) and Year (newest first). Filter: on All the kinds, each with its mark and
+  count, several at once and none on for all; the twelve most used genres with their counts, one at
+  a time; "Clear the filters" in accent. Filter lit (its mark in accent, a count on a sage pill)
+  while any is on. Properties: the list's columns, ticked to show, the title always. Search: the
+  word opens a field in its place (title, maker or genre); Escape empties and closes it. The menus
+  take the focus, ↑ ↓ move in them, Escape or a click outside closes them. Covers or List, and the
+  columns, are the app's (its settings), not the vault's; the sort, the filters and the search are
+  kept per tab for the session.
+- **Covers**: the latest fifteen listened to, watched or finished of what the tab and the filters
+  show, and under them "See all 533 in the list →" in accent. On All each card says its kind, faint,
+  before the maker, and posters and square covers stand on one line with their titles level. The
+  covers in a grid, each with its rating on a small glass pill in the corner (a faint dash when not
+  rated yet), the title, and the maker and year faint. Covers lift under the pointer and load as they
+  near the view. Last, a calendar of covers (Bookmory's book calendar), of everything the filters
+  show: the month's name in the serif beside a strip of the year's twelve months, each a small bar of
+  how many (the shown month in accent, with a glow), ‹ › to step, and the month's days as a grid,
+  Monday first, each day showing the covers of what was listened to, watched or finished: up to
+  three fanned like cards in a hand, the best rated in front and the others tilted behind, a little
+  darker, spreading when pointed at; "+n" when there were more. It opens on this month, or the
+  latest month that has something.
+- **List**: everything the tab, the filters and the search show, as a table after a base's, on the
+  page without a card: a header in the label style that stays at the top as the list scrolls, then a
   row per note, 64px, a hairline under each short of its rounded ends. The cover small (44px tall,
-  posters narrower; without one, its first letter in the serif), the title, who made it ("By" on
-  All, Artist, Director or Author on a kind's tab), the year faint, the kind with its mark (on All),
-  the genres muted with faint dots between, the rating as a thin sage bar out of 100 with the number
-  in accent, and the day ("27 Sep 2026"; Listened, Watched or Finished on a kind's tab). An empty
-  value is a faint "—". Title, By, Year, Rating and the day sort, the chosen one in `--text` with a
-  small accent arrow (down for the latest, the best and the newest, up for A to Z); the chips follow
-  them, and they the chips. A row lights softly under the pointer and in accent when focused; a
-  click opens its page, ↑ ↓ Home End and Page Up and Down move between rows, Enter opens. In a
-  narrower pane the genres go first, then the kind, the year and the rating's bar.
-- **Long libraries**: the cards and rows go on the page a few screens at a time, each drawn only near
-  the view (`content-visibility`), and only the first screen rises in, so six hundred open at once
-  and scroll at the display's rate.
-- **Without a cover**: when notes in view have no cover, a faint line above the grid says how many,
-  "533 without a cover · Find covers", the last two words in accent. A cover is the note's first
+  posters narrower; without one, its first letter in the serif), the title in the serif, who made it
+  ("By" on All, Artist, Director or Author on a kind's tab), the year faint, the kind with its mark
+  (on All), the first genre as a hairline chip and "+n" faint for the rest, the rating as a thin sage
+  bar out of 100 with the number in accent, and the day ("27 Sep 2026"; Listened, Watched or
+  Finished on a kind's tab). An empty value is a faint "—". Title, By, Year, Rating and the day sort
+  as Sort does, the chosen one in `--text` with a small accent arrow (down for the latest, the best
+  and the newest, up for A to Z). A row lights softly under the pointer and in accent when focused;
+  a click opens its page, ↑ ↓ Home End and Page Up and Down move between rows, Enter opens. In a
+  narrower pane the genres go first, then the kind, the year and the rating's bar. A search that
+  finds nothing says so in one line, with "Clear the search". The rows go on the page a few screens
+  at a time, and only the first screen rises in, so six hundred open at once.
+- **Without a cover**: when notes in view have no cover, a faint line under the toolbar says how
+  many of all that are in view (not only the latest fifteen), "533 without a cover · Find covers",
+  the last two words in accent. A cover is the note's first
   embedded image before any of its text (after the overview link); an image further down, after a
   heading, is a page of the note, not its cover.
 - **Empty tab**: a glass card: a kicker, "Your first book" in the serif, one line on what Add does,

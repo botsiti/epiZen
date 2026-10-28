@@ -278,10 +278,32 @@ export function sortEntries(entries: MediaEntry[], order: SortOrder): MediaEntry
   return entries.toSorted(compare);
 }
 
-/** How the library shows what is in view: a grid of covers, or a list. Kept in the app's settings. */
+/** How the library shows what is in view: the latest as covers, or all of it as a list. Kept in the app's settings. */
 export type LibraryLayout = 'covers' | 'list';
 
 export const isLibraryLayout = (value: unknown): value is LibraryLayout => value === 'covers' || value === 'list';
+
+/** How many the covers show: the latest listened to, watched or finished. The list has the rest. */
+export const LATEST = 15;
+
+/** The list's columns that can be hidden; the title always shows. */
+export const LIST_COLUMNS = ['cover', 'maker', 'year', 'kind', 'genres', 'rating', 'date'] as const;
+export type ListColumn = (typeof LIST_COLUMNS)[number];
+
+/** The hidden columns kept in the settings, anything else in there left out. */
+export const hiddenColumns = (value: unknown): ListColumn[] =>
+  Array.isArray(value) ? LIST_COLUMNS.filter((column) => value.includes(column)) : [];
+
+/** Those whose title, maker or a genre has the words searched for, in any case and either Unicode form. */
+export function searchEntries(entries: MediaEntry[], query: string): MediaEntry[] {
+  const fold = (text: string) => text.normalize('NFC').toLocaleLowerCase();
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return entries;
+  return entries.filter((entry) => {
+    const text = fold([entry.title, entry.maker ?? '', ...entry.genres].join(' '));
+    return words.every((word) => text.includes(word));
+  });
+}
 
 /** The genres in use, the most used first. */
 export function genreCounts(entries: MediaEntry[]): [string, number][] {
