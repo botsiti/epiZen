@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent 
 import { category, habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, formatDate, isoWeek, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
-import { clock, formatMinutes, parseDay, type Day, type DayTask } from '../../lib/day';
+import { formatMinutes, parseDay, type Day, type DayTask } from '../../lib/day';
 import type { ThoughtRecord } from '../../lib/cbt';
 import { missingFromDay } from '../../lib/rollup';
 import { Donut, Ring, Segments } from './charts';
@@ -12,6 +12,7 @@ import { Bar, Hero, NavButton, Section, Tabs, Tile } from './parts';
 import { questsIn } from '../../lib/quests';
 import { QuestBoard } from './Quests';
 import { FocusMenu } from '../calendar/FocusMenu';
+import { DeleteTask, EditTask } from '../calendar/TaskDialogs';
 import { Tags, ThoughtWizard } from './ThoughtWizard';
 import type { PeriodicActions, PeriodicSpec } from './types';
 
@@ -164,7 +165,7 @@ function YesterdayGaps({ spec, onOpen }: { spec: PeriodicSpec; onOpen: () => voi
 
 function Overview({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions; isToday: boolean }) {
   const { totals } = day;
-  const [menu, setMenu] = useState<Menu>();
+  const [open, setOpen] = useState<Open>();
   return (
     <>
       <div className="tiles">
@@ -202,7 +203,7 @@ function Overview({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpe
         <Section title="Tasks" note={`${totals.tasksDone} of ${totals.tasks} done`} i={6}>
           <ul className="task-list">
             {day.tasks.map((task) => (
-              <TaskRow key={task.line} task={task} onToggle={actions.onToggle} onMenu={menuOn(isToday, task, setMenu)} />
+              <TaskRow key={task.line} task={task} onToggle={actions.onToggle} onMenu={menuOn(task, setOpen)} />
             ))}
           </ul>
           {day.gratitude && (
@@ -212,7 +213,7 @@ function Overview({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpe
           )}
         </Section>
       )}
-      {menu && <TaskMenu menu={menu} actions={actions} onClose={() => setMenu(undefined)} />}
+      {open && <TaskActions open={open} isToday={isToday} categories={spec.categories} actions={actions} onOpen={setOpen} />}
     </>
   );
 }
@@ -361,31 +362,61 @@ function TimeCard({ day }: { day: Day }) {
   );
 }
 
-/** Where a right-click on one of today's tasks opened the focus menu, and on which task. */
-type Menu = { x: number; y: number; task: DayTask };
+/** What a right-click on a task opened: its menu, or the dialog one of the menu's items opened. */
+type Open = { kind: 'menu'; x: number; y: number; task: DayTask } | { kind: 'edit'; task: DayTask } | { kind: 'delete'; task: DayTask };
 
-/** A right-click handler that opens the focus menu, on today's page only (the timer logs into today's note). */
-const menuOn = (today: boolean, task: DayTask, open: (menu: Menu) => void) =>
-  today
-    ? (event: MouseEvent) => {
-        event.preventDefault();
-        open({ x: event.clientX, y: event.clientY, task });
-      }
-    : undefined;
+const menuOn = (task: DayTask, open: (open: Open) => void) => (event: MouseEvent) => {
+  event.preventDefault();
+  open({ kind: 'menu', x: event.clientX, y: event.clientY, task });
+};
 
-function TaskMenu({ menu, actions, onClose }: { menu: Menu; actions: PeriodicActions; onClose: () => void }) {
+/**
+ * A task's right-click menu and its dialogs: focus on it (today's tasks only: the timer logs into
+ * today's note), edit its words, category and minutes, or delete it.
+ */
+function TaskActions({ open, isToday, categories, actions, onOpen }: { open: Open; isToday: boolean; categories: string[]; actions: PeriodicActions; onOpen: (open?: Open) => void }) {
+  const { task } = open;
+  const close = () => onOpen(undefined);
+  if (open.kind === 'edit') {
+    return (
+      <EditTask
+        task={task}
+        categories={categories}
+        onCancel={close}
+        onSave={(edit) => {
+          close();
+          actions.onEditTask(task, edit);
+        }}
+      />
+    );
+  }
+  if (open.kind === 'delete') {
+    return (
+      <DeleteTask
+        task={task}
+        onCancel={close}
+        onConfirm={() => {
+          close();
+          actions.onDeleteTask(task);
+        }}
+      />
+    );
+  }
   return (
     <FocusMenu
-      at={menu}
-      label={menu.task.label}
-      onFocus={(how) => actions.onFocus({ line: menu.task.line, label: menu.task.label, category: menu.task.category?.name }, how)}
-      onClose={onClose}
+      at={open}
+      label={task.label}
+      noFocus={isToday ? undefined : 'Focus runs on today’s tasks: the timer logs into today’s note.'}
+      onFocus={(how) => actions.onFocus({ line: task.line, label: task.label, category: task.category?.name }, how)}
+      onEdit={() => onOpen({ kind: 'edit', task })}
+      onDeleteTask={() => onOpen({ kind: 'delete', task })}
+      onClose={close}
     />
   );
 }
 
 /** A task to tick: the tick writes that one box back to the note, with a small spark. */
-function TaskRow({ task, onToggle, onMenu }: { task: DayTask; onToggle: (task: DayTask) => void; onMenu?: (event: MouseEvent) => void }) {
+function TaskRow({ task, onToggle, onMenu }: { task: DayTask; onToggle: (task: DayTask) => void; onMenu: (event: MouseEvent) => void }) {
   const color = task.category?.color ?? 'var(--accent)';
   return (
     <li className={task.done ? 'task-row is-done' : 'task-row'} style={{ '--tone': color } as CSSProperties} onContextMenu={onMenu}>
@@ -410,23 +441,23 @@ function TaskRow({ task, onToggle, onMenu }: { task: DayTask; onToggle: (task: D
 }
 
 function TasksTab({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions; isToday: boolean }) {
-  const [menu, setMenu] = useState<Menu>();
+  const [open, setOpen] = useState<Open>();
   return (
     <>
       <Composer categories={spec.categories} onAdd={actions.onAddTask} />
       {day.tasks.length ? (
         <>
-          {isToday && <p className="tasks-hint">Right-click a task to focus on it; the time lands on the task.</p>}
+          <p className="tasks-hint">{isToday ? 'Right-click a task to focus on it, edit it or delete it.' : 'Right-click a task to edit it or delete it.'}</p>
           <div className="task-cards">
             {day.tasks.map((task, i) => (
-              <TaskCard key={task.line} task={task} i={i} onToggle={actions.onToggle} onMinutes={actions.onSetMinutes} onMenu={menuOn(isToday, task, setMenu)} />
+              <TaskCard key={task.line} task={task} i={i} onToggle={actions.onToggle} onMinutes={actions.onSetMinutes} onMenu={menuOn(task, setOpen)} />
             ))}
           </div>
         </>
       ) : (
         <p className="empty-line">No tasks yet. Add one above; it goes under the note's Tasks heading.</p>
       )}
-      {menu && <TaskMenu menu={menu} actions={actions} onClose={() => setMenu(undefined)} />}
+      {open && <TaskActions open={open} isToday={isToday} categories={spec.categories} actions={actions} onOpen={setOpen} />}
     </>
   );
 }
@@ -442,7 +473,7 @@ function TaskCard({
   i: number;
   onToggle: (task: DayTask) => void;
   onMinutes: (task: DayTask, minutes: number) => void;
-  onMenu?: (event: MouseEvent) => void;
+  onMenu: (event: MouseEvent) => void;
 }) {
   const color = task.category?.color ?? 'var(--accent)';
   const xp = task.minutes ? Math.round(task.minutes * (task.category?.multiplier ?? 1)) : 0;
@@ -474,11 +505,6 @@ function TaskCard({
       <p className="task-card-title">{task.label || <span className="faint">untitled</span>}</p>
       <div className="task-card-foot">
         <Minutes value={task.minutes} onSet={(minutes) => onMinutes(task, minutes)} />
-        {task.blocks.map((block) => (
-          <span key={block.start} className="time-chip">
-            {clock(block.start)}–{clock(block.end)}
-          </span>
-        ))}
       </div>
     </div>
   );

@@ -37,6 +37,7 @@ const timer = (): TimerApi => ({
   retry: vi.fn(),
   retryAll: vi.fn(),
   discard: vi.fn(),
+  retask: vi.fn(),
 });
 
 // jsdom lays nothing out: the grid's top is at 0, so a time's place is its minutes past 07:00.
@@ -44,7 +45,7 @@ const HOUR = 44;
 const y = (h: number, m = 0) => ((h * 60 + m - 7 * 60) / 60) * HOUR;
 
 function setup() {
-  const onWrite = vi.fn<(date: Date, edit: (text: string) => string, failed: string) => Promise<void>>(() => Promise.resolve());
+  const onWrite = vi.fn<(date: Date, edit: (text: string) => string, failed: string) => Promise<boolean>>(() => Promise.resolve(true));
   const onStartTimer = vi.fn();
   const onOpenDay = vi.fn();
   render(<CalendarView dayOf={dayOf} textOf={textOf} categories={['code', 'sport', 'book']} timer={timer()} onStartTimer={onStartTimer} onOpenDay={onOpenDay} onWrite={onWrite} />);

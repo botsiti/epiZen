@@ -12,6 +12,7 @@ import {
   restLeft,
   restore,
   resume,
+  retask,
   setRest,
   settle,
   shownSeconds,
@@ -179,5 +180,17 @@ describe('the timer', () => {
     const running = begin('stopwatch');
     expect(openStretch(running.session!, at(10, 0, 20))).toEqual({ day: '2026-10-27', start: min(10, 0), end: min(10, 0) });
     expect(openStretch(running.session!, at(10, 47))).toEqual({ day: '2026-10-27', start: min(10, 0), end: min(10, 47) });
+  });
+
+  it('follows a task edited in its note: the session and the blocks owed to it take its new words', () => {
+    const owed = pause(begin('stopwatch'), at(10, 30));
+    const running = resume(owed, at(10, 40));
+    expect(running.pending).toHaveLength(1);
+    const renamed = retask(running, TASK.path, { label: 'mrSuit skills', category: 'CODE' }, { label: 'mrSuit skills v2', category: 'business' });
+    expect(renamed.session?.task).toEqual({ ...TASK, label: 'mrSuit skills v2', category: 'business' });
+    expect(renamed.pending.map((block) => block.task.label)).toEqual(['mrSuit skills v2']);
+    // Another task, or the same words in another note, stay as they were.
+    expect(retask(running, TASK.path, { label: 'gym', category: 'code' }, { label: 'swim' })).toBe(running);
+    expect(retask(running, 'Calendar/28.10.2026.md', { label: 'mrSuit skills', category: 'code' }, { label: 'x' })).toBe(running);
   });
 });

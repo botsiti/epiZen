@@ -1,14 +1,15 @@
 // @vitest-environment node
-// The calendar's and the timer's writes, run on every daily note of a copy of the demo vault:
-// each changes the lines it means to (a task's minutes, one block line, or a new task and its
-// block), in the one note it was given, and nothing else in the vault.
+// The calendar's, the timer's and the task menu's writes, run on every daily note of a copy of
+// the demo vault: each changes the lines it means to (a task's minutes, one block line, a new
+// task and its block, a task's line, or a task with its blocks), in the one note it was given,
+// and nothing else in the vault.
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseDay } from '../src/lib/day';
-import { addBlock, addTaskWithBlock, deleteBlock, moveBlock, type LineRef } from '../src/lib/timeblocks';
+import { addBlock, addTaskWithBlock, deleteBlock, deleteTask, editTask, moveBlock, type LineRef } from '../src/lib/timeblocks';
 
 const original = fileURLToPath(new URL('../demo-vault', import.meta.url));
 const DAYS = 'Calendar/2026/days 2026';
@@ -75,31 +76,45 @@ describe('time block writes on a copy of the demo vault', () => {
     }
   });
 
-  it('moving a block rewrites that block line and the task’s minutes, nothing else', () => {
+  it('moving a block rewrites that block line only: the task keeps its minutes', () => {
     for (const { path, text, task } of trackedTasks()) {
       const block = task.blocks[0];
       if (!block) continue;
       const { differ, old, now } = run(path, (t) => moveBlock(t, ref(text, task.line), ref(text, block.line), 22 * 60, 22 * 60 + 15));
       expect(differ).toEqual([path]);
       expect(now).toHaveLength(old.length);
-      const minutes = Math.max(0, (task.minutes ?? 0) + 15 - (block.end - block.start));
-      expect(now.flatMap((line, i) => (line === old[i] ? [] : [[i, line]]))).toEqual([
-        [task.line, (old[task.line] ?? '').replace(/\[minutes::\d+\]/, `[minutes::${minutes}]`)],
-        [block.line, '    - 22:00–22:15'],
-      ]);
+      expect(now.flatMap((line, i) => (line === old[i] ? [] : [[i, line]]))).toEqual([[block.line, '    - 22:00–22:15']]);
       restore(path);
     }
   });
 
-  it('deleting a block removes that line and changes the task’s minutes, nothing else', () => {
+  it('deleting a block removes that line only: the task keeps its minutes', () => {
     for (const { path, text, task } of trackedTasks()) {
       const block = task.blocks[0];
       if (!block) continue;
       const { differ, old, now } = run(path, (t) => deleteBlock(t, ref(text, task.line), ref(text, block.line)));
       expect(differ).toEqual([path]);
-      const minutes = Math.max(0, (task.minutes ?? 0) - (block.end - block.start));
-      expect(now[task.line]).toBe((old[task.line] ?? '').replace(/\[minutes::\d+\]/, `[minutes::${minutes}]`));
-      expect(now.filter((_, i) => i !== task.line)).toEqual(old.filter((_, i) => i !== task.line && i !== block.line));
+      expect(now).toEqual(old.filter((_, i) => i !== block.line));
+      restore(path);
+    }
+  });
+
+  it('editing a task rewrites its line only', () => {
+    for (const { path, text, task } of trackedTasks()) {
+      const { differ, old, now } = run(path, (t) => editTask(t, ref(text, task.line), { words: 'renamed', category: 'study', minutes: 5 }));
+      expect(differ).toEqual([path]);
+      const box = (old[task.line] ?? '').slice(0, 6);
+      expect(now.flatMap((line, i) => (line === old[i] ? [] : [[i, line]]))).toEqual([[task.line, `${box}#daily/study — renamed [minutes::5]`]]);
+      restore(path);
+    }
+  });
+
+  it('deleting a task removes its line and its blocks only', () => {
+    for (const { path, text, task } of trackedTasks()) {
+      const { differ, old, now } = run(path, (t) => deleteTask(t, ref(text, task.line)));
+      expect(differ).toEqual([path]);
+      const gone = new Set([task.line, ...task.blocks.map((block) => block.line)]);
+      expect(now).toEqual(old.filter((_, i) => !gone.has(i)));
       restore(path);
     }
   });
