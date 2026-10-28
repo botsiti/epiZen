@@ -128,25 +128,30 @@ describe('the panel at a moment', () => {
 describe('the panel’s commands', () => {
   const task = (view(initialTimer()).tasks[3] ?? {}) as PanelView['tasks'][number];
 
-  it('start a round on the task as it read, the way it was asked for', () => {
-    expect(startCommand(task, { mode: 'pomodoro', minutes: 42 })).toEqual({
+  it('start a round on the task as it read on its day’s list, the way it was asked for', () => {
+    expect(startCommand('2026-09-01', task, { mode: 'pomodoro', minutes: 42 })).toEqual({
       kind: 'start',
+      day: '2026-09-01',
       task: { line: 7, text: '- [ ] #daily/kaizen — draft the weekly review [minutes::33] <!-- focus-id: 20260901-01 -->', label: 'draft the weekly review', category: 'kaizen' },
       mode: 'pomodoro',
       minutes: 42,
     });
-    expect(startCommand(task, { mode: 'stopwatch' })).toMatchObject({ mode: 'stopwatch' });
+    expect(startCommand('2026-09-01', task, { mode: 'stopwatch' })).toMatchObject({ mode: 'stopwatch' });
   });
 
   it('are read back only when they are whole', () => {
-    const command = startCommand(task, { mode: 'pomodoro', minutes: 25 });
+    const command = startCommand('2026-09-01', task, { mode: 'pomodoro', minutes: 25 });
     expect(readCommand(JSON.parse(JSON.stringify(command)))).toEqual(command);
     expect(readCommand({ kind: 'pause' })).toEqual({ kind: 'pause' });
     expect(readCommand({ kind: 'skip-rest' })).toEqual({ kind: 'skip-rest' });
-    expect(readCommand({ kind: 'start', task: { line: 7, text: '', label: 'x' }, mode: 'stopwatch' })).toEqual({ kind: 'start', task: { line: 7, text: '', label: 'x' }, mode: 'stopwatch' });
-    expect(readCommand({ kind: 'start', task: { line: 7, text: '', label: 'x' }, mode: 'pomodoro' })).toBeUndefined();
-    expect(readCommand({ kind: 'start', task: { line: -1, text: '', label: 'x' }, mode: 'stopwatch' })).toBeUndefined();
-    expect(readCommand({ kind: 'start', task: { line: 7, text: '', label: 'x', category: 3 }, mode: 'stopwatch' })).toBeUndefined();
+    const day = '2026-09-01';
+    expect(readCommand({ kind: 'start', day, task: { line: 7, text: '', label: 'x' }, mode: 'stopwatch' })).toEqual({ kind: 'start', day, task: { line: 7, text: '', label: 'x' }, mode: 'stopwatch' });
+    expect(readCommand({ kind: 'start', day, task: { line: 7, text: '', label: 'x' }, mode: 'pomodoro' })).toBeUndefined();
+    expect(readCommand({ kind: 'start', day, task: { line: -1, text: '', label: 'x' }, mode: 'stopwatch' })).toBeUndefined();
+    expect(readCommand({ kind: 'start', day, task: { line: 7, text: '', label: 'x', category: 3 }, mode: 'stopwatch' })).toBeUndefined();
+    // Without the day its task was listed on, a start can't be checked against today.
+    expect(readCommand({ kind: 'start', task: { line: 7, text: '', label: 'x' }, mode: 'stopwatch' })).toBeUndefined();
+    expect(readCommand({ kind: 'start', day: 'today', task: { line: 7, text: '', label: 'x' }, mode: 'stopwatch' })).toBeUndefined();
     expect(readCommand({ kind: 'delete-everything' })).toBeUndefined();
     expect(readCommand('pause')).toBeUndefined();
     expect(readCommand(null)).toBeUndefined();

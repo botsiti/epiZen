@@ -188,16 +188,21 @@ export function panelNow(view: PanelView, now: number): PanelNow {
   };
 }
 
-/** A command from one of the panel's buttons, for the main window's timer to apply. */
+/**
+ * A command from one of the panel's buttons, for the main window's timer to apply. A start says
+ * which day's list its task was on (`YYYY-MM-DD`), so a panel left showing yesterday can't start
+ * on yesterday's task as if it were today's.
+ */
 export type TrayCommand =
-  | { kind: 'start'; task: { line: number; text: string; label: string; category?: string }; mode: TimerMode; minutes?: number }
+  | { kind: 'start'; day: string; task: { line: number; text: string; label: string; category?: string }; mode: TimerMode; minutes?: number }
   | { kind: 'pause' | 'resume' | 'stop' | 'rest' | 'skip-rest' };
 
 /** How a round runs: 25 or 42 minutes, Custom, or Live (the stopwatch). */
 export type RoundHow = { mode: 'pomodoro'; minutes: number } | { mode: 'stopwatch' };
 
-export const startCommand = (task: PanelTask, how: RoundHow): TrayCommand => ({
+export const startCommand = (day: string, task: PanelTask, how: RoundHow): TrayCommand => ({
   kind: 'start',
+  day,
   task: { line: task.line, text: task.text, label: task.label, ...(task.category ? { category: task.category } : {}) },
   ...how,
 });
@@ -216,12 +221,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 export function readCommand(value: unknown): TrayCommand | undefined {
   if (!isRecord(value) || typeof value.kind !== 'string') return undefined;
   if (SIMPLE.has(value.kind)) return { kind: value.kind as 'pause' | 'resume' | 'stop' | 'rest' | 'skip-rest' };
-  if (value.kind !== 'start' || !isRecord(value.task)) return undefined;
+  if (value.kind !== 'start' || !isRecord(value.task) || typeof value.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.day)) return undefined;
+  const { day } = value;
   const { line, text, label, category } = value.task;
   const mode = value.mode === 'pomodoro' || value.mode === 'stopwatch' ? value.mode : undefined;
   if (typeof line !== 'number' || !Number.isInteger(line) || line < 0 || typeof text !== 'string' || typeof label !== 'string' || !mode) return undefined;
   if (category !== undefined && typeof category !== 'string') return undefined;
   const minutes = typeof value.minutes === 'number' && Number.isFinite(value.minutes) ? value.minutes : undefined;
   if (mode === 'pomodoro' && minutes === undefined) return undefined;
-  return { kind: 'start', task: { line, text, label, ...(category ? { category } : {}) }, mode, ...(mode === 'pomodoro' ? { minutes } : {}) };
+  return { kind: 'start', day, task: { line, text, label, ...(category ? { category } : {}) }, mode, ...(mode === 'pomodoro' ? { minutes } : {}) };
 }

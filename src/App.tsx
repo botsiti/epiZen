@@ -610,7 +610,9 @@ export function App() {
     [vaultName, now, todayEntry, texts, timer.state, timer.saveError, unwritten, startProblem],
   );
   const startFromTray = useCallback((choice: TaskChoice, how: FocusHow) => void startTimer(choice, how), [startTimer]);
-  useTrayBridge(timer, trayView, startFromTray);
+  // Opening the panel had it show today's list again; the start was on the day before's.
+  const staleFromTray = useCallback(() => setStartProblem('The timer didn’t start: that list was another day’s. Today’s tasks are shown now.'), []);
+  useTrayBridge(timer, trayView, startFromTray, staleFromTray);
   const textOf = useCallback((path: string) => texts.get(path), [texts]);
   const frontNote = notePath(view);
   // Laid out only while it can be seen.

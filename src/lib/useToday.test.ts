@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { day } from './dates';
-import { useToday } from './useToday';
+import { checkToday, useToday } from './useToday';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -35,6 +35,14 @@ describe('useToday', () => {
       window.dispatchEvent(new Event('focus'));
     });
     expect(result.current).toEqual(day(2026, 9, 27));
+  });
+
+  it('looks again when asked, for a window that slept hidden and never got focus', () => {
+    vi.setSystemTime(new Date(2026, 9, 25, 22, 0));
+    const { result } = renderHook(() => useToday());
+    vi.setSystemTime(new Date(2026, 9, 26, 7, 0));
+    act(() => checkToday());
+    expect(result.current).toEqual(day(2026, 9, 26));
   });
 
   it('keeps the same date, and the same object, within a day', () => {

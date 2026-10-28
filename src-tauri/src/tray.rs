@@ -30,7 +30,8 @@ const COMMAND_EVENT: &str = "epizen://tray-command";
 const DUE_EVENT: &str = "epizen://timer-due";
 /// To the panel: what the main window published for it.
 const STATE_EVENT: &str = "epizen://tray-state";
-/// To the panel: it has just been shown.
+/// To the panel and the main window: the panel has just been shown. The panel refreshes; the
+/// main window looks at the date again, in case it slept hidden over midnight.
 const SHOWN_EVENT: &str = "epizen://tray-shown";
 
 /// The panel's size, in points.
@@ -326,6 +327,7 @@ fn show(app: &AppHandle, icon: &TrayIcon, panel: &WebviewWindow) {
     let _ = panel.show();
     let _ = panel.set_focus();
     let _ = app.emit_to(PANEL, SHOWN_EVENT, ());
+    let _ = app.emit_to(MAIN, SHOWN_EVENT, ());
 }
 
 /// Hides the panel: on losing focus, on Escape or ⌘W, and on its buttons that leave it.

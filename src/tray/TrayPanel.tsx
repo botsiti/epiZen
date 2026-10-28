@@ -199,7 +199,7 @@ function TaskCard({ task, view, shown, send }: { task: PanelTask; view: PanelVie
   const [custom, setCustom] = useState<string>();
   const start = (how: RoundHow) => {
     setCustom(undefined);
-    send(startCommand(task, how));
+    send(startCommand(view.day, task, how));
   };
   const paused = view.session?.pausedAt !== undefined;
   const classes = ['tray-task', task.current && 'is-current', task.done && 'is-done'].filter(Boolean).join(' ');

@@ -48,15 +48,15 @@ describe('the menu bar’s panel', () => {
     const review = cards()[1] as HTMLElement;
     const task = { line: 3, text: '- [ ] #daily/kaizen — draft the weekly review [minutes::33]', label: 'draft the weekly review', category: 'kaizen' };
     await user.click(within(review).getByTestId('tray-start-25'));
-    expect(send).toHaveBeenLastCalledWith({ kind: 'start', task, mode: 'pomodoro', minutes: 25 });
+    expect(send).toHaveBeenLastCalledWith({ kind: 'start', day: '2026-09-01', task, mode: 'pomodoro', minutes: 25 });
     await user.click(within(review).getByTestId('tray-start-42'));
-    expect(send).toHaveBeenLastCalledWith({ kind: 'start', task, mode: 'pomodoro', minutes: 42 });
+    expect(send).toHaveBeenLastCalledWith({ kind: 'start', day: '2026-09-01', task, mode: 'pomodoro', minutes: 42 });
     await user.click(within(review).getByTestId('tray-start-live'));
-    expect(send).toHaveBeenLastCalledWith({ kind: 'start', task, mode: 'stopwatch' });
+    expect(send).toHaveBeenLastCalledWith({ kind: 'start', day: '2026-09-01', task, mode: 'stopwatch' });
     await user.click(within(review).getByTestId('tray-start-custom'));
     expect(within(review).getByTestId('tray-custom-start')).toBeDisabled();
     await user.type(within(review).getByTestId('tray-custom-minutes'), '50{Enter}');
-    expect(send).toHaveBeenLastCalledWith({ kind: 'start', task, mode: 'pomodoro', minutes: 50 });
+    expect(send).toHaveBeenLastCalledWith({ kind: 'start', day: '2026-09-01', task, mode: 'pomodoro', minutes: 50 });
     expect(send).toHaveBeenCalledTimes(4);
   });
 

@@ -77,7 +77,7 @@ export const onTimerDue = (handler: () => void) => listen('epizen://timer-due', 
 /** In the panel: what the main window last published; `null` before it has. */
 export const trayState = () => invoke<unknown>('tray_state');
 export const onTrayState = (handler: (panel: unknown) => void) => listen<unknown>('epizen://tray-state', (event) => handler(event.payload));
-/** In the panel: it has just been shown. */
+/** The panel has just been shown: it refreshes, and the main window looks at the date again. */
 export const onTrayShown = (handler: () => void) => listen('epizen://tray-shown', handler);
 export const trayCommand = (command: unknown) => invoke<void>('tray_command', { command });
 /** Brings the main window to the front, and hides the panel. */
