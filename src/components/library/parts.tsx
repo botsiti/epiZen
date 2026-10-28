@@ -30,13 +30,17 @@ export function RatingRing({ value, onSet, size = 152, label = 'Rating' }: { val
     return () => clearTimeout(timer);
   }, [pending, value, onSet]);
 
-  const fromPointer = (event: PointerEvent<HTMLDivElement>, previous?: number) => {
+  // Where the pointer is round the ring, 0–100, read while the event is live: React clears an
+  // event's currentTarget once its handler returns, before a state update reads it.
+  const fromPointer = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     const angle = Math.atan2(event.clientY - (box.top + box.height / 2), event.clientX - (box.left + box.width / 2));
     let turn = (angle + Math.PI / 2) / TAU;
     if (turn < 0) turn += 1;
-    const next = Math.round(turn * 100);
-    // Across the top the ring wraps; a drag up to 100 stays there instead of jumping to 0.
+    return Math.round(turn * 100);
+  };
+  // Across the top the ring wraps; a drag up to 100 stays there instead of jumping to 0.
+  const wrapped = (next: number, previous?: number) => {
     if (previous !== undefined && previous > 75 && next < 25) return 100;
     if (previous !== undefined && previous < 25 && next > 75) return 0;
     return next;
@@ -83,7 +87,15 @@ export function RatingRing({ value, onSet, size = 152, label = 'Rating' }: { val
             }
           : undefined
       }
-      onPointerMove={interactive ? (event) => dragging.current && setPending((previous) => fromPointer(event, previous)) : undefined}
+      onPointerMove={
+        interactive
+          ? (event) => {
+              if (!dragging.current) return;
+              const next = fromPointer(event);
+              setPending((previous) => wrapped(next, previous));
+            }
+          : undefined
+      }
       onPointerUp={
         interactive
           ? () => {

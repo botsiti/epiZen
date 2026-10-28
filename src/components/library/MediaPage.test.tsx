@@ -111,4 +111,18 @@ describe('MediaPage', () => {
       vi.useRealTimers();
     }
   });
+
+  it('sets the rating by dragging round the ring, without losing the pointer between moves', () => {
+    const { onSetProperty } = renderPage(FILM);
+    const ring = screen.getByRole('slider', { name: 'Rating' });
+    // jsdom lays nothing out: give the ring a box, centred at (100, 100).
+    ring.getBoundingClientRect = () => ({ left: 50, top: 50, width: 100, height: 100, right: 150, bottom: 150, x: 50, y: 50, toJSON: () => ({}) });
+    ring.setPointerCapture = () => undefined;
+    fireEvent.pointerDown(ring, { clientX: 150, clientY: 100, pointerId: 1 });
+    // A move reads where the ring is as it happens; the drag goes on to the bottom: 50.
+    fireEvent.pointerMove(ring, { clientX: 100, clientY: 150, pointerId: 1 });
+    expect(ring).toHaveAttribute('aria-valuenow', '50');
+    fireEvent.pointerUp(ring, { pointerId: 1 });
+    expect(onSetProperty).toHaveBeenLastCalledWith('rating', '50');
+  });
 });
