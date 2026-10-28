@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createNote, fetchImageIntoVault, lookupJson, type VaultFile } from '../../lib/api';
 import {
   coverPath,
@@ -14,7 +14,22 @@ import {
 } from '../../lib/library';
 import { formatDate } from '../../lib/dates';
 import { readDay } from '../../lib/datePicker';
-import { episodeLength, filterEpisodes, parseEpisodes, parseResults, searchUrl, SOURCE_NAMES, withDetails, type EpisodeResult, type LookupResult } from '../../lib/lookup';
+import {
+  episodeLength,
+  filterEpisodes,
+  parseEpisodes,
+  parseSearch,
+  readDetails,
+  SEARCH_PAUSE,
+  searchRequests,
+  SERVICE_NAMES,
+  SOURCE_NAMES,
+  SOURCE_SERVICES,
+  type EpisodeResult,
+  type LookupResult,
+  type Service,
+  type Source,
+} from '../../lib/lookup';
 import { useEscape } from '../calendar/useEscape';
 import { DateField } from '../DateField';
 import { order } from '../periodic/effects';
@@ -29,11 +44,39 @@ interface Props {
   onCreated: (path: string) => Promise<void>;
 }
 
-type Search = { state: 'idle' } | { state: 'loading' } | { state: 'done'; results: LookupResult[] } | { state: 'error'; message: string };
+/** The answers to one search so far, by service, and what the search before it showed until they come. */
+interface Answers {
+  /** The search's requests, as one key. */
+  key: string;
+  answers: Partial<Record<Service, unknown>>;
+  pending: Service[];
+  failed: Partial<Record<Service, string>>;
+  previous: LookupResult[];
+}
+
+/** What a search shows: its own answers once one has landed, and until then what the one before it showed. */
+const shownBy = (source: Source, found?: Answers) => (!found ? [] : Object.keys(found.answers).length ? parseSearch(source, found.answers) : found.previous);
 
 const reason = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 const a = (word: string) => `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}`;
+const names = (services: Service[]) => services.map((service) => SERVICE_NAMES[service]).join(' and ');
+
+// What a picked result reads before its form opens (an album's MusicBrainz page, a Wikipedia
+// result's Wikidata item), once per result for the session. A Wikipedia result's is read ahead
+// as it is pointed at, so picking it is usually instant; one that fails is tried again next time.
+const reads = new Map<string, Promise<LookupResult>>();
+function details(result: LookupResult): Promise<LookupResult> {
+  let read = reads.get(result.id);
+  if (!read) {
+    read = readDetails(result, lookupJson).catch(() => {
+      reads.delete(result.id);
+      return result;
+    });
+    reads.set(result.id, read);
+  }
+  return read;
+}
 
 /**
  * Adds an album, film, book or podcast episode, after Bookmory's search and add form: search as
@@ -43,31 +86,56 @@ const a = (word: string) => `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}`;
  */
 export function AddMedia({ spec, files, today, onClose, onCreated }: Props) {
   const [query, setQuery] = useState('');
-  const [answer, setAnswer] = useState<{ url: string; search: Search }>();
+  const [answer, setAnswer] = useState<Answers>();
   // A podcast's show, picked: its episodes are listed to pick one from.
   const [show, setShow] = useState<LookupResult>();
   const [picked, setPicked] = useState<LookupResult>();
   const [manual, setManual] = useState(false);
-  const url = searchUrl(spec.source, query);
+  const requests = useMemo(() => searchRequests(spec.source, query), [spec.source, query]);
+  const key = requests.map((request) => request.url).join(' ');
 
-  // Asks once typing pauses. An answer to an older question is dropped.
+  // Asks every service at once when typing pauses, and shows each answer as it lands. An answer
+  // to an older question is dropped.
   useEffect(() => {
-    if (!url) return;
+    if (!requests.length) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      setAnswer({ url, search: { state: 'loading' } });
-      lookupJson(url)
-        .then((json) => !cancelled && setAnswer({ url, search: { state: 'done', results: parseResults(spec.source, json) } }))
-        .catch((err: unknown) => !cancelled && setAnswer({ url, search: { state: 'error', message: reason(err) } }));
-    }, 450);
+      setAnswer((prev) => ({ key, answers: {}, pending: requests.map((request) => request.service), failed: {}, previous: shownBy(spec.source, prev) }));
+      for (const { service, url } of requests) {
+        const settle = (change: (prev: Answers) => Answers) => !cancelled && setAnswer((prev) => (prev?.key === key ? change(prev) : prev));
+        const done = (prev: Answers) => prev.pending.filter((other) => other !== service);
+        void lookupJson(url)
+          .then((json) => settle((prev) => ({ ...prev, answers: { ...prev.answers, [service]: json }, pending: done(prev) })))
+          .catch((err: unknown) => settle((prev) => ({ ...prev, failed: { ...prev.failed, [service]: reason(err) }, pending: done(prev) })));
+      }
+    }, SEARCH_PAUSE[spec.source]);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [url, spec.source]);
-  // While the next answer is on its way, the last results stay.
-  const search: Search = !url ? { state: 'idle' } : answer?.url === url ? answer.search : { state: 'loading' };
-  const results = search.state === 'done' ? search.results : url && answer?.search.state === 'done' ? answer.search.results : [];
+  }, [requests, key, spec.source]);
+
+  const current = requests.length && answer?.key === key ? answer : undefined;
+  const answered = current ? (Object.keys(current.answers) as Service[]) : [];
+  // Until the first answer to this search lands, the last results stay.
+  const results = requests.length ? shownBy(spec.source, answer) : [];
+  const pending = current ? current.pending : requests.map((request) => request.service);
+  const failed = current ? (Object.keys(current.failed) as Service[]) : [];
+  const source = SOURCE_NAMES[spec.source];
+  const hint = !requests.length
+    ? `Searches ${source} as you type${spec.kind === 'podcast' ? ', then lists the show’s episodes' : ''}. Nothing is sent until you do.`
+    : pending.length && !answered.length
+      ? `Asking ${source}…`
+      : pending.length
+        ? `Asking ${names(pending)}…`
+        : failed.length === requests.length
+          ? `${source} didn't answer: ${failed.map((service) => current?.failed[service]).find(Boolean) ?? 'no reason given'}.`
+          : !results.length
+            ? `Nothing found for “${query.trim()}”.`
+            : failed.length
+              ? `${names(failed)} didn't answer; these are from ${names(answered)}.`
+              : `${results.length} found on ${source}.`;
+  const mixed = SOURCE_SERVICES[spec.source].length > 1;
 
   const form = picked !== undefined || manual;
   const back = () => {
@@ -88,7 +156,7 @@ export function AddMedia({ spec, files, today, onClose, onCreated }: Props) {
         <div className="add-top">
           <div>
             <p className="kicker">
-              Add {a(episode ? 'podcast episode' : spec.one)} · {SOURCE_NAMES[spec.source]}
+              Add {a(episode ? 'podcast episode' : spec.one)} · {source}
             </p>
             <h2 className="add-title">{form ? 'Rate it' : show ? 'Pick the episode' : episode ? 'Find the show' : `Find ${a(spec.one)}`}</h2>
           </div>
@@ -126,20 +194,14 @@ export function AddMedia({ spec, files, today, onClose, onCreated }: Props) {
               spellCheck={false}
               data-testid="add-search"
             />
-            <p className="add-hint">
-              {search.state === 'loading'
-                ? `Asking ${SOURCE_NAMES[spec.source]}…`
-                : search.state === 'error'
-                  ? `${SOURCE_NAMES[spec.source]} didn't answer: ${search.message}.`
-                  : search.state === 'done' && !search.results.length
-                    ? `Nothing found for “${query.trim()}”.`
-                    : `Searches ${SOURCE_NAMES[spec.source]} as you type${episode ? ', then lists the show’s episodes' : ''}. Nothing is sent until you do.`}
+            <p className="add-hint" data-testid="add-hint">
+              {hint}
             </p>
             <ul className="add-results">
               {results.map((result, i) => (
-                  <li key={result.id} className="rise" style={order(i)}>
-                    <ResultCard spec={spec} result={result} onPick={(found) => (found.episodes ? setShow(found) : setPicked(found))} />
-                  </li>
+                <li key={result.id} className="rise" style={order(Math.min(i, 10))}>
+                  <ResultCard spec={spec} result={result} mixed={mixed} onPick={(found) => (found.episodes ? setShow(found) : setPicked(found))} />
+                </li>
               ))}
               <li>
                 <button type="button" className="add-result is-manual" onClick={() => setManual(true)} data-testid="add-manual">
@@ -160,25 +222,37 @@ export function AddMedia({ spec, files, today, onClose, onCreated }: Props) {
   );
 }
 
-function ResultCard({ spec, result, onPick }: { spec: KindSpec; result: LookupResult; onPick: (result: LookupResult) => void }) {
+/** A result: its cover, its title, who made it and when (or what its source says it is), and, when a search asks more than one service, which one it is from. */
+function ResultCard({ spec, result, mixed, onPick }: { spec: KindSpec; result: LookupResult; mixed: boolean; onPick: (result: LookupResult) => void }) {
   const [reading, setReading] = useState(false);
-  // A MusicBrainz album's genres are on its own page, read once it is picked.
+  const needs = Boolean(result.details ?? result.wikidata);
   const pick = () => {
-    if (!result.details) return onPick(result);
+    if (!needs) return onPick(result);
     setReading(true);
-    lookupJson(result.details)
-      .then((answer) => onPick(withDetails(result, answer)))
-      .catch(() => onPick(result));
+    void details(result).then(onPick);
+  };
+  // Wikidata is read ahead; MusicBrainz takes a request a second, so an album is read only once picked.
+  const ahead = () => {
+    if (result.wikidata) void details(result);
   };
   return (
-    <button type="button" className="add-result" onClick={pick} disabled={reading} data-testid="add-result" data-id={result.id}>
+    <button type="button" className="add-result" onClick={pick} onPointerEnter={ahead} onFocus={ahead} disabled={reading} data-testid="add-result" data-id={result.id} data-from={result.from}>
       <LookupCover url={result.thumb} title={result.title} className={`add-result-cover is-${spec.kind}`} />
       <span className="add-result-text">
         <span className="add-result-title">{result.title}</span>
-        <span className="add-result-meta">{[result.maker, result.year].filter(Boolean).join(' · ')}</span>
+        <span className="add-result-meta">{result.about ?? [result.maker, result.year].filter(Boolean).join(' · ')}</span>
         {(result.note || result.genres.length > 0) && <span className="add-result-note">{[result.note, ...result.genres].filter(Boolean).join(' · ')}</span>}
       </span>
-      {reading && <span className="add-result-reading">Reading…</span>}
+      {reading ? (
+        <span className="add-result-reading">Reading…</span>
+      ) : (
+        mixed &&
+        result.from && (
+          <span className="add-result-from" data-testid="add-result-from">
+            {SERVICE_NAMES[result.from]}
+          </span>
+        )
+      )}
     </button>
   );
 }

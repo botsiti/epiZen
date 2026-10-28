@@ -1,0 +1,134 @@
+{
+  "batchcomplete": true,
+  "continue": {
+    "gsroffset": 8,
+    "continue": "gsroffset||"
+  },
+  "query": {
+    "pages": [
+      {
+        "pageid": 26787,
+        "ns": 0,
+        "title": "Science fiction",
+        "index": 6,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/6/68/Imagination_cover_December_1952.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 342,
+          "height": 500
+        },
+        "description": "Literary genre",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q24925"
+        }
+      },
+      {
+        "pageid": 54173,
+        "ns": 0,
+        "title": "Pulp Fiction",
+        "index": 3,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/3/3b/Pulp_Fiction_%281994%29_poster.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 261,
+          "height": 385
+        },
+        "description": "1994 film by Quentin Tarantino",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q104123"
+        }
+      },
+      {
+        "pageid": 179757,
+        "ns": 0,
+        "title": "Science fiction film",
+        "index": 4,
+        "thumbnail": {
+          "source": "https://thumb.wikimedia.org/wikipedia/en/thumb/9/97/Maschinenmensch_in_a_screen_shot_from_the_Metropolis_film.jpg/500px-Maschinenmensch_in_a_screen_shot_from_the_Metropolis_film.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+          "width": 500,
+          "height": 376
+        },
+        "description": "Film genre",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q471839"
+        }
+      },
+      {
+        "pageid": 564947,
+        "ns": 0,
+        "title": "I, Robot (film)",
+        "index": 8,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/3/3b/Movie_poster_i_robot.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 260,
+          "height": 385
+        },
+        "description": "2004 film by Alex Proyas",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q200572"
+        }
+      },
+      {
+        "pageid": 59873627,
+        "ns": 0,
+        "title": "List of science fiction films of the 2020s",
+        "index": 7,
+        "thumbnail": {
+          "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/Sci-fi_film_icon.svg/500px-Sci-fi_film_icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+          "width": 500,
+          "height": 500
+        },
+        "description": "",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q61581573"
+        }
+      },
+      {
+        "pageid": 72713326,
+        "ns": 0,
+        "title": "American Fiction (film)",
+        "index": 1,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/d/d7/American_fiction_xxlg.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 255,
+          "height": 378
+        },
+        "description": "2023 film by Cord Jefferson",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q116413183"
+        }
+      },
+      {
+        "pageid": 75594219,
+        "ns": 0,
+        "title": "American Fiction (soundtrack)",
+        "index": 5,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/8/85/American_Fiction_%28soundtrack%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 300,
+          "height": 300
+        },
+        "description": "2023 film score by Laura Karpman",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q124097604"
+        }
+      },
+      {
+        "pageid": 75669795,
+        "ns": 0,
+        "title": "American Fiction",
+        "index": 2,
+        "description": "Topics referred to by the same term",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q124047571"
+        }
+      }
+    ]
+  }
+}

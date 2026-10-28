@@ -1,0 +1,25 @@
+{
+  "entities": {
+    "Q100146356": {
+      "type": "item",
+      "id": "Q100146356",
+      "labels": {
+        "en": {
+          "language": "en",
+          "value": "Cord Jefferson"
+        }
+      }
+    },
+    "Q130232": {
+      "type": "item",
+      "id": "Q130232",
+      "labels": {
+        "en": {
+          "language": "en",
+          "value": "drama film"
+        }
+      }
+    }
+  },
+  "success": 1
+}

@@ -1,0 +1,129 @@
+{
+  "batchcomplete": true,
+  "continue": {
+    "gsroffset": 8,
+    "continue": "gsroffset||"
+  },
+  "query": {
+    "pages": [
+      {
+        "pageid": 31742,
+        "ns": 0,
+        "title": "Unicode",
+        "index": 7,
+        "thumbnail": {
+          "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/New_Unicode_logo.svg/500px-New_Unicode_logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+          "width": 500,
+          "height": 600
+        },
+        "description": "Character encoding standard",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q8819"
+        }
+      },
+      {
+        "pageid": 34513,
+        "ns": 0,
+        "title": "0",
+        "index": 3,
+        "description": "Whole number",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q204"
+        }
+      },
+      {
+        "pageid": 46347679,
+        "ns": 0,
+        "title": "Evangelion: 3.0+1.0 Thrice Upon a Time",
+        "index": 8,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/3/36/Evangelion_3.0%2B1.0_Poster.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 265,
+          "height": 376
+        },
+        "description": "2021 Japanese film",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q6434144"
+        }
+      },
+      {
+        "pageid": 46617963,
+        "ns": 0,
+        "title": "Disney Infinity 3.0",
+        "index": 5,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/6/61/Disney_Infinity_3.0_%282015%29_cover.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 259,
+          "height": 388
+        },
+        "description": "2015 video game",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q19861433"
+        }
+      },
+      {
+        "pageid": 55090826,
+        "ns": 0,
+        "title": "Life 3.0",
+        "index": 1,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/4/4e/Cover_of_the_book_Life_3.0.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 261,
+          "height": 389
+        },
+        "description": "2017 book by Max Tegmark on artificial intelligence",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q48093278"
+        }
+      },
+      {
+        "pageid": 63883409,
+        "ns": 0,
+        "title": "Surface Book 3",
+        "index": 6,
+        "description": "2-in-1 PC by Microsoft",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q93476932"
+        }
+      },
+      {
+        "pageid": 71419994,
+        "ns": 0,
+        "title": "The Book of Life (soundtrack)",
+        "index": 4,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/9/97/The_Book_of_Life_%28soundtrack%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 316,
+          "height": 316
+        },
+        "description": "2014 albums",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q113512225"
+        }
+      },
+      {
+        "pageid": 74717437,
+        "ns": 0,
+        "title": "The Book 3",
+        "index": 2,
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/en/1/11/Yoasobi_-_The_Book_3.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+          "width": 300,
+          "height": 317
+        },
+        "description": "2023 EP by Yoasobi",
+        "descriptionsource": "local",
+        "pageprops": {
+          "wikibase_item": "Q122159544"
+        }
+      }
+    ]
+  }
+}

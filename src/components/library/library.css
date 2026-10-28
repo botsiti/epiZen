@@ -1075,6 +1075,21 @@
   font-size: 12px;
 }
 
+/* Which service a result is from, when a search asks more than one (books: Wikipedia and Open Library). */
+.add-result-from {
+  padding: 2px 9px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.add-result[data-from='wikipedia'] .add-result-from {
+  color: var(--text-muted);
+}
+
 .add-result.is-manual {
   margin-top: var(--space-2);
 }

@@ -1,0 +1,25 @@
+{
+  "entities": {
+    "Q2076321": {
+      "type": "item",
+      "id": "Q2076321",
+      "labels": {
+        "en": {
+          "language": "en",
+          "value": "Max Tegmark"
+        }
+      }
+    },
+    "Q1129795": {
+      "type": "item",
+      "id": "Q1129795",
+      "labels": {
+        "en": {
+          "language": "en",
+          "value": "popular science literature"
+        }
+      }
+    }
+  },
+  "success": 1
+}

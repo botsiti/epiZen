@@ -3,7 +3,7 @@ import type { VaultFile } from './api';
 import { parseNote } from './frontmatter';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseEpisodes, parseResults } from './lookup';
+import { parseEpisodes, parseSearch } from './lookup';
 import {
   allEntries,
   bodyWithoutCover,
@@ -257,7 +257,7 @@ describe('a new note', () => {
   it('writes an episode picked from a show\'s episodes: its title for the name, the show as Author, its year, its artwork as the cover', () => {
     // The recorded iTunes answers (test/fixtures/lookup/), read from the project's root: this file runs in jsdom.
     const json = (name: string): unknown => JSON.parse(readFileSync(join(process.cwd(), 'test/fixtures/lookup', name), 'utf8'));
-    const show = parseResults('itunes-podcast', json('itunes-podcast.json'))[0]!;
+    const show = parseSearch('itunes-podcast', { itunes: json('itunes-podcast.json') })[0]!;
     const episode = parseEpisodes(json('itunes-episodes.json'), show).find((found) => found.title.startsWith('Jensen Huang'))!;
     const spec = kindSpec('podcast');
     const picked = draft({ title: episode.title, maker: episode.maker, year: episode.year, genres: episode.genres, rating: '77', date: '2026-09-21' });

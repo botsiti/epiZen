@@ -7,8 +7,21 @@ import { createNote, fetchImageIntoVault, lookupJson, type VaultFile } from '../
 import { kindSpec } from '../../lib/library';
 import { AddMedia } from './AddMedia';
 
-// The recorded iTunes answers (test/fixtures/lookup/): a search for "lex fridman", and the show's episodes.
+// The recorded answers (test/fixtures/lookup/), picked by URL as the e2e build picks them: iTunes's
+// search for "lex fridman" and the show's episodes, Wikipedia's for "american fiction film" and
+// "life 3.0 book", Wikidata's for American Fiction and Life 3.0, Open Library's for "life 3.0".
 const recorded = (name: string): unknown => JSON.parse(readFileSync(join(process.cwd(), 'test/fixtures/lookup', name), 'utf8'));
+function answerFor(url: string): string {
+  const at = new URL(url);
+  const param = (name: string) => at.searchParams.get(name) ?? '';
+  if (at.hostname === 'en.wikipedia.org') return param('gsrsearch').endsWith(' film') ? 'wikipedia-film.json' : 'wikipedia-book.json';
+  if (at.hostname === 'www.wikidata.org') {
+    if (param('props') === 'claims') return param('ids') === 'Q48093278' ? 'wikidata-book-claims.json' : 'wikidata-film-claims.json';
+    return param('ids').includes('Q2076321') ? 'wikidata-book-labels.json' : 'wikidata-film-labels.json';
+  }
+  if (at.hostname === 'openlibrary.org') return 'openlibrary-search.json';
+  return url.includes('entity=podcastEpisode') ? 'itunes-episodes.json' : 'itunes-podcast.json';
+}
 
 vi.mock('../../lib/api', () => ({
   lookupJson: vi.fn(),
@@ -19,12 +32,16 @@ vi.mock('../../lib/api', () => ({
 }));
 
 const files: VaultFile[] = [
+  { path: 'Rating/kino/00. Kino 2026.md', kind: 'note' },
+  { path: 'Rating/books/00. Books.md', kind: 'note' },
   { path: 'Rating/podcasts/00. Podcast 2026.md', kind: 'note' },
   { path: 'Rating/podcasts/Why Dogs Dream.md', kind: 'note' },
   { path: 'Rating/podcasts/_attachments/why-dogs-dream.svg', kind: 'image' },
 ];
 
 const podcast = kindSpec('podcast') as ReturnType<typeof kindSpec> & { source: 'itunes-podcast' };
+const film = kindSpec('film') as ReturnType<typeof kindSpec> & { source: 'wikipedia-film' };
+const book = kindSpec('book') as ReturnType<typeof kindSpec> & { source: 'wikipedia-openlibrary' };
 const TITLE = 'Jensen Huang: NVIDIA – The $4 Trillion Company & the AI Revolution';
 
 beforeAll(() => {
@@ -33,9 +50,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  vi.mocked(lookupJson).mockImplementation((url: string) =>
-    Promise.resolve(recorded(url.includes('entity=podcastEpisode') ? 'itunes-episodes.json' : 'itunes-podcast.json')),
-  );
+  vi.mocked(lookupJson).mockReset();
+  vi.mocked(lookupJson).mockImplementation((url: string) => Promise.resolve(recorded(answerFor(url))));
   vi.mocked(fetchImageIntoVault).mockImplementation((_url: string, path: string) => Promise.resolve(path.replace(/\.jpg$/, '.png')));
   vi.mocked(createNote).mockClear();
 });
@@ -126,5 +142,88 @@ describe('adding a podcast episode', () => {
     expect(screen.getByTestId('add-title')).toHaveValue('');
     expect(screen.getByTestId('add-maker')).toHaveValue('Lex Fridman Podcast');
     expect(screen.getByTestId('add-year')).toHaveValue('');
+  });
+});
+
+/** A result card's title and the line under it, whether or not its cover has loaded. */
+const lines = (result: HTMLElement) => [result.querySelector('.add-result-title')?.textContent, result.querySelector('.add-result-meta')?.textContent];
+
+describe('adding a film from Wikipedia', () => {
+  it('lists the films found, reads Wikidata while one is pointed at, and fills the form with its director, year and genre', async () => {
+    const user = userEvent.setup();
+    const onCreated = vi.fn(() => Promise.resolve());
+    render(<AddMedia spec={film} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={onCreated} />);
+    await user.type(screen.getByTestId('add-search'), 'american fiction');
+    await screen.findAllByTestId('add-result', {}, { timeout: 2000 });
+    expect(lookupJson).toHaveBeenCalledWith(expect.stringContaining('gsrsearch=american%20fiction%20film&'));
+    expect(screen.getAllByTestId('add-result').map(lines)).toEqual([
+      ['American Fiction', '2023 film by Cord Jefferson'],
+      ['Pulp Fiction', '1994 film by Quentin Tarantino'],
+      ['I, Robot', '2004 film by Alex Proyas'],
+    ]);
+    // One service: no card says where it is from.
+    expect(screen.queryByTestId('add-result-from')).toBeNull();
+    expect(screen.getByTestId('add-hint')).toHaveTextContent('3 found on Wikipedia.');
+
+    const first = screen.getAllByTestId('add-result')[0]!;
+    await user.hover(first);
+    await waitFor(() => expect(lookupJson).toHaveBeenCalledWith(expect.stringContaining('www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q116413183&props=claims')));
+    await user.click(first);
+    await screen.findByTestId('add-form');
+    expect(screen.getByTestId('add-title')).toHaveValue('American Fiction');
+    expect(screen.getByTestId('add-maker')).toHaveValue('Cord Jefferson');
+    expect(screen.getByTestId('add-year')).toHaveValue('2023');
+    expect(screen.getByTestId('add-form')).toHaveTextContent('drama');
+    // Wikidata was read once, while pointed at: picking asked nothing more.
+    expect(vi.mocked(lookupJson).mock.calls.filter(([url]) => url.includes('wikidata'))).toHaveLength(2);
+
+    await user.type(screen.getByTestId('add-rating'), '80');
+    await user.clear(screen.getByTestId('add-date'));
+    await user.type(screen.getByTestId('add-date'), '2026-10-07');
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByTestId('add-save'));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith('Rating/kino/American Fiction.md'));
+    expect(fetchImageIntoVault).toHaveBeenCalledWith('https://upload.wikimedia.org/wikipedia/en/d/d7/American_fiction_xxlg.jpg', 'Rating/kino/_attachments/american-fiction.jpg');
+    expect(createNote).toHaveBeenCalledWith(
+      'Rating/kino/American Fiction.md',
+      '---\nDirector: Cord Jefferson\nYear: 2023\nWatched: 2026-10-07\nGenre:\n  - drama\nRating: 80\n---\n[[00. Kino 2026]]\n\n![[american-fiction.png|200]]\n',
+    );
+  });
+});
+
+describe('adding a book from Wikipedia and Open Library', () => {
+  it('shows Wikipedia\'s books as soon as they land, then Open Library\'s, each saying where it is from, a book both have once', async () => {
+    const user = userEvent.setup();
+    let openLibrary: (value: unknown) => void = () => undefined;
+    vi.mocked(lookupJson).mockImplementation((url: string) =>
+      url.includes('openlibrary.org') ? new Promise((resolve) => (openLibrary = resolve)) : Promise.resolve(recorded(answerFor(url))),
+    );
+    render(<AddMedia spec={book} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} />);
+    expect(screen.getByTestId('add-hint')).toHaveTextContent('Searches Wikipedia and Open Library as you type.');
+    await user.type(screen.getByTestId('add-search'), 'life 3.0');
+    await screen.findAllByTestId('add-result', {}, { timeout: 2000 });
+    expect(screen.getAllByTestId('add-result')).toHaveLength(1);
+    expect(screen.getByTestId('add-hint')).toHaveTextContent('Asking Open Library…');
+
+    openLibrary(recorded('openlibrary-search.json'));
+    await waitFor(() => expect(screen.getAllByTestId('add-result')).toHaveLength(5));
+    expect(screen.getAllByTestId('add-result-from').map((tag) => tag.textContent)).toEqual(['Wikipedia', 'Open Library', 'Open Library', 'Open Library', 'Open Library']);
+    expect(lines(screen.getAllByTestId('add-result')[0]!)).toEqual(['Life 3.0', '2017 book by Max Tegmark on artificial intelligence']);
+    expect(screen.getByTestId('add-hint')).toHaveTextContent('5 found on Wikipedia and Open Library.');
+
+    await user.click(screen.getAllByTestId('add-result')[0]!);
+    await screen.findByTestId('add-form');
+    expect(screen.getByTestId('add-maker')).toHaveValue('Max Tegmark');
+    expect(screen.getByTestId('add-year')).toHaveValue('2017');
+    expect(screen.getByTestId('add-form')).toHaveTextContent('popular science');
+  });
+
+  it('shows one service\'s books when the other doesn\'t answer, and says so', async () => {
+    const user = userEvent.setup();
+    vi.mocked(lookupJson).mockImplementation((url: string) => (url.includes('openlibrary.org') ? Promise.reject(new Error('the service is busy')) : Promise.resolve(recorded(answerFor(url)))));
+    render(<AddMedia spec={book} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} />);
+    await user.type(screen.getByTestId('add-search'), 'life 3.0');
+    await waitFor(() => expect(screen.getByTestId('add-hint')).toHaveTextContent("Open Library didn't answer; these are from Wikipedia."));
+    expect(screen.getAllByTestId('add-result')).toHaveLength(1);
   });
 });
