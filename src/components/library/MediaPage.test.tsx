@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { EditorView } from '@codemirror/view';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { VaultFile } from '../../lib/api';
 import { kindSpec } from '../../lib/library';
@@ -31,9 +32,15 @@ Watched: 2026-09-09
 Jim McAllister, a well-liked high school teacher.
 `;
 
-function renderPage(text: string, path = 'Rating/kino/Election.md', kind: 'film' | 'book' = 'film') {
+function renderPage(
+  text: string,
+  path = 'Rating/kino/Election.md',
+  kind: 'film' | 'book' = 'film',
+  onSaveThoughts = vi.fn<(before: string, after: string) => Promise<void>>(() => Promise.resolve()),
+) {
   const onSetProperty = vi.fn();
   const onOpenLink = vi.fn();
+  const onEdit = vi.fn();
   render(
     <MediaPage
       spec={kindSpec(kind)}
@@ -42,11 +49,14 @@ function renderPage(text: string, path = 'Rating/kino/Election.md', kind: 'film'
       files={files}
       onOpenLink={onOpenLink}
       onSetProperty={onSetProperty}
-      onEdit={vi.fn()}
+      onSaveThoughts={onSaveThoughts}
+      onUnsavedThoughts={vi.fn()}
+      linkTargets={[]}
+      onEdit={onEdit}
       onOpenLibrary={vi.fn()}
     />,
   );
-  return { onSetProperty, onOpenLink };
+  return { onSetProperty, onOpenLink, onEdit, onSaveThoughts };
 }
 
 describe('MediaPage', () => {
@@ -124,5 +134,21 @@ describe('MediaPage', () => {
     expect(ring).toHaveAttribute('aria-valuenow', '50');
     fireEvent.pointerUp(ring, { pointerId: 1 });
     expect(onSetProperty).toHaveBeenLastCalledWith('rating', '50');
+  });
+
+  it('saves the text being written before it opens the whole note in the editor', async () => {
+    let land = () => undefined as void;
+    const onSaveThoughts = vi.fn(() => new Promise<void>((resolve) => (land = resolve)));
+    const { onEdit } = renderPage(FILM, undefined, undefined, onSaveThoughts);
+    fireEvent.click(screen.getByTestId('thoughts-write'));
+    const host = screen.getByTestId('editor').querySelector<HTMLElement>('.cm-editor');
+    const view = host && EditorView.findFromDOM(host);
+    if (!view) throw new Error('no editor');
+    act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: 'More.' }, userEvent: 'input.paste' }));
+    fireEvent.click(screen.getByTestId('edit-note'));
+    await waitFor(() => expect(onSaveThoughts).toHaveBeenCalledTimes(1));
+    expect(onEdit).not.toHaveBeenCalled();
+    land();
+    await waitFor(() => expect(onEdit).toHaveBeenCalledTimes(1));
   });
 });

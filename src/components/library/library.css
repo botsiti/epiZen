@@ -835,6 +835,67 @@
   max-width: var(--reading-width);
 }
 
+/* Thoughts: the note's own text, written right on the page. */
+
+.media-thoughts .card-head {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  margin-bottom: var(--space-3);
+}
+
+.media-thoughts .card-head .tile-label {
+  margin: 0;
+}
+
+.media-thoughts-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.media-thoughts-links {
+  margin-bottom: var(--space-3);
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.media-thoughts-links p {
+  margin: 0;
+}
+
+.media-thoughts-text.is-writable {
+  cursor: text;
+}
+
+.media-thoughts-editor {
+  max-width: var(--reading-width);
+}
+
+.media-thoughts-editor .editor .cm-editor {
+  min-height: 7.5em;
+}
+
+.media-thoughts-empty {
+  display: block;
+  width: 100%;
+  max-width: var(--reading-width);
+  padding: var(--space-2) 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font: italic 18px/1.5 var(--display);
+  text-align: left;
+  cursor: text;
+  transition: color 160ms ease-out;
+}
+
+.media-thoughts-empty:hover {
+  color: var(--text-muted);
+}
+
 /* The rating ring: an arc in accent with a glowing dot at its end, ticks every ten. */
 
 .rating-ring {

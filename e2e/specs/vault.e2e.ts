@@ -237,6 +237,29 @@ describe('the demo vault', () => {
     await expect($('[data-testid="rating-ring"]')).toHaveAttribute('data-value', '91');
   });
 
+  it('writes what was thought of the album right on its page, under its link and cover', async () => {
+    const path = 'Rating/music/Glasshouse Weather.md';
+    const file = join(vaultCopy(), path);
+    const before = readFileSync(file, 'utf8');
+    // The text starts after the cover's paragraph; the lines above it stay as they are.
+    const head = before.slice(0, before.indexOf('\n\n', before.indexOf('![[')) + 2);
+    const typed = 'Better on headphones. The second side is the one, see [[Quiet Machinery]].';
+    await $('[data-testid="thoughts-write"]').click();
+    await $('[data-testid="media-text"] [data-testid="editor"] .cm-content').waitForDisplayed();
+    await browser.execute((value) => {
+      document.querySelector<HTMLElement>('[data-testid="media-text"] .cm-content')?.focus();
+      document.execCommand('selectAll');
+      document.execCommand('insertText', false, value);
+    }, typed);
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === head + typed, { timeout: 5000, timeoutMsg: 'what was written never reached the note' });
+    await expect($('[data-testid="thoughts-state"]')).toHaveText('Saved');
+    await screenshot('95-media-thoughts-writing');
+    await $('[data-testid="thoughts-done"]').click();
+    await expect($('[data-testid="thoughts-text"]')).toHaveText(expect.stringContaining('Better on headphones.'));
+    await expect($('[data-testid="media-text"] [data-testid="editor"]')).not.toBeExisting();
+    await screenshot('96-media-thoughts');
+  });
+
   it('adds an album found by a lookup: its note in the vault\'s format, and its cover beside it', async () => {
     // The e2e build answers lookups from test/fixtures/lookup/, so nothing here goes on the network.
     await $('[data-testid="media-library"]').click();
