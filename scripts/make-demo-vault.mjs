@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Writes the fake demo vault: daily, weekly and monthly notes, ratings for albums,
-// films and YouTube videos, and SVG covers drawn here. Everything is invented.
+// films, books, podcasts and YouTube videos, and SVG covers drawn here. Everything is invented.
 //
 // The output is committed as demo-vault/. This script refuses to write into a folder
 // that already exists, so it can't overwrite edits made since.
@@ -115,12 +115,12 @@ const slug = (text) =>
     .replace(/^-|-$/g, '');
 
 /** A small abstract cover: one of five patterns in one of the palettes, with the title. */
-function cover({ title, subtitle, index, width, height }) {
+function cover({ title, subtitle, index, width, height, random = rand }) {
   const [bg, a, b] = PALETTES[index % PALETTES.length];
   const ink = isLight(bg) ? '#1b1b1e' : '#f4f1ea';
   const shapes = [];
-  const cx = width * (0.35 + rand() * 0.3);
-  const cy = height * (0.3 + rand() * 0.2);
+  const cx = width * (0.35 + random() * 0.3);
+  const cy = height * (0.3 + random() * 0.2);
   const unit = Math.min(width, height);
 
   switch (index % 5) {
@@ -140,14 +140,14 @@ function cover({ title, subtitle, index, width, height }) {
       for (let row = 0; row < 6; row++) {
         for (let col = 0; col < 6; col++) {
           const size = width / 8;
-          shapes.push(`<rect x="${(width / 8 + col * size).toFixed(0)}" y="${(height * 0.08 + row * size).toFixed(0)}" width="${(size * 0.8).toFixed(0)}" height="${(size * 0.8).toFixed(0)}" rx="${(size * 0.12).toFixed(0)}" fill="${(row + col) % 3 ? a : b}" opacity="${(0.15 + rand() * 0.8).toFixed(2)}"/>`);
+          shapes.push(`<rect x="${(width / 8 + col * size).toFixed(0)}" y="${(height * 0.08 + row * size).toFixed(0)}" width="${(size * 0.8).toFixed(0)}" height="${(size * 0.8).toFixed(0)}" rx="${(size * 0.12).toFixed(0)}" fill="${(row + col) % 3 ? a : b}" opacity="${(0.15 + random() * 0.8).toFixed(2)}"/>`);
         }
       }
       break;
     case 3: // waves
       for (let i = 0; i < 6; i++) {
         const y = height * (0.2 + i * 0.09);
-        const amp = height * (0.03 + rand() * 0.04);
+        const amp = height * (0.03 + random() * 0.04);
         const points = Array.from({ length: 13 }, (_, step) => {
           const x = (step * width) / 12;
           return `${x.toFixed(0)} ${(y + Math.sin(x / (width / 6) + i) * amp).toFixed(1)}`;
@@ -638,6 +638,113 @@ ${[...months.keys()].map((month) => `- [[${month}|${MONTHS[Number(month.slice(0,
 - [[00. Music 2026 MOC|Music]]
 - [[00. Kino 2026|Kino]]
 - [[00. YouTube 2026|YouTube]]
+`,
+);
+
+// ---------------------------------------------------------------- books and podcasts
+
+// Added after everything above, with their own seeded sequence, so every value drawn before
+// them came out as it was. Books are written as the vault writes them (Open Library's shape:
+// author, first year, subjects), with "Finshed" spelt as it is there; podcasts as the vault's.
+let shelfSeed = 20261028;
+function shelf() {
+  shelfSeed = (shelfSeed + 0x6d2b79f5) | 0;
+  let t = Math.imul(shelfSeed ^ (shelfSeed >>> 15), 1 | shelfSeed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const shelfInt = (min, max) => min + Math.floor(shelf() * (max - min + 1));
+const shelfPick = (list) => list[Math.floor(shelf() * list.length)];
+
+const BOOKS = [
+  ['The Cartographer of Tbilisi', 'Nodar Kipiani', 2012, ['novel', 'historical fiction'], 89],
+  ['Small Habits, Long Years', 'Teodor Brandt', 2021, ['self improvement', 'psychology'], 78],
+  ['The Quiet Arithmetic of Rivers', 'Hana Velasquez', 2019, ['essays', 'nature'], 84],
+  ['Machines That Wait', 'Ivo Sandberg', 2020, ['sci-fi'], 67],
+  ['A Field Guide to Ordinary Mornings', 'Lucía Ferrante', 2016, ['essays'], 72],
+  ['Thinking in Seasons', 'Ada Morrow', 2023, ['philosophy', 'self improvement'], 81],
+];
+
+const PODCASTS = [
+  ['The Long Middle of a Project', 'Slow Systems Radio', ['productivity'], 79],
+  ['Why Dogs Dream', 'Field Notes Weekly', ['science', 'animals'], 85],
+  ['Rhythm Without a Clock', 'The Groove Hour', ['music', 'interview'], 82],
+  ['Sleep Is a Skill', 'Night Shift Science', ['health'], 74],
+];
+
+const bookDay = (i) => DAYS[4 + i * 9];
+const podcastDay = (i) => DAYS[7 + i * 13];
+
+BOOKS.forEach(([title, author, year, genres, rating], i) => {
+  const finished = bookDay(i);
+  const started = addDays(finished, -shelfInt(9, 45));
+  const file = `${slug(title)}.svg`;
+  write(`Rating/books/_attachments/${file}`, cover({ title, subtitle: author, index: i + 2, width: 400, height: 600, random: shelf }));
+  write(
+    `Rating/books/${title}.md`,
+    `---
+Author: ${author}
+Year: ${year}
+Genre_book:
+${genres.map((genre) => `  - ${genre}`).join('\n')}
+Rating: ${rating}
+Finshed: ${ymd(finished)}
+Started: ${ymd(started)}
+---
+[[00. Books]]
+
+![[${file}|200]]
+
+Finished on [[${dmy(finished)}]]. ${shelfPick(['Slow to start, hard to put down.', 'Underlined half of it.', 'One idea worth the whole book.', 'Will read again in a year.'])}
+`,
+  );
+});
+
+write(
+  'Rating/books/00. Books.md',
+  `# Books
+
+Books I finished, newest first.
+
+| Book | Author | Year | Rating |
+| --- | --- | --- | --- |
+${BOOKS.map(([title, author, year, , rating]) => `| [[${title}]] | ${author} | ${year} | ${rating} |`)
+  .reverse()
+  .join('\n')}
+
+Back to [[00. Home 2026|home]].
+`,
+);
+
+PODCASTS.forEach(([title, author, genres, rating], i) => {
+  const day = podcastDay(i);
+  const file = `${slug(title)}.svg`;
+  write(`Rating/podcasts/_attachments/${file}`, cover({ title, subtitle: author, index: i + 5, width: 600, height: 600, random: shelf }));
+  write(
+    `Rating/podcasts/${title}.md`,
+    `---
+Author: ${author}
+Rating: ${rating}
+Genre:
+${genres.map((genre) => `  - ${genre}`).join('\n')}
+Listened: ${ymd(day)}
+---
+[[00. Podcast 2026]]
+
+![[${file}|240]]
+
+Listened on [[${dmy(day)}]]. ${shelfPick(['Took notes on a walk.', 'Two good questions in it.', 'Saved the transcript.'])}
+`,
+  );
+});
+
+write(
+  'Rating/podcasts/00. Podcast 2026.md',
+  `# Podcasts 2026
+
+${PODCASTS.map(([title, author, , rating]) => `- [[${title}]] — ${author} — ${rating}`).join('\n')}
+
+Back to [[00. Home 2026|home]].
 `,
 );
 

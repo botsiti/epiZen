@@ -38,4 +38,19 @@ describe('collectMedia', () => {
     ]);
     expect(shelves[1]?.items[0]?.subtitle).toBe('2019');
   });
+
+  it('shelves a note that writes Rating, and dates a book by when it was finished', () => {
+    const shelves = collectMedia(
+      [
+        { path: 'Rating/books/Thinking in Seasons.md', text: '---\nAuthor: Ada Morrow\nYear: 2023\nRating: 81\nFinshed: 2026-09-19\nStarted: 2026-08-26\n---\n' },
+        { path: 'Rating/kino/Election.md', text: '---\nYear: 1999\nrating: 58\nWatched: 2026-09-09\n---\n' },
+        { path: 'Rating/podcasts/Tear.md', text: '---\nAuthor:\nRating:\nListened: 2026-09-17\n---\n' },
+      ],
+      [],
+    );
+    expect(shelves.map((shelf) => [shelf.folder, shelf.items.map((item) => [item.title, item.rating, item.subtitle, item.date])])).toEqual([
+      ['Rating/books', [['Thinking in Seasons', 81, 'Ada Morrow', '2026-09-19']]],
+      ['Rating/kino', [['Election', 58, '1999', '2026-09-09']]],
+    ]);
+  });
 });

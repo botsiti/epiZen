@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600">
+  <rect width="400" height="600" fill="#e9e3d5"/>
+  <path d="M 0 120.0 L 33 138.9 L 67 153.1 L 100 159.3 L 133 155.8 L 167 143.5 L 200 125.6 L 233 106.2 L 267 90.2 L 300 81.5 L 333 82.3 L 367 92.2 L 400 109.0" fill="none" stroke="#ee6c4d" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 192.7 L 33 196.2 L 67 194.3 L 100 187.3 L 133 177.1 L 167 166.2 L 200 157.1 L 233 152.2 L 267 152.6 L 300 158.3 L 333 167.8 L 367 178.8 L 400 188.6" fill="none" stroke="#3d5a80" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 256.0 L 33 246.4 L 67 232.3 L 100 217.2 L 133 204.7 L 167 197.9 L 200 198.5 L 233 206.3 L 267 219.4 L 300 234.6 L 333 248.2 L 367 256.9 L 400 258.5" fill="none" stroke="#ee6c4d" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 286.6 L 33 270.6 L 67 257.4 L 100 250.3 L 133 250.9 L 167 259.1 L 200 272.9 L 233 289.0 L 267 303.3 L 300 312.4 L 333 314.1 L 367 307.9 L 400 295.4" fill="none" stroke="#3d5a80" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 315.6 L 33 309.7 L 67 310.2 L 100 317.0 L 133 328.5 L 167 341.8 L 200 353.7 L 233 361.2 L 267 362.6 L 300 357.5 L 333 347.1 L 367 334.0 L 400 321.4" fill="none" stroke="#ee6c4d" stroke-width="8.0" stroke-linecap="round"/>
+  <path d="M 0 354.8 L 33 364.1 L 67 379.7 L 100 397.9 L 133 414.1 L 167 424.4 L 200 426.3 L 233 419.3 L 267 405.1 L 300 387.2 L 333 370.0 L 367 357.7 L 400 353.3" fill="none" stroke="#3d5a80" stroke-width="8.0" stroke-linecap="round"/>
+  <text x="28" y="552" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="23" font-weight="600" fill="#1b1b1e">Small Habits, Long Years</text>
+  <text x="28" y="584" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" fill="#1b1b1e" opacity="0.7">Teodor Brandt</text>
+</svg>

@@ -6,6 +6,8 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 
 export const DEMO_VAULT = join(root, 'demo-vault');
 export const EVIDENCE = join(root, 'evidence');
+/** Recorded lookup answers; the e2e build serves them in place of the network (src-tauri/src/net.rs). */
+export const FIXTURES = join(root, 'test/fixtures/lookup');
 /** Built by `npm run build:e2e`: a debug build with the test-only WebDriver plugin. */
 export const APP = join(root, 'src-tauri/target/debug/epizen');
 /** The e2e config copies the demo vault to `<tmp>/epizen-e2e-XXXXXX/demo-vault`. */

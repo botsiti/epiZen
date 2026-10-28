@@ -1,9 +1,10 @@
 //! Access to a vault: a folder of plain Markdown notes and their images.
 //!
 //! This is the only code that touches the vault. Every path that comes from the frontend
-//! goes through [`Vault::resolve`] or [`Vault::new_note_path`], which keep it inside the vault
-//! folder. It writes in two ways only: a new note that can't replace an existing file, and a
-//! note's new text, renamed over it whole and only while the note still holds what the app read.
+//! goes through [`Vault::resolve`] or [`Vault::new_path`], which keep it inside the vault
+//! folder. It writes in three ways only: a new note or a new image (a cover the library
+//! downloaded), neither of which can replace an existing file, and a note's new text, renamed
+//! over it whole and only while the note still holds what the app read.
 
 use std::fmt;
 use std::fs;
@@ -142,7 +143,17 @@ impl Vault {
     /// Creates a note, and its folders inside the vault. Never replaces a file: the check
     /// and the create are one step (`create_new`), so a name taken a moment ago is refused.
     pub fn create_note(&self, path: &str, text: &str) -> Result<(), VaultError> {
-        let target = self.new_note_path(path)?;
+        self.create(path, FileKind::Note, text.as_bytes())
+    }
+
+    /// Creates an image (a cover the library downloaded), and its folders inside the vault.
+    /// The path must end in an image extension. Like a note, it never replaces a file.
+    pub fn create_file(&self, path: &str, bytes: &[u8]) -> Result<(), VaultError> {
+        self.create(path, FileKind::Image, bytes)
+    }
+
+    fn create(&self, path: &str, kind: FileKind, bytes: &[u8]) -> Result<(), VaultError> {
+        let target = self.new_path(path, kind)?;
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -151,8 +162,12 @@ impl Vault {
                 io::ErrorKind::AlreadyExists => VaultError::Exists(path.to_owned()),
                 _ => err.into(),
             })?;
-        file.write_all(text.as_bytes())?;
-        file.sync_all()?;
+        // A file this call created and couldn't finish is removed rather than left half written.
+        if let Err(err) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+            drop(file);
+            let _ = fs::remove_file(&target);
+            return Err(err.into());
+        }
         Ok(())
     }
 
@@ -286,10 +301,10 @@ impl Vault {
         Ok(real)
     }
 
-    /// Where a new note goes: a plain path whose existing folders all lie inside the vault
-    /// (a symlinked folder can't carry it out), with the missing folders created.
-    fn new_note_path(&self, path: &str) -> Result<PathBuf, VaultError> {
-        let relative = plain_path(path, FileKind::Note)?;
+    /// Where a new note or image goes: a plain path whose existing folders all lie inside the
+    /// vault (a symlinked folder can't carry it out), with the missing folders created.
+    fn new_path(&self, path: &str, kind: FileKind) -> Result<PathBuf, VaultError> {
+        let relative = plain_path(path, kind)?;
         let invalid = || VaultError::InvalidPath(path.to_owned());
         let name = relative.file_name().ok_or_else(invalid)?;
         let folder = self.root.join(relative.parent().ok_or_else(invalid)?);
@@ -595,6 +610,63 @@ mod tests {
         assert!(!dir.path().join(".obsidian").exists());
     }
 
+    #[test]
+    fn creates_an_image_and_its_folders_but_never_replaces_a_file() {
+        let (dir, vault) = vault_with(&[("Rating/music/_attachments/taken.jpg", "keep me")]);
+        let jpeg = [0xff, 0xd8, 0xff, 0xe0, 0, 1, 2];
+        vault
+            .create_file("Rating/books/_attachments/new.jpg", &jpeg)
+            .unwrap();
+        assert_eq!(
+            fs::read(dir.path().join("Rating/books/_attachments/new.jpg")).unwrap(),
+            jpeg
+        );
+        assert!(matches!(
+            vault.create_file("Rating/music/_attachments/taken.jpg", &jpeg),
+            Err(VaultError::Exists(_))
+        ));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rating/music/_attachments/taken.jpg")).unwrap(),
+            "keep me"
+        );
+        // Only image extensions, and only plain paths inside the vault.
+        for path in [
+            "cover.md",
+            "cover.txt",
+            "cover",
+            "../cover.jpg",
+            "/tmp/cover.jpg",
+            ".obsidian/cover.png",
+            "Rating/.hidden.png",
+            "",
+        ] {
+            assert!(
+                vault.create_file(path, &jpeg).is_err(),
+                "{path:?} should be refused"
+            );
+        }
+        assert!(!dir.path().join("cover.md").exists());
+        assert!(!dir.path().join(".obsidian").exists());
+        // A note's name can't be taken by an image's command, nor an image's by a note's.
+        assert!(matches!(
+            vault.create_note("x.png", "text"),
+            Err(VaultError::WrongKind(_))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creates_no_image_through_a_symlinked_folder_that_leaves_the_vault() {
+        let outside = tempfile::tempdir().unwrap();
+        let (dir, vault) = vault_with(&[]);
+        std::os::unix::fs::symlink(outside.path(), dir.path().join("linked")).unwrap();
+        assert!(matches!(
+            vault.create_file("linked/_attachments/x.jpg", b"\xff\xd8\xff"),
+            Err(VaultError::InvalidPath(_))
+        ));
+        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+    }
+
     #[cfg(unix)]
     #[test]
     fn creates_nothing_through_a_symlinked_folder_that_leaves_the_vault() {
@@ -823,12 +895,18 @@ mod tests {
         assert_ne!(edited, text);
         vault.write_note(day, &edited, &text).unwrap();
         vault.create_note("Inbox/Idea.md", "An idea\n").unwrap();
+        let cover = "Rating/books/_attachments/a-new-book.jpg";
+        vault.create_file(cover, b"\xff\xd8\xff\xe0jpeg").unwrap();
 
         let mut after = snapshot(copy.path());
         assert_eq!(after.remove(Path::new(day)).unwrap(), edited.as_bytes());
         assert_eq!(
             after.remove(Path::new("Inbox/Idea.md")).unwrap(),
             b"An idea\n"
+        );
+        assert_eq!(
+            after.remove(Path::new(cover)).unwrap(),
+            b"\xff\xd8\xff\xe0jpeg"
         );
         let mut before = before;
         before.remove(Path::new(day)).unwrap();

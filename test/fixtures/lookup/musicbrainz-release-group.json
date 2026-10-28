@@ -1,0 +1,66 @@
+{
+  "secondary-types": [],
+  "secondary-type-ids": [],
+  "genres": [
+    {
+      "disambiguation": "",
+      "count": 1,
+      "id": "b7ef058e-6d83-4ca4-8123-9724bff4648b",
+      "name": "art rock"
+    },
+    {
+      "id": "f1c9b874-7ef2-4e79-9419-c0bcb5f33a30",
+      "disambiguation": "",
+      "count": 4,
+      "name": "britpop"
+    },
+    {
+      "name": "glam rock",
+      "id": "54d89e62-5bfb-42bc-a321-9230e6fdcd75",
+      "disambiguation": "",
+      "count": 3
+    },
+    {
+      "id": "0e3fc579-2d24-4f20-9dae-736e1ec78798",
+      "count": 1,
+      "disambiguation": "",
+      "name": "rock"
+    }
+  ],
+  "title": "Dog Man Star",
+  "primary-type": "Album",
+  "id": "da15737e-3eb3-31e4-97f0-fe46299f75fb",
+  "tags": [
+    {
+      "name": "art rock",
+      "count": 1
+    },
+    {
+      "name": "britpop",
+      "count": 4
+    },
+    {
+      "name": "glam rock",
+      "count": 3
+    },
+    {
+      "name": "rock",
+      "count": 1
+    }
+  ],
+  "artist-credit": [
+    {
+      "name": "Suede",
+      "joinphrase": "",
+      "artist": {
+        "id": "a55c2f1b-3f3f-4d6a-aa30-5e186dbadce6",
+        "name": "Suede",
+        "sort-name": "Suede",
+        "disambiguation": "English rock band"
+      }
+    }
+  ],
+  "disambiguation": "",
+  "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+  "first-release-date": "1994-10-10"
+}

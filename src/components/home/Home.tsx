@@ -42,6 +42,8 @@ export interface HomeProps {
   art: (quest: Quest) => string | undefined;
   onQuestToggle: (quest: Quest) => void;
   onQuestProgress: (quest: Quest, value: number) => void;
+  /** A shelf's "See all": its folder's tab in the library. */
+  onSeeAll?: (folder: string) => void;
 }
 
 const thousands = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -75,7 +77,7 @@ export function Home(props: HomeProps) {
       <Section title={`Quests · ${formatDate(month, 'MMMM')}`} note={`${thisMonth.filter(({ quest }) => quest.done).length}/${thisMonth.length} done`} i={7} testId="home-quests">
         <QuestBoard quests={thisMonth} art={props.art} today={today} onToggle={props.onQuestToggle} onProgress={props.onQuestProgress} />
       </Section>
-      <Shelves shelves={props.shelves} today={today} onOpen={props.onOpenNote} i={8} />
+      <Shelves shelves={props.shelves} today={today} onOpen={props.onOpenNote} onSeeAll={props.onSeeAll} i={8} />
     </div>
   );
 }

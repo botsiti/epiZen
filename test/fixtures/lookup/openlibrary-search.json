@@ -1,0 +1,71 @@
+{
+  "numFound": 231,
+  "start": 0,
+  "numFoundExact": true,
+  "num_found": 231,
+  "documentation_url": "https://openlibrary.org/dev/docs/api/search",
+  "q": "life 3.0",
+  "offset": null,
+  "docs": [
+    {
+      "author_name": [
+        "Max Tegmark"
+      ],
+      "cover_i": 10239283,
+      "first_publish_year": 2017,
+      "key": "/works/OL19717530W",
+      "title": "Life 3.0",
+      "subject": [
+        "Moral and ethical aspects",
+        "Technological forecasting",
+        "Social aspects",
+        "Philosophy",
+        "Artificial intelligence",
+        "Automation",
+        "nyt:business-books=2017-09-10",
+        "New York Times bestseller",
+        "Technology, social aspects",
+        "Human-computer interaction",
+        "Information society",
+        "TECHNOLOGY & ENGINEERING / Robotics",
+        "SCIENCE / Experiments & Projects",
+        "TECHNOLOGY & ENGINEERING / Inventions",
+        "Automata",
+        "Ethics",
+        "Long Now Manual for Civilization"
+      ]
+    },
+    {
+      "author_name": [
+        "Acesprint"
+      ],
+      "first_publish_year": 2021,
+      "key": "/works/OL28146224W",
+      "title": "Summary and Analysis of Life 3. 0"
+    },
+    {
+      "author_name": [
+        "Irb Media"
+      ],
+      "first_publish_year": 2022,
+      "key": "/works/OL28156049W",
+      "title": "Summary of Max Tegmark's Life 3.0",
+      "subject": [
+        "Computers"
+      ]
+    },
+    {
+      "author_name": [
+        "Mr. Ellis Katsof"
+      ],
+      "cover_i": 10455537,
+      "first_publish_year": 2017,
+      "key": "/works/OL22374430W",
+      "title": "Life 3.0"
+    },
+    {
+      "key": "/works/OL44144656W",
+      "title": "Life 3.0：人工智慧時代，人類的蛻變與重生"
+    }
+  ]
+}

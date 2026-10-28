@@ -35,10 +35,10 @@ export async function openFolders(...paths: string[]) {
   }
 }
 
-/** Opens a note from the sidebar and waits for it: its text, or the page of a daily, weekly or monthly note. */
+/** Opens a note from the sidebar and waits for it: its text, or the page of a daily, weekly or monthly note, or a rated note's media page. */
 export async function openNote(path: string) {
   await $(`[data-testid="tree-note"][data-path="${path}"]`).click();
-  await $(`[data-testid="note"][data-path="${path}"], [data-testid="periodic"][data-path="${path}"]`).waitForDisplayed();
+  await $(`[data-testid="note"][data-path="${path}"], [data-testid="periodic"][data-path="${path}"], [data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
 }
 
 /** Shows a tab of the open daily, weekly or monthly page, such as "Note". */
@@ -74,5 +74,5 @@ export async function showMonth(label: string) {
 }
 
 export async function followLink(target: string) {
-  await $(`[data-testid="note"] a[data-wikilink="${target}"]`).click();
+  await $(`[data-testid="note"] a[data-wikilink="${target}"], [data-testid="media-text"] a[data-wikilink="${target}"]`).click();
 }

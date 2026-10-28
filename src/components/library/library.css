@@ -1,0 +1,1104 @@
+/* The library and the media pages. DESIGN.md, "Library and media pages", says why they look like
+   this. They are periodic pages in all but name: the frame, glass, hero, tabs, chips, numbers and
+   motion come from periodic.css; these are their own parts. Covers bring their own colour; the
+   interface stays sage. */
+
+/* ---------------------------------------------------------------- the library */
+
+.library-frame > * + * {
+  margin-top: var(--space-3);
+}
+
+.library-frame > .tabs {
+  margin-top: var(--space-6);
+}
+
+.library-hero {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.library-hero .hero-summary {
+  max-width: 420px;
+  font-size: 17px;
+}
+
+.library-add {
+  margin-top: var(--space-5);
+}
+
+.library-stats {
+  display: grid;
+  align-self: center;
+  gap: var(--space-3);
+}
+
+.library-numbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  background: var(--glass-line);
+}
+
+.library-numbers > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+}
+
+.library-numbers .tile-label {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.library-numbers dd {
+  margin: 0;
+}
+
+.library-number {
+  font: 600 26px/1.1 var(--numbers);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.library-number.is-accent {
+  color: var(--accent);
+}
+
+/* The spread of ratings, after Letterboxd's: a bar for each tenth of the scale. */
+.histogram {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 3px;
+  align-items: end;
+  height: 52px;
+  padding: 0 2px;
+}
+
+.histogram-bar {
+  height: calc(4px + var(--h) * 48px);
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(180deg, rgb(143 188 170 / 85%), rgb(143 188 170 / 35%));
+  transform-origin: bottom;
+  animation: rise-bar 760ms var(--settle) both;
+  animation-delay: calc(var(--i) * 40ms + 200ms);
+}
+
+.histogram-bar.is-empty {
+  height: 2px;
+  background: rgb(255 255 255 / 8%);
+}
+
+@keyframes rise-bar {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.histogram-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: -4px 2px 0;
+  color: var(--text-faint);
+  font: 11px var(--numbers);
+  font-variant-numeric: tabular-nums;
+}
+
+.library-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.library-sorts,
+.library-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.library-genres .faint {
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: var(--space-6) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-grid > li,
+.library-card {
+  min-width: 0;
+}
+
+.library-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+}
+
+.library-cover {
+  position: relative;
+  display: block;
+  aspect-ratio: var(--aspect, 1);
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 6%),
+    0 16px 32px -18px rgb(0 0 0 / 90%);
+  transition:
+    transform 380ms var(--snap),
+    box-shadow 380ms var(--settle);
+}
+
+.library-card:hover .library-cover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow:
+    0 0 0 1px rgb(143 188 170 / 35%),
+    0 24px 40px -20px rgb(0 0 0 / 95%);
+}
+
+.library-cover-image,
+.library-cover .embed-loading {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.library-cover .embed-loading {
+  aspect-ratio: auto !important;
+}
+
+.library-cover-blank {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: var(--space-3);
+  color: var(--text-faint);
+  font: 15px/1.3 var(--display);
+  text-align: center;
+}
+
+/* The rating on the cover: a small glass pill in its corner. */
+.library-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 34px;
+  padding: 3px 8px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  background: rgb(12 14 15 / 62%);
+  backdrop-filter: blur(10px) saturate(1.4);
+  color: var(--accent);
+  font: 600 12.5px/1.2 var(--numbers);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  box-shadow: 0 4px 12px -4px rgb(0 0 0 / 60%);
+}
+
+.library-badge.is-unrated {
+  color: var(--text-faint);
+}
+
+.library-card-title {
+  overflow: hidden;
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-card-meta {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  padding: var(--space-7) var(--space-7);
+}
+
+.library-empty-title {
+  margin: 0;
+  font: 500 34px/1.15 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.library-empty .muted {
+  max-width: 520px;
+  margin-bottom: var(--space-3);
+}
+
+/* The calendar of covers, after Bookmory's book calendar. */
+
+.cover-calendar {
+  padding: var(--space-5);
+}
+
+.calendar-top {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-end;
+  margin-bottom: var(--space-4);
+}
+
+.calendar-month {
+  min-width: 180px;
+  margin: 0;
+  font: 500 30px/1 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.year-strip {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.year-month {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 4px 0 2px;
+  border-radius: 8px;
+  transition: background 160ms ease-out;
+}
+
+.year-month:hover {
+  background: rgb(255 255 255 / 4%);
+}
+
+.year-month-bar {
+  display: block;
+  width: 60%;
+  height: calc(3px + var(--h) * 24px);
+  align-self: end;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 14%);
+}
+
+.year-month-letter {
+  color: var(--text-faint);
+  font: 600 10.5px var(--numbers);
+}
+
+.year-month.is-on .year-month-bar {
+  background: var(--accent);
+  box-shadow: 0 0 10px rgb(143 188 170 / 55%);
+}
+
+.year-month.is-on .year-month-letter {
+  color: var(--accent);
+}
+
+.year-month {
+  align-content: end;
+  height: 44px;
+}
+
+.calendar-steps {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.calendar-steps .nav-chip {
+  padding: 4px 12px;
+  font-size: 15px;
+}
+
+.cover-month {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--glass-line);
+  border-left: 1px solid var(--glass-line);
+}
+
+.cover-weekday {
+  padding: 8px 0;
+  border-right: 1px solid var(--glass-line);
+  border-bottom: 1px solid var(--glass-line);
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.cover-day {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  min-height: 96px;
+  padding: 6px;
+  border-right: 1px solid var(--glass-line);
+  border-bottom: 1px solid var(--glass-line);
+}
+
+.cover-day.is-outside {
+  background: rgb(0 0 0 / 14%);
+}
+
+.cover-day.is-outside .cover-day-number {
+  opacity: 0.4;
+}
+
+.cover-day-number {
+  justify-self: end;
+  color: var(--text-faint);
+  font: 500 11.5px var(--numbers);
+  font-variant-numeric: tabular-nums;
+}
+
+.cover-day.has-covers .cover-day-number {
+  color: var(--text-muted);
+}
+
+.cover-day-cover {
+  position: relative;
+  display: block;
+  height: 62px;
+  aspect-ratio: var(--aspect, 1);
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: 0 8px 16px -8px rgb(0 0 0 / 90%);
+  transition: transform 380ms var(--snap);
+}
+
+.cover-day-cover:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+
+.cover-day-image,
+.cover-day-cover .embed-loading {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-day-blank {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 2px;
+  background: var(--surface);
+  color: var(--text-faint);
+  font: 9.5px/1.15 var(--display);
+  overflow: hidden;
+}
+
+.cover-day-more {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgb(12 14 15 / 72%);
+  color: var(--text);
+  font: 600 10px/1.5 var(--numbers);
+}
+
+/* ---------------------------------------------------------------- a media page */
+
+.media-frame > * + * {
+  margin-top: var(--space-3);
+}
+
+.media-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-5) var(--space-6);
+  align-items: center;
+  overflow: hidden;
+  padding: 40px 40px 20px;
+  border-radius: 24px;
+}
+
+/* The cover again, blurred far out behind everything, under a veil that fades to the page. */
+.media-backdrop {
+  position: absolute;
+  inset: -20%;
+  z-index: -2;
+}
+
+.media-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(64px) saturate(1.35) brightness(0.85);
+  opacity: 0.7;
+  transform: scale(1.1);
+}
+
+.media-veil {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 90% at 18% 0%, transparent 0%, rgb(18 20 22 / 35%) 60%),
+    linear-gradient(180deg, rgb(18 20 22 / 25%) 0%, rgb(18 20 22 / 62%) 62%, rgb(18 20 22 / 90%) 100%);
+}
+
+.media-cover-slot {
+  width: 232px;
+}
+
+.media-hero.is-film .media-cover-slot,
+.media-hero.is-book .media-cover-slot {
+  width: 196px;
+}
+
+.media-hero.is-video .media-cover-slot {
+  width: 300px;
+}
+
+.media-cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 10%),
+    0 34px 60px -24px rgb(0 0 0 / 95%),
+    0 10px 20px -10px rgb(0 0 0 / 60%);
+  animation: rise 760ms var(--settle) 120ms both;
+}
+
+.media-cover.is-blank {
+  display: grid;
+  place-items: center;
+  aspect-ratio: var(--aspect, 1);
+  padding: var(--space-4);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: 20px/1.3 var(--display);
+  text-align: center;
+}
+
+.media-main {
+  min-width: 0;
+}
+
+.media-kicker-date {
+  color: var(--text-faint);
+  letter-spacing: 0.08em;
+}
+
+.media-title {
+  margin-bottom: var(--space-2);
+  font-size: clamp(36px, 5.4cqi, 56px);
+}
+
+.media-byline {
+  margin: 0;
+  font-size: 17px;
+}
+
+.media-maker {
+  color: var(--text);
+}
+
+.media-year {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.media-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.media-genre {
+  padding: 4px 12px;
+  border: 1px solid var(--glass-line-strong, rgb(255 255 255 / 14%));
+  border-radius: 999px;
+  background: rgb(255 255 255 / 5%);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  backdrop-filter: blur(8px);
+}
+
+.media-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-end;
+  margin-top: var(--space-5);
+}
+
+.media-took {
+  margin: 0 0 9px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.value-field {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+.value-field .tile-label {
+  margin: 0;
+}
+
+.value-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.value-field input {
+  width: 128px;
+  padding: 7px 12px;
+  border: 1px solid var(--glass-line);
+  border-radius: 10px;
+  background: rgb(10 12 14 / 45%);
+  color: var(--text);
+  font: 500 14px var(--numbers);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 160ms ease-out;
+}
+
+.value-field.is-rating input {
+  width: 72px;
+  text-align: center;
+}
+
+.value-field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.value-field input[aria-invalid='true'] {
+  border-color: var(--text-muted);
+  border-style: dashed;
+}
+
+.value-field .field-problem {
+  top: 100%;
+  white-space: normal;
+  width: 220px;
+}
+
+.media-aside {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  align-self: center;
+}
+
+.media-aside .value-field {
+  justify-items: center;
+}
+
+.media-nav {
+  margin-top: var(--space-2);
+}
+
+.media-path {
+  overflow: hidden;
+  color: var(--text-faint);
+  font: 11.5px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-tracks ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.media-tracks li {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  font: italic 17px/1.4 var(--display);
+}
+
+.media-track-number {
+  color: var(--accent);
+  font: 600 11.5px var(--numbers);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.media-text {
+  padding: var(--space-6) var(--space-7);
+}
+
+.media-text .note-body {
+  max-width: var(--reading-width);
+}
+
+.media-footer .backlinks {
+  margin-top: var(--space-6);
+}
+
+/* The rating ring: an arc in accent with a glowing dot at its end, ticks every ten. */
+
+.rating-ring {
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  touch-action: none;
+}
+
+.rating-ring.is-interactive {
+  cursor: grab;
+}
+
+.rating-ring.is-interactive:active {
+  cursor: grabbing;
+}
+
+.rating-ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rating-arc {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 7px rgb(143 188 170 / 55%));
+  animation: sweep 1100ms var(--settle) 200ms both;
+}
+
+.rating-dot {
+  fill: #eaf4ef;
+  filter: drop-shadow(0 0 6px rgb(143 188 170 / 95%));
+}
+
+.rating-tick {
+  stroke: rgb(255 255 255 / 16%);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.rating-number {
+  font: 600 42px/1 var(--numbers);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-none {
+  color: var(--text-faint);
+  font: 300 38px/1 var(--numbers);
+}
+
+/* ---------------------------------------------------------------- adding one */
+
+/* Drawn over the whole window, outside the page (a portal), so it brings the page's tokens with it. */
+.add-backdrop {
+  --glass-line: rgb(255 255 255 / 7.5%);
+  --glass-line-strong: rgb(255 255 255 / 14%);
+  --display: 'New York', ui-serif, 'Iowan Old Style', Georgia, serif;
+  --numbers: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --settle: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --snap: cubic-bezier(0.3, 1.35, 0.5, 1);
+
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: rgb(6 8 9 / 70%);
+  backdrop-filter: blur(14px);
+  animation: panel 240ms ease-out both;
+}
+
+.add-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(780px, 100%);
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 24px;
+  background: radial-gradient(130% 90% at 50% -8%, #18211d, #111416 52%, #0e1012);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 6%),
+    0 40px 110px rgb(0 0 0 / 68%);
+  animation: rise 520ms var(--settle) both;
+}
+
+.add-top {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 28px 32px 12px;
+}
+
+.add-title {
+  margin: var(--space-2) 0 0;
+  font: 500 32px/1.1 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.add-body {
+  overflow-y: auto;
+  padding: 8px 32px 28px;
+}
+
+.add-search {
+  width: 100%;
+  padding: 14px 18px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text);
+  font: 18px var(--font-ui);
+  transition: border-color 160ms ease-out;
+}
+
+.add-search:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 4px rgb(143 188 170 / 12%);
+}
+
+.add-search::placeholder {
+  color: var(--text-faint);
+}
+
+.add-hint {
+  margin: var(--space-2) 4px var(--space-4);
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.add-results {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.add-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  text-align: left;
+  transition:
+    background 160ms ease-out,
+    border-color 160ms ease-out,
+    transform 380ms var(--snap);
+}
+
+.add-result:hover:not(:disabled) {
+  border-color: var(--glass-line);
+  background: rgb(255 255 255 / 4%);
+}
+
+.add-result:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.add-result-cover {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 8%),
+    0 10px 20px -12px rgb(0 0 0 / 90%);
+}
+
+.add-result-cover.is-film,
+.add-result-cover.is-book {
+  width: 48px;
+  height: 72px;
+}
+
+.add-result-cover.is-blank,
+.add-cover.is-blank {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text-faint);
+  font: 10px/1.2 var(--display);
+  text-align: center;
+}
+
+.add-result-cover.is-blank > span {
+  display: -webkit-box;
+  padding: 4px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.add-result-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.add-result-title {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-result-meta {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-result-note {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-result-reading {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.add-result.is-manual {
+  margin-top: var(--space-2);
+}
+
+.add-result-plus {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 1px dashed var(--glass-line-strong);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 26px;
+  font-weight: 300;
+}
+
+.add-form {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.add-form-cover {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-5);
+}
+
+.add-cover {
+  display: block;
+  width: 200px;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 10%),
+    0 26px 50px -24px rgb(0 0 0 / 95%);
+}
+
+.add-cover.is-film,
+.add-cover.is-book {
+  width: 170px;
+  aspect-ratio: 2 / 3;
+}
+
+.add-cover.is-blank {
+  font-size: 15px;
+}
+
+.add-fields {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.add-fields .field input {
+  border-color: var(--glass-line);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.add-fields .field input:focus {
+  border-color: var(--accent);
+}
+
+.add-pair {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.add-pair > .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-pair > .field.is-short {
+  flex: 0 0 96px;
+}
+
+.add-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid var(--glass-line);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.add-fields .add-genres input {
+  flex: 1;
+  min-width: 120px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.add-fields .add-genres input:focus {
+  outline: none;
+}
+
+.add-genres:focus-within {
+  border-color: var(--accent);
+}
+
+.media-genre.is-removable {
+  cursor: pointer;
+  transition:
+    color 160ms ease-out,
+    border-color 160ms ease-out;
+}
+
+.media-genre.is-removable:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.add-where {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.add-where code {
+  background: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.add-where.is-taken code {
+  color: var(--text);
+  text-decoration: underline dotted;
+}
+
+.add-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+}
+
+/* Narrow panes */
+
+@container (max-width: 760px) {
+  .library-hero,
+  .media-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .media-cover-slot {
+    justify-self: start;
+  }
+
+  .media-aside {
+    justify-self: start;
+  }
+
+  .calendar-top {
+    flex-wrap: wrap;
+  }
+
+  .cover-day {
+    min-height: 72px;
+  }
+
+  .cover-day-cover {
+    height: 44px;
+  }
+}
+
+/* Motion off: the end state, at once. The dialog lives outside the page, so it is named here. */
+
+@media (prefers-reduced-motion: reduce) {
+  .add-backdrop,
+  .add-backdrop * {
+    animation: none !important;
+  }
+}
+
+:root[data-motion='off'] .add-backdrop,
+:root[data-motion='off'] .add-backdrop * {
+  animation: none !important;
+}
