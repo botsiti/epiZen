@@ -1,12 +1,13 @@
 import { useMemo, type CSSProperties, type PointerEvent } from 'react';
 import type { VaultFile } from '../../lib/api';
+import type { LinkTarget } from '../../lib/completion';
 import { parseNote } from '../../lib/frontmatter';
-import { bodyWithoutCover, coverEmbed, keyIn, readEntry, type KindSpec } from '../../lib/library';
+import { coverEmbed, keyIn, readEntry, type KindSpec } from '../../lib/library';
 import { linkResolver } from '../../lib/links';
-import { NoteMarkdown } from '../NoteMarkdown';
 import { followPointer, order } from '../periodic/effects';
 import { useVaultImage } from '../useVaultImage';
 import { RatingRing, ValueField } from './parts';
+import { Thoughts } from './Thoughts';
 import '../periodic/periodic.css';
 import './library.css';
 
@@ -18,6 +19,12 @@ interface Props {
   onOpenLink: (target: string, fromPath: string, newTab?: boolean) => void;
   /** Writes one property of this note, over the note as it is on disk now. */
   onSetProperty: (key: string, value: string) => void;
+  /** Writes the note's own text, under its properties, link and cover, from `before` to `after`. */
+  onSaveThoughts: (before: string, after: string) => Promise<void>;
+  /** The page was left with text that couldn't be saved. */
+  onUnsavedThoughts: (thoughts: string, message: string) => void;
+  /** What `[[` offers while writing. */
+  linkTargets: LinkTarget[];
   onEdit: () => void;
   onOpenLibrary: () => void;
   /** Why the last change didn't reach the note, if it didn't. */
@@ -30,14 +37,15 @@ const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.par
  * A rated album, film, book or podcast as a page, after Letterboxd's film page and Bookmory's
  * book page: the cover large over a soft backdrop blurred from it, the title in the serif, who
  * made it, its genres, its rating as a ring, and when it was listened to, watched or finished.
- * Setting the rating or a date writes that one property; the note's own text follows below.
+ * Setting the rating or a date writes that one property; the note's own text follows below, and
+ * is written right there.
  */
-export function MediaPage({ spec, path, text, files, onOpenLink, onSetProperty, onEdit, onOpenLibrary, warning }: Props) {
+export function MediaPage(props: Props) {
+  const { spec, path, text, files, onOpenLink, onSetProperty, onSaveThoughts, onUnsavedThoughts, linkTargets, onEdit, onOpenLibrary, warning } = props;
   const resolve = useMemo(() => linkResolver(files), [files]);
   const { properties, body } = useMemo(() => parseNote(text), [text]);
   const entry = useMemo(() => readEntry(path, text, resolve), [path, text, resolve]);
   const cover = useMemo(() => coverEmbed(body, path, resolve), [body, path, resolve]);
-  const shown = useMemo(() => bodyWithoutCover(body, cover?.link).trim(), [body, cover]);
   const image = useVaultImage(cover?.file.path);
   if (!entry) return null;
 
@@ -144,11 +152,17 @@ export function MediaPage({ spec, path, text, files, onOpenLink, onSetProperty, 
         </section>
       )}
 
-      {shown && (
-        <section className="card glass rise media-text" style={order(2)} data-testid="media-text">
-          <NoteMarkdown path={path} body={shown} files={files} onOpenLink={onOpenLink} />
-        </section>
-      )}
+      <Thoughts
+        spec={spec}
+        path={path}
+        text={text}
+        files={files}
+        cover={cover?.link}
+        onOpenLink={onOpenLink}
+        linkTargets={linkTargets}
+        onSave={onSaveThoughts}
+        onUnsaved={onUnsavedThoughts}
+      />
     </div>
   );
 }

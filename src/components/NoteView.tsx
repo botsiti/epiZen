@@ -6,6 +6,7 @@ import { addRecord, deleteRecord, updateRecord } from '../lib/cbt';
 import { addTask, setProperty, setSummary, syncPlanDone } from '../lib/edits';
 import { addQuest } from '../lib/quests';
 import { writeSection } from '../lib/sections';
+import { replaceThoughts, splitThoughts } from '../lib/thoughts';
 import { deleteTask, editTask, focusIdOf, newTaskLabel, setMinutes } from '../lib/timeblocks';
 import type { FocusHow } from './calendar/FocusMenu';
 import type { TaskChange, TaskChoice } from './calendar/types';
@@ -215,6 +216,17 @@ export function NoteView(props: ViewProps) {
         files={files}
         onOpenLink={onOpenLink}
         onSetProperty={actions.onSetProperty}
+        onSaveThoughts={(before, after) =>
+          new Promise<void>((resolve, reject) =>
+            change((text) => replaceThoughts(text, before, after), "What you wrote wasn't saved", undefined, (problem) => (problem ? reject(new Error(problem)) : resolve())),
+          )
+        }
+        onUnsavedThoughts={(thoughts, message) => {
+          // Shown to copy from: the note as it would have been, over its last known lines.
+          const { properties, links } = splitThoughts(latest.current ?? note.text ?? '');
+          onUnsaved(path, properties + links + thoughts, message);
+        }}
+        linkTargets={linkTargets}
         onEdit={actions.onEdit}
         onOpenLibrary={media.onOpenLibrary}
         warning={changeError}

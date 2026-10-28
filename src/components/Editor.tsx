@@ -21,6 +21,8 @@ interface Props {
   linkTargets?: LinkTarget[];
   /** More CodeMirror extensions. */
   extensions?: Extension[];
+  /** What an empty editor shows. */
+  placeholder?: string;
 }
 
 // The source looks like the note it makes: headings sized, emphasis set, Markdown's own marks faint.
@@ -66,7 +68,7 @@ const theme = EditorView.theme(
 );
 
 /** A plain-text Markdown editor. The text it reports is exactly what the file will hold. */
-export function Editor({ initial, lineSeparator, onChange, linkTargets = [], extensions }: Props) {
+export function Editor({ initial, lineSeparator, onChange, linkTargets = [], extensions, placeholder: empty = 'Start writing…' }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const report = useRef(onChange);
   const targets = useRef(linkTargets);
@@ -76,9 +78,9 @@ export function Editor({ initial, lineSeparator, onChange, linkTargets = [], ext
   }, [onChange, linkTargets]);
 
   // Built once per mount: the parent remounts the editor (with `key`) to show another note.
-  const setup = useRef({ initial, lineSeparator, extensions });
+  const setup = useRef({ initial, lineSeparator, extensions, empty });
   useEffect(() => {
-    const { initial: doc, lineSeparator: separator, extensions: extra = [] } = setup.current;
+    const { initial: doc, lineSeparator: separator, extensions: extra = [], empty: hint } = setup.current;
     const view = new EditorView({
       parent: host.current ?? undefined,
       state: EditorState.create({
@@ -89,7 +91,7 @@ export function Editor({ initial, lineSeparator, onChange, linkTargets = [], ext
           markdown(),
           syntaxHighlighting(highlight),
           EditorView.lineWrapping,
-          placeholder('Start writing…'),
+          placeholder(hint),
           autocompletion({ override: [wikilinkSource(() => targets.current)], icons: false }),
           theme,
           EditorView.updateListener.of((update) => {

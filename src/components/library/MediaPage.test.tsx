@@ -42,6 +42,9 @@ function renderPage(text: string, path = 'Rating/kino/Election.md', kind: 'film'
       files={files}
       onOpenLink={onOpenLink}
       onSetProperty={onSetProperty}
+      onSaveThoughts={vi.fn(() => Promise.resolve())}
+      onUnsavedThoughts={vi.fn()}
+      linkTargets={[]}
       onEdit={vi.fn()}
       onOpenLibrary={vi.fn()}
     />,
