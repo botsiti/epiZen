@@ -26,6 +26,12 @@ tokio = { version = "1", features = ["sync", "time"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
+# Apple Calendar, through EventKit (src/eventkit.rs).
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSColor", "NSColorSpace", "objc2-core-foundation"] }
+objc2-event-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-app-kit", "EKCalendar", "EKCalendarItem", "EKEvent", "EKEventStore", "EKObject", "EKTypes"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSDate", "NSError", "NSPredicate", "NSString", "NSURL"] }
 tauri-plugin-wdio = { version = "=1.5.0", optional = true }
 tauri-plugin-wdio-webdriver = { version = "=1.5.0", optional = true }
 

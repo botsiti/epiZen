@@ -154,31 +154,38 @@ content, and the moves are written here after react-bits (`src/components/period
 
 ## Calendar and timer
 
-The time blocks under the daily notes' tasks, on a week or a day, with Senioro's focus timer. It is
-a periodic page in its look (the same glass, hero, chips, count-up numbers and spring), opened from
-"Calendar" in the sidebar.
+Apple Calendar, on a week or a day, as Calendar and Senioro show it, with Senioro's focus timer. It
+is a periodic page in its look (the same glass, hero, chips, count-up numbers and spring), opened
+from "Calendar" in the sidebar.
 
 - **Top**: the week's dates (or the day's) in the serif display face, a kicker with the ISO week, the
-  time logged counting up, ‹ › and Today, and a Week | Day switch. The timer's card sits beside it.
+  minutes the daily notes log counting up with their categories, how many events Calendar has on
+  show, ‹ › and Today, and a Week | Day switch. The timer's card sits beside it. Until Epizen may use
+  Calendar, a chip asks for it (or opens System Settings once it was refused).
 - **Grid**: hours down, 07–22, with the night before and after folded into a thin striped band that
-  unfolds on a click and marks each block it hides. A hairline every hour, a slightly stronger one
-  every three hours, small mono hour labels. Today's column is faintly lit, and a glowing sage line
-  with a dot marks now.
-- **Blocks**: soft rounded fills in their task's category colour with a solid rail down the left,
-  side by side where they overlap; the title, and the time when tall enough. Past blocks recede (the
-  colour steps down, the words only one notch). A block lifts under the pointer and shows its edges.
-- **Day**: one wide column and, beside it, the day's tasks with their totals; pointing at one lights
-  its blocks.
+  unfolds on a click and marks each event it hides. All-day events sit in a row above the hours. A
+  hairline every hour, a slightly stronger one every three hours, small mono hour labels. Today's
+  column is faintly lit, and a glowing sage line with a dot marks now.
+- **Events**: soft rounded fills in their calendar's colour with a solid rail down the left, side by
+  side where they overlap: the title and time on one line, the notes under them (Senioro puts the
+  task's words there). Past events recede (the colour steps down, the words only one notch). An
+  event lifts under the pointer and shows its edges. Calendar colours are data here, like the
+  categories on the periodic pages.
+- **Not drawn**: the time blocks under the notes' tasks. They are the timer's record; the minutes
+  are what counts, and the calendar is Calendar.
+- **Day**: one wide column and, beside it, the day's tasks with their minutes; pointing at one
+  lights its events.
 - **Timer**: a thin ring with a glowing dot that goes round once per pomodoro, or 60 ticks that fill
   with the stopwatch's seconds, and big light tabular numerals; in the task's colour while focusing,
   in `--rest` while resting. While it runs, a pill at the top of the sidebar carries the task and
   the time, its dot breathing.
-- **Writes**: drawing a block (a drag, or a click for half an hour, on 15-minute marks), moving or
-  resizing one, or deleting one (asked once) writes those lines of that day's note, checked against
-  the text the calendar last read, as a day's page does. A day without a note gets one from its
-  template, with the change in it, only when the change can be made. The timer writes each finished
-  stretch under its task; while that note is open in the editor, the stretch waits for Done. A block
-  that runs past midnight stays where it is (the editor changes it).
+- **Writes**: drawing on empty time (a drag, or a click for half an hour, on 15-minute marks) plans
+  a task: an event in Calendar written as Senioro writes one (the category as its title, the task's
+  words as its notes, in the category's calendar), linked to the task. The note only gets the task
+  (when new) and Senioro's focus-id on its line, never minutes. Moving, resizing or deleting (asked
+  once) an event changes Calendar; one Calendar won't let change, or one running past the day, stays
+  where it is. The timer writes each finished stretch under its task, with its minutes; while that
+  note is open in the editor, the stretch waits for Done.
 
 ## Library and media pages
 

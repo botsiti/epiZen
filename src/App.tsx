@@ -5,7 +5,8 @@ import { CalendarView } from './components/calendar/CalendarView';
 import { chime } from './components/calendar/chime';
 import { TimerPill } from './components/calendar/Timer';
 import type { FocusHow } from './components/calendar/FocusMenu';
-import type { TaskChoice } from './components/calendar/types';
+import type { TaskChange, TaskChoice } from './components/calendar/types';
+import { deletePlans, renamePlans } from './components/calendar/usePlans';
 import { reason, useNoteWriter } from './components/calendar/useNoteWriter';
 import { useTimer, type TimerDeps } from './components/calendar/useTimer';
 import { GraphView } from './components/GraphView';
@@ -38,6 +39,7 @@ import { METRICS } from './lib/categories';
 import { addDays, addMonths, parseDate, startOfMonth, today } from './lib/dates';
 import { parseDay, type Day } from './lib/day';
 import { addTask } from './lib/edits';
+import { planText } from './lib/plans';
 import { addBlock, addTaskWithBlock, findTask, focusIdOf, hasTask, newTaskLabel } from './lib/timeblocks';
 import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
@@ -417,12 +419,12 @@ export function App() {
   const writeDay = useCallback(
     async (date: Date, edit: (text: string) => string, failed: string) => {
       try {
-        await changeDay(date, edit);
+        const { path } = await changeDay(date, edit);
         setCalendarWarning(undefined);
-        return true;
+        return path;
       } catch (err) {
         setCalendarWarning(`${failed}: ${reason(err)}. The calendar shows the note as it is now.`);
-        return false;
+        return undefined;
       }
     },
     [changeDay],
@@ -456,6 +458,31 @@ export function App() {
   );
   const timerDeps = useMemo((): TimerDeps => ({ save: (state) => updateSettings({ timer: state }), write: writeBlock, chime }), [writeBlock]);
   const timer = useTimer(timerDeps, settings.timer, status?.state === 'open');
+  const vaultName = status?.state === 'open' ? status.name : undefined;
+  // A task edited or deleted from a menu: the timer follows it, and so do its plans in Calendar.
+  const taskChanged = useCallback(
+    (change: TaskChange) => {
+      if (change.kind === 'edited') timer.retask(change.path, change.before, change.after);
+      if (!change.focusId || !vaultName) return;
+      const link = { vault: vaultName, note: change.path, id: change.focusId };
+      const follow = change.kind === 'edited' ? renamePlans(link, change.date, planText(change.after.category, change.after.label)) : deletePlans(link, change.date);
+      follow.catch((err: unknown) => setCalendarWarning(`The task’s plans in Calendar didn’t follow it: ${reason(err)}`));
+    },
+    [timer, vaultName],
+  );
+  // The Apple Calendar last chosen for each category's plans.
+  const planCalendars = useMemo(() => {
+    const stored = settings.planCalendars;
+    if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
+    return Object.fromEntries(Object.entries(stored).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+  }, [settings.planCalendars]);
+  const chooseCalendar = useCallback(
+    (category: string, calendar: string) => {
+      if (planCalendars[category] === calendar) return;
+      void updateSettings({ planCalendars: { ...planCalendars, [category]: calendar } }).then(setSettings);
+    },
+    [planCalendars],
+  );
   // Done in the editor: the blocks that waited for it go in now.
   const wasEditing = useRef(editingPath);
   useEffect(() => {
@@ -578,7 +605,7 @@ export function App() {
             onOpenNote={openNote}
             onOpenPeriod={openPeriodicOrSay}
             onStartTimer={(choice, how) => void startTimer(choice, how)}
-            onTaskEdited={timer.retask}
+            onTaskChanged={taskChanged}
             known={texts.get(view.path)}
           />
         )}
@@ -591,6 +618,10 @@ export function App() {
             onStartTimer={(choice, how) => void startTimer(choice, how)}
             onOpenDay={(date) => openPeriodicOrSay('day', date)}
             onWrite={writeDay}
+            onTaskChanged={taskChanged}
+            vault={status.name}
+            planCalendars={planCalendars}
+            onChooseCalendar={chooseCalendar}
             warning={calendarWarning}
           />
         )}

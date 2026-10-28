@@ -3,8 +3,8 @@ import { blocksUnder, clock, parseDay, taskLabel, type TimeBlock } from './day';
 import { addTask } from './edits';
 import { lineEnding } from './text';
 
-// The calendar's and the timer's writes: a time block added under a task, moved, resized or
-// removed, and a task edited or deleted. Each returns the note's new text with every other line
+// The timer's, the calendar's and the task menu's writes: a time block added under a task, a
+// task's minutes, a task edited, deleted, or given a focus-id for a plan. Each returns the note's new text with every other line
 // byte for byte as it was, or throws and changes nothing. They write what Senioro writes
 // (SenioroCore's appendBlock):
 //
@@ -12,8 +12,8 @@ import { lineEnding } from './text';
 //       - 16:02–17:42
 //
 // A block is `<the task's indent>    - HH:MM–HH:MM` with an en dash, after the task's other
-// blocks. A new block adds its minutes to the task's `[minutes::N]`; after that the minutes are
-// the task's own, so moving or deleting a block on the calendar leaves them as they are.
+// blocks, and adds its minutes to the task's `[minutes::N]`. Only the timer writes blocks: they
+// are its record, so a stretch written twice counts once. Nothing in the app shows them.
 
 /** A line of a note as the caller saw it: where it was, and what it said (without a `\r`). */
 export interface LineRef {
@@ -25,7 +25,6 @@ export interface LineRef {
 export const LAST_MINUTE = 24 * 60 - 1;
 
 const MINUTES = /\[[ \t]*minutes::([^\]\r\n]*)\]/g;
-const RANGE = /(\d{1,2}):(\d{2})[ \t]*[–—-][ \t]*(\d{1,2}):(\d{2})/;
 
 const length = (block: { start: number; end: number }) => block.end - block.start;
 const range = (start: number, end: number) => `${clock(start)}–${clock(end)}`;
@@ -56,15 +55,6 @@ function findLine(text: string, lines: string[], task: LineRef): number {
   const same = [...tasks].filter((line) => lines[line] === task.text);
   if (same.length === 1 && same[0] !== undefined) return same[0];
   throw new Error(same.length ? 'Two tasks in the note read the same, so Epizen can’t tell which one is meant' : 'That task has changed in the note');
-}
-
-/** The block the caller saw, among the task's own blocks, found the same way as the task. */
-function findBlock(lines: string[], blocks: TimeBlock[], block: LineRef): TimeBlock {
-  const exact = blocks.find((b) => b.line === block.line && lines[b.line] === block.text);
-  if (exact) return exact;
-  const same = blocks.filter((b) => lines[b.line] === block.text);
-  if (same.length === 1 && same[0]) return same[0];
-  throw new Error('That time block has changed in the note');
 }
 
 /**
@@ -120,35 +110,6 @@ export function setMinutes(text: string, task: LineRef, minutes: number): string
   const line = lines[at] ?? '';
   minutesOf(line, blocksUnder(lines, at));
   lines[at] = withMinutes(line, minutes);
-  return lines.join(eol);
-}
-
-/**
- * Moves or resizes one of the task's blocks: rewrites the times on that one line. The task's
- * minutes stay as they are; the calendar only shows when the time went.
- */
-export function moveBlock(text: string, task: LineRef, block: LineRef, start: number, end: number): string {
-  const next = span(start, end);
-  if (!next) throw new Error('A block is at least a minute long');
-  const { lines, eol } = split(text);
-  const at = findLine(text, lines, task);
-  const blocks = blocksUnder(lines, at);
-  const old = findBlock(lines, blocks, block);
-  if (old.start === next.start && old.end === next.end) return text;
-  // Inside one day it can't be said again; moving it would cut it short.
-  if (old.end > 24 * 60) throw new Error('That block runs past midnight, so Epizen leaves it to the editor');
-  if (blocks.some((b) => b !== old && b.start === next.start && b.end === next.end)) throw new Error(`That task already has a block at ${range(next.start, next.end)}`);
-  const blockLine = lines[old.line] ?? '';
-  lines[old.line] = blockLine.replace(RANGE, range(next.start, next.end));
-  return lines.join(eol);
-}
-
-/** Removes one of the task's blocks. The task's minutes stay as they are. */
-export function deleteBlock(text: string, task: LineRef, block: LineRef): string {
-  const { lines, eol } = split(text);
-  const at = findLine(text, lines, task);
-  const old = findBlock(lines, blocksUnder(lines, at), block);
-  lines.splice(old.line, 1);
   return lines.join(eol);
 }
 
@@ -261,6 +222,38 @@ export function findTask(text: string, want: TaskSnapshot): LineRef {
 
 /** True when the note has a task the snapshot describes, even if two do. */
 export const hasTask = (text: string, want: TaskSnapshot) => matching(text, want).length > 0;
+
+/** Senioro's focus-id for a new one of the day's tasks: `YYYYMMDD-NN`, after the highest the note has. */
+export function nextFocusId(text: string, day: Date): string {
+  const prefix = `${day.getFullYear()}${String(day.getMonth() + 1).padStart(2, '0')}${String(day.getDate()).padStart(2, '0')}`;
+  const taken = [...text.matchAll(new RegExp(FOCUS_ID.source, 'g'))].map((match) => new RegExp(`^${prefix}-(\\d+)$`).exec(match[1] ?? '')?.[1]);
+  const last = Math.max(0, ...taken.map((n) => Number(n ?? 0)));
+  return `${prefix}-${String(last + 1).padStart(2, '0')}`;
+}
+
+/**
+ * The task's focus-id, as Senioro writes it: `<!-- focus-id: … -->` at the end of its line
+ * (before a block id). A task without one gets one; the calendar finds a planned task by it.
+ */
+export function withFocusId(text: string, task: LineRef, day: Date): { text: string; focusId: string } {
+  const { lines, eol } = split(text);
+  const at = findLine(text, lines, task);
+  const line = lines[at] ?? '';
+  const own = focusIdOf(line);
+  if (own) return { text, focusId: own };
+  const focusId = nextFocusId(text, day);
+  const blockId = /[ \t]+\^[\w-]+[ \t]*$/.exec(line);
+  const end = blockId ? blockId.index : line.trimEnd().length;
+  lines[at] = `${line.slice(0, end)} <!-- focus-id: ${focusId} -->${line.slice(end)}`;
+  return { text: lines.join(eol), focusId };
+}
+
+/** A new task with a focus-id under the Tasks heading, or the focus-id of the one the note already has with those words. */
+export function addTaskWithFocusId(text: string, category: string, words: string, day: Date): { text: string; focusId: string } {
+  const want = { label: newTaskLabel(words), category };
+  const added = hasTask(text, want) ? text : addTask(text, category, words);
+  return withFocusId(added, findTask(added, want), day);
+}
 
 /**
  * Adds a new task `- [ ] #daily/<category> — <words> [minutes::0]` under the Tasks heading, then

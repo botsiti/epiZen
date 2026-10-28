@@ -1,33 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseDay } from './day';
-import { clip, dragged, drawn, gridBlocks, lanes, shownHours } from './schedule';
+import { clip, dragged, drawn, lanes, shownHours } from './schedule';
 
-const DAY = `### Tasks
-- [ ] #daily/code — refactor the settings screen [minutes::58]
-    - 09:26–10:24
-- [x] #daily/cinema — film night [minutes::120]
-    - 23:10–01:10
-- [x] #daily/sport — gym: upper body [minutes::61]
-    - 12:35–13:06
-    - 13:43–14:13
-`;
 const min = (h: number, m: number) => h * 60 + m;
 const hours = shownHours(false, false);
 
 describe('the calendar’s layout', () => {
-  it('reads each block with the task and block lines it came from, in the order of the day', () => {
-    const blocks = gridBlocks(parseDay(DAY), DAY.replace(/\n/g, '\r\n'));
-    expect(blocks.map((b) => [b.task.label, b.start, b.end])).toEqual([
-      ['refactor the settings screen', min(9, 26), min(10, 24)],
-      ['gym: upper body', min(12, 35), min(13, 6)],
-      ['gym: upper body', min(13, 43), min(14, 13)],
-      ['film night', min(23, 10), 24 * 60],
-    ]);
-    expect(blocks[0]?.taskRef).toEqual({ line: 1, text: '- [ ] #daily/code — refactor the settings screen [minutes::58]' });
-    expect(blocks[0]?.blockRef).toEqual({ line: 2, text: '    - 09:26–10:24' });
-    expect(blocks[3]?.realEnd).toBe(min(25, 10));
-  });
-
   it('puts overlapping blocks side by side, and the rest full width', () => {
     const placed = lanes([
       { start: 60, end: 120 },

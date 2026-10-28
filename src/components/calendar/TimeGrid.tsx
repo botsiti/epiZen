@@ -1,20 +1,31 @@
-import { useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { category } from '../../lib/categories';
+import { useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
+import type { CalendarEvent, CalendarInfo } from '../../lib/api';
 import { formatDate } from '../../lib/dates';
 import { clock, formatMinutes } from '../../lib/day';
-import { clip, dragged, drawn, lanes, snapDown, type DragEdge, type GridBlock, type Hours } from '../../lib/schedule';
-import { dayKey, openStretch, type Session } from '../../lib/timer';
+import { clip, dragged, drawn, lanes, snapDown, type DragEdge, type Hours } from '../../lib/schedule';
+import type { PlanBlock } from '../../lib/plans';
+import { dayKey, type Session } from '../../lib/timer';
 import { FocusMenu, type FocusHow } from './FocusMenu';
 import { TaskPicker } from './TaskPicker';
 import type { DayTaskRef, TaskChoice } from './types';
 import { useEscape } from './useEscape';
 import { useNow } from './useNow';
+import type { PlansApi } from './usePlans';
+
+/** A plan on a day: its event in Calendar, and the task it is bound to, when Epizen finds it. */
+export interface GridPlan extends PlanBlock {
+  task?: DayTaskRef;
+  /** The task's note is this day's, so the task can be edited or timed from here. */
+  here: boolean;
+}
 
 export interface Column {
   date: Date;
   /** `YYYY-MM-DD`. */
   key: string;
-  blocks: GridBlock[];
+  /** Apple Calendar's timed events, and its all-day ones. */
+  plans: GridPlan[];
+  allDay: CalendarEvent[];
   tasks: DayTaskRef[];
   /** Minutes the day's note logs. */
   total: number;
@@ -33,13 +44,17 @@ interface Props {
   wide?: boolean;
   /** A task line whose blocks stand out, in the day view. */
   highlight?: number;
-  onAdd: (date: Date, start: number, end: number, choice: TaskChoice) => Promise<unknown>;
-  onMove: (date: Date, block: GridBlock, start: number, end: number) => Promise<unknown>;
-  onDelete: (date: Date, block: GridBlock) => Promise<unknown>;
-  /** A focus round on a block's task, from the right-click menu. */
-  onFocus: (date: Date, block: GridBlock, how: FocusHow) => void;
-  /** Edits a block's task, from the right-click menu. */
-  onEditTask: (date: Date, block: GridBlock) => void;
+  plans: Pick<PlansApi, 'access' | 'calendars' | 'ask'>;
+  /** The calendar a plan of that category goes to, unless another is picked. */
+  calendarFor: (category?: string) => CalendarInfo | undefined;
+  /** Plans a task (new or the day's) from `start` to `end`, in that calendar. */
+  onPlan: (date: Date, start: number, end: number, choice: TaskChoice, calendar: string) => Promise<unknown>;
+  onMovePlan: (date: Date, plan: GridPlan, start: number, end: number) => Promise<unknown>;
+  onDeletePlan: (plan: GridPlan) => Promise<unknown>;
+  /** A focus round on a plan's task, from the right-click menu. */
+  onFocus: (date: Date, item: DayTaskRef, how: FocusHow) => void;
+  /** Edits a plan's task, from the right-click menu. */
+  onEditTask: (date: Date, item: DayTaskRef) => void;
   /** A block's title: opens the day's page. */
   onOpenDay: (date: Date) => void;
   /** A day's name above its column. */
@@ -48,8 +63,10 @@ interface Props {
 
 type Popover =
   | { kind: 'new'; col: number; start: number; end: number; x: number; y: number }
-  | { kind: 'delete'; col: number; block: GridBlock; x: number; y: number }
-  | { kind: 'menu'; col: number; block: GridBlock; x: number; y: number };
+  | { kind: 'delete-plan'; col: number; plan: GridPlan; x: number; y: number }
+  | { kind: 'plan-menu'; col: number; plan: GridPlan; x: number; y: number };
+
+const NO_FOCUS = 'Focus runs on today’s tasks: the timer logs into today’s note.';
 
 const GUTTER = 56;
 const POPOVER_WIDTH = 300;
@@ -58,9 +75,12 @@ const minuteOfDay = (time: number) => {
   return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
 };
 
-/** Days side by side, hours down: the time blocks of each, drawn, moved, resized and deleted in place. */
+/**
+ * Days side by side, hours down: Apple Calendar's events, as Calendar and Senioro draw them. A
+ * plan is drawn on empty time; events are moved, resized and deleted in place, in Calendar.
+ */
 export function TimeGrid(props: Props) {
-  const { columns, hours, early, late, onFold, hourHeight, categories, session, wide, highlight, onAdd, onMove, onDelete, onFocus, onEditTask, onOpenDay, onHead } = props;
+  const { columns, hours, early, late, onFold, hourHeight, categories, session, wide, highlight, plans, calendarFor, onPlan, onMovePlan, onDeletePlan, onFocus, onEditTask, onOpenDay, onHead } = props;
   const body = useRef<HTMLDivElement>(null);
   const clicked = useRef(false);
   const [draft, setDraft] = useState<{ col: number; start: number; end: number; saving?: boolean }>();
@@ -123,20 +143,20 @@ export function TimeGrid(props: Props) {
     window.addEventListener('pointerup', up);
   };
 
-  // Moving and resizing: the body moves the block, its top and bottom edges resize it.
-  const blockDown = (event: ReactPointerEvent<HTMLDivElement>, col: number, block: GridBlock) => {
+  // Moving and resizing: the body moves an event, its top and bottom edges resize it. `fixed`
+  // keeps one where it is: one Calendar won't let change, or one running past this day.
+  const itemDown = (event: ReactPointerEvent<HTMLDivElement>, item: { key: string; start: number; end: number }, fixed: boolean, land: (next: { start: number; end: number }) => Promise<unknown>) => {
     if (event.button !== 0 || (event.target as Element).closest('.cal-block-x')) return;
     event.stopPropagation();
     if (popover) close();
-    // A block that runs past midnight can't be said inside one day: it stays where it is.
-    if (block.realEnd > 24 * 60) return;
+    if (fixed) return;
     const edge = ((event.target as HTMLElement).dataset.edge as DragEdge | undefined) ?? 'move';
     const y0 = event.clientY;
     let moved = false;
-    const land = (e: PointerEvent) => dragged(block, edge, ((e.clientY - y0) / hourHeight) * 60);
+    const at = (e: PointerEvent) => dragged(item, edge, ((e.clientY - y0) / hourHeight) * 60);
     const move = (e: PointerEvent) => {
       if (Math.abs(e.clientY - y0) > 3) moved = true;
-      if (moved) setDrag({ key: block.key, ...land(e) });
+      if (moved) setDrag({ key: item.key, ...at(e) });
     };
     const up = (e: PointerEvent) => {
       window.removeEventListener('pointermove', move);
@@ -146,13 +166,13 @@ export function TimeGrid(props: Props) {
       // The click that ends a drag on the title isn't a click on the title.
       clicked.current = true;
       setTimeout(() => (clicked.current = false), 0);
-      const next = land(e);
-      if (next.start === block.start && next.end === block.end) return;
-      setHeld((prev) => new Map(prev).set(block.key, next));
-      void onMove(columns[col]?.date ?? new Date(), block, next.start, next.end).finally(() =>
+      const next = at(e);
+      if (next.start === item.start && next.end === item.end) return;
+      setHeld((prev) => new Map(prev).set(item.key, next));
+      void land(next).finally(() =>
         setHeld((prev) => {
           const rest = new Map(prev);
-          rest.delete(block.key);
+          rest.delete(item.key);
           return rest;
         }),
       );
@@ -161,18 +181,22 @@ export function TimeGrid(props: Props) {
     window.addEventListener('pointerup', up);
   };
 
-  const askDelete = (col: number, block: GridBlock) => setPopover({ kind: 'delete', col, block, ...placeAt(col, block.start) });
+  const askDeletePlan = (col: number, plan: GridPlan) => setPopover({ kind: 'delete-plan', col, plan, ...placeAt(col, plan.start) });
 
-  const save = (choice: TaskChoice) => {
+  const save = (choice: TaskChoice, calendar: string) => {
     if (popover?.kind !== 'new') return;
     const { col, start, end } = popover;
     setPopover(undefined);
     setDraft({ col, start, end, saving: true });
-    void onAdd(columns[col]?.date ?? new Date(), start, end, choice).finally(() => setDraft(undefined));
+    void onPlan(columns[col]?.date ?? new Date(), start, end, choice, calendar).finally(() => setDraft(undefined));
   };
 
+  const colorOf = (id: string) => plans.calendars.find((calendar) => calendar.id === id)?.color;
+  // Each event in its calendar's colour, as Calendar and Senioro draw it.
+  const toneOf = (event: CalendarEvent) => colorOf(event.calendar) ?? 'var(--accent)';
   const hourMarks = Array.from({ length: (hours.last - hours.first) / 60 + 1 }, (_, i) => hours.first + i * 60);
-  const foldCounts = (edge: 'early' | 'late') => columns.map((col) => col.blocks.filter((block) => (edge === 'early' ? block.start < hours.first : block.end > hours.last)));
+  const foldCounts = (edge: 'early' | 'late') =>
+    columns.map((col) => col.plans.filter((plan) => (edge === 'early' ? plan.start < hours.first : plan.end > hours.last)).map((plan) => ({ key: plan.key, tone: toneOf(plan.event) })));
 
   return (
     <div className={wide ? 'cal-grid glass rise is-day' : 'cal-grid glass rise'} style={{ '--hour': `${hourHeight}px`, '--cols': columns.length, '--gutter': `${GUTTER}px` } as CSSProperties} data-testid="cal-grid">
@@ -198,6 +222,21 @@ export function TimeGrid(props: Props) {
         })}
       </div>
 
+      {columns.some((col) => col.allDay.length > 0) && (
+        <div className="cal-allday" data-testid="cal-allday">
+          <span className="cal-allday-label">all-day</span>
+          {columns.map((col) => (
+            <div key={col.key} className="cal-allday-day">
+              {col.allDay.map((event) => (
+                <span key={`${event.id}@${event.start}`} className="cal-allday-event" style={{ '--tone': toneOf(event) } as CSSProperties} title={event.notes ? `${event.title} · ${event.notes}` : event.title}>
+                  {event.title}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       <Fold edge="early" open={early} from={0} to={hours.first || 7 * 60} hidden={early ? [] : foldCounts('early')} onToggle={() => onFold('early')} />
 
       <div className="cal-body" ref={body} style={{ height }}>
@@ -215,7 +254,7 @@ export function TimeGrid(props: Props) {
         </div>
         <div className="cal-cols">
           {columns.map((col, c) => {
-            const shown = col.blocks.map((block) => ({ block, range: (drag?.key === block.key ? drag : held.get(block.key)) ?? block }));
+            const shown = col.plans.map((plan) => ({ plan, range: (drag?.key === plan.key ? drag : held.get(plan.key)) ?? plan }));
             const placed = lanes(shown.map((item) => ({ ...item, start: item.range.start, end: item.range.end })));
             return (
               <div
@@ -226,60 +265,61 @@ export function TimeGrid(props: Props) {
                 data-date={col.key}
               >
                 {placed.map(({ item, lane, lanes: count }) => {
-                  const { block, range } = item;
-                  const visible = clip(range, hours);
+                  const { plan } = item;
+                  const visible = clip(item.range, hours);
                   if (!visible) return null;
                   const top = y(visible.start);
                   const tall = y(visible.end) - top;
-                  const past = col.key < todayKey || (col.key === todayKey && range.end <= nowMinute);
-                  const tone = block.task.category?.color ?? category('other').color;
+                  const { start, end } = item.range;
+                  const fixed = plan.cut || !plan.event.writable;
+                  const notes = plan.event.notes?.split('\n')[0];
+                  const calendar = plans.calendars.find((one) => one.id === plan.event.calendar)?.title;
                   const classes = ['cal-block'];
-                  if (past) classes.push('is-past');
-                  if (drag?.key === block.key) classes.push('is-dragging');
-                  if (held.has(block.key)) classes.push('is-saving');
-                  if (highlight !== undefined && block.task.line === highlight) classes.push('is-lit');
+                  if (col.key < todayKey || (col.key === todayKey && end <= nowMinute)) classes.push('is-past');
+                  if (drag?.key === plan.key) classes.push('is-dragging');
+                  if (held.has(plan.key)) classes.push('is-saving');
                   if (tall < 30) classes.push('is-thin');
-                  const overnight = block.realEnd > 24 * 60;
-                  if (overnight) classes.push('is-fixed');
+                  if (fixed) classes.push('is-fixed');
+                  if (highlight !== undefined && plan.here && plan.task?.task.line === highlight) classes.push('is-lit');
                   return (
                     <div
-                      key={block.key}
+                      key={plan.key}
                       className={classes.join(' ')}
-                      style={{ top, height: Math.max(4, tall - 2), '--lane': lane, '--lanes': count, '--tone': tone } as CSSProperties}
-                      onPointerDown={(event) => blockDown(event, c, block)}
+                      style={{ top, height: Math.max(4, tall - 2), '--lane': lane, '--lanes': count, '--tone': toneOf(plan.event) } as CSSProperties}
+                      onPointerDown={(event) => itemDown(event, plan, fixed, (next) => onMovePlan(col.date, plan, next.start, next.end))}
                       onContextMenu={(event) => {
                         event.preventDefault();
-                        setPopover({ kind: 'menu', col: c, block, x: event.clientX, y: event.clientY });
+                        setPopover({ kind: 'plan-menu', col: c, plan, x: event.clientX, y: event.clientY });
                       }}
-                      title={`${clock(range.start)}–${clock(overnight ? block.realEnd : range.end)} · ${block.task.label}${block.task.category ? ` · ${block.task.category.name}` : ''}${overnight ? ' · runs past midnight, so it is changed in the note' : ''}`}
-                      data-testid="cal-block"
-                      data-start={range.start}
-                      data-end={range.end}
+                      title={`${plan.event.title} · ${clock(start)}–${clock(end)}${notes ? ` · ${notes}` : ''}${calendar ? ` · ${calendar}` : ''}${plan.event.writable ? '' : ' · read-only'}`}
+                      data-testid="cal-plan"
+                      data-start={start}
+                      data-end={end}
                     >
-                      {!overnight && <span className="cal-edge is-top" data-edge="top" />}
+                      {!fixed && <span className="cal-edge is-top" data-edge="top" />}
                       {tall >= 16 && (
-                        <button
-                          type="button"
-                          className="cal-block-title"
-                          onClick={() => {
-                            if (!clicked.current) onOpenDay(col.date);
-                          }}
-                        >
-                          {block.task.label || 'untitled'}
-                        </button>
-                      )}
-                      {tall >= 40 && (
-                        <span className="cal-block-time">
-                          {clock(range.start)}–{clock(range.end)}
-                          {wide && block.task.category ? <span className="cal-block-cat"> · {block.task.category.name}</span> : null}
+                        <span className="cal-block-head">
+                          <button
+                            type="button"
+                            className="cal-block-title"
+                            onClick={() => {
+                              if (!clicked.current && plan.here) onOpenDay(col.date);
+                            }}
+                          >
+                            {plan.event.title || 'untitled'}
+                          </button>
+                          <span className="cal-block-time">
+                            {clock(start)}–{clock(end)}
+                          </span>
                         </span>
                       )}
-                      {tall >= 22 && (
-                        <button type="button" className="cal-block-x" aria-label="Delete this block" title="Delete this block" onClick={() => askDelete(c, block)} data-testid="cal-block-delete">
+                      {tall >= 34 && notes && <span className="cal-block-notes">{notes}</span>}
+                      {tall >= 22 && plan.event.writable && (
+                        <button type="button" className="cal-block-x" aria-label="Delete this event" title="Delete this event from Calendar" onClick={() => askDeletePlan(c, plan)} data-testid="cal-plan-delete">
                           ×
                         </button>
                       )}
-                      {!overnight && <span className="cal-edge is-bottom" data-edge="bottom" />}
+                      {!fixed && <span className="cal-edge is-bottom" data-edge="bottom" />}
                     </div>
                   );
                 })}
@@ -290,46 +330,54 @@ export function TimeGrid(props: Props) {
                     </span>
                   </div>
                 )}
-                {session && <LiveBlock session={session} dayKey={col.key} hours={hours} hourHeight={hourHeight} />}
                 {col.key === todayKey && <NowLine hours={hours} hourHeight={hourHeight} />}
               </div>
             );
           })}
         </div>
         {popover?.kind === 'new' && (
-          <NewBlock
+          <NewPlan
             key={`${popover.col}-${popover.start}-${popover.end}`}
             at={popover}
             date={columns[popover.col]?.date ?? new Date()}
             tasks={columns[popover.col]?.tasks ?? []}
             categories={categories}
+            plans={plans}
+            calendarFor={calendarFor}
             onCancel={close}
             onSave={save}
           />
         )}
-        {popover?.kind === 'menu' && (
-          <FocusMenu
+        {popover?.kind === 'plan-menu' && (
+          <PlanMenu
             at={popover}
-            label={popover.block.task.label}
-            noFocus={columns[popover.col]?.key === todayKey ? undefined : 'Focus runs on today’s tasks: the timer logs into today’s note.'}
+            plan={popover.plan}
+            today={columns[popover.col]?.key === todayKey}
             running={Boolean(session)}
-            onFocus={(how) => onFocus(columns[popover.col]?.date ?? new Date(), popover.block, how)}
+            onFocus={(item, how) => onFocus(columns[popover.col]?.date ?? new Date(), item, how)}
             onOpenDay={() => onOpenDay(columns[popover.col]?.date ?? new Date())}
-            onEdit={() => onEditTask(columns[popover.col]?.date ?? new Date(), popover.block)}
-            onDelete={() => askDelete(popover.col, popover.block)}
+            onEdit={(item) => onEditTask(columns[popover.col]?.date ?? new Date(), item)}
+            onDelete={() => askDeletePlan(popover.col, popover.plan)}
             onClose={close}
           />
         )}
-        {popover?.kind === 'delete' && (
-          <ConfirmDelete
+        {popover?.kind === 'delete-plan' && (
+          <Confirm
             at={popover}
-            block={popover.block}
+            label="Delete the plan"
+            words={
+              <>
+                Delete <strong>{clock(popover.plan.start)}–{clock(popover.plan.end)}</strong> “{popover.plan.event.title}”{popover.plan.event.notes ? `, ${popover.plan.event.notes.split('\n')[0]},` : ''} from Calendar?
+              </>
+            }
+            note={popover.plan.task ? 'The task stays in its note, with its minutes.' : 'It goes from Calendar on every device.'}
             onCancel={close}
             onConfirm={() => {
-              const { col, block } = popover;
+              const { plan } = popover;
               setPopover(undefined);
-              void onDelete(columns[col]?.date ?? new Date(), block);
+              void onDeletePlan(plan);
             }}
+            testId="plan-delete"
           />
         )}
       </div>
@@ -340,7 +388,7 @@ export function TimeGrid(props: Props) {
 }
 
 /** The folded night above or below the hours: its hours, and a mark in each day for every block it hides. */
-function Fold({ edge, open, from, to, hidden, onToggle }: { edge: 'early' | 'late'; open: boolean; from: number; to: number; hidden: GridBlock[][]; onToggle: () => void }) {
+function Fold({ edge, open, from, to, hidden, onToggle }: { edge: 'early' | 'late'; open: boolean; from: number; to: number; hidden: { key: string; tone: string }[][]; onToggle: () => void }) {
   const count = hidden.reduce((sum, blocks) => sum + blocks.length, 0);
   const span = `${clock(from)}–${to === 24 * 60 ? '24:00' : clock(to)}`;
   const short = `${String(from / 60).padStart(2, '0')}–${String(to / 60).padStart(2, '0')}`;
@@ -360,33 +408,11 @@ function Fold({ edge, open, from, to, hidden, onToggle }: { edge: 'early' | 'lat
       {hidden.map((blocks, i) => (
         <span key={i} className="cal-fold-day">
           {blocks.slice(0, 4).map((block) => (
-            <span key={block.key} className="cal-fold-mark" style={{ '--tone': block.task.category?.color ?? 'var(--accent)' } as CSSProperties} />
+            <span key={block.key} className="cal-fold-mark" style={{ '--tone': block.tone } as CSSProperties} />
           ))}
         </span>
       ))}
     </button>
-  );
-}
-
-/** The session's open stretch, growing on its day's column. */
-function LiveBlock({ session, dayKey: key, hours, hourHeight }: { session: Session; dayKey: string; hours: Hours; hourHeight: number }) {
-  const now = useNow(session.pausedAt === undefined, 5000);
-  const stretch = openStretch(session, now);
-  if (stretch.day !== key) return null;
-  const shown = clip({ start: stretch.start, end: Math.max(stretch.end, stretch.start + 1) }, hours);
-  if (!shown) return null;
-  const top = ((shown.start - hours.first) / 60) * hourHeight;
-  const tall = Math.max(8, ((shown.end - shown.start) / 60) * hourHeight - 2);
-  const tone = session.task.category ? category(session.task.category).color : 'var(--accent)';
-  return (
-    <div className={session.pausedAt === undefined ? 'cal-block is-live' : 'cal-block is-live is-paused'} style={{ top, height: tall, '--tone': tone } as CSSProperties} data-testid="cal-live" aria-label={`Now: ${session.task.label}`}>
-      {tall >= 16 && <span className="cal-block-title">{session.task.label}</span>}
-      {tall >= 40 && (
-        <span className="cal-block-time">
-          {clock(stretch.start)}–{session.pausedAt === undefined ? 'now' : clock(stretch.end)}
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -398,53 +424,135 @@ function NowLine({ hours, hourHeight }: { hours: Hours; hourHeight: number }) {
   return <div className="cal-now" style={{ top: ((minute - hours.first) / 60) * hourHeight }} aria-hidden="true" data-testid="cal-now" />;
 }
 
-function NewBlock({ at, date, tasks, categories, onCancel, onSave }: { at: { x: number; y: number; start: number; end: number }; date: Date; tasks: DayTaskRef[]; categories: string[]; onCancel: () => void; onSave: (choice: TaskChoice) => void }) {
+/**
+ * A plan for the time drawn: one of the day's tasks or a new one, and the Apple Calendar it goes
+ * to (the category's, unless another is picked). Without access to Calendar, it says how to give it.
+ */
+function NewPlan({
+  at,
+  date,
+  tasks,
+  categories,
+  plans,
+  calendarFor,
+  onCancel,
+  onSave,
+}: {
+  at: { x: number; y: number; start: number; end: number };
+  date: Date;
+  tasks: DayTaskRef[];
+  categories: string[];
+  plans: Pick<PlansApi, 'access' | 'calendars' | 'ask'>;
+  calendarFor: (category?: string) => CalendarInfo | undefined;
+  onCancel: () => void;
+  onSave: (choice: TaskChoice, calendar: string) => void;
+}) {
   const [choice, setChoice] = useState<TaskChoice>();
+  const [picked, setPicked] = useState<string>();
   useEscape(onCancel);
+  const calendar = picked ?? calendarFor(choice?.category)?.id;
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
-    if (choice) onSave(choice);
+    if (choice && calendar) onSave(choice, calendar);
   };
+  const allowed = plans.access === 'allowed';
   return (
-    <form
-      className="cal-popover glass"
-      style={{ left: at.x, top: at.y }}
-      onSubmit={submit}
-      aria-label="New time block"
-      data-testid="block-popover"
-    >
+    <form className="cal-popover glass" style={{ left: at.x, top: at.y }} onSubmit={submit} aria-label="New plan" data-testid="block-popover">
       <p className="kicker">
         {formatDate(date, 'ddd D MMM')} · {clock(at.start)}–{clock(at.end)} · {formatMinutes(at.end - at.start)}
       </p>
-      <TaskPicker tasks={tasks} categories={categories} value={choice} onChange={setChoice} onSubmit={() => submit()} autoFocus />
+      {allowed ? (
+        <>
+          <TaskPicker tasks={tasks} categories={categories} value={choice} onChange={setChoice} onSubmit={() => submit()} autoFocus />
+          <label className="plan-calendar">
+            <span>Calendar</span>
+            <select value={calendar ?? ''} onChange={(event) => setPicked(event.target.value)} data-testid="plan-calendar">
+              {plans.calendars
+                .filter((one) => one.writable)
+                .map((one) => (
+                  <option key={one.id} value={one.id}>
+                    {one.title}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </>
+      ) : (
+        <>
+          <p className="popover-words">A plan goes to Apple Calendar: it shows here and in Calendar, and adds no minutes to the task.</p>
+          <p className="popover-note">{plans.access === 'denied' ? 'Epizen isn’t allowed to use your calendars. System Settings can change that.' : 'Epizen asks once to use your calendars.'}</p>
+        </>
+      )}
       <div className="popover-actions">
         <button type="button" className="quiet-chip" onClick={onCancel}>
           Cancel
         </button>
-        <button type="submit" className="primary-button" disabled={!choice} data-testid="block-save">
-          Save
-        </button>
+        {allowed ? (
+          <button type="submit" className="primary-button" disabled={!choice || !calendar} data-testid="block-save">
+            Plan
+          </button>
+        ) : (
+          <button type="button" className="primary-button" onClick={plans.ask} data-testid="plan-allow">
+            {plans.access === 'denied' ? 'Open System Settings' : 'Allow Calendar'}
+          </button>
+        )}
       </div>
     </form>
   );
 }
 
-function ConfirmDelete({ at, block, onCancel, onConfirm }: { at: { x: number; y: number }; block: GridBlock; onCancel: () => void; onConfirm: () => void }) {
+/** A plan's right-click menu: its task's focus and edit when the task is this day's, and deleting the event. */
+function PlanMenu({
+  at,
+  plan,
+  today,
+  running,
+  onFocus,
+  onOpenDay,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  at: { x: number; y: number };
+  plan: GridPlan;
+  today: boolean;
+  running: boolean;
+  onFocus: (item: DayTaskRef, how: FocusHow) => void;
+  onOpenDay: () => void;
+  onEdit: (item: DayTaskRef) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const item = plan.here ? plan.task : undefined;
+  const noFocus = !plan.task ? 'An event from Calendar, not one of your tasks.' : !item ? 'Its task is in another day’s note.' : today ? undefined : NO_FOCUS;
+  return (
+    <FocusMenu
+      at={at}
+      label={plan.event.notes?.split('\n')[0] ?? plan.event.title}
+      noFocus={noFocus}
+      running={running}
+      onFocus={(how) => item && onFocus(item, how)}
+      onOpenDay={item ? onOpenDay : undefined}
+      onEdit={item ? () => onEdit(item) : undefined}
+      onDelete={plan.event.writable ? onDelete : undefined}
+      deleteLabel="Delete from Calendar…"
+      onClose={onClose}
+    />
+  );
+}
+
+/** Asks before something goes: a block from its note, or a plan from Calendar. */
+function Confirm({ at, label, words, note, onCancel, onConfirm, testId }: { at: { x: number; y: number }; label: string; words: ReactNode; note: string; onCancel: () => void; onConfirm: () => void; testId: string }) {
   useEscape(onCancel);
   return (
-    <div className="cal-popover glass is-small" style={{ left: at.x, top: at.y }} role="alertdialog" aria-label="Delete the block" data-testid="delete-popover">
-      <p className="popover-words">
-        Delete <strong>
-          {clock(block.start)}–{clock(block.realEnd)}
-        </strong>{' '}
-        from “{block.task.label}”?
-      </p>
-      <p className="popover-note">Its line goes from the note. The task keeps its {block.task.minutes ? formatMinutes(block.task.minutes) : 'minutes'}.</p>
+    <div className="cal-popover glass is-small" style={{ left: at.x, top: at.y }} role="alertdialog" aria-label={label} data-testid={`${testId}-popover`}>
+      <p className="popover-words">{words}</p>
+      <p className="popover-note">{note}</p>
       <div className="popover-actions">
         <button type="button" className="quiet-chip" onClick={onCancel} autoFocus>
           Keep
         </button>
-        <button type="button" className="primary-button" onClick={onConfirm} data-testid="block-delete-confirm">
+        <button type="button" className="primary-button" onClick={onConfirm} data-testid={`${testId}-confirm`}>
           Delete
         </button>
       </div>

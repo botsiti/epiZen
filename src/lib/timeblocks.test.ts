@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseDay } from './day';
-import { addBlock, addTaskWithBlock, deleteBlock, deleteTask, editTask, findTask, moveBlock, newTaskLabel, setMinutes, type LineRef } from './timeblocks';
+import { addBlock, addTaskWithBlock, addTaskWithFocusId, deleteTask, editTask, findTask, newTaskLabel, nextFocusId, setMinutes, withFocusId, type LineRef } from './timeblocks';
 
 // A day as Senioro writes it (the brief's example), with a task the old way and an empty one.
 const DAY = `---
@@ -96,34 +96,6 @@ describe('addBlock', () => {
   });
 });
 
-describe('moveBlock', () => {
-  it('rewrites that one block line, and leaves the task’s minutes as they are', () => {
-    const after = moveBlock(DAY, ref(DAY, 7), ref(DAY, 8), min(16, 0), min(17, 0));
-    expect(changed(DAY, after)).toEqual([[8, '    - 16:00–17:00']]);
-    expect(lines(after)).toHaveLength(lines(DAY).length);
-    const bare = '### Tasks\n- [ ] #daily/code — a\n    - 09:00–10:00\n';
-    expect(moveBlock(bare, ref(bare, 1), ref(bare, 2), min(9, 0), min(9, 30))).toBe('### Tasks\n- [ ] #daily/code — a\n    - 09:00–09:30\n');
-  });
-
-  it('refuses a block that changed, one that isn’t the task’s, a range the task has, and under a minute', () => {
-    expect(() => moveBlock(DAY, ref(DAY, 7), { line: 8, text: '    - 16:02–17:43' }, 60, 90)).toThrow(/time block has changed/);
-    expect(() => moveBlock(DAY, ref(DAY, 7), ref(DAY, 6), 60, 90)).toThrow(/time block has changed/);
-    const two = '### Tasks\n- [ ] #daily/code — a [minutes::60]\n    - 09:00–09:30\n    - 10:00–10:30\n';
-    expect(() => moveBlock(two, ref(two, 1), ref(two, 3), min(9, 0), min(9, 30))).toThrow(/already has a block/);
-    expect(() => moveBlock(DAY, ref(DAY, 7), ref(DAY, 8), 60, 60)).toThrow(/at least a minute/);
-  });
-
-  it('keeps CRLF line endings', () => {
-    const crlf = DAY.replace(/\n/g, '\r\n');
-    expect(moveBlock(crlf, ref(crlf, 7), ref(crlf, 8), min(16, 0), min(17, 0))).toBe(moveBlock(DAY, ref(DAY, 7), ref(DAY, 8), min(16, 0), min(17, 0)).replace(/\n/g, '\r\n'));
-  });
-
-  it('leaves a block that runs past midnight to the editor, rather than cut it short', () => {
-    const late = '### Tasks\n- [ ] #daily/cinema — film night [minutes::120]\n    - 23:10–01:10\n';
-    expect(() => moveBlock(late, ref(late, 1), ref(late, 2), min(22, 10), min(23, 59))).toThrow(/past midnight/);
-  });
-});
-
 describe('subtasks', () => {
   const NESTED = '### Tasks\n- [ ] #daily/code — parent [minutes::30]\n    - 08:00–08:10\n    - [ ] #daily/code — child [minutes::20]\n        - 09:00–09:20\n';
 
@@ -134,9 +106,7 @@ describe('subtasks', () => {
     ]);
   });
 
-  it('can’t lose a block through their parent', () => {
-    expect(() => deleteBlock(NESTED, ref(NESTED, 1), ref(NESTED, 4))).toThrow(/time block has changed/);
-    expect(lines(deleteBlock(NESTED, ref(NESTED, 3), ref(NESTED, 4))).slice(3)).toEqual(['    - [ ] #daily/code — child [minutes::20]', '']);
+  it('keep a new block of their parent’s above them', () => {
     // A new block for the parent goes after its own, above the subtask.
     expect(lines(addBlock(NESTED, ref(NESTED, 1), min(10, 0), min(10, 10))).slice(1, 5)).toEqual([
       '- [ ] #daily/code — parent [minutes::40]',
@@ -144,19 +114,6 @@ describe('subtasks', () => {
       '    - 10:00–10:10',
       '    - [ ] #daily/code — child [minutes::20]',
     ]);
-  });
-});
-
-describe('deleteBlock', () => {
-  it('removes that one line, and leaves the task’s minutes as they are', () => {
-    const after = deleteBlock(DAY, ref(DAY, 7), ref(DAY, 8));
-    expect(lines(after)).toEqual(lines(DAY).filter((_, i) => i !== 8));
-    const late = '### Tasks\n- [ ] #daily/cinema — film night [minutes::120]\n    - 23:10–01:10\n';
-    expect(deleteBlock(late, ref(late, 1), ref(late, 2))).toBe('### Tasks\n- [ ] #daily/cinema — film night [minutes::120]\n');
-  });
-
-  it('refuses a block that changed', () => {
-    expect(() => deleteBlock(DAY, ref(DAY, 7), { line: 8, text: '    - 16:02–17:41' })).toThrow(/time block has changed/);
   });
 });
 
@@ -283,5 +240,35 @@ describe('deleteTask', () => {
     expect(() => deleteTask(DAY.replace('gym', 'swim'), ref(DAY, 9))).toThrow(/changed/);
     const twice = '### Tasks\n- [ ] #daily/code — a\n- [ ] #daily/code — a\n';
     expect(() => deleteTask(`x\n${twice}`, ref(twice, 1))).toThrow(/Two tasks/);
+  });
+});
+
+describe('focus-ids, for a task planned in Calendar', () => {
+  const OCT27 = new Date(2026, 9, 27);
+
+  it('are the day and the next number after the note’s highest, as Senioro counts', () => {
+    expect(nextFocusId(DAY, OCT27)).toBe('20261027-03');
+    expect(nextFocusId(DAY, new Date(2026, 9, 28))).toBe('20261028-01');
+    expect(nextFocusId('', new Date(2026, 0, 5))).toBe('20260105-01');
+  });
+
+  it('go on the end of a task’s line that has none, and that line only', () => {
+    const { text, focusId } = withFocusId(DAY, ref(DAY, 9), OCT27);
+    expect(focusId).toBe('20261027-03');
+    expect(changed(DAY, text)).toEqual([[9, '- [ ] #daily/sport — gym [minutes::40] <!-- focus-id: 20261027-03 -->']]);
+    const blockId = '### Tasks\n- [ ] #daily/code — x ^b1\n';
+    expect(withFocusId(blockId, ref(blockId, 1), OCT27).text).toBe('### Tasks\n- [ ] #daily/code — x <!-- focus-id: 20261027-01 --> ^b1\n');
+  });
+
+  it('are kept when the task has one already', () => {
+    expect(withFocusId(DAY, ref(DAY, 7), OCT27)).toEqual({ text: DAY, focusId: '20261027-02' });
+  });
+
+  it('come with a new task, or with the one the note has in those words', () => {
+    const added = addTaskWithFocusId(DAY, 'sport', 'evening run', OCT27);
+    expect(added.focusId).toBe('20261027-03');
+    expect(lines(added.text)[11]).toBe('- [ ] #daily/sport — evening run <!-- focus-id: 20261027-03 -->');
+    expect(addTaskWithFocusId(added.text, 'sport', 'evening run', OCT27)).toEqual(added);
+    expect(addTaskWithFocusId(DAY, 'code', 'mrSuit skills', OCT27)).toEqual({ text: DAY, focusId: '20261027-02' });
   });
 });

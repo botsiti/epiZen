@@ -1,8 +1,12 @@
 //! Epizen's backend. The frontend reaches the vault only through the commands below. Three of
 //! them write: `create_note` and `write_note`, both in `vault.rs`, and `fetch_image_into_vault`,
 //! which saves a cover through `Vault::create_file`. The lookups (`lookup_json`, `lookup_image`
-//! and that one) are the only network access, in `net.rs`.
+//! and that one) are the only network access, in `net.rs`. The `calendar_*` commands reach
+//! Apple Calendar, through `calendar.rs`, and never the vault.
 
+mod calendar;
+#[cfg(target_os = "macos")]
+mod eventkit;
 mod net;
 mod settings;
 mod vault;
@@ -17,6 +21,7 @@ use serde_json::{Map, Value};
 use tauri::ipc::Response;
 use tauri::{Emitter, Manager, RunEvent, State, WindowEvent};
 
+pub use calendar::{Access, CalendarInfo, Calendars, Event, EventChange, MemoryCalendars, NewEvent, Occurrence};
 pub use net::{Net, NetError, store_image};
 pub use settings::Settings;
 pub use vault::{FileKind, NoteText, Vault, VaultError, VaultFile};
@@ -235,6 +240,67 @@ async fn update_settings(
     settings.update(patch).map_err(|err| err.to_string())
 }
 
+/// Apple Calendar, or the e2e build's calendars in memory, so a test never reaches the real ones.
+type Calendar<'a> = State<'a, Box<dyn Calendars>>;
+
+fn calendars() -> Box<dyn Calendars> {
+    if cfg!(feature = "e2e") {
+        return Box::new(MemoryCalendars::demo());
+    }
+    #[cfg(target_os = "macos")]
+    return Box::new(eventkit::EventKit::new());
+    // EventKit is macOS's: elsewhere there are no calendars to use.
+    #[cfg(not(target_os = "macos"))]
+    return Box::new(MemoryCalendars::new(Access::Denied, Vec::new(), Vec::new()));
+}
+
+#[tauri::command]
+async fn calendar_access(calendar: Calendar<'_>) -> Result<Access, String> {
+    Ok(calendar.access())
+}
+
+/// Shows the system's prompt the first time, and waits for the answer.
+#[tauri::command]
+async fn calendar_request_access(calendar: Calendar<'_>) -> Result<Access, String> {
+    Ok(calendar.request_access())
+}
+
+#[tauri::command]
+async fn calendar_list(calendar: Calendar<'_>) -> Result<Vec<CalendarInfo>, String> {
+    calendar.calendars()
+}
+
+#[tauri::command]
+async fn calendar_events(calendar: Calendar<'_>, from: i64, to: i64) -> Result<Vec<Event>, String> {
+    calendar.events(from, to)
+}
+
+#[tauri::command]
+async fn calendar_create(calendar: Calendar<'_>, event: NewEvent) -> Result<Event, String> {
+    calendar.create(&event)
+}
+
+#[tauri::command]
+async fn calendar_update(calendar: Calendar<'_>, at: Occurrence, change: EventChange) -> Result<Event, String> {
+    calendar.update(&at, &change)
+}
+
+#[tauri::command]
+async fn calendar_delete(calendar: Calendar<'_>, at: Occurrence) -> Result<(), String> {
+    calendar.delete(&at)
+}
+
+/// Opens System Settings at Privacy & Security, Calendars: the only place a refusal is undone.
+#[tauri::command]
+fn calendar_open_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")
+        .spawn()
+        .map_err(|err| err.to_string())?;
+    Ok(())
+}
+
 /// Closing waits for the editor's last save. Once the frontend can listen (`guarded`), a close or
 /// quit is held and the frontend is asked to save; it lets go with `close_now` (`done`).
 #[derive(Default)]
@@ -274,6 +340,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Closing::default())
+        .manage(calendars())
         .manage(Net::new().expect("couldn't set up the lookups' HTTP client"))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event
@@ -314,7 +381,15 @@ pub fn run() {
             get_settings,
             update_settings,
             guard_close,
-            close_now
+            close_now,
+            calendar_access,
+            calendar_request_access,
+            calendar_list,
+            calendar_events,
+            calendar_create,
+            calendar_update,
+            calendar_delete,
+            calendar_open_settings
         ]);
 
     #[cfg(feature = "e2e")]

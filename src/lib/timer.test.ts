@@ -6,7 +6,6 @@ import {
   formatSeconds,
   heartbeat,
   initialTimer,
-  openStretch,
   pause,
   readTimer,
   restLeft,
@@ -174,12 +173,6 @@ describe('the timer', () => {
   it('reads a day key back into its day', () => {
     expect(dayOfKey('2026-10-27')).toEqual(new Date(2026, 9, 27));
     expect(dayKey(dayOfKey('2026-01-05'))).toBe('2026-01-05');
-  });
-
-  it('shows the open stretch as it grows, for the calendar', () => {
-    const running = begin('stopwatch');
-    expect(openStretch(running.session!, at(10, 0, 20))).toEqual({ day: '2026-10-27', start: min(10, 0), end: min(10, 0) });
-    expect(openStretch(running.session!, at(10, 47))).toEqual({ day: '2026-10-27', start: min(10, 0), end: min(10, 47) });
   });
 
   it('follows a task edited in its note: the session and the blocks owed to it take its new words', () => {
