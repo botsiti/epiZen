@@ -53,7 +53,8 @@ Try the app on a copy: `cp -R demo-vault /tmp/vault && EPIZEN_VAULT=/tmp/vault n
 
 ## Checks
 
-`npm run check` runs everything in order and prints all of it:
+`npm run check` runs everything in order and prints all of it (`npm run check:fast` the same
+without step 6):
 
 1. `cargo test`
 2. `cargo clippy` on all targets and features, warnings as errors
@@ -63,20 +64,27 @@ Try the app on a copy: `cp -R demo-vault /tmp/vault && EPIZEN_VAULT=/tmp/vault n
 6. e2e: builds a debug app with the `e2e` feature, launches it with no vault, a missing vault and a
    temp copy of `demo-vault/`, and saves a screenshot of every screen to `evidence/`
 
-Then it checks `demo-vault/` is unchanged. CI runs the same command on macOS for every pull
-request, and `main` only takes pull requests that pass it.
+Then it checks `demo-vault/` is unchanged. CI runs `check:fast` on macOS for every pull request,
+and `main` only takes pull requests that pass it (a branch needn't be up to date with `main` to
+merge). The full run, e2e included, is the `full check` workflow, started by hand
+(`gh workflow run full-check.yml --ref main`), or `npm run check` here.
 
 E2E windows open on screen without focus. Don't click them during a run. The bottom 32px of each
 screenshot sit below the page (the title bar's height) and aren't part of the UI.
 
 ## How Claude works here
 
-Before saying a change is done:
+Ship fast in the day, test everything in the evening. This Mac is shared and often loaded, and a
+full run (e2e) takes minutes per change, so:
 
-1. Run `npm run check` and show its output, not a summary.
-2. For UI changes, open the new screenshots in `evidence/` and hold them against DESIGN.md.
-   A new screen gets an e2e step and a screenshot.
-3. Open the pull request with the template filled in: Testing, Risk, How to revert.
+1. During the day, run `npm run check:fast` and the tests of what changed, show the output, and
+   ship: open the pull request (template filled in: Testing, Risk, How to revert), merge it once
+   CI's fast check is green, and reinstall the app.
+2. Don't run the e2e suite for each change. Still write the e2e steps a change needs (a new
+   screen gets one, with a screenshot), unrun until the evening.
+3. The full run is for when Bat asks, usually in the evening: `npm run check` here, or the
+   `full check` workflow on GitHub. Then fix what it finds, hold the day's new screenshots in
+   `evidence/` against DESIGN.md, and ship the fixes the same way.
 
 No review agents: no reviewer subagent, no Codex, no voting. I review the pull request and merge it
 once CI is green.

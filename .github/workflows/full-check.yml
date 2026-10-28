@@ -1,0 +1,45 @@
+name: full check
+
+# Everything, the e2e run included (`npm run check`), with the screenshots kept. Started by
+# hand, e.g. in the evening for the day's work: `gh workflow run full-check.yml --ref main`.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full:
+    name: full check
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install the Rust toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+
+      - run: npm run check
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: evidence
+          path: evidence/
+          if-no-files-found: ignore
