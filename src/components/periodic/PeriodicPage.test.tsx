@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { addDays, sameDay } from '../../lib/dates';
@@ -66,6 +66,8 @@ const actions = (): PeriodicActions => ({
   onAddTask: vi.fn(),
   onSetSummary: vi.fn(),
   onSetMinutes: vi.fn(),
+  onEditTask: vi.fn(),
+  onDeleteTask: vi.fn(),
   onFocus: vi.fn(),
   onAddRecord: vi.fn(),
   onUpdateRecord: vi.fn(),
@@ -141,6 +143,51 @@ describe('the day page', () => {
     await user.clear(field);
     await user.type(field, '75{Enter}');
     expect(act.onSetMinutes).toHaveBeenCalledWith(expect.objectContaining({ line: 19 }), 75);
+  });
+
+  it('shows a task card’s minutes, not its time blocks', async () => {
+    const user = userEvent.setup();
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={actions()} />);
+    await user.click(screen.getByRole('tab', { name: 'Tasks' }));
+    const card = screen.getAllByTestId('task-card')[1] as HTMLElement;
+    expect(within(card).getByTestId('task-minutes')).toHaveTextContent('1h 1m');
+    expect(card).not.toHaveTextContent('12:35');
+  });
+
+  it('edits and deletes a task from a right-click, on any day', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={act} />);
+    await user.click(screen.getByRole('tab', { name: 'Tasks' }));
+    fireEvent.contextMenu(screen.getAllByTestId('task-card')[0] as HTMLElement);
+    // Not today: focus isn't on offer, editing is.
+    expect(screen.queryByTestId('focus-start')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('focus-menu-edit'));
+    const words = screen.getByTestId('edit-task-text');
+    expect(words).toHaveValue('refactor the settings screen');
+    await user.clear(words);
+    await user.type(words, 'refactor settings');
+    await user.click(within(screen.getByTestId('edit-task')).getByRole('radio', { name: 'sport' }));
+    const minutes = screen.getByTestId('edit-task-minutes');
+    await user.clear(minutes);
+    await user.type(minutes, '1.5');
+    expect(screen.getByTestId('edit-task-save')).toBeDisabled();
+    await user.clear(minutes);
+    await user.type(minutes, '40');
+    await user.click(screen.getByRole('button', { name: '+15' }));
+    await user.click(screen.getByTestId('edit-task-save'));
+    expect(act.onEditTask).toHaveBeenCalledWith(expect.objectContaining({ line: 19 }), { words: 'refactor settings', category: 'sport', minutes: 55 });
+    expect(screen.queryByTestId('edit-task')).not.toBeInTheDocument();
+
+    fireEvent.contextMenu(screen.getAllByTestId('task-card')[1] as HTMLElement);
+    await user.click(screen.getByTestId('focus-menu-delete-task'));
+    expect(screen.getByTestId('delete-task')).toHaveTextContent('with its 1h 1m and 2 time blocks');
+    await user.click(screen.getByRole('button', { name: 'Keep' }));
+    expect(act.onDeleteTask).not.toHaveBeenCalled();
+    fireEvent.contextMenu(screen.getAllByTestId('task-card')[1] as HTMLElement);
+    await user.click(screen.getByTestId('focus-menu-delete-task'));
+    await user.click(screen.getByTestId('delete-task-confirm'));
+    expect(act.onDeleteTask).toHaveBeenCalledWith(expect.objectContaining({ line: 21 }));
   });
 });
 

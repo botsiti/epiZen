@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseDay } from './day';
-import { addBlock, addTaskWithBlock, deleteBlock, findTask, moveBlock, newTaskLabel, setMinutes, type LineRef } from './timeblocks';
+import { addBlock, addTaskWithBlock, deleteBlock, deleteTask, editTask, findTask, moveBlock, newTaskLabel, setMinutes, type LineRef } from './timeblocks';
 
 // A day as Senioro writes it (the brief's example), with a task the old way and an empty one.
 const DAY = `---
@@ -97,24 +97,12 @@ describe('addBlock', () => {
 });
 
 describe('moveBlock', () => {
-  it('rewrites that one block line and moves the minutes by the difference', () => {
+  it('rewrites that one block line, and leaves the task’s minutes as they are', () => {
     const after = moveBlock(DAY, ref(DAY, 7), ref(DAY, 8), min(16, 0), min(17, 0));
-    expect(changed(DAY, after)).toEqual([
-      [7, '- [ ] #daily/code — mrSuit skills [minutes::60] <!-- focus-id: 20261027-02 -->'],
-      [8, '    - 16:00–17:00'],
-    ]);
+    expect(changed(DAY, after)).toEqual([[8, '    - 16:00–17:00']]);
     expect(lines(after)).toHaveLength(lines(DAY).length);
-  });
-
-  it('moves without a change in length, and leaves a task without minutes its line', () => {
-    expect(changed(DAY, moveBlock(DAY, ref(DAY, 5), ref(DAY, 6), min(11, 56), min(12, 9)))).toEqual([[6, '    - 11:56–12:09']]);
     const bare = '### Tasks\n- [ ] #daily/code — a\n    - 09:00–10:00\n';
     expect(moveBlock(bare, ref(bare, 1), ref(bare, 2), min(9, 0), min(9, 30))).toBe('### Tasks\n- [ ] #daily/code — a\n    - 09:00–09:30\n');
-  });
-
-  it('never takes the minutes below 0', () => {
-    const low = '### Tasks\n- [ ] #daily/code — a [minutes::10]\n    - 09:00–10:00\n';
-    expect(lines(moveBlock(low, ref(low, 1), ref(low, 2), min(9, 0), min(9, 15)))[1]).toBe('- [ ] #daily/code — a [minutes::0]');
   });
 
   it('refuses a block that changed, one that isn’t the task’s, a range the task has, and under a minute', () => {
@@ -148,7 +136,7 @@ describe('subtasks', () => {
 
   it('can’t lose a block through their parent', () => {
     expect(() => deleteBlock(NESTED, ref(NESTED, 1), ref(NESTED, 4))).toThrow(/time block has changed/);
-    expect(lines(deleteBlock(NESTED, ref(NESTED, 3), ref(NESTED, 4)))[3]).toBe('    - [ ] #daily/code — child [minutes::0]');
+    expect(lines(deleteBlock(NESTED, ref(NESTED, 3), ref(NESTED, 4))).slice(3)).toEqual(['    - [ ] #daily/code — child [minutes::20]', '']);
     // A new block for the parent goes after its own, above the subtask.
     expect(lines(addBlock(NESTED, ref(NESTED, 1), min(10, 0), min(10, 10))).slice(1, 5)).toEqual([
       '- [ ] #daily/code — parent [minutes::40]',
@@ -160,22 +148,11 @@ describe('subtasks', () => {
 });
 
 describe('deleteBlock', () => {
-  it('removes the line and takes its minutes off the task', () => {
+  it('removes that one line, and leaves the task’s minutes as they are', () => {
     const after = deleteBlock(DAY, ref(DAY, 7), ref(DAY, 8));
-    expect(lines(after)[7]).toBe('- [ ] #daily/code — mrSuit skills [minutes::0] <!-- focus-id: 20261027-02 -->');
-    expect(lines(after).filter((_, i) => i !== 7)).toEqual(lines(DAY).filter((_, i) => i !== 7 && i !== 8));
-  });
-
-  it('never goes below 0, and leaves a task without minutes its line', () => {
-    const low = '### Tasks\n- [ ] #daily/code — a [minutes::10]\n    - 09:00–10:00\n';
-    expect(deleteBlock(low, ref(low, 1), ref(low, 2))).toBe('### Tasks\n- [ ] #daily/code — a [minutes::0]\n');
-    const bare = '### Tasks\n- [ ] #daily/code — a\n    - 09:00–10:00\n';
-    expect(deleteBlock(bare, ref(bare, 1), ref(bare, 2))).toBe('### Tasks\n- [ ] #daily/code — a\n');
-  });
-
-  it('removes a block past midnight by its real length', () => {
+    expect(lines(after)).toEqual(lines(DAY).filter((_, i) => i !== 8));
     const late = '### Tasks\n- [ ] #daily/cinema — film night [minutes::120]\n    - 23:10–01:10\n';
-    expect(lines(deleteBlock(late, ref(late, 1), ref(late, 2)))[1]).toBe('- [ ] #daily/cinema — film night [minutes::0]');
+    expect(deleteBlock(late, ref(late, 1), ref(late, 2))).toBe('### Tasks\n- [ ] #daily/cinema — film night [minutes::120]\n');
   });
 
   it('refuses a block that changed', () => {
@@ -243,5 +220,68 @@ describe('setMinutes', () => {
     expect(() => setMinutes(DAY.replace('gym', 'swim'), ref(DAY, 9), 10)).toThrow(/changed/);
     expect(() => setMinutes(DAY, ref(DAY, 9), -5)).toThrow(/whole number/);
     expect(() => setMinutes(DAY, ref(DAY, 9), 2.5)).toThrow(/whole number/);
+  });
+});
+
+// The Tasks section of demo-vault/Calendar/2026/days 2026/29.09.2026.md, as it is.
+const REAL = `### Tasks
+- [x] #daily/dog — long walk with the dog [minutes::41]
+    - 08:50–09:31
+- [x] #daily/code — fix the login bug [minutes::42]
+    - 09:52–10:34
+- [x] #daily/code — review a pull request [minutes::39]
+    - 10:52–11:31
+`;
+
+describe('editTask', () => {
+  it('rewrites the words, category and minutes on that one line, keeping the tick, the focus-id and the blocks', () => {
+    const after = editTask(DAY, ref(DAY, 7), { words: 'mrSuit skills v2', category: 'business', minutes: 90 });
+    expect(changed(DAY, after)).toEqual([[7, '- [ ] #daily/business — mrSuit skills v2 [minutes::90] <!-- focus-id: 20261027-02 -->']]);
+    expect(changed(REAL, editTask(REAL, ref(REAL, 3), { words: 'fix the logout bug', category: 'code', minutes: 42 }))).toEqual([[3, '- [x] #daily/code — fix the logout bug [minutes::42]']]);
+  });
+
+  it('changes nothing when nothing changed, and writes no minutes a task never had', () => {
+    expect(editTask(DAY, ref(DAY, 7), { words: ' mrSuit  skills ', category: 'CODE', minutes: 100 })).toBe(DAY);
+    expect(changed(DAY, editTask(DAY, ref(DAY, 10), { words: 'read a book', category: 'book', minutes: 0 }))).toEqual([[10, '- [ ] #daily/book — read a book']]);
+    expect(changed(DAY, editTask(DAY, ref(DAY, 10), { words: 'read', category: 'book', minutes: 25 }))).toEqual([[10, '- [ ] #daily/book — read [minutes::25]']]);
+    expect(changed(DAY, editTask(DAY, ref(DAY, 9), { words: 'gym', category: 'sport', minutes: 0 }))).toEqual([[9, '- [ ] #daily/sport — gym [minutes::0]']]);
+  });
+
+  it('keeps other fields, comments and a block id, and writes a task without a category without one', () => {
+    const odd = '### Tasks\n  - [ ] call mum [due::friday] [minutes::5] ^call\n';
+    expect(editTask(odd, ref(odd, 1), { words: 'call mum and dad', minutes: 10 })).toBe('### Tasks\n  - [ ] call mum and dad [minutes::10] [due::friday] ^call\n');
+  });
+
+  it('refuses words that would read differently, a bad category, bad minutes, and a task that changed', () => {
+    expect(() => editTask(DAY, ref(DAY, 9), { words: 'gym [minutes::5]', category: 'sport', minutes: 5 })).toThrow(/field/);
+    expect(() => editTask(DAY, ref(DAY, 9), { words: '  ', category: 'sport', minutes: 5 })).toThrow(/Say what/);
+    expect(() => editTask(DAY, ref(DAY, 9), { words: 'gym', category: 'two words', minutes: 5 })).toThrow(/one word/);
+    expect(() => editTask(DAY, ref(DAY, 9), { words: 'gym', category: 'sport', minutes: 1.5 })).toThrow(/whole number/);
+    expect(() => editTask(DAY.replace('gym', 'swim'), ref(DAY, 9), { words: 'gym', category: 'sport', minutes: 5 })).toThrow(/changed/);
+  });
+
+  it('keeps CRLF line endings', () => {
+    const crlf = DAY.replace(/\n/g, '\r\n');
+    expect(editTask(crlf, ref(crlf, 9), { words: 'swim', category: 'sport', minutes: 40 })).toBe(editTask(DAY, ref(DAY, 9), { words: 'swim', category: 'sport', minutes: 40 }).replace(/\n/g, '\r\n'));
+  });
+});
+
+describe('deleteTask', () => {
+  it('takes the task out with its blocks, and nothing else', () => {
+    expect(deleteTask(DAY, ref(DAY, 7))).toBe(lines(DAY).filter((_, i) => i !== 7 && i !== 8).join('\n'));
+    expect(deleteTask(REAL, ref(REAL, 3))).toBe(lines(REAL).filter((_, i) => i !== 3 && i !== 4).join('\n'));
+    expect(deleteTask(DAY, ref(DAY, 10))).toBe(lines(DAY).filter((_, i) => i !== 10).join('\n'));
+  });
+
+  it('takes its subtasks too, but leaves a subtask’s parent and the blank line after', () => {
+    const nested = '### Tasks\n- [ ] #daily/code — parent\n    - [ ] #daily/code — child\n\n        - 09:00–09:20\n\n**Gratitude practice:** tea\n';
+    expect(deleteTask(nested, ref(nested, 1))).toBe('### Tasks\n\n**Gratitude practice:** tea\n');
+    expect(deleteTask(nested, ref(nested, 2))).toBe('### Tasks\n- [ ] #daily/code — parent\n\n**Gratitude practice:** tea\n');
+  });
+
+  it('refuses a task that changed, and two that read the same where the line moved', () => {
+    expect(() => deleteTask(DAY.replace('gym', 'swim'), ref(DAY, 9))).toThrow(/changed/);
+    const twice = '### Tasks\n- [ ] #daily/code — a\n- [ ] #daily/code — a\n';
+    expect(() => deleteTask(`x\n${twice}`, ref(twice, 1))).toThrow(/Two tasks/);
   });
 });

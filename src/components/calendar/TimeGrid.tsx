@@ -33,11 +33,13 @@ interface Props {
   wide?: boolean;
   /** A task line whose blocks stand out, in the day view. */
   highlight?: number;
-  onAdd: (date: Date, start: number, end: number, choice: TaskChoice) => Promise<void>;
-  onMove: (date: Date, block: GridBlock, start: number, end: number) => Promise<void>;
-  onDelete: (date: Date, block: GridBlock) => Promise<void>;
+  onAdd: (date: Date, start: number, end: number, choice: TaskChoice) => Promise<unknown>;
+  onMove: (date: Date, block: GridBlock, start: number, end: number) => Promise<unknown>;
+  onDelete: (date: Date, block: GridBlock) => Promise<unknown>;
   /** A focus round on a block's task, from the right-click menu. */
   onFocus: (date: Date, block: GridBlock, how: FocusHow) => void;
+  /** Edits a block's task, from the right-click menu. */
+  onEditTask: (date: Date, block: GridBlock) => void;
   /** A block's title: opens the day's page. */
   onOpenDay: (date: Date) => void;
   /** A day's name above its column. */
@@ -58,7 +60,7 @@ const minuteOfDay = (time: number) => {
 
 /** Days side by side, hours down: the time blocks of each, drawn, moved, resized and deleted in place. */
 export function TimeGrid(props: Props) {
-  const { columns, hours, early, late, onFold, hourHeight, categories, session, wide, highlight, onAdd, onMove, onDelete, onFocus, onOpenDay, onHead } = props;
+  const { columns, hours, early, late, onFold, hourHeight, categories, session, wide, highlight, onAdd, onMove, onDelete, onFocus, onEditTask, onOpenDay, onHead } = props;
   const body = useRef<HTMLDivElement>(null);
   const clicked = useRef(false);
   const [draft, setDraft] = useState<{ col: number; start: number; end: number; saving?: boolean }>();
@@ -313,6 +315,7 @@ export function TimeGrid(props: Props) {
             running={Boolean(session)}
             onFocus={(how) => onFocus(columns[popover.col]?.date ?? new Date(), popover.block, how)}
             onOpenDay={() => onOpenDay(columns[popover.col]?.date ?? new Date())}
+            onEdit={() => onEditTask(columns[popover.col]?.date ?? new Date(), popover.block)}
             onDelete={() => askDelete(popover.col, popover.block)}
             onClose={close}
           />
@@ -427,7 +430,6 @@ function NewBlock({ at, date, tasks, categories, onCancel, onSave }: { at: { x: 
 }
 
 function ConfirmDelete({ at, block, onCancel, onConfirm }: { at: { x: number; y: number }; block: GridBlock; onCancel: () => void; onConfirm: () => void }) {
-  const length = block.realEnd - block.start;
   useEscape(onCancel);
   return (
     <div className="cal-popover glass is-small" style={{ left: at.x, top: at.y }} role="alertdialog" aria-label="Delete the block" data-testid="delete-popover">
@@ -437,7 +439,7 @@ function ConfirmDelete({ at, block, onCancel, onConfirm }: { at: { x: number; y:
         </strong>{' '}
         from “{block.task.label}”?
       </p>
-      <p className="popover-note">{block.task.minutes ? `Its line goes, and ${formatMinutes(length)} come off the task’s minutes.` : 'Its line goes from the note.'}</p>
+      <p className="popover-note">Its line goes from the note. The task keeps its {block.task.minutes ? formatMinutes(block.task.minutes) : 'minutes'}.</p>
       <div className="popover-actions">
         <button type="button" className="quiet-chip" onClick={onCancel} autoFocus>
           Keep

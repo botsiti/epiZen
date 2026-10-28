@@ -4,6 +4,7 @@ import type { MediaItem } from '../../lib/media';
 import type { Period } from '../../lib/periodic';
 import type { Quest, QuestEntry } from '../../lib/quests';
 import type { DayEntry } from '../../lib/rollup';
+import type { TaskEdit } from '../../lib/timeblocks';
 
 /** What a periodic page reads besides its own note. Built by App from the vault; nothing in the note is code. */
 export interface PeriodicSpec {
@@ -38,6 +39,10 @@ export interface PeriodicActions {
   onAddTask: (category: string, words: string, minutes?: number) => void;
   /** The minutes spent on a task already on the day's list. */
   onSetMinutes: (task: { line: number }, minutes: number) => void;
+  /** A task's words, category and minutes, rewritten on its line. */
+  onEditTask: (task: { line: number; label: string; category?: { name: string } }, edit: TaskEdit) => void;
+  /** A task taken out of the note, with what is written under it. */
+  onDeleteTask: (task: { line: number }) => void;
   /** A focus round on one of today's tasks (the timer logs into today's note). */
   onFocus: (task: { line: number; label: string; category?: string }, how: FocusHow) => void;
   /** The day's summary, the text of its `[!tldr]` callout. */

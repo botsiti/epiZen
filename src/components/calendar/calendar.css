@@ -1278,3 +1278,32 @@
 .new-task input:focus {
   border-color: var(--accent);
 }
+
+/* A task edited or deleted from a right-click. */
+
+.new-task.is-small {
+  width: min(400px, calc(100vw - 48px));
+}
+
+.edit-task-minutes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.new-task .edit-task-minutes input {
+  width: 76px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.new-task .edit-task-minutes input[aria-invalid='true'] {
+  border-color: var(--glass-line-strong);
+}
+
+.edit-task-minutes .faint {
+  margin-right: auto;
+}
