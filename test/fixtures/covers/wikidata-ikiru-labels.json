@@ -1,0 +1,25 @@
+{
+ "entities": {
+  "Q8006": {
+   "type": "item",
+   "id": "Q8006",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "Akira Kurosawa"
+    }
+   }
+  },
+  "Q130232": {
+   "type": "item",
+   "id": "Q130232",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "drama film"
+    }
+   }
+  }
+ },
+ "success": 1
+}

@@ -326,6 +326,23 @@ mod e2e {
                 .unwrap_or_default()
         };
         let json: &[u8] = match host {
+            // Finding covers for notes the vault has (src/lib/covers.ts): Interpol's Antics,
+            // searched by its title and artist, and Kurosawa's Ikiru with its Wikidata facts.
+            "musicbrainz.org"
+                if path == "/ws/2/release-group"
+                    && param("query").starts_with("releasegroup:(antics)") =>
+            {
+                include_bytes!("../../test/fixtures/covers/musicbrainz-antics.json")
+            }
+            "en.wikipedia.org" if param("gsrsearch").starts_with("Ikiru ") => {
+                include_bytes!("../../test/fixtures/covers/wikipedia-ikiru.json")
+            }
+            "www.wikidata.org" if param("props") == "claims" && param("ids") == "Q152105" => {
+                include_bytes!("../../test/fixtures/covers/wikidata-ikiru-claims.json")
+            }
+            "www.wikidata.org" if param("props") == "labels" && param("ids").contains("Q8006") => {
+                include_bytes!("../../test/fixtures/covers/wikidata-ikiru-labels.json")
+            }
             "musicbrainz.org" if path == "/ws/2/release-group" => {
                 include_bytes!("../../test/fixtures/lookup/musicbrainz-search.json")
             }

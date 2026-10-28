@@ -1,0 +1,45 @@
+{
+ "entities": {
+  "Q51545": {
+   "type": "item",
+   "id": "Q51545",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "Luis Buñuel"
+    }
+   }
+  },
+  "Q130232": {
+   "type": "item",
+   "id": "Q130232",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "drama film"
+    }
+   }
+  },
+  "Q157443": {
+   "type": "item",
+   "id": "Q157443",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "comedy film"
+    }
+   }
+  },
+  "Q157394": {
+   "type": "item",
+   "id": "Q157394",
+   "labels": {
+    "en": {
+     "language": "en",
+     "value": "fantasy film"
+    }
+   }
+  }
+ },
+ "success": 1
+}

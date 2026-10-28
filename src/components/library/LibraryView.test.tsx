@@ -30,7 +30,7 @@ const library = collectLibrary(notes, files);
 
 function renderLibrary(tab: LibraryTab = 'all') {
   const onTab = vi.fn();
-  const view = render(<LibraryView library={library} files={files} tab={tab} onTab={onTab} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} />);
+  const view = render(<LibraryView library={library} files={files} tab={tab} onTab={onTab} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
   return { onTab, view };
 }
 
@@ -86,7 +86,7 @@ describe('the library\'s All tab', () => {
       ['book', '+ Book', false],
       ['podcast', '+ Episode', false],
     ]);
-    view.rerender(<LibraryView library={library} files={files} tab="film" onTab={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} />);
+    view.rerender(<LibraryView library={library} files={files} tab="film" onTab={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
     expect(screen.getByTestId('library')).toHaveAttribute('data-tab', 'film');
     expect(adds()).toEqual([
       ['film', '+ Add film', true],

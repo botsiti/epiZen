@@ -1,0 +1,102 @@
+{
+ "search": [
+  {
+   "id": "Q1277317",
+   "label": "Scarlet Sails",
+   "description": "novel by Alexander Grin",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  },
+  {
+   "id": "Q1171515",
+   "label": "Scarlet Sails",
+   "description": "1961 film by Aleksandr Ptushko",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  },
+  {
+   "id": "Q542095",
+   "label": "Scarlet Sails",
+   "description": "celebration in St. Petersburg, Russia",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  },
+  {
+   "id": "Q4063260",
+   "label": "Alye Parusa",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые Паруса"
+   }
+  },
+  {
+   "id": "Q19741872",
+   "label": "Alye parusa (musical)",
+   "description": "musical",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  },
+  {
+   "id": "Q20732509",
+   "label": "Scarlet Sails",
+   "description": "Russian supermarket chain",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  },
+  {
+   "id": "Q85858075",
+   "label": "Crimson Sails",
+   "description": "2001 film",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  },
+  {
+   "id": "Q16488199",
+   "label": "Scarlet Sails",
+   "description": "Soviet rock opera",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  },
+  {
+   "id": "Q112684982",
+   "label": "Алые паруса",
+   "match": {
+    "type": "label",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  },
+  {
+   "id": "Q1276238",
+   "label": "Алые паруса",
+   "description": "2010 film",
+   "match": {
+    "type": "alias",
+    "language": "ru",
+    "text": "Алые паруса"
+   }
+  }
+ ]
+}

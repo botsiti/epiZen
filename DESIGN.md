@@ -271,6 +271,10 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   covers of what was listened to, watched or finished: up to three fanned like cards in a hand, the
   best rated in front and the others tilted behind, a little darker, spreading when pointed at; "+n"
   when there were more. It opens on this month, or the latest month that has something.
+- **Without a cover**: when notes in view have no cover, a faint line above the grid says how many,
+  "533 without a cover · Find covers", the last two words in accent. A cover is the note's first
+  embedded image before any of its text (after the overview link); an image further down, after a
+  heading, is a page of the note, not its cover.
 - **Empty tab**: a glass card: a kicker, "Your first book" in the serif, one line on what Add does,
   and the Add button. Videos aren't added from Epizen; their empty card says so.
 - **Media page**: a rated note in those folders opens as a page; Edit note opens its text in the
@@ -281,7 +285,28 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   faint tick every ten; drag round it or use the arrow keys (Shift for tens), or type the number below
   it. An album's favourite tracks follow in a glass card, numbered in accent, in the serif's italic;
   then the note's own text in a glass card (the cover embed left out, since the hero shows it). Its
-  backlinks are in the right sidebar.
+  backlinks are in the right sidebar. Under a blank cover, a "Find cover" chip; over a cover, when it
+  is pointed at, "Change cover" on a dark chip at its foot.
+- **Finding covers**: the sheet "Find covers" opens, in Add's dark glass, wider: the count of notes
+  without a cover in the serif, a thin sage line of how many were searched, and one honest line of
+  where it is ("Searched 120 of 533 · 98 found, 74 sure · about 7 min left. MusicBrainz takes one
+  search a second."), then chips to show All, Sure, Unsure or Nothing found, each with its count.
+  A row per note, filling in as its answer lands: a round sage tick, the note's title with its maker
+  and year faint, the cover found, and what it is ("Dog Man Star · Suede · 1994") with, faint under
+  it, "Sure" and what it fills in ("fills Year, genre"), or why it isn't sure ("from 1961", "no
+  director to check", "or Dog Man Star · NERVE · 2026"). A sure one is ticked; an unsure one isn't.
+  "1/3 ›" steps to the next match found, × skips the note (Undo brings it back). At the foot, Stop
+  (or Go on) and "Save N covers" in the primary button. Searches go one note at a time per kind,
+  the kinds side by side, at each service's pace: MusicBrainz one a second, iTunes about twenty a
+  minute; a busy service is asked again after a pause. Closing with ticked covers unsaved asks first.
+  A note is sure only when its title, its maker and its year agree with what was found (or, with
+  no maker in the note, its title and year, and nothing else found as well); a title in another
+  script ("Скромное обаяние буржуазии") is found by its label on Wikidata. Nothing that came out
+  after the day the note was listened to, watched or finished can be it.
+- **Finding one cover**: "Find cover" on a media page opens a smaller sheet with the best few covers
+  found, each a cover card with its title, maker and year, and "Best match" in accent on a sure one,
+  which is chosen; the chosen card is ringed in sage. A field above searches other words. The foot
+  says where it saves and what it fills, with Cancel and Save cover.
 - **Add**: a dark glass sheet over the window. A large search field that asks the kind's sources as
   typing pauses (a fifth of a second; MusicBrainz, which takes a request a second, waits a little
   longer): MusicBrainz and the Cover Art Archive for albums, Wikipedia for films, Wikipedia and Open
@@ -307,7 +332,13 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
 - **Writes**: on a media page, setting the rating or a date (typed, or picked in the calendar) writes
   that one property, under the key the note already uses (`rating` or `Rating`), over the note as it is
   on disk. Add writes a new note in the vault's format for its kind and its cover as a new file in the
-  kind's `_attachments`; neither ever replaces a file. A podcast note is one episode, named after it,
+  kind's `_attachments`; neither ever replaces a file. A found cover is saved as a new file in the
+  kind's `_attachments` and embedded as a new note's is, `![[name.jpg|240]]` on its own paragraph
+  right after the overview link (or at the top of the body); the maker, year and genres it brings
+  are written only where the note's property is empty or missing, under the note's own key, and no
+  other line changes. The note is written only while it still holds what it held when its cover was
+  looked for; one that changed meanwhile is left and says so. Changing a cover points its embed at a
+  new image; the old file stays (`src/lib/coverEdits.ts`). A podcast note is one episode, named after it,
   with Author (the show), Rating, Year (only when known, where the vault's notes that have one put it),
   Genre and Listened.
 

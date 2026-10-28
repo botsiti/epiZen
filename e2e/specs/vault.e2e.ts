@@ -45,6 +45,30 @@ const EPISODE_COVER = 'Rating/podcasts/_attachments/jensen-huang-nvidia-the-4-tr
 const EPISODE_NOTE =
   '---\nAuthor: Lex Fridman Podcast\nRating: 77\nYear: 2026\nGenre:\n  - technology\nListened: 2026-09-21\n---\n[[00. Podcast 2026]]\n\n![[jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png|240]]\n';
 
+// Notes entered by hand without a cover, as the vault's own are, for finding their covers.
+const ANTICS = 'Rating/music/Antics.md';
+const ANTICS_NOTE = '---\nArtist: Interpol\nYear:\nlistened: 2026-10-07\ngenre:\nrating: 77\nfavorite tracks:\n---\n[[00. Music 2026 MOC|music 2026]]\n';
+const IKIRU = 'Rating/kino/Ikiru.md';
+const IKIRU_NOTE = '---\nDirector:\nYear: 1952\nWatched: 2026-10-07\nGenre:\nRating: 90\n---\n[[00. Kino 2026]]\n';
+
+/** Adds an album or a film from the library with "Enter it yourself", watched or listened to on 7 October 2026, and waits for its page. */
+async function addByHand(kind: 'album' | 'film', fields: { title: string; maker?: string; year?: string; rating: string }) {
+  await $('[data-testid="open-library"]').click();
+  await $(`[data-testid="library-add"][data-kind="${kind}"]`).click();
+  await $('[data-testid="add-manual"]').click();
+  await $('[data-testid="add-form"]').waitForDisplayed();
+  await $('[data-testid="add-title"]').setValue(fields.title);
+  if (fields.maker) await $('[data-testid="add-maker"]').setValue(fields.maker);
+  if (fields.year) await $('[data-testid="add-year"]').setValue(fields.year);
+  await $('[data-testid="add-date"]').click();
+  await $('[data-testid="add-date"]').setValue('2026-10-07');
+  await $('[data-testid="add-rating"]').click();
+  await expect($('[data-testid="date-picker"]')).not.toBeExisting();
+  await $('[data-testid="add-rating"]').setValue(fields.rating);
+  await $('[data-testid="add-save"]').click();
+  await $(`[data-testid="media-page"][data-path="Rating/${kind === 'album' ? 'music' : 'kino'}/${fields.title}.md"]`).waitForDisplayed();
+}
+
 /**
  * The tabs a step starts from, whatever the steps before it left: these notes, nothing pinned, the
  * first in the tab in front and each next one opened with ⌘-click, so they stand in this order.
@@ -447,6 +471,90 @@ describe('the demo vault', () => {
     expect(await $$('[data-testid="cover-day"][data-count]').length).toBe(3);
     await $('[data-testid="kind-chip"][data-kind="podcast"]').click();
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+  });
+
+  it('finds covers for the notes without one, from the library: the sure ones ticked, each saved with what its note leaves empty', async () => {
+    // Two notes as the vault's own are, without a cover: an album and a film, entered by hand.
+    await addByHand('album', { title: 'Antics', maker: 'Interpol', rating: '77' });
+    expect(readFileSync(join(vaultCopy(), ANTICS), 'utf8')).toBe(ANTICS_NOTE);
+    await expect($('[data-testid="find-cover-open"]')).toHaveText('Find cover');
+    await addByHand('film', { title: 'Ikiru', year: '1952', rating: '90' });
+    expect(readFileSync(join(vaultCopy(), IKIRU), 'utf8')).toBe(IKIRU_NOTE);
+
+    await $('[data-testid="open-library"]').click();
+    await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'all');
+    await expect($('[data-testid="library-missing"]')).toHaveText('2 without a cover · Find covers');
+    await $('[data-testid="find-covers-open"]').click();
+    await $('[data-testid="find-covers"]').waitForDisplayed();
+    // The e2e build answers from test/fixtures/covers/: MusicBrainz for the album, Wikipedia and Wikidata for the film.
+    await browser.waitUntil(async () => (await $$('[data-testid="covers-row"][data-status="found"]').length) === 2, { timeoutMsg: 'the covers were never found' });
+    await browser.waitUntil(async () => (await $$('[data-testid="covers-row"] [data-testid="lookup-cover"]').length) === 2, { timeoutMsg: 'the found covers never loaded' });
+    const rows = () =>
+      browser.execute(
+        (): Record<string, (string | null | undefined)[]> =>
+          Object.fromEntries(
+            [...document.querySelectorAll('[data-testid="covers-row"]')].map((row) => [
+              row.getAttribute('data-path') ?? '',
+              [row.getAttribute('data-ticked'), row.querySelector('[data-testid="covers-found"]')?.textContent, row.querySelector('.covers-why')?.textContent],
+            ]),
+          ),
+      );
+    expect(await rows()).toEqual({
+      [ANTICS]: ['true', 'Antics · Interpol · 2004', 'Sure · fills Year, genre'],
+      [IKIRU]: ['true', 'Ikiru · Akira Kurosawa · 1952', 'Sure · fills Director, Genre'],
+    });
+    await expect($('[data-testid="covers-hint"]')).toHaveText('Searched all 2 · 2 found, 2 sure. The ticked ones are saved; untick any that look wrong.');
+    await screenshot('89-find-covers');
+
+    // The film's is left for its page: unticked, it isn't saved.
+    await $(`[data-testid="covers-row"][data-path="${IKIRU}"] [data-testid="covers-tick"]`).click();
+    await expect($('[data-testid="covers-save"]')).toHaveText('Save 1 cover');
+    await $('[data-testid="covers-save"]').click();
+    await expect($('[data-testid="covers-hint"]')).toHaveText('Saved 1 cover.');
+    await expect($(`[data-testid="covers-row"][data-path="${ANTICS}"]`)).toHaveAttribute('data-status', 'saved');
+    await screenshot('90-find-covers-saved');
+    expect(readFileSync(join(vaultCopy(), ANTICS), 'utf8')).toBe(
+      '---\nArtist: Interpol\nYear: 2004\nlistened: 2026-10-07\ngenre:\n  - indie rock\n  - alternative rock\n  - indie\nrating: 77\nfavorite tracks:\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[antics.png|240]]\n',
+    );
+    const saved = readFileSync(join(vaultCopy(), 'Rating/music/_attachments/antics.png'));
+    expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);
+    expect(readFileSync(join(vaultCopy(), IKIRU), 'utf8')).toBe(IKIRU_NOTE);
+    await $('[data-testid="covers-done"]').click();
+    await expect($('[data-testid="find-covers"]')).not.toBeExisting();
+    await expect($('[data-testid="library-missing"]')).toHaveText('1 without a cover · Find covers');
+  });
+
+  it('finds a cover for one note on its page, then changes it: a new image beside the old one, the embed pointed at it', async () => {
+    await $(`[data-testid="library-card"][data-path="${IKIRU}"]`).click();
+    await $(`[data-testid="media-page"][data-path="${IKIRU}"]`).waitForDisplayed();
+    await $('[data-testid="find-cover-open"]').click();
+    await $('[data-testid="find-cover"]').waitForDisplayed();
+    await browser.waitUntil(async () => (await $$('[data-testid="cover-choice"] [data-testid="lookup-cover"]').length) === 1, { timeoutMsg: 'no cover was offered' });
+    await expect($('[data-testid="cover-choice"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect($('[data-testid="cover-choice"]')).toHaveText(expect.stringContaining('Best match'));
+    await expect($('[data-testid="cover-where"]')).toHaveText('Saves the cover in Rating/kino/_attachments and fills Director, Genre.');
+    await screenshot('91-find-cover');
+    await $('[data-testid="cover-save"]').click();
+    await expect($('[data-testid="find-cover"]')).not.toBeExisting();
+    const file = join(vaultCopy(), IKIRU);
+    const found = IKIRU_NOTE.replace('Director:\n', 'Director: Akira Kurosawa\n').replace('Genre:\n', 'Genre:\n  - drama\n').replace(/\n$/, '\n\n![[ikiru.png|200]]\n');
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === found, { timeout: 5000, timeoutMsg: 'the cover never reached the note' });
+    const cover = $('[data-testid="media-page"] [data-testid="vault-image"]');
+    await browser.waitUntil(async () => Number(await cover.getProperty('naturalWidth')) > 0, { timeoutMsg: 'the cover never showed' });
+    await screenshot('92-media-page-found-cover');
+
+    // "Change cover" shows over a cover when it is pointed at.
+    await $('.media-cover-slot').moveTo();
+    await expect($('[data-testid="find-cover-open"]')).toHaveText('Change cover');
+    await $('[data-testid="find-cover-open"]').click();
+    await expect($('[role="dialog"][aria-label="Change the cover"]')).toBeDisplayed();
+    await browser.waitUntil(async () => (await $$('[data-testid="cover-choice"] [data-testid="lookup-cover"]').length) === 1, { timeoutMsg: 'no cover was offered' });
+    await screenshot('93-change-cover');
+    await $('[data-testid="cover-save"]').click();
+    await expect($('[data-testid="find-cover"]')).not.toBeExisting();
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === found.replace('![[ikiru.png|200]]', '![[ikiru-2.png|200]]'), { timeout: 5000, timeoutMsg: 'the change never reached the note' });
+    // The old image stays.
+    expect(readFileSync(join(vaultCopy(), 'Rating/kino/_attachments/ikiru.png')).length).toBeGreaterThan(0);
   });
 
   it('creates the missing day before from its template', async () => {
@@ -1111,7 +1219,7 @@ describe('the demo vault', () => {
     expect(readFileSync(today, 'utf8')).not.toMatch(/e2e focus[^\n]*\n {4}- \d\d:\d\d/);
   });
 
-  it('changed nothing in the vault copy but the new notes, the added album, episode and film and their covers, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
+  it('changed nothing in the vault copy but the new notes, the added album, episode and film and their covers, the album and film entered by hand and the covers found for them, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
         `added: ${DAYS}/30.07.2026.md`,
@@ -1124,6 +1232,11 @@ describe('the demo vault', () => {
         `added: ${EPISODE_COVER}`,
         'added: Rating/kino/American Fiction.md',
         'added: Rating/kino/_attachments/american-fiction.png',
+        `added: ${ANTICS}`,
+        'added: Rating/music/_attachments/antics.png',
+        `added: ${IKIRU}`,
+        'added: Rating/kino/_attachments/ikiru.png',
+        'added: Rating/kino/_attachments/ikiru-2.png',
         'changed: Rating/music/Glasshouse Weather.md',
         `changed: ${DAYS}/12.08.2026.md`,
         `changed: ${DAYS}/14.08.2026.md`,

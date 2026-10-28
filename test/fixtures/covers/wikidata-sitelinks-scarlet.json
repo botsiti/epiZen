@@ -1,0 +1,38 @@
+{
+ "entities": {
+  "Q1277317": {
+   "type": "item",
+   "id": "Q1277317",
+   "sitelinks": {
+    "enwiki": {
+     "site": "enwiki",
+     "title": "Scarlet Sails (novel)",
+     "badges": []
+    }
+   }
+  },
+  "Q1171515": {
+   "type": "item",
+   "id": "Q1171515",
+   "sitelinks": {
+    "enwiki": {
+     "site": "enwiki",
+     "title": "Scarlet Sails (film)",
+     "badges": []
+    }
+   }
+  },
+  "Q542095": {
+   "type": "item",
+   "id": "Q542095",
+   "sitelinks": {
+    "enwiki": {
+     "site": "enwiki",
+     "title": "Scarlet Sails (tradition)",
+     "badges": []
+    }
+   }
+  }
+ },
+ "success": 1
+}

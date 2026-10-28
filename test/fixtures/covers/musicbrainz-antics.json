@@ -1,0 +1,50 @@
+{
+ "created": "2026-10-28T09:50:18.126Z",
+ "count": 1,
+ "offset": 0,
+ "release-groups": [
+  {
+   "id": "bc7740e1-02c9-3ab7-9869-0e0c79acf941",
+   "score": 100,
+   "count": 24,
+   "title": "Antics",
+   "first-release-date": "2004-09-24",
+   "primary-type": "Album",
+   "tags": [
+    {
+     "count": 2,
+     "name": "rock"
+    },
+    {
+     "count": 4,
+     "name": "alternative rock"
+    },
+    {
+     "count": 1,
+     "name": "post-punk"
+    },
+    {
+     "count": 10,
+     "name": "indie rock"
+    },
+    {
+     "count": 2,
+     "name": "indie"
+    },
+    {
+     "count": 2,
+     "name": "post-punk revival"
+    },
+    {
+     "count": 0,
+     "name": "rock and indie"
+    }
+   ],
+   "artist-credit": [
+    {
+     "name": "Interpol"
+    }
+   ]
+  }
+ ]
+}

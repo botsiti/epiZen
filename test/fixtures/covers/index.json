@@ -1,0 +1,18 @@
+{
+ "https://musicbrainz.org/ws/2/release-group?query=releasegroup%3A(antics)%20AND%20artist%3A(interpol)&fmt=json&limit=10": "musicbrainz-antics.json",
+ "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&generator=search&gsrsearch=Ikiru%201952%20film&gsrlimit=8&gsrnamespace=0&prop=pageimages|description|pageprops&piprop=thumbnail&pithumbsize=500&pilicense=any&ppprop=wikibase_item": "wikipedia-ikiru.json",
+ "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q152105&props=claims": "wikidata-ikiru-claims.json",
+ "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q8006|Q130232&props=labels&languages=en": "wikidata-ikiru-labels.json",
+ "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&generator=search&gsrsearch=Nausicaa%20Agn%C3%A8s%20Varda%201971%20film&gsrlimit=8&gsrnamespace=0&prop=pageimages|description|pageprops&piprop=thumbnail&pithumbsize=500&pilicense=any&ppprop=wikibase_item": "wikipedia-nausicaa.json",
+ "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&generator=search&gsrsearch=Nausicaa%20film&gsrlimit=8&gsrnamespace=0&prop=pageimages|description|pageprops&piprop=thumbnail&pithumbsize=500&pilicense=any&ppprop=wikibase_item": "wikipedia-nausicaa-plain.json",
+ "https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&search=%D0%A1%D0%BA%D1%80%D0%BE%D0%BC%D0%BD%D0%BE%D0%B5%20%D0%BE%D0%B1%D0%B0%D1%8F%D0%BD%D0%B8%D0%B5%20%D0%B1%D1%83%D1%80%D0%B6%D1%83%D0%B0%D0%B7%D0%B8%D0%B8&language=ru&uselang=en&type=item&limit=10": "wikidata-search-bourgeoisie.json",
+ "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q308920&props=sitelinks&sitefilter=enwiki": "wikidata-sitelinks-bourgeoisie.json",
+ "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&redirects=1&titles=The%20Discreet%20Charm%20of%20the%20Bourgeoisie&prop=pageimages|description|pageprops&piprop=thumbnail&pithumbsize=500&pilicense=any&ppprop=wikibase_item": "wikipedia-pages-bourgeoisie.json",
+ "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q308920&props=claims": "wikidata-bourgeoisie-claims.json",
+ "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q51545|Q130232|Q157443|Q157394&props=labels&languages=en": "wikidata-bourgeoisie-labels.json",
+ "https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&search=%D0%90%D0%BB%D1%8B%D0%B5%20%D0%BF%D0%B0%D1%80%D1%83%D1%81%D0%B0&language=ru&uselang=en&type=item&limit=10": "wikidata-search-scarlet.json",
+ "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q1277317|Q1171515|Q542095&props=sitelinks&sitefilter=enwiki": "wikidata-sitelinks-scarlet.json",
+ "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&redirects=1&titles=Scarlet%20Sails%20(novel)|Scarlet%20Sails%20(film)|Scarlet%20Sails%20(tradition)&prop=pageimages|description|pageprops&piprop=thumbnail&pithumbsize=500&pilicense=any&ppprop=wikibase_item": "wikipedia-pages-scarlet.json",
+ "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q1171515&props=claims": "wikidata-scarlet-claims.json",
+ "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q465640|Q1054574|Q157394|Q130232&props=labels&languages=en": "wikidata-scarlet-labels.json"
+}

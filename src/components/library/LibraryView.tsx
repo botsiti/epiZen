@@ -28,6 +28,7 @@ import { Section, Tabs } from '../periodic/parts';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { VaultImage } from '../VaultImage';
 import { AddMedia } from './AddMedia';
+import { FindCovers } from './FindCovers';
 import '../periodic/periodic.css';
 import './library.css';
 
@@ -40,6 +41,8 @@ interface Props {
   onOpenNote: (path: string) => void;
   /** A new note was created by Add: read the vault again and open it. */
   onCreated: (path: string) => Promise<void>;
+  /** Notes were changed here (covers found for them): read the vault again. */
+  onChanged: () => Promise<void>;
 }
 
 const SUMMARY: Record<LibraryTab, string> = {
@@ -78,7 +81,7 @@ const capital = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
  * of covers to sort and filter by genre (and on All by kind), and a calendar of covers by the day
  * they were listened to, watched or finished. The hero has an Add for every kind on every tab.
  */
-export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onCreated }: Props) {
+export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onCreated, onChanged }: Props) {
   // Videos are read as pages, not shelved here: the library is what is rated and added.
   const kinds = SHELVED_KINDS.map(kindSpec);
   const spec = tab === 'all' ? undefined : kinds.find((candidate) => candidate.kind === tab);
@@ -86,6 +89,8 @@ export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onC
   const [choice, setChoice] = useState<Choice>(() => chosen.get(shownTab) ?? { sort: 'recent' });
   const [lastTab, setLastTab] = useState(shownTab);
   const [adding, setAdding] = useState<MediaKind>();
+  // The notes that were in view without a cover when "Find covers" was pressed.
+  const [finding, setFinding] = useState<MediaEntry[]>();
   // A new tab brings back what was chosen on it last.
   if (lastTab !== shownTab) {
     setLastTab(shownTab);
@@ -106,6 +111,8 @@ export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onC
   const genre = choice.genre && genres.some(([name]) => name === choice.genre) ? choice.genre : undefined;
   const shown = sortEntries(withGenre(listed, genre), choice.sort);
   const adder = adding ? kindSpec(adding) : undefined;
+  // Those in view a cover can be looked up for.
+  const coverless = shown.filter((entry) => !entry.cover && kindSpec(entry.kind).source);
 
   return (
     <div className="periodic-frame library-frame" data-testid="library" data-tab={shownTab} onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
@@ -202,6 +209,18 @@ export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onC
             )}
           </div>
 
+          {coverless.length > 0 && (
+            <p className="library-missing" data-testid="library-missing">
+              <span>{coverless.length} without a cover</span>{' '}
+              <span className="faint" aria-hidden="true">
+                ·
+              </span>{' '}
+              <button type="button" className="library-find" onClick={() => setFinding(coverless)} data-testid="find-covers-open">
+                Find covers
+              </button>
+            </p>
+          )}
+
           <ul className={spec ? 'library-grid' : 'library-grid is-mixed'} style={spec ? ({ '--aspect': spec.aspect } as CSSProperties) : undefined} data-testid="library-grid">
             {shown.map((entry, i) => (
               <li key={entry.path} className="rise" style={order(Math.min(i + 1, 24))}>
@@ -213,6 +232,14 @@ export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onC
           <CoverCalendar key={shownTab} spec={spec} entries={listed} today={today} onOpen={onOpenNote} />
         </div>
       )}
+
+      {finding &&
+        createPortal(
+          <ErrorBoundary label="Finding covers" frame={(message) => <div className="add-backdrop" onMouseDown={() => setFinding(undefined)}>{message}</div>}>
+            <FindCovers entries={finding} files={files} scope={spec ? spec.tab : 'Library'} onClose={() => setFinding(undefined)} onSaved={onChanged} />
+          </ErrorBoundary>,
+          document.body,
+        )}
 
       {adder?.source &&
         createPortal(
