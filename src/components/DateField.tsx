@@ -56,17 +56,22 @@ export function DateField({ value, onChange, onPick, label, testId, today, input
     close(true);
   };
 
-  // A press anywhere but the field and its calendar closes it, and goes on to what was pressed.
+  // A press anywhere but the field and its calendar closes it, and goes on to what was pressed;
+  // so does focus going anywhere else (a Tab out, or a click that only moves focus).
   useEffect(() => {
     if (!open) return;
-    const away = (event: PointerEvent) => {
+    const away = (event: Event) => {
       const target = event.target as Node;
       if (field.current?.contains(target) || panel.current?.contains(target)) return;
       setOpen(false);
       setInside(false);
     };
     document.addEventListener('pointerdown', away, true);
-    return () => document.removeEventListener('pointerdown', away, true);
+    document.addEventListener('focusin', away, true);
+    return () => {
+      document.removeEventListener('pointerdown', away, true);
+      document.removeEventListener('focusin', away, true);
+    };
   }, [open]);
 
   const keys = (event: KeyboardEvent<HTMLInputElement>) => {

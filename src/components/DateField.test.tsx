@@ -150,4 +150,20 @@ describe('DateField', () => {
     expect(picker()).toBeNull();
     expect(screen.getByTestId('value')).toHaveTextContent('2026-09-21');
   });
+
+  it('closes when focus goes anywhere else, as a Tab out does, though nothing was pressed', () => {
+    render(
+      <>
+        <Field />
+        <input aria-label="Rating" />
+      </>,
+    );
+    fireEvent.focus(screen.getByTestId('date'));
+    expect(picker()).not.toBeNull();
+    // Focus moving on its own, with no press: the calendar goes with it.
+    fireEvent.focusIn(screen.getByLabelText('Rating'));
+    expect(picker()).toBeNull();
+    expect(screen.getByTestId('value')).toHaveTextContent('2026-09-21');
+  });
 });
+
