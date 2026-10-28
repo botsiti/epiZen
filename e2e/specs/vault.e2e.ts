@@ -156,7 +156,10 @@ describe('the demo vault', () => {
     expect(await $$('[data-testid="library-card-kind"]').length).toBe(34);
     // An Add for every kind, on every tab.
     expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-add"]')].map((button) => button.getAttribute('data-kind')))).toEqual(['album', 'film', 'book', 'podcast']);
-    await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) >= 12, { timeoutMsg: 'the covers never loaded' });
+    // Covers load as they come near the screen: the first row's, at least.
+    await $('[data-testid="library-card"]').scrollIntoView({ block: 'center' });
+    await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) >= 6, { timeoutMsg: 'the covers never loaded' });
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
     await screenshot('80-library-all');
 
     await $('[data-testid="kind-chip"][data-kind="film"]').click();
