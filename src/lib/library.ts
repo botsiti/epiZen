@@ -251,20 +251,58 @@ export function libraryStats(entries: MediaEntry[], today: Date): LibraryStats {
   };
 }
 
-export type SortOrder = 'recent' | 'rating' | 'title';
+/** Recent, Rating and Title are the chips; the list's headers sort by those and by maker and year too. */
+export type SortOrder = 'recent' | 'rating' | 'title' | 'maker' | 'year';
 
-const byTitle = (a: MediaEntry, b: MediaEntry) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true });
+const words = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+const byTitle = (a: MediaEntry, b: MediaEntry) => words(a.title, b.title);
 const byDate = (a: MediaEntry, b: MediaEntry) => (b.date ?? '').localeCompare(a.date ?? '');
 const byRating = (a: MediaEntry, b: MediaEntry) => (b.rating ?? -1) - (a.rating ?? -1);
+// Those without a maker or a year go last, as the unrated and undated do.
+const byMaker = (a: MediaEntry, b: MediaEntry) => Number(!a.maker) - Number(!b.maker) || words(a.maker ?? '', b.maker ?? '');
+const yearOf = (entry: MediaEntry) => (entry.year && /^\d{1,4}$/.test(entry.year) ? Number(entry.year) : -1);
+const byYear = (a: MediaEntry, b: MediaEntry) => yearOf(b) - yearOf(a);
 
-/** Recent: the latest listened, watched or finished first. Rating: the best first. Unrated and undated go last. */
+/**
+ * Recent: the latest listened, watched or finished first. Rating: the best first. Title and maker:
+ * A to Z. Year: the newest first. Unrated, undated, nameless and yearless go last.
+ */
 export function sortEntries(entries: MediaEntry[], order: SortOrder): MediaEntry[] {
   const compare = {
     recent: (a: MediaEntry, b: MediaEntry) => byDate(a, b) || byRating(a, b) || byTitle(a, b),
     rating: (a: MediaEntry, b: MediaEntry) => byRating(a, b) || byDate(a, b) || byTitle(a, b),
     title: byTitle,
+    maker: (a: MediaEntry, b: MediaEntry) => byMaker(a, b) || byYear(a, b) || byTitle(a, b),
+    year: (a: MediaEntry, b: MediaEntry) => byYear(a, b) || byDate(a, b) || byTitle(a, b),
   }[order];
   return entries.toSorted(compare);
+}
+
+/** How the library shows what is in view: the latest as covers, or all of it as a list. Kept in the app's settings. */
+export type LibraryLayout = 'covers' | 'list';
+
+export const isLibraryLayout = (value: unknown): value is LibraryLayout => value === 'covers' || value === 'list';
+
+/** How many the covers show: the latest listened to, watched or finished. The list has the rest. */
+export const LATEST = 15;
+
+/** The list's columns that can be hidden; the title always shows. */
+export const LIST_COLUMNS = ['cover', 'maker', 'year', 'kind', 'genres', 'rating', 'date'] as const;
+export type ListColumn = (typeof LIST_COLUMNS)[number];
+
+/** The hidden columns kept in the settings, anything else in there left out. */
+export const hiddenColumns = (value: unknown): ListColumn[] =>
+  Array.isArray(value) ? LIST_COLUMNS.filter((column) => value.includes(column)) : [];
+
+/** Those whose title, maker or a genre has the words searched for, in any case and either Unicode form. */
+export function searchEntries(entries: MediaEntry[], query: string): MediaEntry[] {
+  const fold = (text: string) => text.normalize('NFC').toLocaleLowerCase();
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return entries;
+  return entries.filter((entry) => {
+    const text = fold([entry.title, entry.maker ?? '', ...entry.genres].join(' '));
+    return words.every((word) => text.includes(word));
+  });
 }
 
 /** The genres in use, the most used first. */
