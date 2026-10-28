@@ -17,6 +17,7 @@ import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { SettingsScreen } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
+import { useTrayBridge } from './components/tray/useTrayBridge';
 import { RightSidebar } from './components/workspace/RightSidebar';
 import { TabBar } from './components/workspace/TabBar';
 import { useLocalGraph } from './components/workspace/useLocalGraph';
@@ -90,6 +91,7 @@ import {
   type View,
 } from './lib/tabs';
 import { useToday } from './lib/useToday';
+import { panelView } from './lib/tray';
 import { buildTree, countFolders } from './lib/tree';
 
 // Each daily note parsed once per text it has had: saves and new notes bring new text.
@@ -465,6 +467,8 @@ export function App() {
   // The calendar's and the timer's writes: one at a time, over the text the app last read.
   const changeNote = useNoteWriter(texts, noteSaved);
   const [calendarWarning, setCalendarWarning] = useState<string>();
+  // Why the timer last didn't start, for the menu bar's panel, where a start may have come from.
+  const [startProblem, setStartProblem] = useState<string>();
   // Which vault is open, by its folder: a timed block is only ever written into the vault it was timed in.
   const vault = status?.state === 'open' ? status.root : undefined;
   // Changes a day's note. A day without one gets it from its template with the change already
@@ -579,12 +583,36 @@ export function App() {
         const task = { path, day: dayKey(date), line: found.line, label: want.label, category: want.category, focusId: focusIdOf(found.text), vault };
         timer.start(task, how?.mode ?? timer.state.prefs.mode, how?.minutes ?? timer.state.prefs.minutes);
         setCalendarWarning(undefined);
+        setStartProblem(undefined);
       } catch (err) {
         setCalendarWarning(`The timer didn’t start: ${reason(err)}.`);
+        setStartProblem(`The timer didn’t start: ${reason(err)}.`);
       }
     },
     [changeDay, timer, vault],
   );
+  // The menu bar item and its panel: the timer and today's tasks, published as they change; the
+  // panel's buttons start, pause and stop this same timer.
+  const todayEntry = useMemo(() => dayOf(now), [dayOf, now]);
+  const unwritten = timer.state.pending.filter((block) => timer.failures.has(block.id)).length;
+  const trayView = useMemo(
+    () =>
+      panelView({
+        vault: vaultName,
+        today: now,
+        path: todayEntry.path,
+        text: todayEntry.path === undefined ? undefined : texts.get(todayEntry.path),
+        day: todayEntry.day,
+        timer: timer.state,
+        unwritten,
+        problem: startProblem ?? (timer.saveError && `The timer couldn’t save itself: ${timer.saveError}`),
+      }),
+    [vaultName, now, todayEntry, texts, timer.state, timer.saveError, unwritten, startProblem],
+  );
+  const startFromTray = useCallback((choice: TaskChoice, how: FocusHow) => void startTimer(choice, how), [startTimer]);
+  // Opening the panel had it show today's list again; the start was on the day before's.
+  const staleFromTray = useCallback(() => setStartProblem('The timer didn’t start: that list was another day’s. Today’s tasks are shown now.'), []);
+  useTrayBridge(timer, trayView, startFromTray, staleFromTray);
   const textOf = useCallback((path: string) => texts.get(path), [texts]);
   const frontNote = notePath(view);
   // Laid out only while it can be seen.

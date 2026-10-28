@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // `npm run check`: every check, in order, with its full output. Runs all of them even
 // when one fails, then prints one line per check and exits non-zero if any failed.
+// `npm run check:fast` (`--fast`) leaves out the e2e run: the day's loop, and CI on a pull
+// request. The full run, e2e included, is for the evening, when Bat asks for it.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -17,7 +19,7 @@ const steps = [
   ['tsc', 'typecheck'],
   ['vitest', 'test'],
   ['e2e (WebdriverIO)', 'test:e2e'],
-];
+].filter(([name]) => !(process.argv.includes('--fast') && name.startsWith('e2e')));
 
 const before = snapshotVault(demoVault);
 const results = [];

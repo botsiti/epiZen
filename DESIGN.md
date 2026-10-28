@@ -60,7 +60,8 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   and nothing moves on load. `prefers-reduced-motion` turns it off.
 - The periodic pages, the homepage and the library are the exception to both, on purpose: they are
   where the day is reviewed and what was loved is kept, and they should feel alive. See "Periodic
-  pages" and "Library and media pages".
+  pages" and "Library and media pages". The menu bar's panel borrows their glass, small; see "Menu
+  bar item and panel".
 
 ## Components
 
@@ -73,6 +74,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   where they are ticked, and that writes the one box back.
 - **Periodic pages**: see the section below.
 - **Calendar and timer**: see "Calendar and timer" below.
+- **Menu bar item and panel**: see "Menu bar item and panel" below.
 - **Library and media pages**: see "Library and media pages" below.
 - **Home**: a periodic page in all but name (the frame, glass, hero and motion below), shaped like
   the Obsidian homepage, "Kaizen cockpit". The hero: the level's title and "Kaizen profile" as the
@@ -213,6 +215,34 @@ from "Calendar" in the sidebar.
   once) an event changes Calendar; one Calendar won't let change, or one running past the day, stays
   where it is. The timer writes each finished stretch under its task, with its minutes; while that
   note is open in the editor, the stretch waits for Done.
+
+## Menu bar item and panel
+
+The running focus in the macOS menu bar, as Senioro has it, in Epizen's look. There is one timer, the
+main window's; the item and its panel only show it and send it commands.
+
+- **Item**: a small monochrome ring with its dot at the top (the timer's dial, drawn as a template
+  image, so macOS tints it). While a round runs, its time and the task's category in lowercase beside
+  it in the menu bar's font with even-width digits: `00:37 code`, counting down in a pomodoro and up
+  on the stopwatch, `focus` for a task without a category; `paused 00:37`; `rest 4:12`. Nothing
+  running: the ring alone. It keeps time with the main window hidden, minimised or behind others.
+- **Panel**: a click on the item opens it under the item, 360 × 600, and it goes when it loses focus,
+  on Escape or on a second click. The window is borderless macOS dark glass with 14px corners, tinted
+  down to the app's dark, a hairline round it. From the top: "Today" in the serif display face and the
+  date muted beside it; a thin 00–24 line of the day, lit in sage up to a glowing dot at now, with
+  marks every three hours, 00 06 12 18 24 faint below, and the time on a small sage pill above the dot.
+  Then a glass card with the round under way: its kind as a kicker, big light tabular numerals with
+  "left", "focused" or "paused", the task's breathing dot, category chip and words, and a thin line of
+  how far the pomodoro is, in the task's colour (`--rest` while resting); or "Nothing running" in the
+  serif's italic with Rest. Two numbers below: minutes focused today (the note's minutes and the
+  stretch under way) and how much of the day is gone. Then today's tasks from today's note, as small
+  glass cards: the category chip, the minutes logged, the words, and four pills to start a round:
+  25 min (in sage), 42 min, Custom (a field for 1 to 240 minutes) and Live (the stopwatch). The task
+  the round is on is edged in its colour and has its time with Pause or Resume and Stop instead; a
+  ticked task is faint and takes no round. The foot, under a hairline: Open Epizen in the primary
+  button, and Quit, which waits for the editor's last save as ⌘Q does.
+- **Writes**: none of its own. A start from the panel is the calendar's right-click start, through the
+  same timer, with the same task and the same writes to the note.
 
 ## Library and media pages
 

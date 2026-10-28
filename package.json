@@ -18,7 +18,8 @@
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked -- -D warnings",
     "build:e2e": "tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json",
     "test:e2e": "npm run build:e2e && wdio run e2e/wdio.conf.ts",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "check:fast": "node scripts/check.mjs --fast"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.4",

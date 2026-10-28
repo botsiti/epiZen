@@ -13,7 +13,9 @@ crate-type = ["rlib"]
 tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
-tauri = { version = "2.12", features = [] }
+# `tray-icon` for the menu bar item (src/tray.rs). Pinned to the minor: the item reaches the
+# `tray-icon` crate under Tauri for its font and its panel's place, which a minor may change.
+tauri = { version = "~2.12", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2.8"
@@ -29,9 +31,9 @@ libc = "0.2"
 # Apple Calendar, through EventKit (src/eventkit.rs).
 block2 = "0.6"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSColor", "NSColorSpace", "objc2-core-foundation"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "bitflags", "NSButton", "NSColor", "NSColorSpace", "NSControl", "NSFont", "NSFontDescriptor", "NSResponder", "NSScreen", "NSStatusBarButton", "NSStatusItem", "NSView", "NSWindow", "objc2-core-foundation"] }
 objc2-event-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-app-kit", "EKCalendar", "EKCalendarItem", "EKEvent", "EKEventStore", "EKObject", "EKTypes"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSDate", "NSError", "NSPredicate", "NSString", "NSURL"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSDate", "NSError", "NSGeometry", "NSPredicate", "NSString", "NSURL", "objc2-core-foundation"] }
 tauri-plugin-wdio = { version = "=1.5.0", optional = true }
 tauri-plugin-wdio-webdriver = { version = "=1.5.0", optional = true }
 

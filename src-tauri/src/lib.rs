@@ -11,6 +11,7 @@ mod eventkit;
 mod menu;
 mod net;
 mod settings;
+mod tray;
 mod vault;
 
 use std::ffi::OsString;
@@ -344,13 +345,21 @@ pub fn run() {
         .manage(Closing::default())
         .manage(calendars())
         .manage(Net::new().expect("couldn't set up the lookups' HTTP client"))
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event
-                && window.state::<Closing>().hold()
+        .manage(tray::Tray::default())
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { api, .. }
+                if window.label() == tray::MAIN && window.state::<Closing>().hold() =>
             {
                 api.prevent_close();
                 let _ = window.emit(CLOSE_REQUESTED, ());
             }
+            // The menu bar's panel goes when it loses focus, as a menu does.
+            WindowEvent::Focused(false) if window.label() == tray::PANEL => {
+                tray::hide(window.app_handle());
+            }
+            // The panel's window goes with the main one, so closing the main window still quits.
+            WindowEvent::Destroyed if window.label() == tray::MAIN => tray::close(window.app_handle()),
+            _ => {}
         })
         .setup(|app| {
             // Tests point this at a temporary folder, so they never read or change real settings.
@@ -366,6 +375,10 @@ pub fn run() {
             );
             app.manage(RwLock::new(state));
             app.manage(settings);
+            // The menu bar item is a convenience: without it the app still runs.
+            if let Err(err) = tray::install(app.handle()) {
+                eprintln!("Epizen couldn't put its item in the menu bar: {err}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -391,7 +404,13 @@ pub fn run() {
             calendar_create,
             calendar_update,
             calendar_delete,
-            calendar_open_settings
+            calendar_open_settings,
+            tray::tray_publish,
+            tray::tray_state,
+            tray::tray_command,
+            tray::tray_open_main,
+            tray::tray_hide,
+            tray::tray_quit
         ]);
 
     // ⌘W closes a tab (src/lib/tabs.ts), not the window.

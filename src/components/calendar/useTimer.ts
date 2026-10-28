@@ -54,6 +54,8 @@ export interface TimerApi extends TimerView {
   discard: (id: string) => void;
   /** A task edited in its note: the session on it and the blocks owed to it follow it. */
   retask: (path: string, before: { label: string; category?: string }, after: { label: string; category?: string }) => void;
+  /** Applies what time alone changes now, without waiting for the next second's tick. */
+  tick: () => void;
 }
 
 /**
@@ -212,6 +214,7 @@ export function useTimer(deps: TimerDeps, stored: unknown, ready: boolean): Time
       retryAll: () => runtime.retryAll(),
       discard: (id) => runtime.discard(id),
       retask: (path, before, after) => runtime.apply((state) => retask(state, path, before, after)),
+      tick: () => runtime.tick(),
     }),
     [runtime, view],
   );
