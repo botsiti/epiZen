@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { DISTORTIONS, EMOTIONS, emotionOf, type RecordInput, type ThoughtRecord } from '../../lib/cbt';
+import { Layer } from '../Layer';
 
 // A thought record, five steps at a time, as the vault's Obsidian wizard walks it (rpg-day.js):
 // the moment, how it felt, the thinking traps, a fairer view, and how it feels now.
@@ -50,91 +51,93 @@ export function ThoughtWizard({ record, onSave, onClose }: Props) {
   const done = step === STEPS.length;
 
   return (
-    <div className="wizard-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()} data-testid="thought-wizard">
-      <div className="wizard" role="dialog" aria-modal="true" aria-label="Thought record">
-        <div className="wizard-top">
-          <button type="button" className="wizard-round" onClick={() => (step ? setStep(step - 1) : close())} aria-label="Back" title="Back">
-            ←
-          </button>
-          <span className="wizard-progress" aria-hidden="true">
-            <span style={{ width: `${(Math.min(step, STEPS.length) / STEPS.length) * 100}%` }} />
-          </span>
-          <button type="button" className="wizard-round is-small" onClick={close} aria-label="Close" title="Close (Esc)">
-            ×
-          </button>
-        </div>
+    <Layer>
+      <div className="periodic-layer wizard-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()} data-testid="thought-wizard">
+        <div className="wizard" role="dialog" aria-modal="true" aria-label="Thought record">
+          <div className="wizard-top">
+            <button type="button" className="wizard-round" onClick={() => (step ? setStep(step - 1) : close())} aria-label="Back" title="Back">
+              ←
+            </button>
+            <span className="wizard-progress" aria-hidden="true">
+              <span style={{ width: `${(Math.min(step, STEPS.length) / STEPS.length) * 100}%` }} />
+            </span>
+            <button type="button" className="wizard-round is-small" onClick={close} aria-label="Close" title="Close (Esc)">
+              ×
+            </button>
+          </div>
 
-        <div className="wizard-body" key={step}>
-          {done ? (
-            <Summary input={input} />
-          ) : (
-            <>
-              <header className="wizard-head">
-                <p className="kicker">Thought record · {['The moment', 'Feelings', 'Thinking traps', 'A fairer view', 'Checking in'][step]}</p>
-                <h2>{STEPS[step]?.title}</h2>
-                <p>{STEPS[step]?.subtitle}</p>
-              </header>
-              {step === 0 && (
-                <>
-                  <textarea
-                    autoFocus
-                    value={input.situation}
-                    onChange={(event) => set({ situation: event.target.value })}
-                    placeholder="e.g. Reviewed the day and thought “I barely moved the needle, I'm falling behind.”"
-                    data-testid="wizard-situation"
-                  />
-                  <p className="wizard-hint">Write the raw thought, not a tidied version. You'll get to reframe it in a minute.</p>
-                </>
-              )}
-              {step === 1 && <Feelings picked={input.before} start="Sad" label="You're feeling" onChange={(before) => set({ before })} />}
-              {step === 2 && <Traps picked={input.distortions} onChange={(distortions) => set({ distortions })} />}
-              {step === 3 && (
-                <>
-                  {input.situation.trim() && <blockquote className="wizard-quote">“{input.situation.trim()}”</blockquote>}
-                  <textarea
-                    autoFocus
-                    value={input.balanced}
-                    onChange={(event) => set({ balanced: event.target.value })}
-                    placeholder="If a good friend had this thought, what would you gently say to them?"
-                    data-testid="wizard-balanced"
-                  />
-                  <p className="wizard-hint">A balanced thought isn't forced positivity. It's just fairer and kinder than the first one.</p>
-                </>
-              )}
-              {step === 4 && <Feelings picked={input.after} start="Peaceful" label="You're feeling now" onChange={(after) => set({ after })} />}
-            </>
+          <div className="wizard-body" key={step}>
+            {done ? (
+              <Summary input={input} />
+            ) : (
+              <>
+                <header className="wizard-head">
+                  <p className="kicker">Thought record · {['The moment', 'Feelings', 'Thinking traps', 'A fairer view', 'Checking in'][step]}</p>
+                  <h2>{STEPS[step]?.title}</h2>
+                  <p>{STEPS[step]?.subtitle}</p>
+                </header>
+                {step === 0 && (
+                  <>
+                    <textarea
+                      autoFocus
+                      value={input.situation}
+                      onChange={(event) => set({ situation: event.target.value })}
+                      placeholder="e.g. Reviewed the day and thought “I barely moved the needle, I'm falling behind.”"
+                      data-testid="wizard-situation"
+                    />
+                    <p className="wizard-hint">Write the raw thought, not a tidied version. You'll get to reframe it in a minute.</p>
+                  </>
+                )}
+                {step === 1 && <Feelings picked={input.before} start="Sad" label="You're feeling" onChange={(before) => set({ before })} />}
+                {step === 2 && <Traps picked={input.distortions} onChange={(distortions) => set({ distortions })} />}
+                {step === 3 && (
+                  <>
+                    {input.situation.trim() && <blockquote className="wizard-quote">“{input.situation.trim()}”</blockquote>}
+                    <textarea
+                      autoFocus
+                      value={input.balanced}
+                      onChange={(event) => set({ balanced: event.target.value })}
+                      placeholder="If a good friend had this thought, what would you gently say to them?"
+                      data-testid="wizard-balanced"
+                    />
+                    <p className="wizard-hint">A balanced thought isn't forced positivity. It's just fairer and kinder than the first one.</p>
+                  </>
+                )}
+                {step === 4 && <Feelings picked={input.after} start="Peaceful" label="You're feeling now" onChange={(after) => set({ after })} />}
+              </>
+            )}
+          </div>
+
+          <footer className="wizard-foot">
+            <span className="wizard-step">{done ? 'Complete' : `Step ${step + 1} of ${STEPS.length}`}</span>
+            <button
+              type="button"
+              className="wizard-continue"
+              disabled={!ready}
+              onClick={() => (done ? onSave(input) : setStep(step + 1))}
+              data-testid="wizard-continue"
+            >
+              {done ? (record ? 'Save changes' : 'Save to my diary') : 'Continue'}
+            </button>
+          </footer>
+
+          {leaving && (
+            <div className="wizard-leave" role="alertdialog" aria-label="Discard this entry?">
+              <p>Discard this entry?</p>
+              <span className="faint">Your changes haven't been saved.</span>
+              <div>
+                <button type="button" className="nav-chip" onClick={() => setLeaving(false)}>
+                  Keep writing
+                </button>
+                <button type="button" className="nav-chip is-action" onClick={onClose} data-testid="wizard-discard">
+                  Discard entry
+                </button>
+              </div>
+            </div>
           )}
         </div>
-
-        <footer className="wizard-foot">
-          <span className="wizard-step">{done ? 'Complete' : `Step ${step + 1} of ${STEPS.length}`}</span>
-          <button
-            type="button"
-            className="wizard-continue"
-            disabled={!ready}
-            onClick={() => (done ? onSave(input) : setStep(step + 1))}
-            data-testid="wizard-continue"
-          >
-            {done ? (record ? 'Save changes' : 'Save to my diary') : 'Continue'}
-          </button>
-        </footer>
-
-        {leaving && (
-          <div className="wizard-leave" role="alertdialog" aria-label="Discard this entry?">
-            <p>Discard this entry?</p>
-            <span className="faint">Your changes haven't been saved.</span>
-            <div>
-              <button type="button" className="nav-chip" onClick={() => setLeaving(false)}>
-                Keep writing
-              </button>
-              <button type="button" className="nav-chip is-action" onClick={onClose} data-testid="wizard-discard">
-                Discard entry
-              </button>
-            </div>
-          </div>
-        )}
       </div>
-    </div>
+    </Layer>
   );
 }
 

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { POMODORO_PRESETS, type TimerMode } from '../../lib/timer';
 import { primeChime } from './chime';
 import { useEscape } from './useEscape';
+import { Layer } from '../Layer';
 
 /** How a focus round runs: counting up, or a pomodoro of so many minutes. */
 export interface FocusHow {
@@ -56,56 +57,58 @@ export function FocusMenu({ at, label, noFocus, running, onFocus, onOpenDay, onE
       onFocus(how);
     });
   return (
-    <div className="focus-menu-backdrop" onMouseDown={onClose} onContextMenu={(event) => event.preventDefault()}>
-      <div
-        ref={menu}
-        className="focus-menu glass"
-        role="menu"
-        aria-label={`Actions for ${label}`}
-        style={{ left: at.x, top: at.y }}
-        onMouseDown={(event) => event.stopPropagation()}
-        data-testid="focus-menu"
-      >
-        <p className="focus-menu-label" title={label}>
-          {label || 'untitled'}
-        </p>
-        {noFocus ? (
-          <p className="focus-menu-note">{noFocus}</p>
-        ) : (
-          <>
-            <button type="button" role="menuitem" onClick={focus({ mode: 'stopwatch' })} data-testid="focus-start">
-              Start focus
-              {running && <span className="faint"> · ends the running one</span>}
-            </button>
-            {POMODORO_PRESETS.map((minutes) => (
-              <button key={minutes} type="button" role="menuitem" onClick={focus({ mode: 'pomodoro', minutes })} data-testid="focus-pomodoro" data-minutes={minutes}>
-                Start {minutes} min pomodoro
+    <Layer>
+      <div className="periodic-layer focus-menu-backdrop" onMouseDown={onClose} onContextMenu={(event) => event.preventDefault()}>
+        <div
+          ref={menu}
+          className="focus-menu glass"
+          role="menu"
+          aria-label={`Actions for ${label}`}
+          style={{ left: at.x, top: at.y }}
+          onMouseDown={(event) => event.stopPropagation()}
+          data-testid="focus-menu"
+        >
+          <p className="focus-menu-label" title={label}>
+            {label || 'untitled'}
+          </p>
+          {noFocus ? (
+            <p className="focus-menu-note">{noFocus}</p>
+          ) : (
+            <>
+              <button type="button" role="menuitem" onClick={focus({ mode: 'stopwatch' })} data-testid="focus-start">
+                Start focus
+                {running && <span className="faint"> · ends the running one</span>}
               </button>
-            ))}
-          </>
-        )}
-        {(onOpenDay ?? onEdit ?? onDelete ?? onDeleteTask) && <hr />}
-        {onOpenDay && (
-          <button type="button" role="menuitem" onClick={pick(onOpenDay)}>
-            Open the day
-          </button>
-        )}
-        {onEdit && (
-          <button type="button" role="menuitem" onClick={pick(onEdit)} data-testid="focus-menu-edit">
-            Edit task…
-          </button>
-        )}
-        {onDelete && (
-          <button type="button" role="menuitem" onClick={pick(onDelete)} data-testid="focus-menu-delete">
-            {deleteLabel}
-          </button>
-        )}
-        {onDeleteTask && (
-          <button type="button" role="menuitem" onClick={pick(onDeleteTask)} data-testid="focus-menu-delete-task">
-            Delete task…
-          </button>
-        )}
+              {POMODORO_PRESETS.map((minutes) => (
+                <button key={minutes} type="button" role="menuitem" onClick={focus({ mode: 'pomodoro', minutes })} data-testid="focus-pomodoro" data-minutes={minutes}>
+                  Start {minutes} min pomodoro
+                </button>
+              ))}
+            </>
+          )}
+          {(onOpenDay ?? onEdit ?? onDelete ?? onDeleteTask) && <hr />}
+          {onOpenDay && (
+            <button type="button" role="menuitem" onClick={pick(onOpenDay)}>
+              Open the day
+            </button>
+          )}
+          {onEdit && (
+            <button type="button" role="menuitem" onClick={pick(onEdit)} data-testid="focus-menu-edit">
+              Edit task…
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" role="menuitem" onClick={pick(onDelete)} data-testid="focus-menu-delete">
+              {deleteLabel}
+            </button>
+          )}
+          {onDeleteTask && (
+            <button type="button" role="menuitem" onClick={pick(onDeleteTask)} data-testid="focus-menu-delete-task">
+              Delete task…
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </Layer>
   );
 }

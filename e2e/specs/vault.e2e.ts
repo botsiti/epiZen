@@ -570,12 +570,19 @@ describe('the demo vault', () => {
 
     // A right-click edits a task in place: new words, the same category and minutes.
     const evening = `[data-testid="task-card"][data-line="${added.split('\n').indexOf('- [ ] #daily/sport — evening run [minutes::30]')}"]`;
+    // Right-clicks where the card is on screen, and says where.
     const rightClick = (selector: string) =>
       browser.execute((css) => {
         const box = document.querySelector(css)?.getBoundingClientRect();
-        document.querySelector(css)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: (box?.left ?? 0) + 24, clientY: (box?.top ?? 0) + 24 }));
+        const at = { x: (box?.left ?? 0) + 24, y: (box?.top ?? 0) + 24 };
+        document.querySelector(css)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: at.x, clientY: at.y }));
+        return at;
       }, selector);
-    await rightClick(evening);
+    const clicked = await rightClick(evening);
+    // The menu opens at the pointer, not where the page's frame would put a fixed menu.
+    const menu = await browser.execute(() => document.querySelector('[data-testid="focus-menu"]')?.getBoundingClientRect().toJSON() as { left: number; top: number } | undefined);
+    expect(Math.abs((menu?.left ?? -999) - clicked.x)).toBeLessThan(2);
+    expect(Math.abs((menu?.top ?? -999) - clicked.y)).toBeLessThan(2);
     await $('[data-testid="focus-menu-edit"]').click();
     await $('[data-testid="edit-task-text"]').waitForDisplayed();
     await browser.execute((value) => {
