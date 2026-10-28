@@ -271,8 +271,8 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   while any is on. Properties: the list's columns, ticked to show, the title always. Search: the
   word opens a field in its place (title, maker or genre); Escape empties and closes it. The menus
   take the focus, ↑ ↓ move in them, Escape or a click outside closes them. Covers or List, and the
-  columns, are the app's (its settings), not the vault's; the sort, the filters and the search are
-  kept per tab for the session.
+  columns, are the app's (its settings), not the vault's; the sort and the filters are kept per tab
+  for the session, and the search until the covers are shown.
 - **Covers**: the latest fifteen listened to, watched or finished of what the tab and the filters
   show, and under them "See all 533 in the list →" in accent. On All each card says its kind, faint,
   before the maker, and posters and square covers stand on one line with their titles level. The

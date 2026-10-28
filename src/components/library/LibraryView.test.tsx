@@ -86,6 +86,50 @@ describe("the library's All tab", () => {
     expect(screen.getByTestId('library-filter')).toHaveFocus();
   });
 
+  it('keeps the focus in a menu, so Escape and Tab are its own, and the window gets Escape only when none is open', async () => {
+    const user = userEvent.setup();
+    const escapes = vi.fn();
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') escapes();
+    };
+    window.addEventListener('keydown', onEscape);
+    try {
+      renderLibrary();
+      await openTool(user, 'library-filter');
+      await user.click(byData('kind-chip', 'data-kind', 'film'));
+      // Clear takes itself away; the focus goes to the first item, not the page behind.
+      screen.getByTestId('filter-clear').focus();
+      await user.keyboard('{Enter}');
+      expect(screen.queryByTestId('filter-clear')).not.toBeInTheDocument();
+      expect(byData('kind-chip', 'data-kind', 'album')).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByTestId('library-filter-menu')).not.toBeInTheDocument();
+      expect(screen.getByTestId('library-filter')).toHaveFocus();
+      expect(escapes).not.toHaveBeenCalled();
+      await user.keyboard('{Escape}');
+      expect(escapes).toHaveBeenCalledTimes(1);
+      // Tab leaves a menu, and closes it.
+      await openTool(user, 'library-filter');
+      await user.tab();
+      expect(screen.queryByTestId('library-filter-menu')).not.toBeInTheDocument();
+    } finally {
+      window.removeEventListener('keydown', onEscape);
+    }
+  });
+
+  it('narrows the calendar by genre too', async () => {
+    const user = userEvent.setup();
+    renderLibrary();
+    const day = (n: number) => screen.getAllByTestId('cover-day').find((cell) => cell.getAttribute('data-day') === String(n))!;
+    expect(day(21)).toHaveAttribute('data-count', '2');
+    await openTool(user, 'library-filter');
+    await user.click(byData('genre-chip', 'data-genre', 'sci-fi'));
+    expect(cards()).toEqual(['Rating/kino/Static Bloom.md']);
+    expect(day(21)).toHaveAttribute('data-count', '1');
+    await user.click(byData('genre-chip', 'data-genre', ''));
+    expect(day(21)).toHaveAttribute('data-count', '2');
+  });
+
   it('draws several covers on a day of the calendar, the best rated in front', () => {
     renderLibrary();
     expect(screen.getByTestId('cover-calendar-month')).toHaveTextContent('September 2026');
@@ -318,6 +362,24 @@ describe('a long library', () => {
     await user.click(screen.getByTestId('library-see-all'));
     expect(screen.getByTestId('library-see-all')).toHaveTextContent('See all 40 in the list');
     expect(onLayout).toHaveBeenLastCalledWith('list');
+  });
+
+  it('leaves the search with the list: the covers, and "See all", count what the list will show', async () => {
+    const user = userEvent.setup();
+    const { onLayout, view, props } = renderLibrary('album', 'list', shelved);
+    await user.click(screen.getByTestId('library-search-open'));
+    // Every word: "Band 12" is the maker of Album 13, and "12" the title of Album 12.
+    await user.keyboard('Band 12');
+    expect(rows().sort()).toEqual(['Rating/music/Album 12.md', 'Rating/music/Album 13.md']);
+    expect(screen.getByTestId('library-count')).toHaveTextContent('2 results');
+    await openTool(user, 'library-view-menu');
+    await user.click(byData('library-view', 'data-view', 'covers'));
+    expect(onLayout).toHaveBeenLastCalledWith('covers');
+    view.rerender(<LibraryView {...props} layout="covers" />);
+    expect(screen.getByTestId('library-see-all')).toHaveTextContent('See all 40 in the list');
+    view.rerender(<LibraryView {...props} layout="list" />);
+    expect(screen.getByTestId('library-count')).toHaveTextContent('40 results');
+    expect(screen.queryByTestId('library-search')).not.toBeInTheDocument();
   });
 
   it('puts the list on the page a few screens at once and the rest just after, only the first screen rising into place', async () => {

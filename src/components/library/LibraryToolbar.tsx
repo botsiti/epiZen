@@ -69,21 +69,14 @@ function Tool({
     const away = (event: Event) => {
       if (!box.current?.contains(event.target as Node)) setOpen(false);
     };
-    // Escape closes it wherever the focus went (a filter's Clear takes itself away).
-    const escape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-      button.current?.focus();
-    };
     document.addEventListener('pointerdown', away);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('pointerdown', away);
-      document.removeEventListener('keydown', escape);
-    };
+    return () => document.removeEventListener('pointerdown', away);
   }, [open]);
+  // The focus stays in the menu while it is open: an item that takes itself away (a filter's Clear)
+  // hands it to the first item, so the menu's own keys (Escape, Tab) still reach it.
+  useEffect(() => {
+    if (open && panel.current && !panel.current.contains(document.activeElement)) itemsIn(panel.current)[0]?.focus();
+  });
   const keys = (event: KeyboardEvent<HTMLDivElement>) => {
     const items = itemsIn(panel.current);
     const at = items.indexOf(document.activeElement as HTMLElement);
@@ -91,6 +84,11 @@ function Tool({
     if (to !== undefined) {
       event.preventDefault();
       items[to]?.focus();
+    } else if (event.key === 'Escape') {
+      // The menu's, not a sheet's or the window's behind it.
+      event.preventDefault();
+      event.stopPropagation();
+      close();
     } else if (event.key === 'Tab') {
       setOpen(false);
     }

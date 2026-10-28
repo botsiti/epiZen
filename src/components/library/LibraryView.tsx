@@ -123,11 +123,20 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
     chosen.set(shownTab, next);
     setChoice(next);
   };
+  // The search is the list's: the covers have none, so going to them leaves it, on every tab, and
+  // "See all N" is what the list will show.
+  const showAs = (next: LibraryLayout) => {
+    if (next === 'covers') {
+      for (const [kept, was] of chosen) chosen.set(kept, { ...was, search: undefined });
+      setChoice({ ...choice, search: undefined });
+    }
+    onLayout(next);
+  };
 
   const everything = useMemo(() => allEntries(library), [library]);
   const onKinds = choice.kinds ?? new Set<MediaKind>();
   const entries = spec ? (library.get(spec.kind) ?? NONE) : everything;
-  // On All, the kinds narrow the covers, the list and the calendar; the hero counts everything.
+  // On All, the kinds narrow the covers, the list and the calendar, as the genre does; the hero counts everything.
   const listed = spec ? entries : allEntries(library, onKinds);
   const stats = libraryStats(entries, today);
   const genres = genreCounts(listed).slice(0, 12);
@@ -185,7 +194,7 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
         <div className="tab-panel" key={shownTab}>
           <LibraryToolbar
             layout={layout}
-            onLayout={onLayout}
+            onLayout={showAs}
             count={count}
             summary={summary}
             spec={spec}
@@ -237,12 +246,12 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
                 ))}
               </ul>
               {shown.length > LATEST && (
-                <button type="button" className="library-more" onClick={() => onLayout('list')} data-testid="library-see-all">
+                <button type="button" className="library-more" onClick={() => showAs('list')} data-testid="library-see-all">
                   See all {shown.length} in the list
                   <ToolMark name="arrow" />
                 </button>
               )}
-              <CoverCalendar key={shownTab} spec={spec} entries={listed} today={today} onOpen={onOpenNote} />
+              <CoverCalendar key={shownTab} spec={spec} entries={filtered} today={today} onOpen={onOpenNote} />
             </>
           )}
         </div>
