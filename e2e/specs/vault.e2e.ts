@@ -190,7 +190,8 @@ describe('the demo vault', () => {
     // An Add for every kind, on every tab.
     expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-add"]')].map((button) => button.getAttribute('data-kind')))).toEqual(['album', 'film', 'book', 'podcast']);
     // Covers load as they come near the screen: the first row's, at least.
-    await $('[data-testid="library-card"]').scrollIntoView({ block: 'center' });
+    // The driver's action-based scroll can wait indefinitely for an inactive window's frames.
+    await browser.execute(() => document.querySelector('[data-testid="library-card"]')?.scrollIntoView({ block: 'center', behavior: 'instant' }));
     await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) >= 6, { timeoutMsg: 'the covers never loaded' });
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
     await screenshot('80-library-all');
@@ -446,9 +447,10 @@ describe('the demo vault', () => {
     await expect($('[data-testid="add-back"]')).toHaveText('← Episodes');
 
     // The date: typed, then a month back and a day with a click, then a day on with the keys.
-    const picker = $('[data-testid="date-picker"]');
+    // The calendar is removed and recreated after each pick; don't retain its old WebDriver element.
+    const picker = () => $('[data-testid="date-picker"]');
     await $('[data-testid="add-date"]').click();
-    await picker.waitForDisplayed();
+    await picker().waitForDisplayed();
     await $('[data-testid="add-date"]').setValue('2026-10-07');
     await expect($('[data-testid="date-picker-month"]')).toHaveText('October 2026');
     await expect($('[data-testid="date-picker-day"][data-date="2026-10-07"]')).toHaveAttribute('aria-pressed', 'true');
@@ -456,21 +458,22 @@ describe('the demo vault', () => {
     await expect($('[data-testid="date-picker-month"]')).toHaveText('September 2026');
     await screenshot('83-date-picker');
     await $('[data-testid="date-picker-day"][data-date="2026-09-20"]').click();
-    await expect(picker).not.toBeExisting();
+    await expect(picker()).not.toBeExisting();
     await expect($('[data-testid="add-date"]')).toHaveValue('2026-09-20');
     await $('[data-testid="add-date"]').click();
-    await picker.waitForDisplayed();
+    await picker().waitForDisplayed();
     await browser.keys(['ArrowDown']);
     await browser.waitUntil(async () => (await browser.execute(() => document.activeElement?.getAttribute('data-date'))) === '2026-09-20', { timeoutMsg: 'the keys never reached the calendar' });
     await browser.keys(['ArrowRight']);
+    await browser.waitUntil(async () => (await browser.execute(() => document.activeElement?.getAttribute('data-date'))) === '2026-09-21', { timeoutMsg: 'the focus never moved to the next day' });
     await browser.keys(['Enter']);
-    await expect(picker).not.toBeExisting();
+    await expect(picker()).not.toBeExisting();
     await expect($('[data-testid="add-date"]')).toHaveValue('2026-09-21');
     // Escape closes an open calendar, and only it: the form stays.
     await $('[data-testid="add-date"]').click();
-    await picker.waitForDisplayed();
+    await picker().waitForDisplayed();
     await browser.keys(['Escape']);
-    await expect(picker).not.toBeExisting();
+    await expect(picker()).not.toBeExisting();
     await expect($('[data-testid="add-form"]')).toBeDisplayed();
 
     await $('[data-testid="add-rating"]').setValue('77');
@@ -484,7 +487,7 @@ describe('the demo vault', () => {
 
     // On its page the date opens the same calendar, and a day picked there is written at once.
     await $('[data-testid="media-date"]').click();
-    await picker.waitForDisplayed();
+    await picker().waitForDisplayed();
     await expect($('[data-testid="date-picker-month"]')).toHaveText('September 2026');
     await screenshot('84-podcast-episode');
     await $('[data-testid="date-picker-day"][data-date="2026-09-22"]').click();
@@ -492,7 +495,7 @@ describe('the demo vault', () => {
     await browser.waitUntil(() => readFileSync(file, 'utf8') === moved, { timeout: 5000, timeoutMsg: 'the picked day never reached the note' });
     await expect($('[data-testid="media-date"]')).toHaveValue('2026-09-22');
     await $('[data-testid="media-date"]').click();
-    await picker.waitForDisplayed();
+    await picker().waitForDisplayed();
     await $('[data-testid="date-picker-day"][data-date="2026-09-21"]').click();
     await browser.waitUntil(() => readFileSync(file, 'utf8') === EPISODE_NOTE, { timeout: 5000, timeoutMsg: 'the day picked back never reached the note' });
   });
