@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "tray",
+  "description": "The menu bar item's panel (src-tauri/src/tray.rs): it may listen to events, for what the main window publishes. App commands aren't gated by capabilities here (there is no app manifest), so it could call the same commands as the main window; it calls only the tray_* ones.",
+  "windows": ["tray"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

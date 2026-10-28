@@ -95,12 +95,15 @@ export function dayOfKey(key: string): Date {
 const clampMinutes = (minutes: number) => Math.min(CUSTOM_MINUTES.max, Math.max(CUSTOM_MINUTES.min, Math.round(minutes) || CUSTOM_MINUTES.min));
 const clampRest = (seconds: number) => Math.min(2 * 60 * 60, Math.max(10, Math.round(seconds) || DEFAULT_REST));
 
+/** The part of a session its time is counted from: all the menu bar's panel is sent of it. */
+export type SessionTime = Pick<Session, 'mode' | 'planned' | 'accumulated' | 'segmentStartedAt' | 'pausedAt' | 'stretchStartedAt'>;
+
 /** Focus counted so far, in milliseconds: pauses don't count. */
-export const elapsed = (session: Session, now: number) =>
+export const elapsed = (session: Pick<SessionTime, 'accumulated' | 'segmentStartedAt' | 'pausedAt'>, now: number) =>
   session.accumulated + (session.pausedAt === undefined ? Math.max(0, now - session.segmentStartedAt) : 0);
 
 /** What the dial shows, in whole seconds: time left in a pomodoro, time so far on the stopwatch. */
-export function shownSeconds(session: Session, now: number): number {
+export function shownSeconds(session: SessionTime, now: number): number {
   const seconds = Math.floor(elapsed(session, now) / 1000);
   return session.planned ? Math.max(0, session.planned - seconds) : seconds;
 }

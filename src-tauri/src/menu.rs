@@ -113,6 +113,15 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
 /// What a click on one of the items above (or its shortcut) does.
 pub fn handle<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    // With the menu bar's panel in front, ⌘W closes the panel, not a tab behind it.
+    if matches!(id, CLOSE_TAB | CLOSE_WINDOW)
+        && app
+            .get_webview_window(crate::tray::PANEL)
+            .is_some_and(|panel| panel.is_focused().unwrap_or(false))
+    {
+        crate::tray::hide(app);
+        return;
+    }
     match id {
         NEW_TAB | CLOSE_TAB | RIGHT_SIDEBAR => {
             let _ = app.emit(MENU_EVENT, id);

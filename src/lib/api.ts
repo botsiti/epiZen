@@ -65,6 +65,27 @@ export async function guardClose(handler: () => void): Promise<() => void> {
 }
 export const closeNow = () => invoke<void>('close_now');
 
+// The menu bar item and its panel (src-tauri/src/tray.rs). The main window publishes the timer
+// for both, and gets the panel's buttons back as commands; the panel shows what was published.
+
+/** The main window's timer, for the item's title and tooltip and for the panel (src/lib/tray.ts). */
+export const publishTray = (status: { clock: unknown; tooltip: string; panel: unknown }) => invoke<void>('tray_publish', { status });
+/** In the main window: a command from one of the panel's buttons, unchecked. */
+export const onTrayCommand = (handler: (command: unknown) => void) => listen<unknown>('epizen://tray-command', (event) => handler(event.payload));
+/** In the main window: the round or rest it published has run out, though its own timers may be held back. */
+export const onTimerDue = (handler: () => void) => listen('epizen://timer-due', handler);
+/** In the panel: what the main window last published; `null` before it has. */
+export const trayState = () => invoke<unknown>('tray_state');
+export const onTrayState = (handler: (panel: unknown) => void) => listen<unknown>('epizen://tray-state', (event) => handler(event.payload));
+/** The panel has just been shown: it refreshes, and the main window looks at the date again. */
+export const onTrayShown = (handler: () => void) => listen('epizen://tray-shown', handler);
+export const trayCommand = (command: unknown) => invoke<void>('tray_command', { command });
+/** Brings the main window to the front, and hides the panel. */
+export const openMainWindow = () => invoke<void>('tray_open_main');
+export const hideTray = () => invoke<void>('tray_hide');
+/** Quits as ⌘Q does, after the editor's last save. */
+export const quitApp = () => invoke<void>('tray_quit');
+
 /** An item of the menu bar the page acts on (src-tauri/src/menu.rs). */
 export type MenuItemId = 'new-tab' | 'close-tab' | 'right-sidebar';
 

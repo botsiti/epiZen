@@ -81,6 +81,7 @@ const timer = (): TimerApi => ({
   retryAll: vi.fn(),
   discard: vi.fn(),
   retask: vi.fn(),
+  tick: vi.fn(),
 });
 
 // jsdom lays nothing out: the grid's top is at 0, so a time's place is its minutes past 07:00.
