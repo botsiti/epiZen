@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type PointerEvent } from 'react';
+import { useCallback, useMemo, useRef, type CSSProperties, type PointerEvent } from 'react';
 import type { VaultFile } from '../../lib/api';
 import type { LinkTarget } from '../../lib/completion';
 import { parseNote } from '../../lib/frontmatter';
@@ -47,6 +47,12 @@ export function MediaPage(props: Props) {
   const entry = useMemo(() => readEntry(path, text, resolve), [path, text, resolve]);
   const cover = useMemo(() => coverEmbed(body, path, resolve), [body, path, resolve]);
   const image = useVaultImage(cover?.file.path);
+  // The text open for writing saves what is left before the whole note opens in the editor.
+  const flushThoughts = useRef<() => Promise<boolean>>(undefined);
+  const holdFlush = useCallback((flush: (() => Promise<boolean>) | undefined) => {
+    flushThoughts.current = flush;
+  }, []);
+  const edit = () => void (flushThoughts.current?.() ?? Promise.resolve(true)).then((saved) => saved && onEdit());
   if (!entry) return null;
 
   // A value is written under the key the note already uses (`rating` or `Rating`), or the vault's usual one.
@@ -132,7 +138,7 @@ export function MediaPage(props: Props) {
           <span className="media-path" title="The note">
             {path}
           </span>
-          <button type="button" className="nav-chip is-action" onClick={onEdit} data-testid="edit-note">
+          <button type="button" className="nav-chip is-action" onClick={edit} data-testid="edit-note">
             Edit note
           </button>
         </nav>
@@ -162,6 +168,7 @@ export function MediaPage(props: Props) {
         linkTargets={linkTargets}
         onSave={onSaveThoughts}
         onUnsaved={onUnsavedThoughts}
+        onFlush={holdFlush}
       />
     </div>
   );

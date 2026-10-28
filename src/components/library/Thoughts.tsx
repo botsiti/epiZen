@@ -7,7 +7,7 @@ import { bodyWithoutCover, type KindSpec } from '../../lib/library';
 import type { WikilinkMatch } from '../../lib/links';
 import { flushBeforeClose, trackSave } from '../../lib/saving';
 import { lineEnding } from '../../lib/text';
-import { splitThoughts } from '../../lib/thoughts';
+import { firstThoughtLead, splitThoughts } from '../../lib/thoughts';
 import { Editor } from '../Editor';
 import { NoteMarkdown } from '../NoteMarkdown';
 import { order } from '../periodic/effects';
@@ -22,10 +22,15 @@ interface Props {
   cover?: WikilinkMatch;
   onOpenLink: (target: string, fromPath: string, newTab?: boolean) => void;
   linkTargets: LinkTarget[];
-  /** Writes the note's text from `before` to `after`; rejects with why it couldn't. */
+  /** Rewrites the end of the note the page owns from `before` to `after` (see `replaceThoughts`); rejects with why it couldn't. */
   onSave: (before: string, after: string) => Promise<void>;
   /** The page was left with text that couldn't be saved. */
   onUnsaved: (thoughts: string, message: string) => void;
+  /**
+   * Hands over a flush while the text is open for writing (`undefined` once it closes): it saves
+   * what is left and resolves to whether all of it is in the note.
+   */
+  onFlush?: (flush: (() => Promise<boolean>) | undefined) => void;
 }
 
 /**
@@ -34,7 +39,7 @@ interface Props {
  * writing; it saves on its own after a short pause, and Done, Escape or ⌘↵ closes it once saved.
  * The lines above the text are never touched.
  */
-export function Thoughts({ spec, path, text, files, cover, onOpenLink, linkTargets, onSave, onUnsaved }: Props) {
+export function Thoughts({ spec, path, text, files, cover, onOpenLink, linkTargets, onSave, onUnsaved, onFlush }: Props) {
   const [editing, setEditing] = useState(false);
   const parts = useMemo(() => splitThoughts(text), [text]);
   // The hero shows the cover: it is left out of whichever part holds it.
@@ -63,12 +68,14 @@ export function Thoughts({ spec, path, text, files, cover, onOpenLink, linkTarge
         <ThoughtsEditor
           path={path}
           initial={parts.thoughts}
+          lead={parts.thoughts ? '' : firstThoughtLead(text)}
           separator={separator}
           hint={`What did you think of this ${spec.one}?`}
           linkTargets={linkTargets}
           above={above}
           onSave={onSave}
           onUnsaved={onUnsaved}
+          onFlush={onFlush}
           onDone={() => setEditing(false)}
         />
       ) : (
@@ -121,12 +128,15 @@ const DONE_KEYS = [
 interface EditorProps {
   path: string;
   initial: string;
+  /** What a first thought is written after (`firstThoughtLead`); `''` when the note has text. */
+  lead: string;
   separator: '\n' | '\r\n';
   hint: string;
   linkTargets: LinkTarget[];
   above: ReactNode;
   onSave: Props['onSave'];
   onUnsaved: Props['onUnsaved'];
+  onFlush: Props['onFlush'];
   onDone: () => void;
 }
 
@@ -134,8 +144,12 @@ interface EditorProps {
  * The text open for writing. As the note editor does, it saves one write at a time, each over
  * what the last one left; if one can't be written, saving stops and says so, the text stays on
  * screen, Done stays put, and leaving hands it to `onUnsaved`.
+ *
+ * What it writes is the end of the note it owns: the text, after the lead a first thought needs.
+ * Erased, the text takes its lead with it, and the note is as it was.
  */
-function ThoughtsEditor({ path, initial, separator, hint, linkTargets, above, onSave, onUnsaved, onDone }: EditorProps) {
+function ThoughtsEditor({ path, initial, lead, separator, hint, linkTargets, above, onSave, onUnsaved, onFlush, onDone }: EditorProps) {
+  const [owned] = useState(() => (text: string) => (text ? lead + text : ''));
   const [draft, setDraft] = useState(initial);
   const [state, setState] = useState<SaveState>({ kind: 'idle' });
   const saved = useRef(initial);
@@ -161,7 +175,7 @@ function ThoughtsEditor({ path, initial, separator, hint, linkTargets, above, on
         const next = latest.current;
         if (mounted.current) setState({ kind: 'saving' });
         try {
-          await report.current.onSave(saved.current, next);
+          await report.current.onSave(owned(saved.current), owned(next));
           saved.current = next;
           if (mounted.current && latest.current === next) setState({ kind: 'saved' });
         } catch (err) {
@@ -174,7 +188,7 @@ function ThoughtsEditor({ path, initial, separator, hint, linkTargets, above, on
       }
     });
     return queue.current;
-  }, []);
+  }, [owned]);
   const unsaved = useCallback(() => (failure.current === undefined ? undefined : path), [path]);
 
   useEffect(() => {
@@ -190,13 +204,18 @@ function ThoughtsEditor({ path, initial, separator, hint, linkTargets, above, on
     latest.current = next;
     setDraft(next);
   }, []);
-  // Done closes only once everything written is in the note.
+  // Done (and "Edit note") go on only once everything written is in the note.
+  const flush = useCallback(() => save().then(() => failure.current === undefined), [save]);
+  useEffect(() => {
+    onFlush?.(flush);
+    return () => onFlush?.(undefined);
+  }, [onFlush, flush]);
   const done = useCallback(
     () =>
-      void save().then(() => {
-        if (failure.current === undefined) report.current.onDone();
+      void flush().then((saved) => {
+        if (saved) report.current.onDone();
       }),
-    [save],
+    [flush],
   );
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {

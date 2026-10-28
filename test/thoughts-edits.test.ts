@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { KINDS, LIBRARY_ROOT, kindOfPath } from '../src/lib/library';
-import { replaceThoughts, splitThoughts } from '../src/lib/thoughts';
+import { KINDS, LIBRARY_ROOT, kindOfPath, mediaNoteText } from '../src/lib/library';
+import { firstThoughtLead, replaceThoughts, splitThoughts } from '../src/lib/thoughts';
 
 const original = fileURLToPath(new URL('../demo-vault', import.meta.url));
 let copy: string;
@@ -72,16 +72,33 @@ describe('thoughts written on a copy of the demo vault', () => {
     }
   });
 
-  it('clears the text and then writes a first thought, keeping the link and the cover', () => {
+  it('clears the text, writes a first thought and erases it again, back to the cleared note byte for byte', () => {
     for (const path of mediaNotes()) {
       const cleared = run(path, (text) => replaceThoughts(text, splitThoughts(text).thoughts, ''));
       expect(splitThoughts(cleared.after).thoughts, path).toBe('');
       expect(headOf(cleared.after), path).toBe(headOf(cleared.before));
-      const written = run(path, (text) => replaceThoughts(text, '', 'Weird and lovely.'));
+      const lead = firstThoughtLead(cleared.after);
+      const written = run(path, (text) => replaceThoughts(text, '', `${lead}Weird and lovely.`));
       expect(written.differ, path).toEqual([path]);
       expect(written.after.startsWith(cleared.after), path).toBe(true);
       expect(splitThoughts(written.after).thoughts, path).toBe('Weird and lovely.');
+      const erased = run(path, (text) => replaceThoughts(text, `${lead}Weird and lovely.`, ''));
+      expect(erased.after, path).toBe(cleared.after);
       cpSync(join(original, path), join(copy, path));
+    }
+  });
+
+  it('writes a first thought into a note as Add writes it, and erasing it leaves that note as it was', () => {
+    for (const spec of KINDS) {
+      const draft = { title: 'Brand New', maker: 'Someone', year: '2026', genres: ['drama'], rating: '', date: '2026-10-28', started: '' };
+      for (const links of [{ overview: `00. ${spec.tab} 2026`, cover: `${LIBRARY_ROOT}/${spec.folder}/_attachments/brand-new.jpg` }, {}]) {
+        const note = mediaNoteText(spec, draft, links);
+        const lead = firstThoughtLead(note);
+        const written = replaceThoughts(note, '', `${lead}First listen.`);
+        expect(written.slice(0, note.length), spec.kind).toBe(note);
+        expect(splitThoughts(written).thoughts, spec.kind).toBe('First listen.');
+        expect(replaceThoughts(written, `${lead}First listen.`, ''), spec.kind).toBe(note);
+      }
     }
   });
 });

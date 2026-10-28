@@ -78,9 +78,9 @@ export function NoteView(props: ViewProps) {
   // returns the new text, or `undefined` when there is nothing to do. If the note changes on disk
   // between the read and the write, nothing is written: it says so and shows the note as it is.
   // `written` runs once the change is in the note. `settled` runs once either way, with why it
-  // wasn't written if it wasn't.
+  // wasn't written if it wasn't. `failed` heads the page's warning; with none, the caller says it.
   const change = useCallback(
-    (edit: (text: string) => string | undefined, failed: string, written?: () => void, settled?: (problem?: string) => void) => {
+    (edit: (text: string) => string | undefined, failed: string | undefined, written?: () => void, settled?: (problem?: string) => void) => {
       changes.current = changes.current.then(async () => {
         if (latest.current === undefined) return settled?.('The note is still loading.');
         try {
@@ -97,7 +97,7 @@ export function NoteView(props: ViewProps) {
         } catch (err) {
           const problem = err instanceof Error ? err.message : String(err);
           settled?.(problem);
-          setChangeError(`${failed}: ${problem}. The note is shown as it is now.`);
+          if (failed !== undefined) setChangeError(`${failed}: ${problem}. The note is shown as it is now.`);
           const fresh = await readNote(path).catch(() => undefined);
           if (fresh !== undefined) {
             latest.current = fresh;
@@ -218,7 +218,8 @@ export function NoteView(props: ViewProps) {
         onSetProperty={actions.onSetProperty}
         onSaveThoughts={(before, after) =>
           new Promise<void>((resolve, reject) =>
-            change((text) => replaceThoughts(text, before, after), "What you wrote wasn't saved", undefined, (problem) => (problem ? reject(new Error(problem)) : resolve())),
+            // The card says what went wrong, beside the text it still holds.
+            change((text) => replaceThoughts(text, before, after), undefined, undefined, (problem) => (problem ? reject(new Error(problem)) : resolve())),
           )
         }
         onUnsavedThoughts={(thoughts, message) => {

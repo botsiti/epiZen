@@ -37,21 +37,28 @@ export function splitThoughts(text: string): NoteParts {
 export const CHANGED_ELSEWHERE = "the note's text was changed somewhere else";
 
 /**
- * The note with its thoughts rewritten from `before` (what the page last saw, or saved) to
- * `after`, every line above them as it is now: a rating set meanwhile stays set. Throws when the
- * note no longer ends with `before`, or (for a first thought) when it has gained text of its own:
- * the text changed somewhere else, and writing over it would lose that.
+ * What a first thought needs before it in this note: a line break if the note's last line has
+ * none, and a blank line under a link or a cover, so it reads as a paragraph of its own. The page
+ * writes it with the thought and takes it away with it, so a thought typed and erased leaves the
+ * note as it was.
+ */
+export function firstThoughtLead(text: string): string {
+  const separator = lineEnding(text) ?? '\n';
+  let lead = text && !text.endsWith('\n') ? separator : '';
+  if (splitThoughts(text).links.trim() && !/\n[ \t]*\r?\n$/.test(text + lead)) lead += separator;
+  return lead;
+}
+
+/**
+ * The note with the end the page owns rewritten from `before` to `after`. That end is the text as
+ * the page last saw or saved it, with a first thought's lead (`firstThoughtLead`). Every line above
+ * it stays as it is now, so a rating set meanwhile stays set.
  *
- * A first thought under a link or a cover starts a paragraph of its own, after a blank line.
+ * Throws when the note no longer ends with `before`, or has text of its own above it: the text was
+ * changed somewhere else, and writing would lose that or mix it in.
  */
 export function replaceThoughts(text: string, before: string, after: string): string {
-  const fresh = before ? text.endsWith(before) : splitThoughts(text).thoughts === '';
-  if (!fresh) throw new Error(CHANGED_ELSEWHERE);
-  if (after === before) return text;
-  let head = text.slice(0, text.length - before.length);
-  if (!after || before) return head + after;
-  const separator = lineEnding(text) ?? '\n';
-  if (head && !head.endsWith('\n')) head += separator;
-  if (splitThoughts(text).links.trim() && !/\n[ \t]*\r?\n$/.test(head)) head += separator;
+  const head = text.slice(0, text.length - before.length);
+  if (!text.endsWith(before) || splitThoughts(head).thoughts !== '') throw new Error(CHANGED_ELSEWHERE);
   return head + after;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHANGED_ELSEWHERE, replaceThoughts, splitThoughts } from './thoughts';
+import { CHANGED_ELSEWHERE, firstThoughtLead, replaceThoughts, splitThoughts } from './thoughts';
 
 // demo-vault/Rating/kino/Static Bloom.md, as written.
 const FILM = `---
@@ -56,12 +56,24 @@ describe('replaceThoughts', () => {
   });
 
   it('gives a first thought its own paragraph under the link', () => {
-    expect(replaceThoughts(EMPTY, '', 'Weird and lovely.')).toBe(`${EMPTY}\nWeird and lovely.`);
-    // No link to keep apart from: the text goes straight under the properties.
-    expect(replaceThoughts('---\nrating: 1\n---\n', '', 'Hm.')).toBe('---\nrating: 1\n---\nHm.');
-    // A link with no line break after it gets one first.
-    expect(replaceThoughts('---\nrating: 1\n---\n[[00. Books]]', '', 'Hm.')).toBe('---\nrating: 1\n---\n[[00. Books]]\n\nHm.');
-    expect(replaceThoughts(EMPTY.replaceAll('\n', '\r\n'), '', 'Hm.')).toBe(`${EMPTY.replaceAll('\n', '\r\n')}\r\nHm.`);
+    expect(firstThoughtLead(EMPTY)).toBe('\n');
+    expect(replaceThoughts(EMPTY, '', '\nWeird and lovely.')).toBe(`${EMPTY}\nWeird and lovely.`);
+    // Under a blank line already, or with no link to keep apart from: nothing more.
+    expect(firstThoughtLead(`${EMPTY}\n`)).toBe('');
+    expect(firstThoughtLead('---\nrating: 1\n---\n')).toBe('');
+    // A last line with no line break gets one first.
+    expect(firstThoughtLead('---\nrating: 1\n---\n[[00. Books]]')).toBe('\n\n');
+    expect(firstThoughtLead('---\nrating: 1\n---')).toBe('\n');
+    expect(firstThoughtLead(EMPTY.replaceAll('\n', '\r\n'))).toBe('\r\n');
+  });
+
+  it('leaves the note as it was when a first thought is typed and erased', () => {
+    for (const note of [EMPTY, `${EMPTY}\n`, '---\nrating: 1\n---\n', '---\nrating: 1\n---\n[[00. Books]]', '---\nrating: 1\n---', EMPTY.replaceAll('\n', '\r\n')]) {
+      const lead = firstThoughtLead(note);
+      const typed = replaceThoughts(note, '', `${lead}W`);
+      expect(splitThoughts(typed).thoughts, JSON.stringify(note)).toBe('W');
+      expect(replaceThoughts(typed, `${lead}W`, ''), JSON.stringify(note)).toBe(note);
+    }
   });
 
   it('keeps a rating set while the text was being written', () => {
@@ -74,8 +86,8 @@ describe('replaceThoughts', () => {
   });
 
   it('keeps a text that is only a link as text the next time', () => {
-    const once = replaceThoughts(EMPTY, '', '[[Radiohead]]');
-    expect(replaceThoughts(once, '[[Radiohead]]', '[[Radiohead]] and [[Portishead]]')).toBe(`${EMPTY}\n[[Radiohead]] and [[Portishead]]`);
+    const once = replaceThoughts(EMPTY, '', '\n[[Radiohead]]');
+    expect(replaceThoughts(once, '\n[[Radiohead]]', '\n[[Radiohead]] and [[Portishead]]')).toBe(`${EMPTY}\n[[Radiohead]] and [[Portishead]]`);
   });
 
   it('refuses when the text changed somewhere else, rather than write over it', () => {
@@ -83,6 +95,9 @@ describe('replaceThoughts', () => {
     expect(() => replaceThoughts(edited, splitThoughts(FILM).thoughts, 'Mine.\n')).toThrow(CHANGED_ELSEWHERE);
     // A first thought, where Obsidian has meanwhile written one.
     expect(() => replaceThoughts(TIGHT, '', 'Mine.')).toThrow(CHANGED_ELSEWHERE);
+    // Words put in front of the text, which a write would mix with these.
+    expect(() => replaceThoughts(TIGHT.replace('Adam, a lonely man.', 'Not Adam, a lonely man.'), 'a lonely man.\n', 'a man.\n')).toThrow(CHANGED_ELSEWHERE);
+    expect(() => replaceThoughts(TIGHT.replace('Adam,', 'First.\n\nAdam,'), 'Adam, a lonely man.\n', 'Adam.\n')).toThrow(CHANGED_ELSEWHERE);
   });
 
   it('leaves the note as it is when nothing changed', () => {

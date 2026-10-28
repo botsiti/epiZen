@@ -41,18 +41,29 @@ function renderThoughts(text: string, onSave = vi.fn<(before: string, after: str
   const onOpenLink = vi.fn();
   const onUnsaved = vi.fn();
   const cover = coverEmbed(parseNote(text).body, PATH, linkResolver(files))?.link;
-  render(
+  const { unmount } = render(
     <Thoughts spec={kindSpec('album')} path={PATH} text={text} files={files} cover={cover} onOpenLink={onOpenLink} linkTargets={[]} onSave={onSave} onUnsaved={onUnsaved} />,
   );
-  return { onSave, onOpenLink, onUnsaved };
+  return { onSave, onOpenLink, onUnsaved, unmount };
+}
+
+function editor() {
+  const host = screen.getByTestId('editor').querySelector<HTMLElement>('.cm-editor');
+  const view = host && EditorView.findFromDOM(host);
+  if (!view) throw new Error('no editor');
+  return view;
 }
 
 /** Types at the end of the open editor, as a paste does. */
 function type(text: string) {
-  const host = screen.getByTestId('editor').querySelector<HTMLElement>('.cm-editor');
-  const view = host && EditorView.findFromDOM(host);
-  if (!view) throw new Error('no editor');
+  const view = editor();
   act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: text }, userEvent: 'input.paste' }));
+}
+
+/** Erases everything in the open editor. */
+function erase() {
+  const view = editor();
+  act(() => view.dispatch({ changes: { from: 0, to: view.state.doc.length }, userEvent: 'delete' }));
 }
 
 describe('Thoughts', () => {
@@ -112,6 +123,46 @@ describe('Thoughts', () => {
     await waitFor(() => expect(screen.getByTestId('thoughts-error')).toHaveTextContent("the note's text was changed somewhere else"));
     expect(screen.getByTestId('thoughts-state')).toHaveTextContent('Not saved');
     expect(screen.getByTestId('editor')).toHaveTextContent('Mine.');
+  });
+
+  it("takes a first thought's line break away with it when the thought is erased", async () => {
+    vi.useFakeTimers();
+    try {
+      // The cover's line with no blank line under it, as a note may have.
+      const { onSave } = renderThoughts(HEAD.replace(/\n\n$/, '\n'));
+      fireEvent.click(screen.getByTestId('thoughts-write'));
+      type('W');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(onSave).toHaveBeenLastCalledWith('', '\nW');
+      erase();
+      await vi.advanceTimersByTimeAsync(600);
+      expect(onSave).toHaveBeenLastCalledWith('\nW', '');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('writes nothing when it is closed without a change', async () => {
+    const { onSave } = renderThoughts(ALBUM);
+    fireEvent.click(screen.getByTestId('thoughts-write'));
+    fireEvent.click(screen.getByTestId('thoughts-done'));
+    await waitFor(() => expect(screen.queryByTestId('editor')).toBeNull());
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("hands the text on when the page is left after a save didn't go through", async () => {
+    const onSave = vi.fn(() => Promise.reject(new Error("the note's text was changed somewhere else")));
+    const { onUnsaved, unmount } = renderThoughts(ALBUM, onSave);
+    fireEvent.click(screen.getByTestId('thoughts-write'));
+    type('Mine.');
+    fireEvent.click(screen.getByTestId('thoughts-done'));
+    await waitFor(() => expect(screen.getByTestId('thoughts-error')).toBeInTheDocument());
+    unmount();
+    await waitFor(() => expect(onUnsaved).toHaveBeenCalledTimes(1));
+    expect(onUnsaved).toHaveBeenLastCalledWith(
+      'Sounds like the weather outside today. In a good way. Listened on [[15.09.2026]].\nMine.',
+      "the note's text was changed somewhere else",
+    );
   });
 
   it('closes on Escape once saved', async () => {
