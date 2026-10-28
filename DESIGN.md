@@ -271,6 +271,24 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   covers of what was listened to, watched or finished: up to three fanned like cards in a hand, the
   best rated in front and the others tilted behind, a little darker, spreading when pointed at; "+n"
   when there were more. It opens on this month, or the latest month that has something.
+- **Covers or List**: at the right of the word tabs, on their hairline, a small pill of two quiet
+  segments, a line-drawn grid and "Covers", three lines and "List", the chosen one softly lit with
+  its mark in accent. The choice is the app's (its settings), not the vault's, and holds on every tab.
+- **List**: the same notes, sorts and filters as the covers, as a table after Obsidian's, on the page
+  without a card: a header in the label style that stays at the top as the list scrolls, then a
+  row per note, 64px, a hairline under each short of its rounded ends. The cover small (44px tall,
+  posters narrower; without one, its first letter in the serif), the title, who made it ("By" on
+  All, Artist, Director or Author on a kind's tab), the year faint, the kind with its mark (on All),
+  the genres muted with faint dots between, the rating as a thin sage bar out of 100 with the number
+  in accent, and the day ("27 Sep 2026"; Listened, Watched or Finished on a kind's tab). An empty
+  value is a faint "—". Title, By, Year, Rating and the day sort, the chosen one in `--text` with a
+  small accent arrow (down for the latest, the best and the newest, up for A to Z); the chips follow
+  them, and they the chips. A row lights softly under the pointer and in accent when focused; a
+  click opens its page, ↑ ↓ Home End and Page Up and Down move between rows, Enter opens. In a
+  narrower pane the genres go first, then the kind, the year and the rating's bar.
+- **Long libraries**: the cards and rows go on the page a few screens at a time, each drawn only near
+  the view (`content-visibility`), and only the first screen rises in, so six hundred open at once
+  and scroll at the display's rate.
 - **Without a cover**: when notes in view have no cover, a faint line above the grid says how many,
   "533 without a cover · Find covers", the last two words in accent. A cover is the note's first
   embedded image before any of its text (after the overview link); an image further down, after a

@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { VaultFile } from '../../lib/api';
-import { collectLibrary, type LibraryTab } from '../../lib/library';
+import { collectLibrary, type LibraryLayout, type LibraryTab } from '../../lib/library';
 import { LibraryView } from './LibraryView';
 
 vi.mock('../../lib/api', () => ({
@@ -28,10 +28,14 @@ const notes = [
 const files: VaultFile[] = notes.map((note) => ({ path: note.path, kind: 'note' }));
 const library = collectLibrary(notes, files);
 
-function renderLibrary(tab: LibraryTab = 'all') {
+function renderLibrary(tab: LibraryTab = 'all', layout: LibraryLayout = 'covers', shelved = library) {
   const onTab = vi.fn();
-  const view = render(<LibraryView library={library} files={files} tab={tab} onTab={onTab} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
-  return { onTab, view };
+  const onLayout = vi.fn();
+  const onOpenNote = vi.fn();
+  const view = render(
+    <LibraryView library={shelved} files={files} tab={tab} onTab={onTab} layout={layout} onLayout={onLayout} today={new Date(2026, 9, 28)} onOpenNote={onOpenNote} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />,
+  );
+  return { onTab, onLayout, onOpenNote, view };
 }
 
 const cards = () => screen.getAllByTestId('library-card').map((card) => card.getAttribute('data-path'));
@@ -86,7 +90,7 @@ describe('the library\'s All tab', () => {
       ['book', '+ Book', false],
       ['podcast', '+ Episode', false],
     ]);
-    view.rerender(<LibraryView library={library} files={files} tab="film" onTab={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
+    view.rerender(<LibraryView library={library} files={files} tab="film" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
     expect(screen.getByTestId('library')).toHaveAttribute('data-tab', 'film');
     expect(adds()).toEqual([
       ['film', '+ Add film', true],
@@ -105,5 +109,126 @@ describe('the library\'s All tab', () => {
     const { onTab } = renderLibrary();
     await user.click(screen.getByRole('tab', { name: 'Podcasts' }));
     expect(onTab).toHaveBeenLastCalledWith('podcast');
+  });
+});
+
+const rows = () => screen.getAllByTestId('library-row').map((row) => row.getAttribute('data-path'));
+const row = (path: string) => screen.getAllByTestId('library-row').find((found) => found.getAttribute('data-path') === path)!;
+const cells = (path: string) => within(row(path)).getAllByRole('cell').map((cell) => cell.textContent);
+const heads = () => screen.getAllByRole('columnheader').map((head) => head.getAttribute('aria-label') ?? head.textContent);
+const sorted = () => screen.getAllByRole('columnheader').filter((head) => head.hasAttribute('aria-sort')).map((head) => [head.textContent, head.getAttribute('aria-sort')]);
+const pressedSort = () => screen.getAllByTestId('sort').filter((chip) => chip.getAttribute('aria-pressed') === 'true').map((chip) => chip.textContent);
+
+describe("the library's list", () => {
+  it('switches between the covers and the list, the choice handed up to be kept in the settings', async () => {
+    const user = userEvent.setup();
+    const { onLayout, view } = renderLibrary();
+    expect(screen.getByTestId('library-grid')).toBeInTheDocument();
+    expect(screen.getAllByTestId('library-view').map((option) => [option.textContent, option.getAttribute('aria-pressed')])).toEqual([
+      ['Covers', 'true'],
+      ['List', 'false'],
+    ]);
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    expect(onLayout).toHaveBeenLastCalledWith('list');
+    view.unmount();
+
+    renderLibrary('all', 'list');
+    expect(screen.queryByTestId('library-grid')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId('library-card')).toHaveLength(0);
+    expect(rows()).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows each note as a row: its cover, title, maker, year, kind on All, genres, rating and day', () => {
+    renderLibrary('all', 'list');
+    expect(heads()).toEqual(['Cover', 'Title', 'By', 'Year', 'Kind', 'Genres', 'Rating', 'Date']);
+    expect(cells('Rating/books/Thinking in Seasons.md')).toEqual(['T', 'Thinking in Seasons', 'Ada Morrow', '2023', 'book', 'philosophy', '81', '3 Sep 2026']);
+    // A film without a director shows a faint dash, as an empty property does.
+    expect(cells('Rating/kino/Static Bloom.md')).toEqual(['S', 'Static Bloom', '—', '2024', 'film', 'sci-fi', '68', '21 Sep 2026']);
+    expect(within(row('Rating/books/Thinking in Seasons.md')).getByTestId('row-rating').querySelector('.row-meter span')).toHaveStyle({ '--r': '0.81' });
+  });
+
+  it("names a kind's own columns on its tab, and leaves the kind out", () => {
+    renderLibrary('film', 'list');
+    expect(heads()).toEqual(['Cover', 'Title', 'Director', 'Year', 'Genres', 'Rating', 'Watched']);
+    expect(screen.queryAllByTestId('row-kind')).toHaveLength(0);
+    expect(rows()).toEqual(['Rating/kino/Static Bloom.md']);
+  });
+
+  it('sorts from its headers, in step with the sort chips', async () => {
+    const user = userEvent.setup();
+    renderLibrary('all', 'list');
+    expect(sorted()).toEqual([['Date', 'descending']]);
+    expect(pressedSort()).toEqual(['Recent']);
+    expect(rows()[0]).toBe('Rating/music/Monastery Wi-Fi.md');
+
+    await user.click(within(screen.getAllByRole('columnheader').find((head) => head.textContent === 'Rating')!).getByRole('button'));
+    expect(sorted()).toEqual([['Rating', 'descending']]);
+    expect(pressedSort()).toEqual(['Rating']);
+    expect(rows()[0]).toBe('Rating/podcasts/Why Dogs Dream.md');
+
+    await user.click(screen.getAllByTestId('sort').find((chip) => chip.textContent === 'Title')!);
+    expect(sorted()).toEqual([['Title', 'ascending']]);
+    expect(rows()).toEqual(['Rating/music/Monastery Wi-Fi.md', 'Rating/music/Salt & Graphite.md', 'Rating/kino/Static Bloom.md', 'Rating/books/Thinking in Seasons.md', 'Rating/podcasts/Why Dogs Dream.md']);
+
+    // By maker, A to Z, the film without a director last; no chip is that sort.
+    await user.click(within(screen.getAllByRole('columnheader').find((head) => head.textContent === 'By')!).getByRole('button'));
+    expect(sorted()).toEqual([['By', 'ascending']]);
+    expect(pressedSort()).toEqual([]);
+    expect(rows().at(-1)).toBe('Rating/kino/Static Bloom.md');
+    expect(rows()[0]).toBe('Rating/books/Thinking in Seasons.md');
+  });
+
+  it("opens a row's page from a click anywhere on it, or from the keyboard, ↑ and ↓ going from row to row", async () => {
+    const user = userEvent.setup();
+    const { onOpenNote } = renderLibrary('all', 'list');
+    await user.click(within(row('Rating/kino/Static Bloom.md')).getByText('2024'));
+    expect(onOpenNote).toHaveBeenLastCalledWith('Rating/kino/Static Bloom.md');
+    onOpenNote.mockClear();
+
+    const opens = screen.getAllByTestId('row-open');
+    opens[0]!.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(opens[1]).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(opens.at(-1)).toHaveFocus();
+    await user.keyboard('{ArrowDown}{ArrowUp}');
+    expect(opens.at(-2)).toHaveFocus();
+    await user.keyboard('{Home}{Enter}');
+    expect(opens[0]).toHaveFocus();
+    expect(onOpenNote).toHaveBeenCalledTimes(1);
+    expect(onOpenNote).toHaveBeenLastCalledWith(rows()[0]);
+  });
+
+  it('narrows by kind and genre as the covers do, and offers Find covers for those in view without one', async () => {
+    const user = userEvent.setup();
+    renderLibrary('all', 'list');
+    expect(screen.getByTestId('library-missing')).toHaveTextContent('5 without a cover · Find covers');
+    await user.click(screen.getAllByTestId('kind-chip').find((chip) => chip.getAttribute('data-kind') === 'album')!);
+    expect(rows()).toEqual(['Rating/music/Monastery Wi-Fi.md', 'Rating/music/Salt & Graphite.md']);
+    expect(screen.getByTestId('library-missing')).toHaveTextContent('2 without a cover · Find covers');
+    await user.click(screen.getAllByTestId('genre-chip').find((chip) => chip.getAttribute('data-genre') === 'ambient')!);
+    expect(rows()).toEqual(['Rating/music/Monastery Wi-Fi.md']);
+  });
+});
+
+describe('a long library', () => {
+  // 40 albums, as a real vault has hundreds.
+  const many = Array.from({ length: 40 }, (_, i) => ({ path: `Rating/music/Album ${i + 1}.md`, text: `---\nArtist: Band ${i}\nlistened: 2026-09-${String((i % 28) + 1).padStart(2, '0')}\nrating: ${50 + i}\n---\n` }));
+  const shelved = collectLibrary(many, many.map((note) => ({ path: note.path, kind: 'note' as const })));
+
+  it('puts its first screens on the page at once and the rest just after, only the first screen rising into place', async () => {
+    const { view } = renderLibrary('album', 'covers', shelved);
+    const rising = (items: Element[]) => items.map((item) => item.classList.contains('rise'));
+    expect(screen.getAllByTestId('library-card')).toHaveLength(36);
+    await waitFor(() => expect(screen.getAllByTestId('library-card')).toHaveLength(40));
+    const cardItems = screen.getAllByTestId('library-card').map((card) => card.closest('li')!);
+    expect(rising(cardItems)).toEqual(Array.from({ length: 40 }, (_, i) => i < 24));
+    // Every note in view is offered to Find covers, put on the page yet or not.
+    expect(screen.getByTestId('library-missing')).toHaveTextContent('40 without a cover');
+    view.unmount();
+    renderLibrary('album', 'list', shelved);
+    await waitFor(() => expect(screen.getAllByTestId('library-row')).toHaveLength(40));
+    expect(rising(screen.getAllByTestId('library-row'))).toEqual(Array.from({ length: 40 }, (_, i) => i < 24));
   });
 });

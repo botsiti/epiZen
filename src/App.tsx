@@ -51,7 +51,7 @@ import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
 import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
-import { collectLibrary, kindOfFolder, kindOfPath, type LibraryTab } from './lib/library';
+import { collectLibrary, isLibraryLayout, kindOfFolder, kindOfPath, type LibraryLayout, type LibraryTab } from './lib/library';
 import { collectMedia } from './lib/media';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
@@ -202,6 +202,12 @@ export function App() {
     (id: number, tab: LibraryTab) => update((prev) => replaceView(prev, (v) => (v.kind === 'library' ? { ...v, tab } : v), id)),
     [update],
   );
+  // Covers or the list, kept in the app's settings (never the vault), for every library tab.
+  const libraryLayout: LibraryLayout = isLibraryLayout(settings.libraryLayout) ? settings.libraryLayout : 'covers';
+  const setLibraryLayout = useCallback((layout: LibraryLayout) => {
+    setSettings((prev) => ({ ...prev, libraryLayout: layout }));
+    void updateSettings({ libraryLayout: layout }).catch(() => undefined);
+  }, []);
   const todayNote = useMemo(
     () => ({ date: now, path: periodicNotes.get(periodKey('day', now)), name: noteTitle(periodicPath('day', now, periodic)) }),
     [now, periodic, periodicNotes],
@@ -752,6 +758,8 @@ export function App() {
                 files={files}
                 tab={view.tab}
                 onTab={(shown) => setLibraryTab(tab.id, shown)}
+                layout={libraryLayout}
+                onLayout={setLibraryLayout}
                 today={now}
                 onOpenNote={openNote}
                 onCreated={mediaCreated}

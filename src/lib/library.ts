@@ -251,21 +251,37 @@ export function libraryStats(entries: MediaEntry[], today: Date): LibraryStats {
   };
 }
 
-export type SortOrder = 'recent' | 'rating' | 'title';
+/** Recent, Rating and Title are the chips; the list's headers sort by those and by maker and year too. */
+export type SortOrder = 'recent' | 'rating' | 'title' | 'maker' | 'year';
 
-const byTitle = (a: MediaEntry, b: MediaEntry) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true });
+const words = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+const byTitle = (a: MediaEntry, b: MediaEntry) => words(a.title, b.title);
 const byDate = (a: MediaEntry, b: MediaEntry) => (b.date ?? '').localeCompare(a.date ?? '');
 const byRating = (a: MediaEntry, b: MediaEntry) => (b.rating ?? -1) - (a.rating ?? -1);
+// Those without a maker or a year go last, as the unrated and undated do.
+const byMaker = (a: MediaEntry, b: MediaEntry) => Number(!a.maker) - Number(!b.maker) || words(a.maker ?? '', b.maker ?? '');
+const yearOf = (entry: MediaEntry) => (entry.year && /^\d{1,4}$/.test(entry.year) ? Number(entry.year) : -1);
+const byYear = (a: MediaEntry, b: MediaEntry) => yearOf(b) - yearOf(a);
 
-/** Recent: the latest listened, watched or finished first. Rating: the best first. Unrated and undated go last. */
+/**
+ * Recent: the latest listened, watched or finished first. Rating: the best first. Title and maker:
+ * A to Z. Year: the newest first. Unrated, undated, nameless and yearless go last.
+ */
 export function sortEntries(entries: MediaEntry[], order: SortOrder): MediaEntry[] {
   const compare = {
     recent: (a: MediaEntry, b: MediaEntry) => byDate(a, b) || byRating(a, b) || byTitle(a, b),
     rating: (a: MediaEntry, b: MediaEntry) => byRating(a, b) || byDate(a, b) || byTitle(a, b),
     title: byTitle,
+    maker: (a: MediaEntry, b: MediaEntry) => byMaker(a, b) || byYear(a, b) || byTitle(a, b),
+    year: (a: MediaEntry, b: MediaEntry) => byYear(a, b) || byDate(a, b) || byTitle(a, b),
   }[order];
   return entries.toSorted(compare);
 }
+
+/** How the library shows what is in view: a grid of covers, or a list. Kept in the app's settings. */
+export type LibraryLayout = 'covers' | 'list';
+
+export const isLibraryLayout = (value: unknown): value is LibraryLayout => value === 'covers' || value === 'list';
 
 /** The genres in use, the most used first. */
 export function genreCounts(entries: MediaEntry[]): [string, number][] {

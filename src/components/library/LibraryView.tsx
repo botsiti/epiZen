@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { VaultFile } from '../../lib/api';
 import { formatDate, monthGrid } from '../../lib/dates';
@@ -16,6 +16,7 @@ import {
   toggleKind,
   withGenre,
   type KindSpec,
+  type LibraryLayout,
   type LibraryTab,
   type MediaEntry,
   type MediaKind,
@@ -29,6 +30,9 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { VaultImage } from '../VaultImage';
 import { AddMedia } from './AddMedia';
 import { FindCovers } from './FindCovers';
+import { LibraryList } from './LibraryList';
+import { KindMark } from './marks';
+import { useInBatches } from './useInBatches';
 import '../periodic/periodic.css';
 import './library.css';
 
@@ -37,6 +41,9 @@ interface Props {
   files: VaultFile[];
   tab: LibraryTab;
   onTab: (tab: LibraryTab) => void;
+  /** Covers or the list: kept in the app's settings, never the vault. */
+  layout: LibraryLayout;
+  onLayout: (layout: LibraryLayout) => void;
   today: Date;
   onOpenNote: (path: string) => void;
   /** A new note was created by Add: read the vault again and open it. */
@@ -71,6 +78,11 @@ const MONTH_LETTERS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 /** At most this many covers fan out on one day of the calendar; the rest is "+n". */
 const FAN = 3;
+/**
+ * The cards and rows that rise into place as the library opens: those on its first screen. The
+ * hundreds below it come in still; animating them too (with a blur) stalled the opening.
+ */
+const RISING = 24;
 
 const a = (word: string) => `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}`;
 const capital = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
@@ -81,7 +93,7 @@ const capital = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
  * of covers to sort and filter by genre (and on All by kind), and a calendar of covers by the day
  * they were listened to, watched or finished. The hero has an Add for every kind on every tab.
  */
-export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onCreated, onChanged }: Props) {
+export function LibraryView({ library, files, tab, onTab, layout, onLayout, today, onOpenNote, onCreated, onChanged }: Props) {
   // Videos are read as pages, not shelved here: the library is what is rated and added.
   const kinds = SHELVED_KINDS.map(kindSpec);
   const spec = tab === 'all' ? undefined : kinds.find((candidate) => candidate.kind === tab);
@@ -143,11 +155,14 @@ export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onC
         <Stats stats={stats} />
       </header>
 
-      <Tabs
-        tabs={[ALL, ...kinds.map((candidate) => candidate.tab)]}
-        active={spec?.tab ?? ALL}
-        onChange={(name) => onTab(kinds.find((candidate) => candidate.tab === name)?.kind ?? 'all')}
-      />
+      <div className="library-bar">
+        <Tabs
+          tabs={[ALL, ...kinds.map((candidate) => candidate.tab)]}
+          active={spec?.tab ?? ALL}
+          onChange={(name) => onTab(kinds.find((candidate) => candidate.tab === name)?.kind ?? 'all')}
+        />
+        {entries.length > 0 && <LayoutSwitch layout={layout} onLayout={onLayout} />}
+      </div>
 
       {entries.length === 0 ? (
         spec ? <Empty spec={spec} onAdd={() => setAdding(spec.kind)} /> : <EmptyAll onAdd={setAdding} />
@@ -221,13 +236,11 @@ export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onC
             </p>
           )}
 
-          <ul className={spec ? 'library-grid' : 'library-grid is-mixed'} style={spec ? ({ '--aspect': spec.aspect } as CSSProperties) : undefined} data-testid="library-grid">
-            {shown.map((entry, i) => (
-              <li key={entry.path} className="rise" style={order(Math.min(i + 1, 24))}>
-                <Card entry={entry} mixed={!spec} onOpen={onOpenNote} />
-              </li>
-            ))}
-          </ul>
+          {layout === 'list' ? (
+            <LibraryList entries={shown} spec={spec} sort={choice.sort} onSort={(sort) => choose({ ...choice, sort })} onOpen={onOpenNote} rising={RISING} />
+          ) : (
+            <CoverGrid entries={shown} mixed={!spec} onOpen={onOpenNote} />
+          )}
 
           <CoverCalendar key={shownTab} spec={spec} entries={listed} today={today} onOpen={onOpenNote} />
         </div>
@@ -290,18 +303,71 @@ function Stats({ stats }: { stats: ReturnType<typeof libraryStats> }) {
   );
 }
 
-/** A kind's small mark, drawn in lines: a record, a strip of film, a book, a microphone. */
-function KindMark({ kind }: { kind: MediaKind }) {
-  const paths: Partial<Record<MediaKind, string>> = {
-    album: 'M8 1.75a6.25 6.25 0 1 0 0 12.5 6.25 6.25 0 0 0 0-12.5ZM8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z',
-    film: 'M3 2.25h10v11.5H3zM5.5 2.25v11.5M10.5 2.25v11.5M3 5.5h2.5M3 8h2.5M3 10.5h2.5M10.5 5.5H13M10.5 8H13M10.5 10.5H13',
-    book: 'M3.25 2.75c1.8-.6 3.4-.4 4.75.6v10.4c-1.35-1-2.95-1.2-4.75-.6zM12.75 2.75c-1.8-.6-3.4-.4-4.75.6v10.4c1.35-1 2.95-1.2 4.75-.6z',
-    podcast: 'M6 2.25h4v6.5a2 2 0 0 1-4 0zM3.75 7.5a4.25 4.25 0 0 0 8.5 0M8 11.75v2.5M5.75 14.25h4.5',
+/** Covers or List, beside the tabs: the same notes, sorts and filters either way. */
+function LayoutSwitch({ layout, onLayout }: { layout: LibraryLayout; onLayout: (layout: LibraryLayout) => void }) {
+  const names: Record<LibraryLayout, string> = { covers: 'Covers', list: 'List' };
+  return (
+    <div className="layout-switch" role="group" aria-label="Show as">
+      {(['covers', 'list'] as const).map((name) => (
+        <button
+          key={name}
+          type="button"
+          className={layout === name ? 'layout-option is-on' : 'layout-option'}
+          onClick={() => onLayout(name)}
+          aria-pressed={layout === name}
+          data-testid="library-view"
+          data-view={name}
+        >
+          <LayoutMark layout={name} />
+          {names[name]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LayoutMark({ layout }: { layout: LibraryLayout }) {
+  const paths: Record<LibraryLayout, string> = {
+    covers: 'M2.75 2.75h4v4h-4zM9.25 2.75h4v4h-4zM2.75 9.25h4v4h-4zM9.25 9.25h4v4h-4z',
+    list: 'M2.75 3.75h1.5M6.75 3.75h6.5M2.75 8h1.5M6.75 8h6.5M2.75 12.25h1.5M6.75 12.25h6.5',
   };
   return (
     <svg className="kind-mark" viewBox="0 0 16 16" aria-hidden="true">
-      <path d={paths[kind] ?? ''} />
+      <path d={paths[layout]} />
     </svg>
+  );
+}
+
+/**
+ * The covers in a grid, put on the page in batches (`useInBatches`). Each card is drawn only near
+ * the view (`content-visibility`): with all of them drawn, every cover that came in laid the whole
+ * grid out again, and a first scroll through 600 of them stalled on every frame. Off screen, a
+ * card keeps the height it last had, or one worked out from the first card's.
+ */
+function CoverGrid({ entries, mixed, onOpen }: { entries: MediaEntry[]; mixed: boolean; onOpen: (path: string) => void }) {
+  const grid = useRef<HTMLUListElement>(null);
+  const count = useInBatches(entries.length);
+  const first = entries[0];
+  useEffect(() => {
+    const card = grid.current?.firstElementChild;
+    if (!card || !first || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([seen]) => {
+      if (!seen || !grid.current) return;
+      const { width, height } = seen.contentRect;
+      grid.current.style.setProperty('--cover-w', `${width}px`);
+      grid.current.style.setProperty('--card-text', `${Math.max(0, height - width / kindSpec(first.kind).aspect)}px`);
+    });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [first]);
+  return (
+    <ul ref={grid} className={mixed ? 'library-grid is-mixed' : 'library-grid'} data-testid="library-grid">
+      {entries.slice(0, count).map((entry, i) => (
+        <li key={entry.path} className={i < RISING ? 'rise' : undefined} style={{ ...(i < RISING ? order(i + 1) : {}), '--aspect': kindSpec(entry.kind).aspect } as CSSProperties} data-drawn-near>
+          <Card entry={entry} mixed={mixed} onOpen={onOpen} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -311,7 +377,6 @@ function Card({ entry, mixed, onOpen }: { entry: MediaEntry; mixed?: boolean; on
     <button
       type="button"
       className="library-card"
-      style={mixed ? ({ '--aspect': spec.aspect } as CSSProperties) : undefined}
       onClick={() => onOpen(entry.path)}
       title={entry.path}
       data-testid="library-card"

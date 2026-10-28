@@ -9,8 +9,63 @@
   margin-top: var(--space-3);
 }
 
-.library-frame > .tabs {
+/* The tabs, and Covers | List at their right, on one hairline. */
+.library-bar {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
   margin-top: var(--space-6);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--glass-line);
+}
+
+.library-bar .tabs {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  border-bottom: 0;
+}
+
+/* Covers or List: two quiet segments in one hairline pill, the chosen one lit softly. */
+.layout-switch {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  margin-bottom: 4px;
+  padding: 2px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+}
+
+.layout-option {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 12px 4px 10px;
+  border-radius: 999px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  transition:
+    background 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.layout-option:hover {
+  color: var(--text-muted);
+}
+
+.layout-option.is-on {
+  background: rgb(255 255 255 / 7%);
+  color: var(--text);
+}
+
+.layout-option.is-on .kind-mark {
+  stroke: var(--accent);
+}
+
+.layout-option .kind-mark {
+  width: 13px;
+  height: 13px;
 }
 
 .library-hero {
@@ -206,6 +261,16 @@
 .library-grid > li,
 .library-card {
   min-width: 0;
+}
+
+/* A card is drawn only near the view: off screen it keeps the height it last had, or one worked
+   out from the first card's (LibraryView's CoverGrid). Drawn, its paint is clipped to the item,
+   so the item reaches 8px past the card for the lift and its ring under the pointer. */
+.library-grid > li {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(var(--cover-w, 160px) / var(--aspect, 1) + var(--card-text, 50px));
+  margin: -8px -8px 0;
+  padding: 8px 8px 0;
 }
 
 .library-card {
@@ -1729,12 +1794,294 @@
   opacity: 1;
 }
 
+/* ---------------------------------------------------------------- the list */
+
+/* A row per note, the columns the same in every row, on the page without a card: hairlines
+   between rows, a header that stays at the top as the list scrolls. */
+.library-list {
+  --list-columns: 44px minmax(0, 2.2fr) minmax(0, 1.5fr) 48px minmax(0, 1.4fr) 116px 96px;
+  margin: 0 calc(var(--space-3) * -1);
+  font-size: 13.5px;
+}
+
+.library-list.is-mixed {
+  --list-columns: 44px minmax(0, 2.2fr) minmax(0, 1.5fr) 48px 78px minmax(0, 1.4fr) 116px 96px;
+}
+
+.library-list-row {
+  display: grid;
+  grid-template-columns: var(--list-columns);
+  gap: var(--space-4);
+  align-items: center;
+  padding: 0 var(--space-3);
+}
+
+.library-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+}
+
+.library-list-head .library-list-row {
+  position: relative;
+  height: 40px;
+}
+
+/* The header's hairline, and each row's, stop short of the rows' rounded ends. */
+.library-list-head .library-list-row::after,
+.library-row::after {
+  content: '';
+  position: absolute;
+  right: var(--space-3);
+  bottom: 0;
+  left: var(--space-3);
+  height: 1px;
+  background: var(--border);
+}
+
+.library-list-head .library-list-row::after {
+  background: var(--glass-line);
+}
+
+.list-head {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.list-head.is-rating,
+.list-head.is-date {
+  text-align: right;
+}
+
+.list-sort {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  transition: color 160ms ease-out;
+}
+
+.list-sort:hover {
+  color: var(--text-muted);
+}
+
+.list-head.is-on .list-sort {
+  color: var(--text);
+}
+
+/* The chosen sort's arrow, in accent: down for the latest, the best and the newest first, up for A to Z. */
+.list-arrow {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+
+.list-arrow.is-up {
+  transform: rotate(180deg);
+}
+
+.list-head.is-on .list-arrow {
+  opacity: 1;
+}
+
+/* Off screen a row isn't drawn; it is always this tall, so the list keeps its length. */
+.library-row {
+  position: relative;
+  height: 64px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+  cursor: pointer;
+  transition: background 120ms ease-out;
+}
+
+.library-row:hover {
+  background: rgb(255 255 255 / 3%);
+}
+
+.library-row:focus-within {
+  background: rgb(143 188 170 / 8%);
+}
+
+.library-row > [role='cell'] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-cover {
+  display: grid;
+  place-items: center;
+  height: 44px;
+}
+
+.row-cover-image,
+.row-cover-blank,
+.row-cover .embed-loading,
+.row-cover .embed-missing {
+  display: block;
+  height: 44px;
+  aspect-ratio: var(--aspect, 1) !important;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 6%);
+  object-fit: cover;
+}
+
+.row-cover .embed-missing {
+  color: transparent;
+  font-size: 0;
+}
+
+/* No cover yet: its first letter in the serif. */
+.row-cover-blank {
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  font: 17px/1 var(--display);
+}
+
+.row-open {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-open:focus-visible {
+  outline: none;
+  color: var(--accent);
+}
+
+.row-year {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.row-kind {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.row-kind .kind-mark {
+  width: 12px;
+  height: 12px;
+}
+
+.row-genres {
+  font-size: 12.5px;
+}
+
+.row-genre-dot {
+  color: var(--text-faint);
+}
+
+/* The rating: a thin sage bar out of 100, the number in accent beside it. */
+.row-rating {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.row-meter {
+  flex: none;
+  width: 64px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 7%);
+}
+
+.row-meter > span {
+  display: block;
+  width: calc(var(--r) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(143 188 170 / 35%), rgb(143 188 170 / 90%));
+}
+
+.row-rating-number {
+  min-width: 24px;
+  color: var(--accent);
+  font: 600 14px/1 var(--numbers);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.row-date {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 /* Narrow panes */
+
+@container (max-width: 860px) {
+  /* The list lets its genres go first, then the kind. */
+  .library-list {
+    --list-columns: 44px minmax(0, 2fr) minmax(0, 1.4fr) 48px 116px 96px;
+  }
+
+  .library-list.is-mixed {
+    --list-columns: 44px minmax(0, 2fr) minmax(0, 1.4fr) 48px 78px 116px 96px;
+  }
+
+  .row-genres,
+  .list-head.is-genres {
+    display: none !important;
+  }
+}
 
 @container (max-width: 760px) {
   .library-hero,
   .media-hero {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .library-list,
+  .library-list.is-mixed {
+    --list-columns: 44px minmax(0, 2fr) minmax(0, 1.4fr) 76px 88px;
+  }
+
+  .row-kind,
+  .row-year,
+  .list-head.is-kind,
+  .list-head.is-year {
+    display: none !important;
+  }
+
+  .row-meter {
+    display: none;
   }
 
   .covers-row {
