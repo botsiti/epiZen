@@ -1,6 +1,6 @@
 import type { NoteText, VaultFile } from './api';
 import { parseNote } from './frontmatter';
-import { field } from './library';
+import { field, kindOfFolder, kindSpec, LIBRARY_ROOT, type MediaKind } from './library';
 import { findWikilinks, linkResolver, noteFolder, noteTitle } from './links';
 
 export interface MediaItem {
@@ -61,4 +61,15 @@ export function collectMedia(notes: NoteText[], files: VaultFile[]): Shelf[] {
       items: items.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || b.rating - a.rating || a.title.localeCompare(b.title)),
     }))
     .sort((a, b) => b.items.length - a.items.length || a.folder.localeCompare(b.folder));
+}
+
+/** The kinds the home screen keeps a shelf for, in this order. Videos are the library's to read, not the home's. */
+export const SHELF_KINDS: readonly MediaKind[] = ['album', 'film', 'book', 'podcast'];
+
+/**
+ * The home screen's shelves: albums, films, books and podcasts, each its folder's rated notes,
+ * and an empty one for a kind the vault has rated nothing of yet, so it can be started.
+ */
+export function homeShelves(shelves: Shelf[]): Shelf[] {
+  return SHELF_KINDS.map((kind) => shelves.find((shelf) => kindOfFolder(shelf.folder)?.kind === kind) ?? { folder: `${LIBRARY_ROOT}/${kindSpec(kind).folder}`, items: [] });
 }

@@ -7,7 +7,7 @@ import type { ThoughtRecord } from '../../lib/cbt';
 import { missingFromDay } from '../../lib/rollup';
 import { Donut, Ring, Segments } from './charts';
 import { order, spark } from './effects';
-import { BlurText, CountUp } from './motion';
+import { CountUp } from './motion';
 import { Bar, Hero, NavButton, Section, Tabs, Tile } from './parts';
 import { questsIn } from '../../lib/quests';
 import { QuestBoard } from './Quests';
@@ -91,7 +91,7 @@ export function DayPage({ spec, path, text, actions }: Props) {
         {tab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} isToday={isToday} />}
         {tab === 'Habits' && <HabitsTab day={day} spec={spec} actions={actions} />}
         {tab === 'Quests' && (
-          <QuestBoard quests={questsIn(spec.quests, date, addDays(date, 1))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} />
+          <QuestBoard quests={questsIn(spec.quests, date, addDays(date, 1))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} onChange={actions.onQuestChange} />
         )}
         {tab === 'Stream' && <StreamTab day={day} actions={actions} onOpen={(record) => setWizard({ record })} />}
       </div>
@@ -141,7 +141,8 @@ function Summary({ text, onSave }: { text?: string; onSave: (summary: string) =>
   }
   return (
     <button type="button" className="summary-button" onClick={() => setDraft(text ?? '')} title="Write about the day" data-testid="summary">
-      {text ? <BlurText text={text} className="hero-summary" /> : <span className="hero-summary faint">Write a few words about the day…</span>}
+      {/* The day's own words, the first thing to read on its page: there at once, never revealed word by word. */}
+      {text ? <span className="hero-summary">{text}</span> : <span className="hero-summary faint">Write a few words about the day…</span>}
     </button>
   );
 }

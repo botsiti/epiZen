@@ -173,8 +173,14 @@ describe('the homepage', () => {
   it("shows the shelves with this year's count", async () => {
     const user = userEvent.setup();
     const onOpenNote = vi.fn();
-    render(<Home {...props({ onOpenNote })} />);
-    expect(screen.getByTestId('shelf')).toHaveTextContent('2 rated · 1 this year');
+    const onSeeAll = vi.fn();
+    render(<Home {...props({ onOpenNote, onSeeAll })} />);
+    // Albums, films, books and podcasts: the kinds with nothing rated yet say how to start.
+    const shelves = screen.getAllByTestId('shelf');
+    expect(shelves.map((shelf) => shelf.dataset.folder)).toEqual(['Rating/music', 'Rating/kino', 'Rating/books', 'Rating/podcasts']);
+    expect(shelves[0]).toHaveTextContent('2 rated · 1 this year');
+    await user.click(within(shelves[1] as HTMLElement).getByRole('button', { name: 'Add the first film →' }));
+    expect(onSeeAll).toHaveBeenCalledWith('Rating/kino');
     await user.click(screen.getAllByTestId('cover-card')[0] as HTMLElement);
     expect(onOpenNote).toHaveBeenCalledWith('Rating/music/Glasshouse Weather.md');
   });

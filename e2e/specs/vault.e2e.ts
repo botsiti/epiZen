@@ -3,7 +3,30 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { DEMO_VAULT, FIXTURES, vaultCopy } from '../paths';
-import { followLink, nextFrame, openFolders, openNote, prepareWindow, screenshot, showMonth, showTab, typeInEditor } from '../support';
+import {
+  clickAs,
+  clickCanvas,
+  closeOtherTabs,
+  foldersOf,
+  followLink,
+  frontTab,
+  nextFrame,
+  openFolders,
+  openNote,
+  openPanel,
+  pinTab,
+  pointAtNode,
+  prepareWindow,
+  pressCommand,
+  screenshot,
+  setRightSidebar,
+  showMonth,
+  showTab,
+  tabTitles,
+  typeInEditor,
+  waitForNote,
+  workspaceTabs,
+} from '../support';
 
 const DAYS = 'Calendar/2026/days 2026';
 // Today's daily note, as the demo vault names them.
@@ -12,6 +35,27 @@ const TODAY = (() => {
   return `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
 })();
 const title = () => $('[data-testid="note-title"]');
+const ALBUM = 'Rating/music/Glasshouse Weather.md';
+const FILM = 'Rating/kino/The Lighthouse Accountant.md';
+const INBOX = 'Inbox idea.md';
+const DAY = `${DAYS}/14.08.2026.md`;
+
+/**
+ * The tabs a step starts from, whatever the steps before it left: these notes, nothing pinned, the
+ * first in the tab in front and each next one opened with ⌘-click, so they stand in this order.
+ */
+async function startWithTabs(paths: string[], front = 0) {
+  await closeOtherTabs();
+  for (const [i, path] of paths.entries()) {
+    await openFolders(...foldersOf(path));
+    if (i === 0) await openNote(path);
+    else await clickAs(`[data-testid="tree-note"][data-path="${path}"]`, 'meta');
+    await waitForNote(path);
+  }
+  expect(await tabTitles()).toEqual(paths.map((path) => path.replace(/^.*\//, '').replace(/\.md$/, '')));
+  await workspaceTabs()[front]?.click();
+  await waitForNote(paths[front] ?? '');
+}
 
 describe('the demo vault', () => {
   before(async () => {
@@ -24,11 +68,12 @@ describe('the demo vault', () => {
     await expect($('[data-testid="vault-name"]')).toHaveText('demo-vault');
     await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('119 notes · 12 folders · 46 images'));
     await expect($('[data-testid="today-create"]')).toBeDisplayed();
-    // Albums, books, films, podcasts and videos: books and podcasts write `Rating`, and count too.
-    expect(await $$('[data-testid="shelf"]').length).toBe(5);
-    expect(await $$('[data-testid="cover-card"]').length).toBe(37);
+    // Albums, films, books and podcasts, never videos: books and podcasts write `Rating`, and count too.
+    expect(await $$('[data-testid="shelf"]').length).toBe(4);
+    await expect($('[data-testid="shelf"][data-folder="Rating/youtube"]')).not.toBeExisting();
+    expect(await $$('[data-testid="cover-card"]').length).toBe(34);
     await expect($('[data-testid="shelf"][data-folder="Rating/music"]')).toHaveText(expect.stringContaining('88'));
-    await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 37, {
+    await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 34, {
       timeoutMsg: 'the covers never loaded',
     });
     // Life XP is the demo's 60 days (12,296 XP) plus its quests, less what open quests have lost
@@ -98,7 +143,7 @@ describe('the demo vault', () => {
     const library = $('[data-testid="library"]');
     await library.waitForDisplayed();
     await expect(library).toHaveAttribute('data-tab', 'album');
-    expect(await $$('[data-testid="tab"]').length).toBe(5);
+    expect(await $$('[data-testid="tab"]').length).toBe(4);
     expect(await $$('[data-testid="library-card"]').length).toBe(20);
     await expect($('[data-testid="library-total"]')).toHaveText('20');
     await expect($('[data-testid="library-average"]')).toHaveText('77');
@@ -131,9 +176,8 @@ describe('the demo vault', () => {
     await screenshot('50-library-books');
     await showTab('Podcasts');
     expect(await $$('[data-testid="library-card"]').length).toBe(4);
-    await showTab('Videos');
-    expect(await $$('[data-testid="library-card"]').length).toBe(3);
-    await expect($('[data-testid="library-add"]')).not.toBeExisting();
+    // Videos open as pages, but the library is what is rated and added: no tab for them.
+    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library"] [role="tab"]')].map((tab) => tab.textContent))).toEqual(['Albums', 'Films', 'Books', 'Podcasts']);
     await showTab('Albums');
   });
 
@@ -247,14 +291,180 @@ describe('the demo vault', () => {
     await $('[data-testid="missing-note"] button').click();
   });
 
-  it('lists the notes that link to a note', async () => {
+  it('lists the notes that link to a note in the right sidebar, not under the note', async () => {
     await followLink('Glasshouse Weather');
     await expect(title()).toHaveText('Glasshouse Weather');
-    const backlinks = $('[data-testid="backlinks"]');
+    await expect($('main [data-testid="backlinks"]')).not.toBeExisting();
+    await expect($('[data-testid="right-sidebar"]')).not.toBeExisting();
+    await $('[data-testid="right-sidebar-toggle"]').click();
+    const sidebar = $('[data-testid="right-sidebar"]');
+    await expect(sidebar).toHaveAttribute('data-note', ALBUM);
+    const backlinks = sidebar.$('[data-testid="backlinks"]');
     await expect(backlinks).toHaveText(expect.stringContaining('Inbox idea'));
     await expect(backlinks).toHaveText(expect.stringContaining('08.26 RPG'));
-    await backlinks.scrollIntoView();
+    await expect($('[data-testid="right-sidebar-toggle"]')).toHaveAttribute('aria-pressed', 'true');
     await screenshot('18-backlinks');
+    // ⌥⌘B closes it again.
+    await pressCommand('b', { alt: true });
+    await expect(sidebar).not.toBeExisting();
+  });
+
+  it('opens a note in a new tab with ⌘-click or a middle click, each tab with its own history', async () => {
+    await startWithTabs([ALBUM]);
+    await clickAs(`[data-testid="tree-note"][data-path="${INBOX}"]`, 'meta');
+    await expect(title()).toHaveText('Inbox idea');
+    expect(await tabTitles()).toEqual(['Glasshouse Weather', 'Inbox idea']);
+    await expect(frontTab()).toHaveAttribute('data-title', 'Inbox idea');
+    // A new tab starts its own history.
+    await expect($('[data-testid="tab-back"]')).toBeDisabled();
+    // A day of the sidebar's calendar, and a note with the middle button, each right of the tab in front.
+    await showMonth('August 2026');
+    await clickAs('[data-testid="calendar-day"][data-date="2026-08-14"]', 'meta');
+    await expect(title()).toHaveText('14.08.2026');
+    await workspaceTabs()[1]?.click();
+    await expect(title()).toHaveText('Inbox idea');
+    await openFolders(...foldersOf(FILM));
+    await clickAs(`[data-testid="tree-note"][data-path="${FILM}"]`, 'middle');
+    await waitForNote(FILM);
+    expect(await tabTitles()).toEqual(['Glasshouse Weather', 'Inbox idea', 'The Lighthouse Accountant', '14.08.2026']);
+    await screenshot('70-tabs-second-tab');
+    // The first tab still shows what it showed.
+    await workspaceTabs()[0]?.click();
+    await expect(title()).toHaveText('Glasshouse Weather');
+    // A plain click opens in the tab in front, which can go back to what it showed, and forward again.
+    await workspaceTabs()[1]?.click();
+    await openFolders(...foldersOf(ALBUM));
+    await openNote(ALBUM);
+    await expect(frontTab()).toHaveAttribute('data-title', 'Glasshouse Weather');
+    await $('[data-testid="tab-back"]').click();
+    await expect(title()).toHaveText('Inbox idea');
+    await expect($('[data-testid="tab-back"]')).toBeDisabled();
+    await $('[data-testid="tab-forward"]').click();
+    await expect(title()).toHaveText('Glasshouse Weather');
+    await expect($('[data-testid="tab-forward"]')).toBeDisabled();
+    expect(await tabTitles()).toEqual(['Glasshouse Weather', 'Glasshouse Weather', 'The Lighthouse Accountant', '14.08.2026']);
+  });
+
+  it('pins a tab: it moves left with a pin, ⌘W leaves it, and a plain link click in it opens a new tab', async () => {
+    await startWithTabs([ALBUM, FILM, INBOX], 2);
+    await clickAs('[data-testid="workspace-tab"][data-title="Inbox idea"]', 'right');
+    await $('[data-testid="tab-menu"]').waitForDisplayed();
+    await expect($('[data-testid="tab-menu-pin"]')).toHaveText('Pin');
+    await $('[data-testid="tab-menu-pin"]').click();
+    await expect($('[data-testid="tab-menu"]')).not.toBeExisting();
+    expect(await tabTitles()).toEqual(['Inbox idea', 'Glasshouse Weather', 'The Lighthouse Accountant']);
+    const pinned = workspaceTabs()[0];
+    await expect(pinned).toHaveAttribute('data-pinned', 'true');
+    await expect(pinned?.$('[data-testid="tab-pin"]')).toBeDisplayed();
+    await expect(pinned?.$('[data-testid="tab-close"]')).not.toBeExisting();
+    await expect(frontTab()).toHaveAttribute('data-title', 'Inbox idea');
+
+    await pressCommand('w');
+    expect(await tabTitles()).toHaveLength(3);
+    await expect(title()).toHaveText('Inbox idea');
+
+    await followLink('Someday maybe');
+    await $('[data-testid="missing-note"]').waitForDisplayed();
+    expect(await tabTitles()).toEqual(['Inbox idea', 'Someday maybe', 'Glasshouse Weather', 'The Lighthouse Accountant']);
+    await expect(frontTab()).toHaveAttribute('data-pinned', 'false');
+    await workspaceTabs()[0]?.click();
+    await expect(title()).toHaveText('Inbox idea');
+    await screenshot('71-tabs-pinned');
+  });
+
+  it('closes tabs with ⌘W, the ×, a middle click and the menu, and unpins one', async () => {
+    await startWithTabs([INBOX, ALBUM, FILM, DAY], 1);
+    await pinTab('Inbox idea');
+    await expect(frontTab()).toHaveAttribute('data-title', 'Glasshouse Weather');
+    await pressCommand('w');
+    // The tab to the right of the one closed comes forward.
+    expect(await tabTitles()).toEqual(['Inbox idea', 'The Lighthouse Accountant', '14.08.2026']);
+    await expect(frontTab()).toHaveAttribute('data-title', 'The Lighthouse Accountant');
+    await frontTab().$('[data-testid="tab-close"]').click();
+    await expect(frontTab()).toHaveAttribute('data-title', '14.08.2026');
+    await expect(title()).toHaveText('14.08.2026');
+    // ⌘T opens a new tab on the home screen.
+    await pressCommand('t');
+    await $('[data-testid="home"]').waitForDisplayed();
+    expect(await tabTitles()).toEqual(['Inbox idea', '14.08.2026', 'Home']);
+    await clickAs('[data-testid="workspace-tab"][data-title="14.08.2026"]', 'middle');
+    expect(await tabTitles()).toEqual(['Inbox idea', 'Home']);
+    await expect(frontTab()).toHaveAttribute('data-title', 'Home');
+    await screenshot('72-tabs-closed');
+
+    await workspaceTabs()[0]?.$('[data-testid="tab-pin"]').click();
+    await expect(workspaceTabs()[0]).toHaveAttribute('data-pinned', 'false');
+    await clickAs('[data-testid="workspace-tab"][data-title="Inbox idea"]', 'right');
+    await expect($('[data-testid="tab-menu-pin"]')).toHaveText('Pin');
+    await $('[data-testid="tab-menu-close"]').click();
+    expect(await tabTitles()).toEqual(['Home']);
+    // Closing the last tab leaves a new one on the home screen.
+    const last = (await frontTab().getAttribute('data-tab-id')) ?? '';
+    await pressCommand('w');
+    expect(await tabTitles()).toEqual(['Home']);
+    await expect(frontTab()).not.toHaveAttribute('data-tab-id', last);
+    await $('[data-testid="home"]').waitForDisplayed();
+  });
+
+  it('shows the backlinks of the note in front in the right sidebar, and opens one in a new tab', async () => {
+    await startWithTabs([ALBUM]);
+    await setRightSidebar(true);
+    await openPanel('backlinks');
+    const sidebar = $('[data-testid="right-sidebar"]');
+    await expect(sidebar).toHaveAttribute('data-note', ALBUM);
+    const inbox = sidebar.$(`[data-testid="backlink"][data-path="${INBOX}"]`);
+    await expect(inbox).toHaveText(expect.stringContaining('Glasshouse Weather'));
+    await screenshot('73-right-sidebar-backlinks');
+
+    // ⌘-click opens it in a new tab, and the sidebar follows the note in front.
+    await clickAs(`[data-testid="backlink"][data-path="${INBOX}"]`, 'meta');
+    await expect(title()).toHaveText('Inbox idea');
+    expect(await tabTitles()).toEqual(['Glasshouse Weather', 'Inbox idea']);
+    await expect(sidebar).toHaveAttribute('data-note', INBOX);
+    await expect(sidebar.$('[data-testid="backlinks"]')).toHaveAttribute('data-count', '0');
+    await expect(sidebar.$('[data-testid="backlinks"]')).toHaveText('No links to this note yet.');
+
+    // A panel folds away and opens again.
+    const toggle = sidebar.$('[data-testid="panel-toggle"][data-panel="backlinks"]');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(sidebar.$('[data-testid="backlinks"]')).not.toBeExisting();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    // A tab that isn't a note says so quietly.
+    await pressCommand('t');
+    await expect(sidebar).toHaveAttribute('data-note', '');
+    await expect(sidebar).toHaveText(expect.stringContaining('Open a note to see what links to it.'));
+    await pressCommand('w');
+    await workspaceTabs()[0]?.click();
+    await expect(sidebar).toHaveAttribute('data-note', ALBUM);
+  });
+
+  it('draws the local graph of the note in front, and opens a neighbour from it in a new tab', async () => {
+    await startWithTabs([ALBUM]);
+    await setRightSidebar(true);
+    await openPanel('graph');
+    const local = '[data-testid="right-sidebar"] [data-testid="local-graph"]';
+    await browser.waitUntil(async () => (await $(local).getAttribute('data-settled')) === 'true', {
+      timeout: 20_000,
+      timeoutMsg: 'the local graph never settled',
+    });
+    await expect($(local)).toHaveAttribute('data-center', ALBUM);
+    expect(Number(await $(local).getAttribute('data-nodes'))).toBeGreaterThanOrEqual(3);
+    const neighbour = await pointAtNode(local, (path) => path !== ALBUM);
+    await nextFrame();
+    await screenshot('74-right-sidebar-local-graph');
+
+    await clickCanvas(local, neighbour, { meta: true });
+    await expect(title()).toHaveText(neighbour.path.replace(/^.*\//, '').replace(/\.md$/, ''));
+    expect(await tabTitles()).toHaveLength(2);
+    await expect($('[data-testid="right-sidebar"]')).toHaveAttribute('data-note', neighbour.path);
+
+    // Back to one tab and no sidebar, as the steps after this expect.
+    await pressCommand('w');
+    expect(await tabTitles()).toEqual(['Glasshouse Weather']);
+    await setRightSidebar(false);
   });
 
   it('draws every note and link in the graph, and lights a note and its neighbours up', async () => {
@@ -360,12 +570,19 @@ describe('the demo vault', () => {
 
     // A right-click edits a task in place: new words, the same category and minutes.
     const evening = `[data-testid="task-card"][data-line="${added.split('\n').indexOf('- [ ] #daily/sport — evening run [minutes::30]')}"]`;
+    // Right-clicks where the card is on screen, and says where.
     const rightClick = (selector: string) =>
       browser.execute((css) => {
         const box = document.querySelector(css)?.getBoundingClientRect();
-        document.querySelector(css)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: (box?.left ?? 0) + 24, clientY: (box?.top ?? 0) + 24 }));
+        const at = { x: (box?.left ?? 0) + 24, y: (box?.top ?? 0) + 24 };
+        document.querySelector(css)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: at.x, clientY: at.y }));
+        return at;
       }, selector);
-    await rightClick(evening);
+    const clicked = await rightClick(evening);
+    // The menu opens at the pointer, not where the page's frame would put a fixed menu.
+    const menu = await browser.execute(() => document.querySelector('[data-testid="focus-menu"]')?.getBoundingClientRect().toJSON() as { left: number; top: number } | undefined);
+    expect(Math.abs((menu?.left ?? -999) - clicked.x)).toBeLessThan(2);
+    expect(Math.abs((menu?.top ?? -999) - clicked.y)).toBeLessThan(2);
     await $('[data-testid="focus-menu-edit"]').click();
     await $('[data-testid="edit-task-text"]').waitForDisplayed();
     await browser.execute((value) => {
@@ -426,9 +643,6 @@ describe('the demo vault', () => {
     expect(await $$('[data-testid="day-card"]').length).toBe(7);
     await expect($('[data-testid="reflections"]')).toBeDisplayed();
     await screenshot('23-weekly-dashboard');
-    await showTab('Timeline');
-    expect(await $$('[data-testid="time-block"]').length).toBeGreaterThan(7);
-    await screenshot('29-week-timeline');
     await showTab('Habits');
     await expect($('[data-testid="habit-grid"]')).toBeDisplayed();
     await screenshot('30-week-habits');
@@ -466,6 +680,89 @@ describe('the demo vault', () => {
     await showTab('Quests');
     await expect($('.mythic-shelf')).toBeDisplayed();
     await screenshot('43-month-quests');
+    await showTab('Overview');
+  });
+
+  it("writes the running week's Plus, Minus and Next, adds a quest to it, and a chapter to that quest's log", async () => {
+    await showMonth('September 2026');
+    await $('[data-testid="calendar-week"][data-week="40"]').click();
+    await expect(title()).toHaveText('2026-W40 - 28.09.26');
+    const file = join(vaultCopy(), 'Calendar/2026/weeks/2026-W40 - 28.09.26.md');
+    const read = () => readFileSync(file, 'utf8');
+    const before = read();
+    // The week as the vault's weekly template leaves it: a second Plus, "Goals", and a dash under each heading.
+    expect(before).toContain('\n#### Plus\nGoals\n\n#### Plus\n-\n\n#### Minus\n-\n\n#### Next\n-\n\n\n#### Statistics\n');
+
+    // Each card writes its own section, in place, as the Obsidian weekly dashboard's Save does.
+    await showTab('Overview');
+    await $('[data-testid="reflections"]').scrollIntoView();
+    const card = (heading: string) => `[data-testid="reflection"][data-heading="${heading}"]`;
+    await $(`${card('Plus')} [data-testid="reflection-field"]`).setValue('Two deep mornings');
+    await $(`${card('Plus')} [data-testid="reflection-save"]`).click();
+    const plus = before.replace('\n#### Plus\nGoals\n\n', '\n#### Plus\nTwo deep mornings\n');
+    await browser.waitUntil(() => read() === plus, { timeout: 5000, timeoutMsg: 'Plus never reached the note' });
+    await $(`${card('Minus')} [data-testid="reflection-field"]`).setValue('Phone at night');
+    await $(`${card('Minus')} [data-testid="reflection-save"]`).click();
+    const minus = plus.replace('\n#### Minus\n-\n\n', '\n#### Minus\nPhone at night\n');
+    await browser.waitUntil(() => read() === minus, { timeout: 5000, timeoutMsg: 'Minus never reached the note' });
+    await $(`${card('Next')} [data-testid="reflection-field"]`).setValue('A long run on Saturday');
+    await $(`${card('Next')} [data-testid="reflection-save"]`).click();
+    const reflected = minus.replace('\n#### Next\n-\n\n\n', '\n#### Next\nA long run on Saturday\n');
+    await browser.waitUntil(() => read() === reflected, { timeout: 5000, timeoutMsg: 'Next never reached the note' });
+    await expect($(card('Next'))).toHaveText(expect.stringContaining('Saved'));
+    await screenshot('60-week-reflections');
+
+    // A new quest: the first sphere is the main one, the second a bonus at 30%; Epic sets 1000 XP.
+    await showTab('Quests');
+    await $('[data-testid="quest-new"]').click();
+    await $('[data-testid="quest-title"]').setValue('Read 100 pages');
+    await $('[data-testid="quest-sphere"][data-sphere="Personal Growth"]').click();
+    await $('[data-testid="quest-sphere"][data-sphere="Spiritual"]').click();
+    await $('[data-testid="quest-tier"][data-tier="epic"]').click();
+    // Set as typing sets it: the driver's clear doesn't reach React.
+    await browser.execute((value) => {
+      const field = document.querySelector<HTMLInputElement>('[data-testid="quest-target"]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(field, value);
+      field?.dispatchEvent(new Event('input', { bubbles: true }));
+    }, '100');
+    await expect($('[data-testid="quest-total"]')).toHaveText('Personal Growth 1000 · bonus +300 · 1300 XP in all once done');
+    await screenshot('61-quest-composer');
+    await $('[data-testid="quest-add"]').click();
+    const quest = '- [ ] #quest/weekly - Read 100 pages [xp::1000] [spheres::Personal Growth, Spiritual:30] [tier::epic] [target::100] [current::0]';
+    // After the week's last quest, before the template's hint, as the dashboard's composer puts it.
+    const added = reflected.replace('\nAdd real weekly quests', `\n${quest}\nAdd real weekly quests`);
+    await browser.waitUntil(() => read() === added, { timeout: 5000, timeoutMsg: 'the quest never reached the weekly note' });
+    await expect($('[data-testid="quest-status"]')).toHaveText('Saved');
+    await $('button[aria-label="Details of Read 100 pages"]').scrollIntoView();
+    await screenshot('62-quest-added');
+
+    // Its detail, and a chapter for its adventure log, added with ⌘ + Enter.
+    await $('button[aria-label="Details of Read 100 pages"]').click();
+    await $('[data-testid="quest-detail"]').waitForDisplayed();
+    await expect($('[data-testid="quest-detail-title"]')).toHaveText('Read 100 pages');
+    await expect($('[data-testid="quest-detail-earned"]')).toHaveText('+0 XP');
+    await screenshot('63-quest-detail');
+    await $('[data-testid="chapter-field"]').setValue('Forty pages on the train.');
+    await browser.execute(() =>
+      document.querySelector('[data-testid="chapter-field"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true, cancelable: true })),
+    );
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const chaptered = added.replace(`${quest}\n`, `${quest}\n    - ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} :: Forty pages on the train.\n`);
+    await browser.waitUntil(() => read() === chaptered, { timeout: 5000, timeoutMsg: 'the chapter never reached the weekly note' });
+    expect(await $$('[data-testid="chapter"]').length).toBe(1);
+    await expect($('[data-testid="chapter-field"]')).toHaveValue('');
+    await screenshot('64-quest-chapter');
+    await $('[data-testid="quest-detail-close"]').click();
+    await expect($('[data-testid="quest-detail"]')).not.toBeExisting();
+
+    // A quest whose log holds two chapters alike, each on its own line.
+    await $('button[aria-label="Details of Three deep-work mornings"]').click();
+    await $('[data-testid="quest-detail"]').waitForDisplayed();
+    expect(await $$('[data-testid="chapter"]').length).toBe(2);
+    await screenshot('65-quest-log');
+    await $('[data-testid="quest-detail-close"]').click();
+    expect(read()).toBe(chaptered);
     await showTab('Overview');
   });
 
@@ -601,7 +898,7 @@ describe('the demo vault', () => {
     expect(readFileSync(today, 'utf8')).not.toMatch(/e2e focus[^\n]*\n {4}- \d\d:\d\d/);
   });
 
-  it('changed nothing in the vault copy but the new notes, the added album and its cover, the rating set, the day changed from its page and the day drawn on', () => {
+  it('changed nothing in the vault copy but the new notes, the added album and its cover, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
         `added: ${DAYS}/30.07.2026.md`,
@@ -614,6 +911,7 @@ describe('the demo vault', () => {
         `changed: ${DAYS}/12.08.2026.md`,
         `changed: ${DAYS}/14.08.2026.md`,
         'changed: Calendar/2026/weeks/2026-W33 - 10.08.26.md',
+        'changed: Calendar/2026/weeks/2026-W40 - 28.09.26.md',
       ].sort(),
     );
   });

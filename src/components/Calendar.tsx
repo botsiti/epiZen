@@ -1,5 +1,6 @@
 import { addMonths, formatDate, isoWeek, monthGrid, sameDay, today } from '../lib/dates';
 import type { Period } from '../lib/periodic';
+import { openClicks } from './workspace/clicks';
 
 interface Props {
   month: Date;
@@ -8,10 +9,10 @@ interface Props {
   has: (period: Period, date: Date) => boolean;
   /** The day, week or month whose note is open. */
   selected?: { period: Period; date: Date };
-  /** Opens the note, or creates it from its template. */
-  onOpen: (period: Period, date: Date) => void;
+  /** Opens the note, or creates it from its template; `newTab` for a ⌘-click or a middle click. */
+  onOpen: (period: Period, date: Date, newTab: boolean) => void;
   /** Opens the big calendar: the time blocks of a week or a day, and the timer. */
-  onOpenCalendar: () => void;
+  onOpenCalendar: (newTab: boolean) => void;
 }
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
@@ -28,13 +29,13 @@ export function Calendar({ month, onMonthChange, has, selected, onOpen, onOpenCa
         <button
           type="button"
           className={classes('calendar-month', has('month', month) && 'has-note', isSelected('month', month) && 'is-selected')}
-          onClick={() => onOpen('month', month)}
+          {...openClicks((newTab) => onOpen('month', month, newTab))}
           title="Open this month's note"
           data-testid="calendar-month"
         >
           {formatDate(month, 'MMMM YYYY')}
         </button>
-        <button type="button" className="icon-button calendar-open" onClick={onOpenCalendar} aria-label="Open the calendar" title="Open the calendar: time blocks and the timer" data-testid="calendar-open">
+        <button type="button" className="icon-button calendar-open" {...openClicks(onOpenCalendar)} aria-label="Open the calendar" title="Open the calendar: time blocks and the timer" data-testid="calendar-open">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
             <rect x="2" y="3" width="12" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
             <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
@@ -70,7 +71,7 @@ export function Calendar({ month, onMonthChange, has, selected, onOpen, onOpenCa
                   <button
                     type="button"
                     className={classes('calendar-cell calendar-week', has('week', monday) && 'has-note', isSelected('week', monday) && 'is-selected')}
-                    onClick={() => onOpen('week', monday)}
+                    {...openClicks((newTab) => onOpen('week', monday, newTab))}
                     title={`Week ${number}`}
                     data-testid="calendar-week"
                     data-week={number}
@@ -89,7 +90,7 @@ export function Calendar({ month, onMonthChange, has, selected, onOpen, onOpenCa
                         has('day', date) && 'has-note',
                         isSelected('day', date) && 'is-selected',
                       )}
-                      onClick={() => onOpen('day', date)}
+                      {...openClicks((newTab) => onOpen('day', date, newTab))}
                       title={formatDate(date, 'dddd, D MMMM YYYY')}
                       data-testid="calendar-day"
                       data-date={formatDate(date, 'YYYY-MM-DD')}

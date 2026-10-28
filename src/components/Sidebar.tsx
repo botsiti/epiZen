@@ -1,18 +1,22 @@
 import { useState, type ReactNode } from 'react';
 import type { TreeNode } from '../lib/tree';
+import { openClicks } from './workspace/clicks';
+
+/** Opens a view; `newTab` for a ⌘-click or a middle click. */
+type Open = (newTab: boolean) => void;
 
 interface Props {
   vaultName: string;
   tree: TreeNode[];
   selected?: string;
-  onOpenNote: (path: string) => void;
-  onHome: () => void;
+  onOpenNote: (path: string, newTab: boolean) => void;
+  onHome: Open;
   onNewNote: () => void;
   onOpenFolder: () => void;
-  onSettings: () => void;
-  onGraph: () => void;
-  onCalendar: () => void;
-  onLibrary: () => void;
+  onSettings: Open;
+  onGraph: Open;
+  onCalendar: Open;
+  onLibrary: Open;
   /** The focus timer while it runs, at the top. */
   timer?: ReactNode;
   /** Why the last folder the user picked couldn't be opened. */
@@ -31,7 +35,7 @@ export function Sidebar(props: Props) {
   return (
     <nav className="sidebar" aria-label="Notes">
       <div className="sidebar-head">
-        <button type="button" className="vault-name" onClick={onHome} data-testid="sidebar-vault">
+        <button type="button" className="vault-name" {...openClicks(onHome)} data-testid="sidebar-vault">
           {vaultName}
         </button>
         <button type="button" className="icon-button" onClick={onNewNote} title="New note" aria-label="New note" data-testid="new-note-button">
@@ -44,16 +48,16 @@ export function Sidebar(props: Props) {
         <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isOpen} toggle={toggle} onOpenNote={onOpenNote} />
       </ul>
       <div className="sidebar-foot">
-        <button type="button" className="sidebar-action" onClick={onCalendar} data-testid="open-calendar">
+        <button type="button" className="sidebar-action" {...openClicks(onCalendar)} data-testid="open-calendar">
           Calendar
         </button>
-        <button type="button" className="sidebar-action" onClick={onLibrary} data-testid="open-library">
+        <button type="button" className="sidebar-action" {...openClicks(onLibrary)} data-testid="open-library">
           Library
         </button>
-        <button type="button" className="sidebar-action" onClick={onGraph} data-testid="open-graph">
+        <button type="button" className="sidebar-action" {...openClicks(onGraph)} data-testid="open-graph">
           Graph
         </button>
-        <button type="button" className="sidebar-action" onClick={onSettings} data-testid="open-settings">
+        <button type="button" className="sidebar-action" {...openClicks(onSettings)} data-testid="open-settings">
           Settings
         </button>
         <button type="button" className="sidebar-action" onClick={onOpenFolder} data-testid="open-folder">
@@ -71,7 +75,7 @@ interface ItemsProps {
   selected?: string;
   isOpen: (path: string) => boolean;
   toggle: (path: string) => void;
-  onOpenNote: (path: string) => void;
+  onOpenNote: (path: string, newTab: boolean) => void;
 }
 
 // Each level indents one chevron's width, so a folder's notes sit under its name.
@@ -90,7 +94,7 @@ function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote }: Items
             className={current ? 'tree-row is-selected' : 'tree-row'}
             style={{ paddingLeft: `${12 + depth * STEP + CHEVRON}px` }}
             title={node.name}
-            onClick={() => onOpenNote(node.path)}
+            {...openClicks((newTab) => onOpenNote(node.path, newTab))}
             data-testid="tree-note"
             data-path={node.path}
           >

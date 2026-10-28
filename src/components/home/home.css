@@ -714,6 +714,12 @@
   justify-content: flex-start;
 }
 
+.shelf-empty {
+  margin: var(--space-2) 0 var(--space-1);
+  color: var(--text-faint);
+  font-size: 13.5px;
+}
+
 .shelf-all {
   padding: 4px 12px;
   border: 1px solid var(--glass-line);

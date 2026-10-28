@@ -288,6 +288,196 @@ export function toggleQuest(text: string, quest: Quest, today: Date): string {
   return lines.join(eol);
 }
 
+// New quests, as the "+ New quest" composers of the vault's weekly and monthly dashboards write them
+// (rpg-week.js and rpg-month.js, questLine and appendToQuestSection):
+//
+//   - [ ] #quest/weekly - Two long runs [xp::500] [spheres::Health/Fitness, Personal Growth:30] [tier::rare] [target::2] [current::0]
+
+/** A bonus sphere's share of the quest's XP when first picked, and the least it can be set to. */
+export const BONUS_WEIGHT = 30;
+export const BONUS_MIN = 5;
+
+export interface NewQuest {
+  scope: 'weekly' | 'monthly';
+  /** What counts as done. */
+  title: string;
+  xp: number;
+  tier: Tier;
+  /** The main sphere first; every other one earns its weight's share on top. */
+  spheres: { name: string; weight: number }[];
+  /** 0 for a quest that is done or not, else how many it counts to. */
+  target: number;
+}
+
+/** A bonus weight as the scripts keep it: a whole number from 5 to 100, 30 when not set. */
+export const bonusWeight = (raw: number) => (Number.isFinite(raw) ? Math.max(BONUS_MIN, Math.min(100, Math.round(raw))) : BONUS_WEIGHT);
+
+/** Picking a sphere adds it (the main one if it is the first), picking it again takes it out; taking out the main one makes the next one main. */
+export function toggleSphere(list: NewQuest['spheres'], name: string): NewQuest['spheres'] {
+  const at = list.findIndex((sphere) => sphere.name === name);
+  if (at < 0) return [...list, { name, weight: list.length ? BONUS_WEIGHT : 100 }];
+  const rest = list.filter((_, i) => i !== at);
+  return rest.map((sphere, i) => (i === 0 ? { name: sphere.name, weight: 100 } : sphere));
+}
+
+/** A bonus weight's − and + step: to the neighbouring multiple of ten, so 25 goes to 20 or 30. */
+export const stepWeight = (weight: number, direction: 1 | -1) =>
+  bonusWeight(direction > 0 ? Math.floor(bonusWeight(weight) / 10) * 10 + 10 : Math.ceil(bonusWeight(weight) / 10) * 10 - 10);
+
+/** The XP a sphere earns once the quest is done: the main one all of it, a bonus its share on top. */
+export const sphereXp = (xp: number, weight: number) => Math.round((Math.max(0, xp) * Math.max(0, weight)) / 100);
+
+/** `]` would end an inline field early, and a quest is one line. */
+const fieldText = (value: string) => value.replace(/\]/g, ')').replace(/\r?\n/g, ' ').trim();
+
+/** The new quest's line, as the dashboards' composers write it. */
+export function questLine(quest: NewQuest): string {
+  const title = fieldText(quest.title);
+  if (!title) throw new Error('Say what counts as done.');
+  if (!quest.spheres.length) throw new Error('Pick a life sphere.');
+  for (const { name } of quest.spheres) if (!SPHERES.some((sphere) => sphere.name === name)) throw new Error(`“${name}” isn't one of the life spheres.`);
+  if (new Set(quest.spheres.map(({ name }) => name)).size !== quest.spheres.length) throw new Error('A sphere is picked once.');
+  if (!(quest.tier in TIERS)) throw new Error(`“${String(quest.tier)}” isn't a tier.`);
+  const xp = Math.max(0, Math.round(Number(quest.xp) || 0));
+  const target = Math.max(0, Math.round(Number(quest.target) || 0));
+  const spheres = quest.spheres.map(({ name, weight }, i) => (i === 0 ? name : `${name}:${Math.max(0, Math.round(Number(weight) || BONUS_WEIGHT))}`)).join(', ');
+  return `- [ ] #quest/${quest.scope} - ${title} [xp::${xp}] [spheres::${spheres}] [tier::${quest.tier}]${target > 0 ? ` [target::${target}] [current::0]` : ''}`;
+}
+
+/**
+ * Adds a quest line to the note's `### Quest XP` section, after its last quest and the log under
+ * it (blank lines between quests are stepped over; anything else ends the run). A note without
+ * that heading gets it at its end, with the quest under it.
+ */
+export function addQuest(text: string, line: string): string {
+  if (/[\r\n]/.test(line) || !QUEST.test(line)) throw new Error("That isn't one quest line.");
+  const eol = lineEnding(text);
+  if (!eol) throw new Error("This note mixes line endings, so Epizen won't add to it.");
+  const lines = text.split(eol);
+  const heading = lines.findIndex((row) => /^###\s+Quest XP\s*$/i.test(row.trim()));
+  if (heading < 0) {
+    const block = `### Quest XP${eol}${line}${eol}`;
+    if (!text) return block;
+    const last = text.endsWith(eol) ? (lines.at(-2) ?? '') : (lines.at(-1) ?? '');
+    return `${text}${text.endsWith(eol) ? '' : eol}${last.trim() ? eol : ''}${block}`;
+  }
+  let at = heading + 1;
+  for (let i = heading + 1; i < lines.length; i += 1) {
+    const row = lines[i] ?? '';
+    const trimmed = row.trim();
+    if (/^#+\s+/.test(trimmed)) break;
+    // A quest, or a line indented under one (its log): part of the run.
+    if (/^[-*]\s*\[[ xX]\]/.test(trimmed) || /^\s+[-*]\s+/.test(row)) {
+      at = i + 1;
+      continue;
+    }
+    if (trimmed === '') continue;
+    break;
+  }
+  lines.splice(at, 0, line);
+  return lines.join(eol);
+}
+
+// The quest detail's writes, as the dashboards' modals make them (rpg-shared.js: addQuestNote,
+// updateQuestNote, deleteQuestNote and updateQuestField). A chapter of the adventure log is a line
+// indented under the quest:
+//
+//       - 29.09.2026 :: Two hours before the phone.
+
+export type QuestChange =
+  | { kind: 'add-chapter'; words: string }
+  | { kind: 'edit-chapter'; entry: LogEntry; words: string }
+  | { kind: 'delete-chapter'; entry: LogEntry }
+  /** A `YYYY-MM-DD` date, or none to take the deadline out. */
+  | { kind: 'deadline'; date?: string };
+
+const chapterWords = (words: string) => {
+  const clean = words.replace(/\r?\n+/g, ' ').trim();
+  if (!clean) throw new Error('Write what happened first.');
+  return clean;
+};
+
+/**
+ * Where a chapter the page showed is in the note now. The log as shown and the log on disk are
+ * walked in step: each shown entry takes the next entry on disk with the same date and words. So
+ * two chapters alike are told apart by their order, never by which line is nearest.
+ */
+function chapterLine(text: string, quest: Quest, entry: LogEntry): number {
+  const index = quest.log.findIndex((shown) => shown.line === entry.line && shown.date === entry.date && shown.text === entry.text);
+  if (index < 0) throw new Error("That chapter isn't in the quest's log.");
+  if (entry.xp !== undefined) throw new Error("An XP stamp is written by the quest's tick and counter, so Epizen leaves it as it is.");
+  const now = parseQuests(quest.path, text).find((found) => found.line === quest.line && found.raw === quest.raw)?.log ?? [];
+  let cursor = 0;
+  for (let i = 0; i <= index; i += 1) {
+    const shown = quest.log[i];
+    const hit = now.findIndex((onDisk, k) => k >= cursor && onDisk.date === shown?.date && onDisk.text === shown.text);
+    if (hit < 0) continue;
+    cursor = hit + 1;
+    if (i === index) return now[hit]?.line ?? -1;
+  }
+  throw new Error('That chapter has changed in its note.');
+}
+
+/** Adds a chapter dated today at the end of the quest's log: after the run of lines indented under it. */
+export function addChapter(text: string, quest: Quest, words: string, today: Date): string {
+  const clean = chapterWords(words);
+  const { eol, lines } = open(text, quest);
+  let at = quest.line + 1;
+  while (at < lines.length && /^\s+-\s+/.test(lines[at] ?? '')) at += 1;
+  lines.splice(at, 0, `    - ${formatDate(today, 'DD.MM.YYYY')} :: ${clean}`);
+  return lines.join(eol);
+}
+
+/** Rewrites a chapter's words, keeping its bullet and its date. */
+export function editChapter(text: string, quest: Quest, entry: LogEntry, words: string): string {
+  const clean = chapterWords(words);
+  const { eol, lines } = open(text, quest);
+  const at = chapterLine(text, quest, entry);
+  const parts = /^(\s+[-*+]\s+)(\d{1,2}\.\d{1,2}\.\d{4}\s*::\s*)(.*)$/.exec(lines[at] ?? '');
+  if (!parts) throw new Error('That chapter has changed in its note.');
+  lines[at] = `${parts[1] ?? ''}${parts[2] ?? ''}${clean}`;
+  return lines.join(eol);
+}
+
+/** Takes a chapter out of the log. One with lines of its own under it is left to the editor. */
+export function deleteChapter(text: string, quest: Quest, entry: LogEntry): string {
+  const { eol, lines } = open(text, quest);
+  const at = chapterLine(text, quest, entry);
+  const indent = (line: string) => /^\s*/.exec(line)?.[0].length ?? 0;
+  const next = lines[at + 1] ?? '';
+  if (next.trim() && indent(next) > indent(lines[at] ?? '')) throw new Error('That chapter has lines under it, so Epizen leaves it to the editor.');
+  lines.splice(at, 1);
+  return lines.join(eol);
+}
+
+/** Sets the quest's `[deadline::YYYY-MM-DD]`, or takes it out. */
+export function setDeadline(text: string, quest: Quest, date?: string): string {
+  const value = (date ?? '').trim();
+  if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('A deadline is a date, like 2026-10-31.');
+  const { eol, lines } = open(text, quest);
+  const field = /\s*\[deadline::[^\]]*\]/i;
+  let line = quest.raw;
+  if (!value) line = line.replace(field, '');
+  else if (field.test(line)) line = line.replace(field, ` [deadline::${value}]`);
+  else line = `${line} [deadline::${value}]`;
+  lines[quest.line] = line.replace(/\s+$/, '');
+  return lines.join(eol);
+}
+
+/** One change from a quest's detail, made over its note as it is now. */
+export function changeQuest(text: string, quest: Quest, change: QuestChange, today: Date): string {
+  switch (change.kind) {
+    case 'add-chapter':
+      return addChapter(text, quest, change.words, today);
+    case 'edit-chapter':
+      return editChapter(text, quest, change.entry, change.words);
+    case 'delete-chapter':
+      return deleteChapter(text, quest, change.entry);
+    case 'deadline':
+      return setDeadline(text, quest, change.date);
+  }
+}
+
 /** Sets a counter quest's progress, clamped to its target; reaching the target ticks it, falling below unticks it. */
 export function setQuestProgress(text: string, quest: Quest, value: number, today: Date): string {
   if (!quest.target) throw new Error('That quest has no counter.');

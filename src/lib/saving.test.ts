@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flushAll, flushBeforeClose, trackSave } from './saving';
+import { flushAll, flushBeforeClose, trackSave, whenSaved } from './saving';
 
 describe('flushAll', () => {
   it('waits for every registered save and lists the notes that could not be saved', async () => {
@@ -30,5 +30,28 @@ describe('flushAll', () => {
     finish('Inbox idea.md');
     expect(await flushed).toEqual(['Inbox idea.md']);
     expect(await flushAll()).toEqual([]);
+  });
+});
+
+describe('whenSaved', () => {
+  it('waits for the saves under way, landed or failed, and not for registered flushes', async () => {
+    const stop = flushBeforeClose(() => new Promise(() => undefined));
+    expect(await whenSaved()).toBeUndefined();
+    let finish: (path: string | undefined) => void = () => undefined;
+    let fail: (path: string | undefined) => void = () => undefined;
+    void trackSave(new Promise((resolve) => (finish = resolve)));
+    void trackSave(new Promise((resolve) => (fail = resolve)));
+    let done = false;
+    const waiting = whenSaved().then(() => (done = true));
+    await Promise.resolve();
+    expect(done).toBe(false);
+    finish(undefined);
+    await Promise.resolve();
+    expect(done).toBe(false);
+    // A save that failed resolves to its note.
+    fail('Inbox idea.md');
+    await waiting;
+    expect(done).toBe(true);
+    stop();
   });
 });

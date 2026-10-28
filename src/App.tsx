@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Backlinks } from './components/Backlinks';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { CalendarView } from './components/calendar/CalendarView';
 import { chime } from './components/calendar/chime';
@@ -18,6 +17,12 @@ import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { SettingsScreen } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
+import { RightSidebar } from './components/workspace/RightSidebar';
+import { TabBar } from './components/workspace/TabBar';
+import { useLocalGraph } from './components/workspace/useLocalGraph';
+import { useScrollMemory } from './components/workspace/useScrollMemory';
+import { useShortcuts } from './components/workspace/useShortcuts';
+import { useWorkspace } from './components/workspace/useWorkspace';
 import {
   closeNow,
   createNote,
@@ -60,25 +65,32 @@ import {
   type Period,
   type PeriodicSettings,
 } from './lib/periodic';
-import { artPaths, parseQuests, setQuestProgress, toggleQuest, type Quest, type QuestEntry } from './lib/quests';
+import { artPaths, changeQuest, parseQuests, setQuestProgress, toggleQuest, type Quest, type QuestChange, type QuestEntry } from './lib/quests';
 import { metricScale, type DayEntry } from './lib/rollup';
-import { flushAll } from './lib/saving';
+import { flushAll, whenSaved } from './lib/saving';
+import {
+  activate,
+  activeTab,
+  back as goBack,
+  close as closeTab,
+  closeActive,
+  currentView,
+  cycle,
+  forward as goForward,
+  HOME,
+  notePath,
+  open,
+  openTab,
+  parseRightSidebar,
+  replaceView,
+  setPinned,
+  showIn,
+  type PanelId,
+  type RightSidebar as RightSidebarState,
+  type View,
+} from './lib/tabs';
 import { useToday } from './lib/useToday';
 import { buildTree, countFolders } from './lib/tree';
-
-type View =
-  | { kind: 'home' }
-  | { kind: 'note'; path: string; editing?: boolean }
-  | { kind: 'missing'; target: string }
-  | { kind: 'new'; folder: string }
-  | { kind: 'unsaved'; path: string; text: string; message: string }
-  | { kind: 'settings' }
-  | { kind: 'graph' }
-  | { kind: 'calendar' }
-  | { kind: 'library'; tab: MediaKind }
-  | { kind: 'problem'; title: string; message: string };
-
-const HOME: View = { kind: 'home' };
 
 // Each daily note parsed once per text it has had: saves and new notes bring new text.
 const parsedDays = new Map<string, { text: string; day: Day }>();
@@ -102,14 +114,17 @@ async function periodicText(period: Period, date: Date, path: string, periodic: 
 export function App() {
   const [status, setStatus] = useState<VaultStatus>();
   const [files, setFiles] = useState<VaultFile[]>([]);
-  const [history, setHistory] = useState<View[]>([HOME]);
+  // The open tabs, each with its own history (src/lib/tabs.ts); the main pane shows the one in front.
+  const { ws, update, restore, reset } = useWorkspace();
+  const [right, setRight] = useState<RightSidebarState>({ open: false, closed: [] });
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
   const [settings, setSettings] = useState<Settings>({});
   // Every note's text, for links, backlinks and the graph. Saves and new notes keep it current.
   const [texts, setTexts] = useState<ReadonlyMap<string, string>>(new Map());
   const [month, setMonth] = useState(() => startOfMonth(today()));
-  const view = history.at(-1) ?? HOME;
+  const tab = activeTab(ws);
+  const view = currentView(tab);
   const main = useRef<HTMLElement>(null);
   const now = useToday();
 
@@ -124,6 +139,9 @@ export function App() {
       setFiles(found);
       setTexts(new Map(read.map((note) => [note.path, note.text])));
       setSettings(stored);
+      // The tabs and the right sidebar as they were left in this vault, never a note that is gone.
+      if (next.state === 'open') restore(stored.workspace, { vault: next.root, notes: new Set(found.filter((file) => file.kind === 'note').map((file) => file.path)) });
+      setRight(parseRightSidebar(stored.rightSidebar));
       setStatus(next);
     };
     load().catch((err: unknown) => {
@@ -132,11 +150,12 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [loads]);
+  }, [loads, restore]);
 
-  // A new screen starts at the top; switching a note between reading and editing doesn't.
+  // A new screen starts at the top; switching a note between reading and editing doesn't. Each
+  // tab comes back to where it was scrolled.
   const place = view.kind === 'note' ? view.path : view.kind;
-  useEffect(() => main.current?.scrollTo(0, 0), [place]);
+  const onScroll = useScrollMemory(main, tab.id, place);
 
   // A close or quit first saves what the editor holds. If a note can't be saved, the window stays
   // open with the editor's warning and its text. Closing again closes only when it is still those
@@ -165,20 +184,21 @@ export function App() {
   const notes = useMemo(() => files.filter((file) => file.kind === 'note').map((file) => file.path.replace(/\.md$/i, '')), [files]);
   const periodic = useMemo(() => periodicSettings(settings), [settings]);
   const periodicNotes = useMemo(() => periodicIndex(files, periodic), [files, periodic]);
-  const go = useCallback((next: View) => setHistory((prev) => [...prev, next]), []);
+  // Opens a screen in the tab in front, or in a new tab (⌘-click, or when the tab in front is pinned).
+  const go = useCallback((next: View, newTab?: boolean) => update((prev) => open(prev, next, { newTab })), [update]);
   const links = useMemo(() => buildLinkIndex([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
   const graph = useMemo(
     () => buildGraph(files.filter((file) => file.kind === 'note').map((file) => file.path), links.outgoing),
     [files, links],
   );
-  const openNote = useCallback((path: string) => go({ kind: 'note', path }), [go]);
+  const openNote = useCallback((path: string, newTab?: boolean) => go({ kind: 'note', path }, newTab), [go]);
   const shelves = useMemo(() => collectMedia([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
   const library = useMemo(() => collectLibrary([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
-  const openLibrary = useCallback((tab: MediaKind) => go({ kind: 'library', tab }), [go]);
-  // The library remembers its tab in its place in the history, so coming back finds it again.
+  const openLibrary = useCallback((kind: MediaKind, newTab?: boolean) => go({ kind: 'library', tab: kind }, newTab), [go]);
+  // The library remembers its tab in its place in its tab's history, so coming back finds it again.
   const setLibraryTab = useCallback(
-    (tab: MediaKind) => setHistory((prev) => prev.map((v, i) => (i === prev.length - 1 && v.kind === 'library' ? { ...v, tab } : v))),
-    [],
+    (id: number, kind: MediaKind) => update((prev) => replaceView(prev, (v) => (v.kind === 'library' ? { ...v, tab: kind } : v), id)),
+    [update],
   );
   const mediaPage = useMemo(() => {
     const spec = view.kind === 'note' ? kindOfPath(view.path) : undefined;
@@ -282,47 +302,97 @@ export function App() {
   // at a time, each over the note as it is on disk now, and written only while it still holds that.
   const edits = useRef(Promise.resolve());
   const [editError, setEditError] = useState<string>();
+  // Each settles with why it wasn't written, if it wasn't.
   const editNote = useCallback(
-    (path: string, edit: (text: string) => string, failed: string) => {
-      edits.current = edits.current.then(async () => {
+    (path: string, edit: (text: string) => string, failed: string): Promise<string | undefined> => {
+      const job = edits.current.then(async () => {
         try {
           const current = await readNote(path);
           const next = edit(current);
-          if (next === current) return;
+          if (next === current) return undefined;
           await writeNote(path, next, current);
           noteSaved(path, next);
           setEditError(undefined);
+          return undefined;
         } catch (err) {
-          setEditError(`${failed}: ${err instanceof Error ? err.message : String(err)}`);
+          const problem = err instanceof Error ? err.message : String(err);
+          setEditError(`${failed}: ${problem}`);
           const fresh = await readNote(path).catch(() => undefined);
           if (fresh !== undefined) noteSaved(path, fresh);
+          return problem;
         }
       });
+      edits.current = job.then(() => undefined);
+      return job;
     },
     [noteSaved],
   );
-  const onQuestToggle = useCallback((quest: Quest) => editNote(quest.path, (text) => toggleQuest(text, quest, new Date()), 'The quest wasn\'t changed'), [editNote]);
+  const onQuestToggle = useCallback((quest: Quest) => void editNote(quest.path, (text) => toggleQuest(text, quest, new Date()), 'The quest wasn\'t changed'), [editNote]);
   const onQuestProgress = useCallback(
-    (quest: Quest, value: number) => editNote(quest.path, (text) => setQuestProgress(text, quest, value, new Date()), 'The quest wasn\'t changed'),
+    (quest: Quest, value: number) => void editNote(quest.path, (text) => setQuestProgress(text, quest, value, new Date()), 'The quest wasn\'t changed'),
     [editNote],
   );
-  const back = history.length > 1 ? () => setHistory((prev) => prev.slice(0, -1)) : undefined;
+  // A chapter or a deadline from a quest's detail, in the quest's own note.
+  const onQuestChange = useCallback(
+    (quest: Quest, change: QuestChange) => editNote(quest.path, (text) => changeQuest(text, quest, change, new Date()), 'The quest wasn\'t changed'),
+    [editNote],
+  );
+  const back = tab.index > 0 ? () => update((prev) => goBack(prev)) : undefined;
+  // Reading or editing, in the note's own tab: an editor that closes after the tab went to the back still closes there.
   const setEditing = useCallback(
-    (editing: boolean) => setHistory((prev) => prev.map((v, i) => (i === prev.length - 1 && v.kind === 'note' ? { ...v, editing } : v))),
-    [],
+    (id: number, editing: boolean) => update((prev) => replaceView(prev, (v) => (v.kind === 'note' ? { ...v, editing } : v), id)),
+    [update],
+  );
+  // Text an editor couldn't save goes to its own tab, brought to the front, or to a new tab if that one was closed.
+  const showUnsaved = useCallback(
+    (id: number, path: string, text: string, message: string) => update((prev) => showIn(prev, id, { kind: 'unsaved', path, text, message })),
+    [update],
+  );
+  const toggleRight = useCallback(() => {
+    const next = { ...right, open: !right.open };
+    setRight(next);
+    void updateSettings({ rightSidebar: next }).catch(() => undefined);
+  }, [right]);
+  const togglePanel = useCallback(
+    (panel: PanelId) => {
+      const closed = right.closed.includes(panel) ? right.closed.filter((p) => p !== panel) : [...right.closed, panel];
+      const next = { ...right, closed };
+      setRight(next);
+      void updateSettings({ rightSidebar: next }).catch(() => undefined);
+    },
+    [right],
+  );
+  const newTab = useCallback(() => update((prev) => openTab(prev, HOME)), [update]);
+  useShortcuts(
+    useMemo(
+      () => ({
+        newTab,
+        closeTab: () => update(closeActive),
+        toggleRightSidebar: toggleRight,
+        back: () => update((prev) => goBack(prev)),
+        forward: () => update((prev) => goForward(prev)),
+        cycle: (step: 1 | -1) => update((prev) => cycle(prev, step)),
+        showTab: (at: number) =>
+          update((prev) => {
+            const target = prev.tabs[Math.min(at, prev.tabs.length - 1)];
+            return target ? activate(prev, target.id) : prev;
+          }),
+      }),
+      [newTab, toggleRight, update],
+    ),
   );
 
   const chooseFolder = useCallback(async () => {
     setFolderError(undefined);
     try {
       if (!(await pickVault())) return;
-      setHistory([HOME]);
+      reset();
       setLoads((n) => n + 1);
     } catch (err) {
       // The vault that was open stays open.
       setFolderError(String(err));
     }
-  }, []);
+  }, [reset]);
 
   // Add in the library created a note (and maybe its cover): read the vault again, then open it.
   const mediaCreated = useCallback(
@@ -362,23 +432,26 @@ export function App() {
     [files, periodic, periodicNotes, refresh],
   );
   // A day, week or month opens its note, creating it first if it has none.
-  const openPeriodic = useCallback(async (period: Period, date: Date) => go({ kind: 'note', path: await ensurePeriodic(period, date) }), [ensurePeriodic, go]);
+  const openPeriodic = useCallback(
+    async (period: Period, date: Date, newTab?: boolean) => go({ kind: 'note', path: await ensurePeriodic(period, date) }, newTab),
+    [ensurePeriodic, go],
+  );
   const openPeriodicOrSay = useCallback(
-    (period: Period, date: Date) =>
-      void openPeriodic(period, date).catch((err: unknown) =>
-        go({ kind: 'problem', title: "Couldn't create the note", message: String(err) }),
+    (period: Period, date: Date, newTab?: boolean) =>
+      void openPeriodic(period, date, newTab).catch((err: unknown) =>
+        go({ kind: 'problem', title: "Couldn't create the note", message: String(err) }, newTab),
       ),
     [go, openPeriodic],
   );
   // A link to a missing day, week or month creates that note, like the calendar; any other
   // missing note is only explained, never created.
   const openLink = useCallback(
-    (target: string, fromPath: string) => {
+    (target: string, fromPath: string, newTab?: boolean) => {
       const file = resolveLink(target, files, fromPath);
       const named = file ? undefined : periodOfName(target, periodic);
-      if (named) openPeriodicOrSay(named.period, named.date);
-      else if (!file) go({ kind: 'missing', target });
-      else if (file.kind === 'note') go({ kind: 'note', path: file.path });
+      if (named) openPeriodicOrSay(named.period, named.date, newTab);
+      else if (!file) go({ kind: 'missing', target }, newTab);
+      else if (file.kind === 'note') go({ kind: 'note', path: file.path }, newTab);
     },
     [files, go, periodic, openPeriodicOrSay],
   );
@@ -483,10 +556,11 @@ export function App() {
     },
     [planCalendars],
   );
-  // Done in the editor: the blocks that waited for it go in now.
+  // Done in the editor, or its tab gone to the back (maybe for another tab's editor) or closed: the
+  // blocks that waited for it go in now, once the editor's last save has landed.
   const wasEditing = useRef(editingPath);
   useEffect(() => {
-    if (wasEditing.current !== undefined && editingPath === undefined) timer.retryAll();
+    if (wasEditing.current !== undefined && editingPath !== wasEditing.current) void whenSaved().then(() => timer.retryAll());
     wasEditing.current = editingPath;
   }, [editingPath, timer]);
   // The timer starts on one of today's tasks, or on a new one added to today's note first:
@@ -512,6 +586,9 @@ export function App() {
     [changeDay, timer, vault],
   );
   const textOf = useCallback((path: string) => texts.get(path), [texts]);
+  const frontNote = notePath(view);
+  // Laid out only while it can be seen.
+  const local = useLocalGraph(graph, frontNote, right.open && !right.closed.includes('graph'));
   const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
 
   if (!status) return null;
@@ -526,19 +603,19 @@ export function App() {
   }
 
   return (
-    <div className="app">
+    <div className={right.open ? 'app has-right' : 'app'}>
       <Sidebar
         vaultName={status.name}
         tree={tree}
         selected={view.kind === 'note' ? view.path : undefined}
-        onOpenNote={(path) => go({ kind: 'note', path })}
-        onHome={() => go(HOME)}
+        onOpenNote={openNote}
+        onHome={(newTab) => go(HOME, newTab)}
         onNewNote={() => go({ kind: 'new', folder: view.kind === 'note' ? noteFolder(view.path) : '' })}
         onOpenFolder={() => void chooseFolder()}
-        onSettings={() => go({ kind: 'settings' })}
-        onGraph={() => go({ kind: 'graph' })}
-        onCalendar={() => go({ kind: 'calendar' })}
-        onLibrary={() => openLibrary('album')}
+        onSettings={(newTab) => go({ kind: 'settings' }, newTab)}
+        onGraph={(newTab) => go({ kind: 'graph' }, newTab)}
+        onCalendar={(newTab) => go({ kind: 'calendar' }, newTab)}
+        onLibrary={(newTab) => openLibrary('album', newTab)}
         timer={<TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
         folderError={folderError}
         calendar={
@@ -548,101 +625,128 @@ export function App() {
             has={(period, date) => periodicNotes.has(periodKey(period, date))}
             selected={view.kind === 'note' ? periodOf(view.path, periodic) : undefined}
             onOpen={openPeriodicOrSay}
-            onOpenCalendar={() => go({ kind: 'calendar' })}
+            onOpenCalendar={(newTab) => go({ kind: 'calendar' }, newTab)}
           />
         }
       />
-      <main className={view.kind === 'graph' ? 'main is-graph' : 'main'} ref={main}>
-        {view.kind === 'home' && (
-          <Home
-            vaultName={status.name}
-            stats={{
-              notes: files.filter((file) => file.kind === 'note').length,
-              folders: countFolders(tree),
-              images: files.filter((file) => file.kind === 'image').length,
-            }}
-            today={todayNote.date}
-            todayNote={todayNote}
-            days={dailyNotes}
-            dayOf={dayOf}
-            exists={exists}
-            scales={dailyFacts.scales}
-            shelves={shelves}
-            birthDate={birthDate}
-            onOpenNote={openNote}
-            onOpenPeriod={openPeriodicOrSay}
-            quests={quests}
-            art={art}
-            onQuestToggle={onQuestToggle}
-            onQuestProgress={onQuestProgress}
-            onSeeAll={(folder) => {
-              const spec = kindOfFolder(folder);
-              if (spec) openLibrary(spec.kind);
-            }}
-          />
-        )}
-        {editError && (
-          <p className="note-warning" data-testid="edit-warning">
-            {editError}
-          </p>
-        )}
-        {view.kind === 'note' && (
-          <NoteView
-            key={view.path}
-            path={view.path}
-            files={files}
-            onOpenLink={openLink}
-            editing={Boolean(view.editing)}
-            onEditingChange={setEditing}
-            onSaved={noteSaved}
-            onUnsaved={(path, text, message) => go({ kind: 'unsaved', path, text, message })}
-            linkTargets={linkTargets}
-            footer={<Backlinks links={links.backlinks.get(view.path) ?? []} onOpen={openNote} />}
-            periodic={periodicPage}
-            media={mediaPage}
-            onQuestToggle={onQuestToggle}
-            onQuestProgress={onQuestProgress}
-            onOpenNote={openNote}
-            onOpenPeriod={openPeriodicOrSay}
-            onStartTimer={(choice, how) => void startTimer(choice, how)}
-            onTaskChanged={taskChanged}
-            known={texts.get(view.path)}
-          />
-        )}
-        {view.kind === 'calendar' && (
-          <CalendarView
-            dayOf={dayOf}
-            textOf={textOf}
-            categories={categories}
-            timer={timer}
-            onStartTimer={(choice, how) => void startTimer(choice, how)}
-            onOpenDay={(date) => openPeriodicOrSay('day', date)}
-            onWrite={writeDay}
-            onTaskChanged={taskChanged}
-            vault={status.name}
-            planCalendars={planCalendars}
-            onChooseCalendar={chooseCalendar}
-            warning={calendarWarning}
-          />
-        )}
-        {view.kind === 'library' && (
-          <LibraryView
-            library={library}
-            files={files}
-            tab={view.tab}
-            onTab={setLibraryTab}
-            today={now}
-            onOpenNote={openNote}
-            onCreated={mediaCreated}
-          />
-        )}
-        {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
-        {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
-        {view.kind === 'new' && <NewNote key={history.length} folders={folders} folder={view.folder} onCreate={create} />}
-        {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
-        {view.kind === 'settings' && <SettingsScreen periodic={periodic} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} folders={folders} notes={notes} onSave={saveSettings} />}
-        {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
-      </main>
+      <div className="workspace">
+        <TabBar
+          ws={ws}
+          onActivate={(id) => update((prev) => activate(prev, id))}
+          onClose={(id) => update((prev) => closeTab(prev, id))}
+          onPin={(id, pinned) => update((prev) => setPinned(prev, id, pinned))}
+          onNewTab={newTab}
+          onBack={() => update((prev) => goBack(prev))}
+          onForward={() => update((prev) => goForward(prev))}
+          rightOpen={right.open}
+          onToggleRight={toggleRight}
+        />
+        <main className={view.kind === 'graph' ? 'main is-graph' : 'main'} ref={main} onScroll={onScroll}>
+          {/* Only the tab in front is drawn, afresh for each tab: an editor leaving saves as it goes. */}
+          <Fragment key={tab.id}>
+            {view.kind === 'home' && (
+              <Home
+                vaultName={status.name}
+                stats={{
+                  notes: files.filter((file) => file.kind === 'note').length,
+                  folders: countFolders(tree),
+                  images: files.filter((file) => file.kind === 'image').length,
+                }}
+                today={todayNote.date}
+                todayNote={todayNote}
+                days={dailyNotes}
+                dayOf={dayOf}
+                exists={exists}
+                scales={dailyFacts.scales}
+                shelves={shelves}
+                birthDate={birthDate}
+                onOpenNote={openNote}
+                onOpenPeriod={openPeriodicOrSay}
+                quests={quests}
+                art={art}
+                onQuestToggle={onQuestToggle}
+                onQuestProgress={onQuestProgress}
+                onQuestChange={onQuestChange}
+                onSeeAll={(folder) => {
+                  const spec = kindOfFolder(folder);
+                  if (spec) openLibrary(spec.kind);
+                }}
+              />
+            )}
+            {editError && (
+              <p className="note-warning" data-testid="edit-warning">
+                {editError}
+              </p>
+            )}
+            {view.kind === 'note' && (
+              <NoteView
+                key={view.path}
+                path={view.path}
+                files={files}
+                onOpenLink={openLink}
+                editing={Boolean(view.editing)}
+                onEditingChange={(editing) => setEditing(tab.id, editing)}
+                onSaved={noteSaved}
+                onUnsaved={(path, text, message) => showUnsaved(tab.id, path, text, message)}
+                linkTargets={linkTargets}
+                periodic={periodicPage}
+                media={mediaPage}
+                onQuestToggle={onQuestToggle}
+                onQuestProgress={onQuestProgress}
+                onQuestChange={onQuestChange}
+                onOpenNote={openNote}
+                onOpenPeriod={openPeriodicOrSay}
+                onStartTimer={(choice, how) => void startTimer(choice, how)}
+                onTaskChanged={taskChanged}
+                known={texts.get(view.path)}
+              />
+            )}
+            {view.kind === 'calendar' && (
+              <CalendarView
+                dayOf={dayOf}
+                textOf={textOf}
+                categories={categories}
+                timer={timer}
+                onStartTimer={(choice, how) => void startTimer(choice, how)}
+                onOpenDay={(date) => openPeriodicOrSay('day', date)}
+                onWrite={writeDay}
+                onTaskChanged={taskChanged}
+                vault={status.name}
+                planCalendars={planCalendars}
+                onChooseCalendar={chooseCalendar}
+                warning={calendarWarning}
+              />
+            )}
+            {view.kind === 'library' && (
+              <LibraryView
+                library={library}
+                files={files}
+                tab={view.tab}
+                onTab={(kind) => setLibraryTab(tab.id, kind)}
+                today={now}
+                onOpenNote={openNote}
+                onCreated={mediaCreated}
+              />
+            )}
+            {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
+            {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
+            {view.kind === 'new' && <NewNote key={tab.index} folders={folders} folder={view.folder} onCreate={create} />}
+            {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
+            {view.kind === 'settings' && <SettingsScreen periodic={periodic} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} folders={folders} notes={notes} onSave={saveSettings} />}
+            {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
+          </Fragment>
+        </main>
+      </div>
+      {right.open && (
+        <RightSidebar
+          note={frontNote}
+          backlinks={frontNote === undefined ? [] : (links.backlinks.get(frontNote) ?? [])}
+          graph={local}
+          closed={right.closed}
+          onTogglePanel={togglePanel}
+          onOpen={openNote}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,278 @@
+/* The tab bar and the right sidebar: DESIGN.md, "Tabs and the right sidebar". */
+
+.workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Tab bar */
+
+.tabbar {
+  display: flex;
+  /* The tabs sit on the hairline, so the page's tab joins the page; the buttons line up with their names. */
+  align-items: flex-end;
+  gap: var(--space-1);
+  height: 40px;
+  padding: 0 var(--space-2);
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+}
+
+.tabbar-nav {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin-right: var(--space-1);
+}
+
+.tabbar-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 3px;
+  border-radius: var(--radius);
+  color: var(--text-faint);
+  transition: background-color var(--ease), color var(--ease);
+}
+
+.tabbar-button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 3%);
+  color: var(--text);
+}
+
+.tabbar-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.tabbar-right {
+  margin-left: var(--space-1);
+}
+
+.tabbar-right.is-on {
+  color: var(--accent);
+}
+
+.tabbar-tabs {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  align-self: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabbar-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabbar-new {
+  margin-bottom: 2px;
+}
+
+.tabbar-tab {
+  position: relative;
+  display: flex;
+  flex: 0 1 184px;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 88px;
+  height: 31px;
+  margin-bottom: -1px;
+  padding: 0 var(--space-1) 0 var(--space-3);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--text-faint);
+  font-size: 13.5px;
+  cursor: default;
+  user-select: none;
+  transition: background-color var(--ease), color var(--ease);
+}
+
+.tabbar-tab:hover {
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-muted);
+}
+
+/* The tab in front joins the page below it. */
+.tabbar-tab.is-active {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.tabbar-tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabbar-tab-end {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--text-faint);
+  transition: background-color var(--ease), color var(--ease), opacity var(--ease);
+}
+
+.tabbar-tab-end:hover {
+  background: rgb(255 255 255 / 6%);
+  color: var(--text);
+}
+
+/* The × shows on the tab in front and under the pointer; the pin always. */
+.tabbar-tab-close {
+  opacity: 0;
+}
+
+.tabbar-tab:hover .tabbar-tab-close,
+.tabbar-tab.is-active .tabbar-tab-close,
+.tabbar-tab-close:focus-visible {
+  opacity: 1;
+}
+
+.tabbar-tab-pin {
+  color: var(--accent);
+}
+
+/* The menu a right-click on a tab opens. */
+
+.tab-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+
+.tab-menu {
+  position: fixed;
+  display: grid;
+  min-width: 168px;
+  padding: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.tab-menu button {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 6px var(--space-3);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13.5px;
+  text-align: left;
+  transition: background-color var(--ease);
+}
+
+.tab-menu button:hover,
+.tab-menu button:focus-visible {
+  outline: none;
+  background: var(--accent-soft);
+}
+
+.tab-menu-key {
+  color: var(--text-faint);
+}
+
+/* Right sidebar */
+
+.right-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border);
+}
+
+.right-sidebar-head {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  height: 40px;
+  padding: 0 var(--space-4) 7px;
+  border-bottom: 1px solid var(--border);
+}
+
+.right-sidebar-head .eyebrow {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel {
+  padding: var(--space-3) var(--space-3) 0;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 30px;
+  padding: 0 var(--space-2) 0 var(--space-1);
+  border-radius: var(--radius);
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background-color var(--ease), color var(--ease);
+}
+
+.panel-head:hover {
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-muted);
+}
+
+.panel-title {
+  flex: 1;
+  text-align: left;
+}
+
+.panel-count {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.panel-body {
+  padding: var(--space-2) 0 var(--space-3);
+}
+
+.panel-quiet {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) var(--space-2);
+  color: var(--text-faint);
+  font-size: 13.5px;
+}
+
+.panel-hint {
+  margin: var(--space-2) var(--space-1) 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+/* The local graph: the graph's look in a framed panel. */
+.graph.is-local {
+  position: relative;
+  inset: auto;
+  height: 248px;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}

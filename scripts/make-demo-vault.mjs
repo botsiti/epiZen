@@ -485,11 +485,49 @@ function weekQuests(days) {
     .join('\n');
 }
 
+// The last week is the one still running, and reads as the vault's own weekly template leaves a
+// week (Templates/Week Template.md there): a hint under the quests, a second Plus heading whose
+// first holds "Goals", and a lone "-" under each heading. Its first quest has two chapters alike,
+// logged on the same day, as the adventure log can hold them.
+const TWIN = '    - 29.09.2026 :: Two hours before the phone.';
+
 weekNames.forEach((name, i) => {
   const days = weeks.get(name);
   const stats = days.map((day) => dailyStats.get(dmy(day)));
   const months = [...new Set(days.map(monthName))];
   const quests = weekQuests(days);
+  // Drawn for every week, so the values after them stay as they were.
+  const [plus, minus, next] = [pick(PLUS), pick(MINUS), pick(NEXT)];
+  const running = i === weekNames.length - 1;
+  const [first, ...rest] = quests.split('\n');
+  const reflections = running
+    ? `${[first, TWIN, TWIN, ...rest].join('\n')}
+Add real weekly quests with the **+ New quest** button in the Quests tab.
+
+#### Plus
+Goals
+
+#### Plus
+-
+
+#### Minus
+-
+
+#### Next
+-
+
+`
+    : `${quests}
+
+#### Plus
+- ${plus}
+
+#### Minus
+- ${minus}
+
+#### Next
+- ${next}
+`;
   write(
     `Calendar/2026/weeks/${name}.md`,
     `---
@@ -506,17 +544,7 @@ ${days.map((day) => `- [[${dmy(day)}]] · ${WEEKDAYS[day.getUTCDay()]}`).join('\
 Month: ${months.map((month) => `[[${month}]]`).join(', ')}
 
 ### Quest XP
-${quests}
-
-#### Plus
-- ${pick(PLUS)}
-
-#### Minus
-- ${pick(MINUS)}
-
-#### Next
-- ${pick(NEXT)}
-
+${reflections}
 #### Statistics
 Average mood ${average(stats.map((s) => s.mood))}, focus ${average(stats.map((s) => s.focus))}, plan done ${average(stats.map((s) => s.done))}% over ${days.length} days.
 `,

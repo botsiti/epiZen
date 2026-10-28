@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { addDays, sameDay } from '../../lib/dates';
 import { parseDay } from '../../lib/day';
+import { parseQuests } from '../../lib/quests';
 import type { DayEntry } from '../../lib/rollup';
 import { PeriodicPage } from './PeriodicPage';
 import type { PeriodicActions, PeriodicSpec } from './types';
@@ -74,6 +75,9 @@ const actions = (): PeriodicActions => ({
   onDeleteRecord: vi.fn(),
   onQuestToggle: vi.fn(),
   onQuestProgress: vi.fn(),
+  onQuestChange: vi.fn(() => Promise.resolve(undefined)),
+  onAddQuest: vi.fn(() => Promise.resolve(undefined)),
+  onSetSection: vi.fn(() => Promise.resolve(undefined)),
 });
 
 describe('the day page', () => {
@@ -245,7 +249,7 @@ describe('the week and month pages', () => {
     const monday = addDays(DATE, -4);
     render(<PeriodicPage spec={spec('week', monday)} path="w.md" text={'#### Plus\n- Shipped\n'} actions={act} />);
     expect(screen.getAllByTestId('day-card')).toHaveLength(7);
-    expect(screen.getByTestId('reflections')).toHaveTextContent('Shipped');
+    expect(screen.getAllByTestId('reflection-field').map((field) => (field as HTMLTextAreaElement).value)).toEqual(['- Shipped', '', '']);
     expect(screen.getByTestId('tile-productive')).toHaveTextContent('1h 59m');
     await user.click(screen.getAllByTestId('day-card')[4] as HTMLElement);
     expect(act.onOpenPeriod).toHaveBeenCalledWith('day', DATE);
@@ -255,5 +259,142 @@ describe('the week and month pages', () => {
     render(<PeriodicPage spec={spec('month', new Date(2026, 7, 1))} path="m.md" text="" actions={actions()} />);
     expect(screen.getAllByTestId('heatmap-day')).toHaveLength(31);
     expect(screen.getByTestId('hero-title')).toHaveTextContent('August 2026');
+  });
+});
+
+// demo-vault/Calendar/2026/weeks/2026-W40 - 28.09.26.md, from its Quest XP heading: the week still
+// running, as the vault's weekly template leaves one.
+const WEEK = `### Quest XP
+- [ ] #quest/weekly - Three deep-work mornings [xp::300] [spheres::Career/Work] [tier::rare] [target::3] [current::1]
+    - 29.09.2026 :: Two hours before the phone.
+    - 29.09.2026 :: Two hours before the phone.
+- [ ] #quest/weekly - Two long runs [xp::300] [spheres::Health/Fitness] [tier::rare] [target::2] [current::0]
+Add real weekly quests with the **+ New quest** button in the Quests tab.
+
+#### Plus
+Goals
+
+#### Plus
+-
+
+#### Minus
+-
+
+#### Next
+-
+
+
+#### Statistics
+`;
+const W40 = 'Calendar/2026/weeks/2026-W40 - 28.09.26.md';
+const MONDAY = new Date(2026, 8, 28);
+const weekSpec = (): PeriodicSpec => ({
+  ...spec('week', MONDAY),
+  quests: parseQuests(W40, WEEK).map((quest) => ({ quest, period: { from: MONDAY, to: addDays(MONDAY, 7) } })),
+});
+
+describe('the week page writes', () => {
+  it('has no Timeline tab', () => {
+    render(<PeriodicPage spec={weekSpec()} path={W40} text={WEEK} actions={actions()} />);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Overview', 'Days', 'Quests', 'Habits', 'Stats']);
+  });
+
+  it('saves Plus, Minus and Next from their cards, and only once something is typed', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={weekSpec()} path={W40} text={WEEK} actions={act} />);
+    const [plus] = screen.getAllByTestId('reflection');
+    if (!plus) throw new Error('no Plus card');
+    // The template's "Goals" and lone "-" aren't words.
+    expect(within(plus).getByTestId('reflection-field')).toHaveValue('');
+    expect(within(plus).getByTestId('reflection-save')).toBeDisabled();
+    await user.type(within(plus).getByTestId('reflection-field'), 'Two deep mornings');
+    await user.click(within(plus).getByTestId('reflection-save'));
+    expect(act.onSetSection).toHaveBeenCalledWith('Plus', 'Two deep mornings');
+    expect(await within(plus).findByText('Saved')).toBeInTheDocument();
+  });
+
+  it('adds a quest from the composer: spheres, tier, XP and target, as one line', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={weekSpec()} path={W40} text={WEEK} actions={act} />);
+    await user.click(screen.getByRole('tab', { name: 'Quests' }));
+    await user.click(screen.getByTestId('quest-new'));
+    await user.click(screen.getByTestId('quest-add'));
+    expect(screen.getByTestId('quest-status')).toHaveTextContent('Add a title');
+    await user.type(screen.getByTestId('quest-title'), 'Read 100 pages');
+    await user.click(screen.getByTestId('quest-add'));
+    expect(screen.getByTestId('quest-status')).toHaveTextContent('Pick a life sphere');
+    expect(act.onAddQuest).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /^Personal Growth/ }));
+    await user.click(screen.getByRole('button', { name: /^Spiritual/ }));
+    await user.click(screen.getByTestId('quest-weight-up'));
+    await user.click(screen.getByRole('radio', { name: /epic/i }));
+    expect(screen.getByTestId('quest-xp')).toHaveValue(1000);
+    expect(screen.getByTestId('quest-total')).toHaveTextContent('Personal Growth 1000 · bonus +400 · 1400 XP in all once done');
+    await user.clear(screen.getByTestId('quest-target'));
+    await user.type(screen.getByTestId('quest-target'), '100{Enter}');
+    expect(act.onAddQuest).toHaveBeenCalledWith(
+      '- [ ] #quest/weekly - Read 100 pages [xp::1000] [spheres::Personal Growth, Spiritual:40] [tier::epic] [target::100] [current::0]',
+    );
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    expect(screen.getByTestId('quest-title')).toHaveValue('');
+  });
+
+  it('lights the tier a typed XP falls in, and keeps a monthly quest monthly', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={spec('month', new Date(2026, 8, 1))} path="Calendar/2026/months 2026/09.26 RPG.md" text="" actions={act} />);
+    await user.click(screen.getByRole('tab', { name: 'Quests' }));
+    await user.click(screen.getByTestId('quest-new'));
+    expect(screen.getByTestId('quest-xp')).toHaveValue(500);
+    await user.type(screen.getByTestId('quest-title'), 'Launch the beta');
+    await user.click(screen.getByRole('button', { name: /^Career\/Work/ }));
+    await user.clear(screen.getByTestId('quest-xp'));
+    await user.type(screen.getByTestId('quest-xp'), '1600');
+    expect(screen.getByRole('radio', { name: /legendary/i })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByTestId('quest-add'));
+    expect(act.onAddQuest).toHaveBeenCalledWith('- [ ] #quest/monthly - Launch the beta [xp::1600] [spheres::Career/Work] [tier::legendary]');
+  });
+
+  it("opens a quest's detail from its art: a chapter added with ⌘ + Enter, one deleted after asking once", async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    render(<PeriodicPage spec={weekSpec()} path={W40} text={WEEK} actions={act} />);
+    await user.click(screen.getByRole('tab', { name: 'Quests' }));
+    await user.click(screen.getByRole('button', { name: 'Details of Three deep-work mornings' }));
+    const detail = screen.getByRole('dialog', { name: 'Three deep-work mornings' });
+    expect(within(detail).getByTestId('quest-detail-meta')).toHaveTextContent('Sunday, 4 Oct (end of its week)');
+    expect(within(detail).getAllByTestId('chapter')).toHaveLength(2);
+    await user.type(within(detail).getByTestId('chapter-field'), 'Third morning.');
+    await user.keyboard('{Meta>}{Enter}{/Meta}');
+    const [quest] = weekSpec().quests;
+    expect(act.onQuestChange).toHaveBeenCalledWith(expect.objectContaining({ line: 1, title: 'Three deep-work mornings' }), { kind: 'add-chapter', words: 'Third morning.' });
+    expect(within(detail).getByTestId('chapter-field')).toHaveValue('');
+
+    // The second of the two chapters alike, by its own line.
+    const second = within(detail).getAllByTestId('chapter-delete')[1] as HTMLElement;
+    await user.click(second);
+    expect(act.onQuestChange).toHaveBeenCalledTimes(1);
+    expect(second).toHaveTextContent('Delete?');
+    await user.click(second);
+    expect(act.onQuestChange).toHaveBeenLastCalledWith(expect.objectContaining({ line: 1 }), { kind: 'delete-chapter', entry: quest?.quest.log[1] });
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('sets a deadline from the detail, and shows why a change was refused', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    act.onQuestChange = vi.fn(() => Promise.resolve('That quest has changed in its note.'));
+    render(<PeriodicPage spec={weekSpec()} path={W40} text={WEEK} actions={act} />);
+    await user.click(screen.getByRole('tab', { name: 'Quests' }));
+    await user.click(screen.getByRole('button', { name: 'Details of Two long runs' }));
+    await user.click(screen.getByTestId('quest-deadline-edit'));
+    fireEvent.change(screen.getByTestId('quest-deadline-field'), { target: { value: '2026-10-02' } });
+    await user.click(screen.getByTestId('quest-deadline-save'));
+    expect(act.onQuestChange).toHaveBeenCalledWith(expect.objectContaining({ title: 'Two long runs' }), { kind: 'deadline', date: '2026-10-02' });
+    expect(await screen.findByTestId('quest-detail-problem')).toHaveTextContent('That quest has changed in its note.');
   });
 });

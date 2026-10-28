@@ -24,3 +24,11 @@ export async function flushAll(): Promise<string[]> {
   const results = await Promise.all([...[...flushes].map((flush) => flush()), ...inflight]);
   return [...new Set(results.filter((path): path is string => path !== undefined))].sort();
 }
+
+/**
+ * Resolves once every save under way has landed, failed or not. A note that opens again (in
+ * another tab, or back in its own) reads after its editor's last save, never the text before it.
+ */
+export async function whenSaved(): Promise<void> {
+  await Promise.allSettled([...inflight]);
+}
