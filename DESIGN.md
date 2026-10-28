@@ -282,10 +282,16 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   it. An album's favourite tracks follow in a glass card, numbered in accent, in the serif's italic;
   then the note's own text in a glass card (the cover embed left out, since the hero shows it). Its
   backlinks are in the right sidebar.
-- **Add**: a dark glass sheet over the window. A large search field that asks the kind's source as
-  typing pauses (MusicBrainz and the Cover Art Archive for albums, iTunes for films and podcasts, Open
-  Library for books); result rows with their cover, the title in semibold, the maker and year muted,
-  the kind and genres faint; and a dashed "Enter it yourself". Picking one opens the form: the cover and
+- **Add**: a dark glass sheet over the window. A large search field that asks the kind's sources as
+  typing pauses (a fifth of a second; MusicBrainz, which takes a request a second, waits a little
+  longer): MusicBrainz and the Cover Art Archive for albums, Wikipedia for films, Wikipedia and Open
+  Library together for books, iTunes for podcasts. Result rows with their cover, the title in
+  semibold, the maker and year muted (or, from Wikipedia, its one line: "2023 film by Cord
+  Jefferson"), the kind and genres faint; and a dashed "Enter it yourself". Each service's results
+  show as soon as they land, the hint naming the one still being asked. Books list Wikipedia's first,
+  then Open Library's, a book both have once, and each card says in a faint pill which one it is from.
+  A Wikipedia result's director or author, year and genres come from Wikidata, read while it is
+  pointed at, so picking it is quick; its poster or cover is saved. Picking one opens the form: the cover and
   a rating ring on the left; title, maker, year, genres (pills to remove, a field to add), rating and
   date on the right, the date set to today; the path it will be saved at, faint, and Save in the
   primary button. Nothing goes out until something is typed, and nothing is written until Save.

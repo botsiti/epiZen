@@ -348,6 +348,63 @@ describe('the demo vault', () => {
     await browser.waitUntil(() => readFileSync(file, 'utf8') === EPISODE_NOTE, { timeout: 5000, timeoutMsg: 'the day picked back never reached the note' });
   });
 
+  it('adds a film found on Wikipedia: its director, year and genre from Wikidata, its poster as the cover', async () => {
+    // The e2e build answers Wikipedia and Wikidata from test/fixtures/lookup/ too.
+    await $('[data-testid="open-library"]').click();
+    await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'all');
+    await $('[data-testid="library-add"][data-kind="film"]').click();
+    await $('[data-testid="add-search"]').setValue('american fiction');
+    // Wikipedia's answer also has a genre, a soundtrack, a list and a disambiguation page: only the films show.
+    await browser.waitUntil(async () => (await $$('[data-testid="add-result"]').length) === 3, { timeoutMsg: 'no films came' });
+    await browser.waitUntil(async () => (await $$('[data-testid="lookup-cover"]').length) === 3, { timeoutMsg: 'the posters never loaded' });
+    await expect($('[data-testid="add-result"]')).toHaveText(expect.stringContaining('2023 film by Cord Jefferson'));
+    await expect($('[data-testid="add-hint"]')).toHaveText('3 found on Wikipedia.');
+    await screenshot('86-film-search');
+
+    await $('[data-testid="add-result"][data-id="wikipedia:72713326"]').click();
+    await $('[data-testid="add-form"]').waitForDisplayed();
+    await expect($('[data-testid="add-title"]')).toHaveValue('American Fiction');
+    await expect($('[data-testid="add-maker"]')).toHaveValue('Cord Jefferson');
+    await expect($('[data-testid="add-year"]')).toHaveValue('2023');
+    await expect($('[data-testid="add-form"]')).toHaveText(expect.stringContaining('drama'));
+    await $('[data-testid="add-date"]').click();
+    await $('[data-testid="add-date"]').setValue('2026-10-07');
+    await $('[data-testid="add-rating"]').click();
+    await expect($('[data-testid="date-picker"]')).not.toBeExisting();
+    await $('[data-testid="add-rating"]').setValue('80');
+    await $('[data-testid="add-form"] [data-testid="lookup-cover"]').waitForDisplayed();
+    await screenshot('87-film-form');
+    await $('[data-testid="add-save"]').click();
+
+    const path = 'Rating/kino/American Fiction.md';
+    await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
+    expect(readFileSync(join(vaultCopy(), path), 'utf8')).toBe(
+      '---\nDirector: Cord Jefferson\nYear: 2023\nWatched: 2026-10-07\nGenre:\n  - drama\nRating: 80\n---\n[[00. Kino 2026]]\n\n![[american-fiction.png|200]]\n',
+    );
+    const saved = readFileSync(join(vaultCopy(), 'Rating/kino/_attachments/american-fiction.png'));
+    expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);
+  });
+
+  it('finds a book on Wikipedia and Open Library together, each card saying where it is from, a book both have once', async () => {
+    await $('[data-testid="open-library"]').click();
+    await $('[data-testid="library-add"][data-kind="book"]').click();
+    await $('[data-testid="add-search"]').setValue('life 3.0');
+    await browser.waitUntil(async () => (await $$('[data-testid="add-result"]').length) === 5, { timeoutMsg: 'the books never came' });
+    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="add-result-from"]')].map((tag) => tag.textContent))).toEqual([
+      'Wikipedia',
+      'Open Library',
+      'Open Library',
+      'Open Library',
+      'Open Library',
+    ]);
+    await expect($('[data-testid="add-result"]')).toHaveText(expect.stringContaining('2017 book by Max Tegmark on artificial intelligence'));
+    await expect($('[data-testid="add-hint"]')).toHaveText('5 found on Wikipedia and Open Library.');
+    await $('[data-testid="add-result"] [data-testid="lookup-cover"]').waitForDisplayed();
+    await screenshot('88-book-search');
+    await browser.keys(['Escape']);
+    await expect($('[data-testid="media-add"]')).not.toBeExisting();
+  });
+
   it("shows everything listened to, watched and finished in All's calendar, several covers on a day, narrowed by kind", async () => {
     await $('[data-testid="open-library"]').click();
     await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'all');
@@ -1031,7 +1088,7 @@ describe('the demo vault', () => {
     expect(readFileSync(today, 'utf8')).not.toMatch(/e2e focus[^\n]*\n {4}- \d\d:\d\d/);
   });
 
-  it('changed nothing in the vault copy but the new notes, the added album and episode and their covers, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
+  it('changed nothing in the vault copy but the new notes, the added album, episode and film and their covers, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
         `added: ${DAYS}/30.07.2026.md`,
@@ -1042,6 +1099,8 @@ describe('the demo vault', () => {
         'added: Rating/music/_attachments/dog-man-star.png',
         `added: ${EPISODE}`,
         `added: ${EPISODE_COVER}`,
+        'added: Rating/kino/American Fiction.md',
+        'added: Rating/kino/_attachments/american-fiction.png',
         'changed: Rating/music/Glasshouse Weather.md',
         `changed: ${DAYS}/12.08.2026.md`,
         `changed: ${DAYS}/14.08.2026.md`,

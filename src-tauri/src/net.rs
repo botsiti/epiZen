@@ -27,7 +27,8 @@ const MAX_REDIRECTS: usize = 5;
 const MUSICBRAINZ_GAP: Duration = Duration::from_secs(1);
 
 /// The hosts a lookup may reach: MusicBrainz and the Cover Art Archive (albums), the iTunes
-/// Search API (films, and podcasts and their episodes), Open Library (books).
+/// Search API (podcasts and their episodes), Open Library (books), English Wikipedia (films and
+/// books) and Wikidata (who made them, their year and genres).
 pub const HOSTS: &[&str] = &[
     "musicbrainz.org",
     "coverartarchive.org",
@@ -35,10 +36,13 @@ pub const HOSTS: &[&str] = &[
     "itunes.apple.com",
     "openlibrary.org",
     "covers.openlibrary.org",
+    "en.wikipedia.org",
+    "www.wikidata.org",
 ];
 /// Subdomains allowed as a family: the Cover Art Archive redirects to archive.org's mirrors
-/// (`ia800…`, `dn…ca.archive.org`), and iTunes artwork lives on `is1-ssl.mzstatic.com` and its kin.
-pub const HOST_SUFFIXES: &[&str] = &[".archive.org", ".mzstatic.com"];
+/// (`ia800…`, `dn…ca.archive.org`), iTunes artwork lives on `is1-ssl.mzstatic.com` and its kin,
+/// and Wikipedia's posters and covers on `upload.wikimedia.org` and `thumb.wikimedia.org`.
+pub const HOST_SUFFIXES: &[&str] = &[".archive.org", ".mzstatic.com", ".wikimedia.org"];
 
 #[derive(Debug)]
 pub enum NetError {
@@ -57,7 +61,7 @@ impl fmt::Display for NetError {
         match self {
             Self::NotAllowed(url) => write!(
                 f,
-                "Epizen only looks things up over https at MusicBrainz, the Cover Art Archive, iTunes and Open Library, not at {url}"
+                "Epizen only looks things up over https at MusicBrainz, the Cover Art Archive, iTunes, Open Library, Wikipedia and Wikidata, not at {url}"
             ),
             Self::TooLarge => write!(
                 f,
@@ -315,6 +319,12 @@ mod e2e {
         let host = url.host_str().unwrap_or_default();
         let path = url.path();
         let query = url.query().unwrap_or_default();
+        let param = |name: &str| {
+            url.query_pairs()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.into_owned())
+                .unwrap_or_default()
+        };
         let json: &[u8] = match host {
             "musicbrainz.org" if path == "/ws/2/release-group" => {
                 include_bytes!("../../test/fixtures/lookup/musicbrainz-search.json")
@@ -326,9 +336,23 @@ mod e2e {
             "itunes.apple.com" if path == "/lookup" && query.contains("entity=podcastEpisode") => {
                 include_bytes!("../../test/fixtures/lookup/itunes-episodes.json")
             }
-            "itunes.apple.com" if query.contains("media=movie") => {
-                include_bytes!("../../test/fixtures/lookup/itunes-movie.json")
+            // A film or a book: Wikipedia's search for "<what was typed> film" or "… book".
+            "en.wikipedia.org" if param("gsrsearch").ends_with(" film") => {
+                include_bytes!("../../test/fixtures/lookup/wikipedia-film.json")
             }
+            "en.wikipedia.org" => include_bytes!("../../test/fixtures/lookup/wikipedia-book.json"),
+            // A picked one's Wikidata item (Life 3.0's for a book, American Fiction's for a
+            // film), then the names of the people and genres in it.
+            "www.wikidata.org" if param("props") == "claims" && param("ids") == "Q48093278" => {
+                include_bytes!("../../test/fixtures/lookup/wikidata-book-claims.json")
+            }
+            "www.wikidata.org" if param("props") == "claims" => {
+                include_bytes!("../../test/fixtures/lookup/wikidata-film-claims.json")
+            }
+            "www.wikidata.org" if param("ids").contains("Q2076321") => {
+                include_bytes!("../../test/fixtures/lookup/wikidata-book-labels.json")
+            }
+            "www.wikidata.org" => include_bytes!("../../test/fixtures/lookup/wikidata-film-labels.json"),
             "itunes.apple.com" if query.contains("media=podcast") => {
                 include_bytes!("../../test/fixtures/lookup/itunes-podcast.json")
             }
@@ -359,7 +383,10 @@ mod tests {
             "https://archive.org/download/mbid-b71f964d/front.jpg",
             "https://dn710902.ca.archive.org/0/items/mbid-b71f964d/front.jpg",
             "https://ia800505.us.archive.org/1/items/x.jpg",
-            "https://itunes.apple.com/search?media=movie&entity=movie&term=coraline",
+            "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&generator=search&gsrsearch=american%20fiction%20film&gsrlimit=8&gsrnamespace=0&prop=pageimages|description|pageprops&piprop=thumbnail&pithumbsize=500&pilicense=any&ppprop=wikibase_item",
+            "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=Q116413183&props=claims",
+            "https://upload.wikimedia.org/wikipedia/en/d/d7/American_fiction_xxlg.jpg",
+            "https://thumb.wikimedia.org/wikipedia/en/thumb/9/97/Maschinenmensch.jpg/500px-Maschinenmensch.jpg",
             "https://itunes.apple.com/lookup?id=1434243584&media=podcast&entity=podcastEpisode&limit=200",
             "https://is1-ssl.mzstatic.com/image/thumb/Video116/v4/6d/600x600bb.jpg",
             "https://openlibrary.org/search.json?q=life%203.0",
@@ -385,6 +412,12 @@ mod tests {
             "https://notmusicbrainz.org/",
             "https://mzstatic.com/x.jpg",
             "https://.mzstatic.com/x.jpg",
+            "https://wikimedia.org/x.jpg",
+            "https://upload.wikimedia.org.evil.com/x.jpg",
+            "https://de.wikipedia.org/w/api.php",
+            "https://wikipedia.org/",
+            "https://en.wikipedia.org.evil.com/w/api.php",
+            "https://wikidata.org/w/api.php",
             "https://musicbrainz.org./ws/2/",
             "https://musicbrainz.org:8443/ws/2/",
             "https://user:secret@musicbrainz.org/ws/2/",

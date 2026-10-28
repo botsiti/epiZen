@@ -1,0 +1,518 @@
+{
+  "entities": {
+    "Q48093278": {
+      "type": "item",
+      "id": "Q48093278",
+      "claims": {
+        "P31": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P31",
+              "hash": "56d2ce980dfb7e5844c4c8777065c37181767334",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 47461344,
+                  "id": "Q47461344"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$C88EF794-AA7A-4289-9D2A-0F03CB781DD1",
+            "rank": "normal"
+          }
+        ],
+        "P577": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P577",
+              "hash": "e028f404f6f8b18b646a1ce77b9496fa37ee7612",
+              "datavalue": {
+                "value": {
+                  "time": "+2017-08-23T00:00:00Z",
+                  "timezone": 0,
+                  "before": 0,
+                  "after": 0,
+                  "precision": 11,
+                  "calendarmodel": "http://www.wikidata.org/entity/Q1985727"
+                },
+                "type": "time"
+              },
+              "datatype": "time"
+            },
+            "type": "statement",
+            "id": "Q48093278$374C286E-E8EC-439F-A39E-0C4CE214337D",
+            "rank": "normal",
+            "references": [
+              {
+                "hash": "fa278ebfc458360e5aed63d5058cca83c46134f1",
+                "snaks": {
+                  "P143": [
+                    {
+                      "snaktype": "value",
+                      "property": "P143",
+                      "hash": "e4f6d9441d0600513c4533c672b5ab472dc73694",
+                      "datavalue": {
+                        "value": {
+                          "entity-type": "item",
+                          "numeric-id": 328,
+                          "id": "Q328"
+                        },
+                        "type": "wikibase-entityid"
+                      },
+                      "datatype": "wikibase-item"
+                    }
+                  ]
+                },
+                "snaks-order": [
+                  "P143"
+                ]
+              }
+            ]
+          }
+        ],
+        "P50": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P50",
+              "hash": "17217fdf7eda5f47bde1d1c63c3013981216561e",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 2076321,
+                  "id": "Q2076321"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$8BE7DD84-D983-4800-95FC-4AB1FD5F1713",
+            "rank": "normal",
+            "references": [
+              {
+                "hash": "fa278ebfc458360e5aed63d5058cca83c46134f1",
+                "snaks": {
+                  "P143": [
+                    {
+                      "snaktype": "value",
+                      "property": "P143",
+                      "hash": "e4f6d9441d0600513c4533c672b5ab472dc73694",
+                      "datavalue": {
+                        "value": {
+                          "entity-type": "item",
+                          "numeric-id": 328,
+                          "id": "Q328"
+                        },
+                        "type": "wikibase-entityid"
+                      },
+                      "datatype": "wikibase-item"
+                    }
+                  ]
+                },
+                "snaks-order": [
+                  "P143"
+                ]
+              }
+            ]
+          }
+        ],
+        "P155": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P155",
+              "hash": "41f6d8aa44b126f01bba3d296aacd162ca994cfa",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 18358743,
+                  "id": "Q18358743"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$7dbc5677-498c-5047-5826-c5aed0334b34",
+            "rank": "normal"
+          }
+        ],
+        "P1476": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P1476",
+              "hash": "e9bd128355e85e6594ed58b05d4146c6620b9093",
+              "datavalue": {
+                "value": {
+                  "text": "Life 3.0",
+                  "language": "en"
+                },
+                "type": "monolingualtext"
+              },
+              "datatype": "monolingualtext"
+            },
+            "type": "statement",
+            "id": "Q48093278$f32f41d6-4bdd-c87f-824e-e7e68903bcb2",
+            "rank": "normal"
+          }
+        ],
+        "P747": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P747",
+              "hash": "6fb31d65019b6e442e41a170ea0bce887ef7a5e7",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 43555574,
+                  "id": "Q43555574"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$da762b40-4016-e6bf-ea3c-4a4947df5723",
+            "rank": "normal"
+          }
+        ],
+        "P407": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P407",
+              "hash": "daf1c4fcb58181b02dff9cc89deb084004ddae4b",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 1860,
+                  "id": "Q1860"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$7ca9e87d-4e6d-7d83-a458-74f462469bc1",
+            "rank": "normal"
+          }
+        ],
+        "P136": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P136",
+              "hash": "2ff146c3d2fb99a02ebd49ce7ff03707be34f59c",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 1129795,
+                  "id": "Q1129795"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$360e0a1a-49a3-7431-61d9-c730dfb03805",
+            "rank": "normal"
+          }
+        ],
+        "P123": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P123",
+              "hash": "beeb0b2bbb19c347bace345872373d3a64f3507c",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 744182,
+                  "id": "Q744182"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$AE6BA806-3BA6-4373-821A-AF50E51E0375",
+            "rank": "normal",
+            "references": [
+              {
+                "hash": "2c502934af1582cf75b30476e94a8e0475a79746",
+                "snaks": {
+                  "P143": [
+                    {
+                      "snaktype": "value",
+                      "property": "P143",
+                      "hash": "e4f6d9441d0600513c4533c672b5ab472dc73694",
+                      "datavalue": {
+                        "value": {
+                          "entity-type": "item",
+                          "numeric-id": 328,
+                          "id": "Q328"
+                        },
+                        "type": "wikibase-entityid"
+                      },
+                      "datatype": "wikibase-item"
+                    }
+                  ],
+                  "P4656": [
+                    {
+                      "snaktype": "value",
+                      "property": "P4656",
+                      "hash": "741b0ef2898975af749d9053a3316851f13d6fbc",
+                      "datavalue": {
+                        "value": "https://en.wikipedia.org/w/index.php?title=Life_3.0&oldid=840685489",
+                        "type": "string"
+                      },
+                      "datatype": "url"
+                    }
+                  ]
+                },
+                "snaks-order": [
+                  "P143",
+                  "P4656"
+                ]
+              }
+            ]
+          }
+        ],
+        "P495": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P495",
+              "hash": "7f985e15819b74ed189d022e004890e66d2ae42e",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 30,
+                  "id": "Q30"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$755C0577-CD63-4EEE-A7E0-24D824C9B483",
+            "rank": "normal",
+            "references": [
+              {
+                "hash": "bbb089c0d1c8724f687fc60c30764a3ee177a98b",
+                "snaks": {
+                  "P143": [
+                    {
+                      "snaktype": "value",
+                      "property": "P143",
+                      "hash": "e4f6d9441d0600513c4533c672b5ab472dc73694",
+                      "datavalue": {
+                        "value": {
+                          "entity-type": "item",
+                          "numeric-id": 328,
+                          "id": "Q328"
+                        },
+                        "type": "wikibase-entityid"
+                      },
+                      "datatype": "wikibase-item"
+                    }
+                  ],
+                  "P4656": [
+                    {
+                      "snaktype": "value",
+                      "property": "P4656",
+                      "hash": "909e75e4a69b2b53520aa12afed39cc3a8f9a7ef",
+                      "datavalue": {
+                        "value": "https://en.wikipedia.org/w/index.php?title=Life_3.0&oldid=859726135",
+                        "type": "string"
+                      },
+                      "datatype": "url"
+                    }
+                  ]
+                },
+                "snaks-order": [
+                  "P143",
+                  "P4656"
+                ]
+              }
+            ]
+          }
+        ],
+        "P921": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P921",
+              "hash": "63e8da897e0c62e377119fdaa4db0f0a69f111e0",
+              "datavalue": {
+                "value": {
+                  "entity-type": "item",
+                  "numeric-id": 11660,
+                  "id": "Q11660"
+                },
+                "type": "wikibase-entityid"
+              },
+              "datatype": "wikibase-item"
+            },
+            "type": "statement",
+            "id": "Q48093278$90B16DFB-808D-4725-92AA-0479C5A1156D",
+            "rank": "normal",
+            "references": [
+              {
+                "hash": "bbb089c0d1c8724f687fc60c30764a3ee177a98b",
+                "snaks": {
+                  "P143": [
+                    {
+                      "snaktype": "value",
+                      "property": "P143",
+                      "hash": "e4f6d9441d0600513c4533c672b5ab472dc73694",
+                      "datavalue": {
+                        "value": {
+                          "entity-type": "item",
+                          "numeric-id": 328,
+                          "id": "Q328"
+                        },
+                        "type": "wikibase-entityid"
+                      },
+                      "datatype": "wikibase-item"
+                    }
+                  ],
+                  "P4656": [
+                    {
+                      "snaktype": "value",
+                      "property": "P4656",
+                      "hash": "909e75e4a69b2b53520aa12afed39cc3a8f9a7ef",
+                      "datavalue": {
+                        "value": "https://en.wikipedia.org/w/index.php?title=Life_3.0&oldid=859726135",
+                        "type": "string"
+                      },
+                      "datatype": "url"
+                    }
+                  ]
+                },
+                "snaks-order": [
+                  "P143",
+                  "P4656"
+                ]
+              }
+            ]
+          }
+        ],
+        "P8632": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P8632",
+              "hash": "fcef81f0b6f66c67de524701e9fd968575494c0f",
+              "datavalue": {
+                "value": "life-3-0-being-human-in-the-age-of-artificial-intelligence",
+                "type": "string"
+              },
+              "datatype": "external-id"
+            },
+            "type": "statement",
+            "id": "Q48093278$4ff7ba46-498b-93a9-35dc-7c7b93f7fde3",
+            "rank": "normal"
+          }
+        ],
+        "P2671": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P2671",
+              "hash": "5c9c6a259575837ba17c705f814e41699deada57",
+              "datavalue": {
+                "value": "/g/11gdkqkh5z",
+                "type": "string"
+              },
+              "datatype": "external-id"
+            },
+            "type": "statement",
+            "id": "Q48093278$1E2E8981-A1F6-479C-8C6B-F974C8A7E72A",
+            "rank": "normal"
+          }
+        ],
+        "P1085": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P1085",
+              "hash": "d5f10c5fe577357510b719e6d83e22fed558cc93",
+              "datavalue": {
+                "value": "19961163",
+                "type": "string"
+              },
+              "datatype": "external-id"
+            },
+            "type": "statement",
+            "id": "Q48093278$82CD9C1C-DBB7-408D-A8D9-D66F63208A51",
+            "rank": "normal"
+          }
+        ],
+        "P1680": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P1680",
+              "hash": "1e093889aa9ec1c338dd4cd5c5475bf023070b3e",
+              "datavalue": {
+                "value": {
+                  "text": "Being Human in the Age of Artificial Intelligence",
+                  "language": "en"
+                },
+                "type": "monolingualtext"
+              },
+              "datatype": "monolingualtext"
+            },
+            "type": "statement",
+            "id": "Q48093278$67176adb-4037-1408-ddf0-489ba7b541b3",
+            "rank": "normal"
+          }
+        ],
+        "P9818": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P9818",
+              "hash": "46cfc0b9a6f735a526e4e6d0b89663e3d58f5e00",
+              "datavalue": {
+                "value": "530584",
+                "type": "string"
+              },
+              "datatype": "external-id"
+            },
+            "type": "statement",
+            "id": "Q48093278$1B7EC5C3-E5AF-41CE-8FC7-3ED3F924BD64",
+            "rank": "normal"
+          }
+        ],
+        "P648": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P648",
+              "hash": "adf79cd5659453c32d534a0bc011f456aab70f99",
+              "datavalue": {
+                "value": "OL19717530W",
+                "type": "string"
+              },
+              "datatype": "external-id"
+            },
+            "type": "statement",
+            "id": "Q48093278$0B8F9ECF-B828-460E-9448-679F209DA27E",
+            "rank": "normal"
+          }
+        ]
+      }
+    }
+  },
+  "success": 1
+}

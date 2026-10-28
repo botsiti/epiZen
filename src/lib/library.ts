@@ -47,8 +47,8 @@ export interface KindSpec {
   coverWidth: number;
   /** The shape of its covers, width over height. */
   aspect: number;
-  /** Where "Add" looks things up; videos are only read. */
-  source?: 'musicbrainz' | 'itunes-movie' | 'openlibrary' | 'itunes-podcast';
+  /** Where "Add" looks things up (src/lib/lookup.ts); videos are only read. */
+  source?: 'musicbrainz' | 'wikipedia-film' | 'wikipedia-openlibrary' | 'itunes-podcast';
 }
 
 /** The one place a folder under Rating/ becomes a kind of thing. */
@@ -80,7 +80,7 @@ export const KINDS: readonly KindSpec[] = [
     moc: 'year',
     coverWidth: 200,
     aspect: 2 / 3,
-    source: 'itunes-movie',
+    source: 'wikipedia-film',
   },
   {
     kind: 'book',
@@ -95,7 +95,7 @@ export const KINDS: readonly KindSpec[] = [
     moc: 'single',
     coverWidth: 200,
     aspect: 2 / 3,
-    source: 'openlibrary',
+    source: 'wikipedia-openlibrary',
   },
   {
     kind: 'podcast',
