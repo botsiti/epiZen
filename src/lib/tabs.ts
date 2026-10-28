@@ -1,4 +1,4 @@
-import { KINDS, type MediaKind } from './library';
+import { isLibraryTab, type LibraryTab } from './library';
 import { noteTitle } from './links';
 
 /** What a tab shows: one screen of the main pane. */
@@ -11,7 +11,7 @@ export type View =
   | { kind: 'settings' }
   | { kind: 'graph' }
   | { kind: 'calendar' }
-  | { kind: 'library'; tab: MediaKind }
+  | { kind: 'library'; tab: LibraryTab }
   | { kind: 'problem'; title: string; message: string };
 
 export const HOME: View = { kind: 'home' };
@@ -251,7 +251,6 @@ export function toStored(ws: Workspace, vault: string): StoredWorkspace {
   return { vault, tabs, active: Math.max(0, ws.tabs.findIndex((tab) => tab.id === ws.active)) };
 }
 
-const MEDIA_KINDS = new Set<string>(KINDS.map((spec) => spec.kind));
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** A stored screen, if it is one this vault can still show: a note only while it exists. */
@@ -266,7 +265,7 @@ export function parseView(value: unknown, notes: ReadonlySet<string>): View | un
     case 'note':
       return typeof value.path === 'string' && notes.has(value.path) ? { kind: 'note', path: value.path } : undefined;
     case 'library':
-      return typeof value.tab === 'string' && MEDIA_KINDS.has(value.tab) ? { kind: 'library', tab: value.tab as MediaKind } : undefined;
+      return isLibraryTab(value.tab) ? { kind: 'library', tab: value.tab } : undefined;
     default:
       return undefined;
   }

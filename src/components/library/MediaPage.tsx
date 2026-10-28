@@ -103,7 +103,7 @@ export function MediaPage({ spec, path, text, files, onOpenLink, onSetProperty, 
             </ul>
           )}
           <div className="media-fields">
-            <ValueField label={spec.dateLabel} value={entry.date} kind="date" today onCommit={(value) => onSetProperty(key(keys.date), value)} testId="media-date" />
+            <ValueField label={spec.dateLabel} value={entry.date} kind="date" onCommit={(value) => onSetProperty(key(keys.date), value)} testId="media-date" />
             {keys.started && (
               <ValueField label="Started" value={entry.started} kind="date" onCommit={(value) => onSetProperty(key(keys.started ?? 'Started'), value)} testId="media-started" />
             )}

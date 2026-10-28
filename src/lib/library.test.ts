@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { VaultFile } from './api';
 import { parseNote } from './frontmatter';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseEpisodes, parseResults } from './lookup';
 import {
+  allEntries,
   bodyWithoutCover,
   calendarStart,
   collectLibrary,
@@ -13,9 +17,11 @@ import {
   findOverview,
   genreCounts,
   imageType,
+  isLibraryTab,
   isMediaNote,
   keyIn,
   kindOfFolder,
+  kindCounts,
   kindOfPath,
   kindSpec,
   libraryStats,
@@ -25,6 +31,7 @@ import {
   noteFileName,
   notePath,
   sortEntries,
+  toggleKind,
   withGenre,
   yamlText,
   type MediaDraft,
@@ -170,6 +177,33 @@ describe('collectLibrary', () => {
   });
 });
 
+describe('everything together', () => {
+  const library = collectLibrary(notes, files);
+
+  it('puts every shelved kind together, or only the kinds chosen, and counts each', () => {
+    const counts = kindCounts(library);
+    expect(counts.map(([kind]) => kind)).toEqual(['album', 'film', 'book', 'podcast']);
+    expect(allEntries(library)).toHaveLength(counts.reduce((sum, [, count]) => sum + count, 0));
+    expect(allEntries(library).some((entry) => entry.kind === 'video')).toBe(false);
+    expect(allEntries(library, new Set(['podcast'])).map((entry) => entry.kind)).toEqual(['podcast']);
+    expect(allEntries(library, new Set(['film', 'book'])).every((entry) => entry.kind === 'film' || entry.kind === 'book')).toBe(true);
+  });
+
+  it('turns kinds on and off, and every kind on is none: everything shows', () => {
+    let kinds = toggleKind(new Set(), 'album');
+    expect([...kinds]).toEqual(['album']);
+    kinds = toggleKind(toggleKind(kinds, 'film'), 'album');
+    expect([...kinds]).toEqual(['film']);
+    for (const kind of ['album', 'book', 'podcast'] as const) kinds = toggleKind(kinds, kind);
+    expect(kinds.size).toBe(0);
+  });
+
+  it('knows its tabs', () => {
+    expect(['all', 'album', 'podcast', 'video'].every(isLibraryTab)).toBe(true);
+    expect([undefined, 'games', 'toString', 1].some(isLibraryTab)).toBe(false);
+  });
+});
+
 describe('a new note', () => {
   const draft = (patch: Partial<MediaDraft>): MediaDraft => ({ title: '', maker: '', year: '', genres: [], rating: '', date: '', started: '', ...patch });
 
@@ -207,6 +241,32 @@ describe('a new note', () => {
     expect(
       mediaNoteText(kindSpec('podcast'), draft({ title: 'Jensen Huang', maker: 'Lex Fridman', genres: ['AI', 'business'], rating: '77', date: '2026-07-04' }), { overview: '00. Podcast 2026' }),
     ).toBe('---\nAuthor: Lex Fridman\nRating: 77\nGenre:\n  - AI\n  - business\nListened: 2026-07-04\n---\n[[00. Podcast 2026]]\n');
+  });
+
+  it('writes a podcast episode with the year it came out where the vault\'s notes that have one put it, between Rating and Genre', () => {
+    // As "Ilya Sutskever" is written in the owner's vault: Author, Rating, Year, Genre, Listened.
+    expect(
+      mediaNoteText(kindSpec('podcast'), draft({ title: 'Ilya Sutskever', maker: 'Dwarkesh', year: '2025', genres: ['AI', 'interview'], rating: '68', date: '2026-01-06' }), {
+        overview: '00. Podcast 2025 MOC',
+      }),
+    ).toBe('---\nAuthor: Dwarkesh\nRating: 68\nYear: 2025\nGenre:\n  - AI\n  - interview\nListened: 2026-01-06\n---\n[[00. Podcast 2025 MOC]]\n');
+    // Without a year it is left out, as the vault's template leaves it out; other empty ones stay.
+    expect(mediaNoteText(kindSpec('podcast'), draft({ title: 'Tear' }), {})).toBe('---\nAuthor:\nRating:\nGenre:\nListened:\n---\n');
+  });
+
+  it('writes an episode picked from a show\'s episodes: its title for the name, the show as Author, its year, its artwork as the cover', () => {
+    // The recorded iTunes answers (test/fixtures/lookup/), read from the project's root: this file runs in jsdom.
+    const json = (name: string): unknown => JSON.parse(readFileSync(join(process.cwd(), 'test/fixtures/lookup', name), 'utf8'));
+    const show = parseResults('itunes-podcast', json('itunes-podcast.json'))[0]!;
+    const episode = parseEpisodes(json('itunes-episodes.json'), show).find((found) => found.title.startsWith('Jensen Huang'))!;
+    const spec = kindSpec('podcast');
+    const picked = draft({ title: episode.title, maker: episode.maker, year: episode.year, genres: episode.genres, rating: '77', date: '2026-09-21' });
+    const cover = coverPath(spec, picked.title, files);
+    expect(notePath(spec, picked.title, files).path).toBe('Rating/podcasts/Jensen Huang - NVIDIA – The $4 Trillion Company & the AI Revolution.md');
+    expect(cover).toBe('Rating/podcasts/_attachments/jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.jpg');
+    expect(mediaNoteText(spec, picked, { overview: findOverview(spec, files, 2026), cover: cover.replace(/\.jpg$/, '.png') })).toBe(
+      '---\nAuthor: Lex Fridman Podcast\nRating: 77\nYear: 2026\nGenre:\n  - technology\nListened: 2026-09-21\n---\n[[00. Podcast 2026]]\n\n![[jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png|240]]\n',
+    );
   });
 
   it('leaves what the form left empty as an empty property, and quotes only what YAML would misread', () => {

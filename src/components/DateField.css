@@ -1,0 +1,275 @@
+/* A date field and the small month calendar it opens. DESIGN.md, "Library and media pages",
+   says why: the glass of the pages, the serif month, sage for the chosen day and a ring for today.
+   Ideas from Notion's and Calendars' date sheets (the field above the month, ‹ › by the month's
+   name, a Today chip), Timepage (today as a ring, the chosen day a lit disc) and Booking.com
+   (quick chips under the days), drawn in Epizen's own look. */
+
+.date-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+/* Inside a form's label, the field isn't the label's words. */
+.field > span.date-field {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.date-field .date-field-input {
+  padding-right: 34px;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-field-glyph {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--text-faint);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: stroke 160ms ease-out;
+}
+
+.date-field:hover .date-field-glyph,
+.date-field.is-open .date-field-glyph {
+  stroke: var(--accent);
+}
+
+/* The calendar, over the window. `.glass` gives it the pages' light; this rule outranks its
+   position and its face, whichever sheet loads first. */
+
+.date-picker.glass {
+  position: fixed;
+  z-index: 70;
+  width: 292px;
+  padding: 14px 14px 12px;
+  border-color: var(--glass-line-strong);
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgb(143 188 170 / 9%), transparent 60%),
+    var(--glass-face),
+    #121517;
+  box-shadow:
+    var(--glass-top),
+    0 24px 60px -18px rgb(0 0 0 / 80%),
+    0 2px 8px -2px rgb(0 0 0 / 40%);
+  font-family: var(--font-ui);
+  animation: date-picker-in 220ms var(--settle) both;
+  user-select: none;
+}
+
+.date-picker[data-side='above'] {
+  animation-name: date-picker-in-above;
+}
+
+@keyframes date-picker-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+@keyframes date-picker-in-above {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+.date-picker-top {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-end;
+  justify-content: space-between;
+  margin: 0 2px 10px 4px;
+}
+
+.date-picker-label {
+  margin: 0 0 3px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.date-picker-month {
+  margin: 0;
+  color: var(--text);
+  font: 500 21px/1.1 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.date-picker-steps {
+  display: flex;
+  gap: 4px;
+}
+
+.date-picker-step {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--text-muted);
+  font-size: 17px;
+  line-height: 1;
+  transition:
+    color 160ms ease-out,
+    border-color 160ms ease-out,
+    background 160ms ease-out,
+    transform 380ms var(--snap);
+}
+
+.date-picker-step:hover {
+  border-color: var(--glass-line-strong);
+  background: rgb(255 255 255 / 6%);
+  color: var(--text);
+}
+
+.date-picker-step:active {
+  transform: scale(0.92);
+}
+
+.date-picker-weekdays,
+.date-picker-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.date-picker-weekdays {
+  margin-bottom: 4px;
+}
+
+.date-picker-weekdays span {
+  color: var(--text-faint);
+  font: 600 10.5px/24px var(--numbers);
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.date-picker-weekdays span.is-today {
+  color: var(--accent);
+}
+
+.date-picker-day {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--text);
+  font: 500 13.5px var(--numbers);
+  font-variant-numeric: tabular-nums;
+  transition:
+    background 140ms ease-out,
+    color 140ms ease-out,
+    transform 380ms var(--snap);
+}
+
+.date-picker-day:hover {
+  background: rgb(255 255 255 / 6%);
+}
+
+.date-picker-day:active {
+  transform: scale(0.9);
+}
+
+.date-picker-day.is-outside {
+  color: var(--text-faint);
+  opacity: 0.55;
+}
+
+/* Today: a thin sage ring. */
+.date-picker-day.is-today {
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgb(143 188 170 / 55%);
+}
+
+/* The chosen day: a lit sage disc. */
+.date-picker-day.is-chosen {
+  background: linear-gradient(180deg, #a4cbbb, var(--accent));
+  color: #0e1012;
+  font-weight: 650;
+  opacity: 1;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 30%),
+    0 0 18px rgb(143 188 170 / 45%);
+  animation: date-picker-chosen 420ms var(--snap) both;
+}
+
+@keyframes date-picker-chosen {
+  from {
+    transform: scale(0.8);
+  }
+}
+
+/* The keyboard's day: a soft white ring and a faint fill, unlike today's sage ring. */
+.date-picker-day:focus-visible {
+  outline: 1.5px solid rgb(255 255 255 / 55%);
+  outline-offset: 1px;
+  background: rgb(255 255 255 / 8%);
+}
+
+.date-picker-day.is-chosen:focus-visible {
+  background: linear-gradient(180deg, #a4cbbb, var(--accent));
+}
+
+.date-picker-foot {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--glass-line);
+}
+
+.date-picker-quick {
+  padding: 4px 11px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+  transition:
+    background 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.date-picker-quick:hover {
+  border-color: rgb(143 188 170 / 40%);
+  background: rgb(143 188 170 / 8%);
+  color: var(--accent);
+}
+
+.date-picker-chosen {
+  margin-left: auto;
+  color: var(--text-faint);
+  font: italic 13px var(--display);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .date-picker,
+  .date-picker * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+:root[data-motion='off'] .date-picker,
+:root[data-motion='off'] .date-picker * {
+  animation: none !important;
+}

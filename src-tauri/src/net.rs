@@ -1,6 +1,6 @@
-//! The library's lookups: an album's, film's, book's or podcast's details and its cover, from a
-//! fixed list of public services that need no account. This is the only code that goes on the
-//! network, and only when the user searches or saves.
+//! The library's lookups: an album's, film's, book's or podcast episode's details and its
+//! cover, from a fixed list of public services that need no account. This is the only code that
+//! goes on the network, and only when the user searches, picks a show or saves.
 //!
 //! Every URL, and every redirect, must be `https` to one of [`HOSTS`] (or a subdomain in
 //! [`HOST_SUFFIXES`]); anything else is refused before a connection is made. Answers are capped
@@ -27,7 +27,7 @@ const MAX_REDIRECTS: usize = 5;
 const MUSICBRAINZ_GAP: Duration = Duration::from_secs(1);
 
 /// The hosts a lookup may reach: MusicBrainz and the Cover Art Archive (albums), the iTunes
-/// Search API (films and podcasts), Open Library (books).
+/// Search API (films, and podcasts and their episodes), Open Library (books).
 pub const HOSTS: &[&str] = &[
     "musicbrainz.org",
     "coverartarchive.org",
@@ -322,6 +322,10 @@ mod e2e {
             "musicbrainz.org" if path.starts_with("/ws/2/release-group/") => {
                 include_bytes!("../../test/fixtures/lookup/musicbrainz-release-group.json")
             }
+            // A show's episodes: asked by its id once the show is picked.
+            "itunes.apple.com" if path == "/lookup" && query.contains("entity=podcastEpisode") => {
+                include_bytes!("../../test/fixtures/lookup/itunes-episodes.json")
+            }
             "itunes.apple.com" if query.contains("media=movie") => {
                 include_bytes!("../../test/fixtures/lookup/itunes-movie.json")
             }
@@ -356,6 +360,7 @@ mod tests {
             "https://dn710902.ca.archive.org/0/items/mbid-b71f964d/front.jpg",
             "https://ia800505.us.archive.org/1/items/x.jpg",
             "https://itunes.apple.com/search?media=movie&entity=movie&term=coraline",
+            "https://itunes.apple.com/lookup?id=1434243584&media=podcast&entity=podcastEpisode&limit=200",
             "https://is1-ssl.mzstatic.com/image/thumb/Video116/v4/6d/600x600bb.jpg",
             "https://openlibrary.org/search.json?q=life%203.0",
             "https://covers.openlibrary.org/b/id/10239283-L.jpg",

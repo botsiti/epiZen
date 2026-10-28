@@ -109,3 +109,34 @@ fn adding_an_album_writes_its_cover_and_its_note_and_nothing_else() {
     assert!(store_image(&vault, &cover, png).is_err());
     assert_eq!(fs::read(copy.join(path)).unwrap(), note.as_bytes());
 }
+
+/// A podcast episode, added as the library's Add writes one (the text is the one
+/// `src/lib/library.test.ts` builds from the recorded iTunes episodes): its cover in the podcasts'
+/// `_attachments`, its note named after the episode, and nothing else in the vault changed.
+#[test]
+fn adding_a_podcast_episode_writes_its_cover_and_its_note_and_nothing_else() {
+    let (_dir, copy) = copy_of_demo_vault();
+    let before = snapshot(&copy);
+    let vault = Vault::open(&copy).unwrap();
+
+    let png = include_bytes!("../../test/fixtures/lookup/cover-2.png");
+    let cover = store_image(
+        &vault,
+        "Rating/podcasts/_attachments/jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.jpg",
+        png,
+    )
+    .unwrap();
+    assert_eq!(
+        cover,
+        "Rating/podcasts/_attachments/jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png"
+    );
+    let note = "---\nAuthor: Lex Fridman Podcast\nRating: 77\nYear: 2026\nGenre:\n  - technology\nListened: 2026-09-21\n---\n[[00. Podcast 2026]]\n\n![[jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png|240]]\n";
+    let path = "Rating/podcasts/Jensen Huang - NVIDIA – The $4 Trillion Company & the AI Revolution.md";
+    vault.create_note(path, note).unwrap();
+
+    let mut after = snapshot(&copy);
+    assert_eq!(after.remove(Path::new(&cover)).unwrap(), png);
+    assert_eq!(after.remove(Path::new(path)).unwrap(), note.as_bytes());
+    assert_eq!(after, before, "only the new episode and its cover may differ");
+    assert!(vault.create_note(path, "again").is_err());
+}

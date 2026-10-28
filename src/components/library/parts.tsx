@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { lookupImage } from '../../lib/api';
 import { imageType, isDate, isoDate } from '../../lib/library';
+import { DateField } from '../DateField';
 import { CountUp } from '../periodic/motion';
 
 const TAU = Math.PI * 2;
@@ -156,7 +157,8 @@ export function RatingRing({ value, onSet, size = 152, label = 'Rating' }: { val
 
 /**
  * A short value typed in and set when the field is left or Enter is pressed: a rating or a date.
- * A value that doesn't fit is refused with a word, never written.
+ * A date also opens a month calendar, and a day picked there is set at once. A value that doesn't
+ * fit is refused with a word, never written.
  */
 export function ValueField({
   label,
@@ -164,15 +166,12 @@ export function ValueField({
   onCommit,
   kind,
   testId,
-  today,
 }: {
   label: string;
   value?: string;
   onCommit: (value: string) => void;
   kind: 'rating' | 'date';
   testId: string;
-  /** A date field's "Today" chip. */
-  today?: boolean;
 }) {
   const [draft, setDraft] = useState<string>();
   const [problem, setProblem] = useState<string>();
@@ -191,32 +190,26 @@ export function ValueField({
     setProblem(why);
     if (!why) onCommit(kind === 'rating' && text ? String(Number(text)) : text);
   };
+  const input = {
+    'aria-invalid': problem ? true : undefined,
+    title: problem,
+    onBlur: () => commit(),
+    onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') event.currentTarget.blur();
+      if (event.key === 'Escape') {
+        setDraft(undefined);
+        setProblem(undefined);
+      }
+    },
+  };
   return (
     <label className={`value-field is-${kind}`}>
       <span className="tile-label">{label}</span>
       <span className="value-row">
-        <input
-          type="text"
-          inputMode={kind === 'rating' ? 'numeric' : undefined}
-          value={shown}
-          placeholder={kind === 'date' ? 'YYYY-MM-DD' : '—'}
-          aria-invalid={problem ? true : undefined}
-          title={problem}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={() => commit()}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur();
-            if (event.key === 'Escape') {
-              setDraft(undefined);
-              setProblem(undefined);
-            }
-          }}
-          data-testid={testId}
-        />
-        {today && (
-          <button type="button" className="chip-filter" onClick={() => commit(isoDate(new Date()))} data-testid={`${testId}-today`}>
-            Today
-          </button>
+        {kind === 'date' ? (
+          <DateField value={shown} onChange={setDraft} onPick={(picked) => commit(picked)} label={label} testId={testId} inputProps={input} />
+        ) : (
+          <input type="text" inputMode="numeric" value={shown} placeholder="—" onChange={(event) => setDraft(event.target.value)} data-testid={testId} {...input} />
         )}
       </span>
       {problem && (

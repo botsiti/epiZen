@@ -39,6 +39,11 @@ const ALBUM = 'Rating/music/Glasshouse Weather.md';
 const FILM = 'Rating/kino/The Lighthouse Accountant.md';
 const INBOX = 'Inbox idea.md';
 const DAY = `${DAYS}/14.08.2026.md`;
+// The Lex Fridman Podcast's episode #494, from the recorded iTunes answers (test/fixtures/lookup/).
+const EPISODE = 'Rating/podcasts/Jensen Huang - NVIDIA – The $4 Trillion Company & the AI Revolution.md';
+const EPISODE_COVER = 'Rating/podcasts/_attachments/jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png';
+const EPISODE_NOTE =
+  '---\nAuthor: Lex Fridman Podcast\nRating: 77\nYear: 2026\nGenre:\n  - technology\nListened: 2026-09-21\n---\n[[00. Podcast 2026]]\n\n![[jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png|240]]\n';
 
 /**
  * The tabs a step starts from, whatever the steps before it left: these notes, nothing pinned, the
@@ -138,12 +143,41 @@ describe('the demo vault', () => {
     await screenshot('09-youtube');
   });
 
-  it('shows the library: a tab per kind with its counts, its covers, its genres and a calendar of covers', async () => {
+  it('opens the library on All: every album, film, book and podcast together, narrowed by kind', async () => {
     await $('[data-testid="open-library"]').click();
     const library = $('[data-testid="library"]');
     await library.waitForDisplayed();
+    await expect(library).toHaveAttribute('data-tab', 'all');
+    await expect($('[data-testid="hero-title"]')).toHaveText('Library');
+    // 20 albums, 4 films, 6 books and 4 podcasts; videos are read as pages, not shelved.
+    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library"] [role="tab"]')].map((tab) => tab.textContent))).toEqual(['All', 'Albums', 'Films', 'Books', 'Podcasts']);
+    await expect($('[data-testid="library-total"]')).toHaveText('34');
+    expect(await $$('[data-testid="library-card"]').length).toBe(34);
+    expect(await $$('[data-testid="library-card-kind"]').length).toBe(34);
+    // An Add for every kind, on every tab.
+    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-add"]')].map((button) => button.getAttribute('data-kind')))).toEqual(['album', 'film', 'book', 'podcast']);
+    // Covers load as they come near the screen: the first row's, at least.
+    await $('[data-testid="library-card"]').scrollIntoView({ block: 'center' });
+    await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) >= 6, { timeoutMsg: 'the covers never loaded' });
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+    await screenshot('80-library-all');
+
+    await $('[data-testid="kind-chip"][data-kind="film"]').click();
+    await $('[data-testid="kind-chip"][data-kind="book"]').click();
+    expect(await $$('[data-testid="library-card"]').length).toBe(10);
+    expect(new Set(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-card"]')].map((card) => card.getAttribute('data-kind'))))).toEqual(new Set(['film', 'book']));
+    await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) === 10, { timeoutMsg: 'the film and book covers never loaded' });
+    await screenshot('81-library-all-kinds');
+    await $('[data-testid="kind-chip"][data-kind="film"]').click();
+    await $('[data-testid="kind-chip"][data-kind="book"]').click();
+    expect(await $$('[data-testid="library-card"]').length).toBe(34);
+  });
+
+  it('shows the library: a tab per kind with its counts, its covers, its genres and a calendar of covers', async () => {
+    const library = $('[data-testid="library"]');
+    await showTab('Albums');
     await expect(library).toHaveAttribute('data-tab', 'album');
-    expect(await $$('[data-testid="tab"]').length).toBe(4);
+    expect(await $$('[data-testid="tab"]').length).toBe(5);
     expect(await $$('[data-testid="library-card"]').length).toBe(20);
     await expect($('[data-testid="library-total"]')).toHaveText('20');
     await expect($('[data-testid="library-average"]')).toHaveText('77');
@@ -177,7 +211,7 @@ describe('the demo vault', () => {
     await showTab('Podcasts');
     expect(await $$('[data-testid="library-card"]').length).toBe(4);
     // Videos open as pages, but the library is what is rated and added: no tab for them.
-    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library"] [role="tab"]')].map((tab) => tab.textContent))).toEqual(['Albums', 'Films', 'Books', 'Podcasts']);
+    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library"] [role="tab"]')].map((tab) => tab.textContent))).toEqual(['All', 'Albums', 'Films', 'Books', 'Podcasts']);
     await showTab('Albums');
   });
 
@@ -207,7 +241,7 @@ describe('the demo vault', () => {
     // The e2e build answers lookups from test/fixtures/lookup/, so nothing here goes on the network.
     await $('[data-testid="media-library"]').click();
     await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'album');
-    await $('[data-testid="library-add"]').click();
+    await $('[data-testid="library-add"][data-kind="album"]').click();
     await $('[data-testid="add-search"]').setValue('dog man star');
     await browser.waitUntil(async () => (await $$('[data-testid="add-result"]').length) === 6, { timeoutMsg: 'no results came' });
     await browser.waitUntil(async () => (await $$('[data-testid="lookup-cover"]').length) === 6, { timeoutMsg: 'the result covers never loaded' });
@@ -219,8 +253,12 @@ describe('the demo vault', () => {
     await expect($('[data-testid="add-title"]')).toHaveValue('Dog Man Star');
     await expect($('[data-testid="add-maker"]')).toHaveValue('Suede');
     await expect($('[data-testid="add-year"]')).toHaveValue('1994');
-    await $('[data-testid="add-rating"]').setValue('86');
+    // Typed, not picked: the field still takes a date. Pressing the rating closes its calendar.
+    await $('[data-testid="add-date"]').click();
     await $('[data-testid="add-date"]').setValue('2026-10-07');
+    await $('[data-testid="add-rating"]').click();
+    await expect($('[data-testid="date-picker"]')).not.toBeExisting();
+    await $('[data-testid="add-rating"]').setValue('86');
     await $('[data-testid="add-form"] [data-testid="lookup-cover"]').waitForDisplayed();
     await screenshot('53-media-add-form');
     await $('[data-testid="add-save"]').click();
@@ -234,6 +272,101 @@ describe('the demo vault', () => {
     const saved = readFileSync(join(vaultCopy(), 'Rating/music/_attachments/dog-man-star.png'));
     expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);
     await expect($('[data-testid="rating-ring"]')).toHaveAttribute('data-value', '86');
+  });
+
+  it("adds a podcast episode: the show, its episodes narrowed by typing, the day picked in the calendar, the note in the vault's format", async () => {
+    // From the albums' tab: every tab has an Add for every kind.
+    await $('[data-testid="media-library"]').click();
+    await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'album');
+    await $('[data-testid="library-add"][data-kind="podcast"]').click();
+    await $('[data-testid="add-search"]').setValue('lex fridman');
+    await browser.waitUntil(async () => (await $$('[data-testid="add-result"]').length) === 4, { timeoutMsg: 'no shows came' });
+    await $('[data-testid="add-result"][data-id="1434243584"]').click();
+    await browser.waitUntil(async () => (await $$('[data-testid="add-episode"]').length) === 16, { timeoutMsg: 'no episodes came' });
+    await expect($('[data-testid="add-show-title"]')).toHaveText('Lex Fridman Podcast');
+    await expect($('[data-testid="add-episode"]')).toHaveText(expect.stringContaining('26 October 2026 · 3 h 43 min'));
+    await screenshot('82-podcast-episodes');
+
+    await $('[data-testid="episode-filter"]').setValue('jensen');
+    await browser.waitUntil(async () => (await $$('[data-testid="add-episode"]').length) === 1, { timeoutMsg: 'typing never narrowed the episodes' });
+    await $('[data-testid="add-episode"][data-id="1000756806357"]').click();
+    await $('[data-testid="add-form"]').waitForDisplayed();
+    await expect($('[data-testid="add-title"]')).toHaveValue('Jensen Huang: NVIDIA – The $4 Trillion Company & the AI Revolution');
+    await expect($('[data-testid="add-maker"]')).toHaveValue('Lex Fridman Podcast');
+    await expect($('[data-testid="add-year"]')).toHaveValue('2026');
+    await expect($('[data-testid="add-back"]')).toHaveText('← Episodes');
+
+    // The date: typed, then a month back and a day with a click, then a day on with the keys.
+    const picker = $('[data-testid="date-picker"]');
+    await $('[data-testid="add-date"]').click();
+    await picker.waitForDisplayed();
+    await $('[data-testid="add-date"]').setValue('2026-10-07');
+    await expect($('[data-testid="date-picker-month"]')).toHaveText('October 2026');
+    await expect($('[data-testid="date-picker-day"][data-date="2026-10-07"]')).toHaveAttribute('aria-pressed', 'true');
+    await $('[data-testid="date-picker-prev"]').click();
+    await expect($('[data-testid="date-picker-month"]')).toHaveText('September 2026');
+    await screenshot('83-date-picker');
+    await $('[data-testid="date-picker-day"][data-date="2026-09-20"]').click();
+    await expect(picker).not.toBeExisting();
+    await expect($('[data-testid="add-date"]')).toHaveValue('2026-09-20');
+    await $('[data-testid="add-date"]').click();
+    await picker.waitForDisplayed();
+    await browser.keys(['ArrowDown']);
+    await browser.waitUntil(async () => (await browser.execute(() => document.activeElement?.getAttribute('data-date'))) === '2026-09-20', { timeoutMsg: 'the keys never reached the calendar' });
+    await browser.keys(['ArrowRight']);
+    await browser.keys(['Enter']);
+    await expect(picker).not.toBeExisting();
+    await expect($('[data-testid="add-date"]')).toHaveValue('2026-09-21');
+    // Escape closes an open calendar, and only it: the form stays.
+    await $('[data-testid="add-date"]').click();
+    await picker.waitForDisplayed();
+    await browser.keys(['Escape']);
+    await expect(picker).not.toBeExisting();
+    await expect($('[data-testid="add-form"]')).toBeDisplayed();
+
+    await $('[data-testid="add-rating"]').setValue('77');
+    await $('[data-testid="add-form"] [data-testid="lookup-cover"]').waitForDisplayed();
+    await $('[data-testid="add-save"]').click();
+    await $(`[data-testid="media-page"][data-path="${EPISODE}"]`).waitForDisplayed();
+    const file = join(vaultCopy(), EPISODE);
+    expect(readFileSync(file, 'utf8')).toBe(EPISODE_NOTE);
+    const saved = readFileSync(join(vaultCopy(), EPISODE_COVER));
+    expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);
+
+    // On its page the date opens the same calendar, and a day picked there is written at once.
+    await $('[data-testid="media-date"]').click();
+    await picker.waitForDisplayed();
+    await expect($('[data-testid="date-picker-month"]')).toHaveText('September 2026');
+    await screenshot('84-podcast-episode');
+    await $('[data-testid="date-picker-day"][data-date="2026-09-22"]').click();
+    const moved = EPISODE_NOTE.replace('Listened: 2026-09-21', 'Listened: 2026-09-22');
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === moved, { timeout: 5000, timeoutMsg: 'the picked day never reached the note' });
+    await expect($('[data-testid="media-date"]')).toHaveValue('2026-09-22');
+    await $('[data-testid="media-date"]').click();
+    await picker.waitForDisplayed();
+    await $('[data-testid="date-picker-day"][data-date="2026-09-21"]').click();
+    await browser.waitUntil(() => readFileSync(file, 'utf8') === EPISODE_NOTE, { timeout: 5000, timeoutMsg: 'the day picked back never reached the note' });
+  });
+
+  it("shows everything listened to, watched and finished in All's calendar, several covers on a day, narrowed by kind", async () => {
+    await $('[data-testid="open-library"]').click();
+    await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'all');
+    await $('[data-testid="cover-calendar"]').scrollIntoView();
+    // September, from the year's strip: the 21st has an album, the new episode and a film.
+    await $$('[data-testid="year-month"]')[8]?.click();
+    await expect($('[data-testid="cover-calendar-month"]')).toHaveText('September 2026');
+    const day21 = $('[data-testid="cover-day"][data-day="21"]');
+    await expect(day21).toHaveAttribute('data-count', '3');
+    expect(await day21.$$('[data-testid="cover-day-cover"]').length).toBe(3);
+    await expect($('[data-testid="cover-day"][data-day="3"]')).toHaveAttribute('data-count', '2');
+    await browser.waitUntil(async () => (await $$('.cover-day-image[data-testid="vault-image"]').length) >= 17, { timeoutMsg: 'the calendar covers never loaded' });
+    await screenshot('85-library-all-calendar');
+
+    await $('[data-testid="kind-chip"][data-kind="podcast"]').click();
+    await expect(day21).toHaveAttribute('data-count', '1');
+    expect(await $$('[data-testid="cover-day"][data-count]').length).toBe(3);
+    await $('[data-testid="kind-chip"][data-kind="podcast"]').click();
+    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
   });
 
   it('creates the missing day before from its template', async () => {
@@ -898,7 +1031,7 @@ describe('the demo vault', () => {
     expect(readFileSync(today, 'utf8')).not.toMatch(/e2e focus[^\n]*\n {4}- \d\d:\d\d/);
   });
 
-  it('changed nothing in the vault copy but the new notes, the added album and its cover, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
+  it('changed nothing in the vault copy but the new notes, the added album and episode and their covers, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
         `added: ${DAYS}/30.07.2026.md`,
@@ -907,6 +1040,8 @@ describe('the demo vault', () => {
         'added: Inbox idea.md',
         'added: Rating/music/Dog Man Star.md',
         'added: Rating/music/_attachments/dog-man-star.png',
+        `added: ${EPISODE}`,
+        `added: ${EPISODE_COVER}`,
         'changed: Rating/music/Glasshouse Weather.md',
         `changed: ${DAYS}/12.08.2026.md`,
         `changed: ${DAYS}/14.08.2026.md`,
