@@ -1,5 +1,7 @@
 name: check
 
+# Every pull request: the fast checks, everything but the e2e run (`npm run check:fast`).
+# The full run, e2e included, is `full-check.yml`, started by hand.
 on:
   pull_request:
   workflow_dispatch:
@@ -34,12 +36,4 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run check
-
-      - name: Upload screenshots
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: evidence
-          path: evidence/
-          if-no-files-found: ignore
+      - run: npm run check:fast
