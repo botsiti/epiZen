@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import type { Category } from '../../lib/categories';
-import { clock, formatMinutes, type TimeBlock } from '../../lib/day';
+import { formatMinutes } from '../../lib/day';
 import type { MediaItem } from '../../lib/media';
 import { VaultImage } from '../VaultImage';
 import { order } from './effects';
@@ -118,63 +118,6 @@ export function CategoryBars({ rows }: { rows: [Category, number][] }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-export interface TrackRow {
-  key: string;
-  label: string;
-  /** Opens the row's note. */
-  onOpen?: () => void;
-  blocks: { block: TimeBlock; color: string; title: string }[];
-}
-
-/** Rows of logged time on one clock: a day's tasks, or a week's days. */
-export function TimeTrack({ rows }: { rows: TrackRow[] }) {
-  const blocks = rows.flatMap((row) => row.blocks.map(({ block }) => block));
-  if (!blocks.length) return <p className="empty-line">No time logged under the tasks yet. A line like “- 09:30–10:15” under a task shows here.</p>;
-  const from = Math.max(0, Math.floor(Math.min(...blocks.map((block) => block.start)) / 60) * 60);
-  const to = Math.max(from + 8 * 60, Math.ceil(Math.max(...blocks.map((block) => block.end)) / 60) * 60);
-  const at = (minutes: number) => `${((minutes - from) / (to - from)) * 100}%`;
-  const hours = Array.from({ length: (to - from) / 60 + 1 }, (_, i) => from + i * 60);
-  const step = hours.length > 13 ? 2 : 1;
-  return (
-    <div className="track" data-testid="time-track">
-      <div className="track-hours" aria-hidden="true">
-        {hours.map((hour, i) =>
-          i % step ? null : (
-            <span key={hour} style={{ left: at(hour) }}>
-              {clock(hour)}
-            </span>
-          ),
-        )}
-      </div>
-      {rows.map((row, r) => (
-        <div className="track-row rise" key={row.key} style={order(r)}>
-          {row.onOpen ? (
-            <button type="button" className="track-label" onClick={row.onOpen}>
-              {row.label}
-            </button>
-          ) : (
-            <span className="track-label">{row.label}</span>
-          )}
-          <div className="track-lane">
-            {hours.map((hour) => (
-              <span key={hour} className="track-tick" style={{ left: at(hour) }} aria-hidden="true" />
-            ))}
-            {row.blocks.map(({ block, color, title }) => (
-              <span
-                key={`${block.start}-${title}`}
-                className="track-block"
-                style={{ left: at(block.start), width: at(from + block.end - block.start), background: color, color }}
-                title={`${clock(block.start)}–${clock(block.end)} · ${title}`}
-                data-testid="time-block"
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 

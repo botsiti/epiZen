@@ -4,13 +4,15 @@ import type { LinkTarget } from '../lib/completion';
 import { parseTasks, toggleTask } from '../lib/dashboard';
 import { addRecord, deleteRecord, updateRecord } from '../lib/cbt';
 import { addTask, setProperty, setSummary, syncPlanDone } from '../lib/edits';
+import { addQuest } from '../lib/quests';
+import { writeSection } from '../lib/sections';
 import { deleteTask, editTask, focusIdOf, newTaskLabel, setMinutes } from '../lib/timeblocks';
 import type { FocusHow } from './calendar/FocusMenu';
 import type { TaskChange, TaskChoice } from './calendar/types';
 import { formatValue, parseNote, type Properties } from '../lib/frontmatter';
 import { isMediaNote, type KindSpec } from '../lib/library';
 import { noteFolder, noteTitle } from '../lib/links';
-import { flushBeforeClose, trackSave } from '../lib/saving';
+import { flushBeforeClose, trackSave, whenSaved } from '../lib/saving';
 import { lineEnding } from '../lib/text';
 import { Editor } from './Editor';
 import { MediaPage } from './library/MediaPage';
@@ -21,7 +23,8 @@ import type { PeriodicActions, PeriodicSpec } from './periodic/types';
 interface NoteProps {
   path: string;
   files: VaultFile[];
-  onOpenLink: (target: string, fromPath: string) => void;
+  /** A [[link]] was clicked; `newTab` for a ⌘-click or a middle click. */
+  onOpenLink: (target: string, fromPath: string, newTab?: boolean) => void;
 }
 
 interface ViewProps extends NoteProps {
@@ -33,8 +36,6 @@ interface ViewProps extends NoteProps {
   onUnsaved: (path: string, text: string, message: string) => void;
   /** What `[[` offers in the editor. */
   linkTargets: LinkTarget[];
-  /** Shown under the note when reading it: its backlinks. */
-  footer?: ReactNode;
   /** For a daily, weekly or monthly note: what its page reads from the rest of the vault. */
   periodic?: PeriodicSpec;
   /** For a note in one of the library's folders: its kind. A rated one opens as a media page. */
@@ -46,6 +47,7 @@ interface ViewProps extends NoteProps {
   known?: string;
   onQuestToggle: PeriodicActions['onQuestToggle'];
   onQuestProgress: PeriodicActions['onQuestProgress'];
+  onQuestChange: PeriodicActions['onQuestChange'];
   /** Starts the timer on a task of today's note. */
   onStartTimer: (choice: TaskChoice, how?: FocusHow) => void;
   /** A task of this note was edited or deleted: the timer and the task's plans follow it. */
@@ -54,7 +56,7 @@ interface ViewProps extends NoteProps {
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, footer, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onStartTimer, onTaskChanged } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
   // When the app learns a new text for this note (the timer wrote a block into it while it is
   // open), show that one and build the next change on it.
@@ -74,23 +76,27 @@ export function NoteView(props: ViewProps) {
   // over the note as it is on disk now, so a change made elsewhere is never written over. `edit`
   // returns the new text, or `undefined` when there is nothing to do. If the note changes on disk
   // between the read and the write, nothing is written: it says so and shows the note as it is.
-  // `written` runs once the change is in the note.
+  // `written` runs once the change is in the note. `settled` runs once either way, with why it
+  // wasn't written if it wasn't.
   const change = useCallback(
-    (edit: (text: string) => string | undefined, failed: string, written?: () => void) => {
+    (edit: (text: string) => string | undefined, failed: string, written?: () => void, settled?: (problem?: string) => void) => {
       changes.current = changes.current.then(async () => {
-        if (latest.current === undefined) return;
+        if (latest.current === undefined) return settled?.('The note is still loading.');
         try {
           const current = await readNote(path);
           const next = edit(current);
-          if (next === undefined || next === current) return;
+          if (next === undefined || next === current) return settled?.();
           await writeNote(path, next, current);
           latest.current = next;
           setNote({ path, text: next });
           onSaved(path, next);
           setChangeError(undefined);
           written?.();
+          settled?.();
         } catch (err) {
-          setChangeError(`${failed}: ${err instanceof Error ? err.message : String(err)}. The note is shown as it is now.`);
+          const problem = err instanceof Error ? err.message : String(err);
+          settled?.(problem);
+          setChangeError(`${failed}: ${problem}. The note is shown as it is now.`);
           const fresh = await readNote(path).catch(() => undefined);
           if (fresh !== undefined) {
             latest.current = fresh;
@@ -151,13 +157,20 @@ export function NoteView(props: ViewProps) {
       onDeleteRecord: (record) => change((text) => deleteRecord(text, record), "The thought record wasn't deleted"),
       onQuestToggle,
       onQuestProgress,
+      onQuestChange,
+      // A new quest goes into this note: the weekly or monthly note the page is drawn from.
+      onAddQuest: (line) => new Promise((settle) => change((text) => addQuest(text, line), "The quest wasn't added", undefined, settle)),
+      onSetSection: (heading, value) => new Promise((settle) => change((text) => writeSection(text, heading, value), `${heading} wasn't saved`, undefined, settle)),
     }),
-    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onStartTimer, onTaskChanged, path, periodic, seenLine],
+    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, path, periodic, seenLine],
   );
 
+  // Read once the saves under way have landed: the editor this note was last open in (here, or in
+  // another tab) may still be writing what was typed.
   useEffect(() => {
     let cancelled = false;
-    readNote(path)
+    whenSaved()
+      .then(() => readNote(path))
       .then((text) => !cancelled && setNote({ path, text }))
       .catch((err: unknown) => !cancelled && setNote({ path, error: String(err) }));
     return () => {
@@ -205,7 +218,6 @@ export function NoteView(props: ViewProps) {
         onEdit={actions.onEdit}
         onOpenLibrary={media.onOpenLibrary}
         warning={changeError}
-        footer={footer}
       />
     );
   }
@@ -225,12 +237,7 @@ export function NoteView(props: ViewProps) {
       Edit
     </button>
   );
-  return (
-    <>
-      <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} />
-      {footer}
-    </>
-  );
+  return <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} />;
 }
 
 type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'failed'; message: string };

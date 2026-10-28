@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { VaultFile } from './api';
-import { collectMedia } from './media';
+import { collectMedia, homeShelves, type Shelf } from './media';
 
 const files: VaultFile[] = [
   { path: 'Rating/music/Glasshouse Weather.md', kind: 'note' },
@@ -52,5 +52,23 @@ describe('collectMedia', () => {
       ['Rating/books', [['Thinking in Seasons', 81, 'Ada Morrow', '2026-09-19']]],
       ['Rating/kino', [['Election', 58, '1999', '2026-09-09']]],
     ]);
+  });
+});
+
+describe('the home screen’s shelves', () => {
+  const shelf = (folder: string, n: number): Shelf => ({ folder, items: Array.from({ length: n }, (_, i) => ({ path: `${folder}/${i}.md`, title: String(i), rating: 50, date: undefined })) });
+
+  it('are albums, films, books and podcasts, in that order, without videos', () => {
+    const shelves = homeShelves([shelf('Rating/youtube', 3), shelf('Rating/podcasts', 1), shelf('Rating/music', 9), shelf('Rating/kino', 4)]);
+    expect(shelves.map((s) => [s.folder, s.items.length])).toEqual([
+      ['Rating/music', 9],
+      ['Rating/kino', 4],
+      ['Rating/books', 0],
+      ['Rating/podcasts', 1],
+    ]);
+  });
+
+  it('keep a folder named in another case, and leave other folders out', () => {
+    expect(homeShelves([shelf('Rating/Music', 2), shelf('Notes', 5)]).map((s) => [s.folder, s.items.length])[0]).toEqual(['Rating/Music', 2]);
   });
 });

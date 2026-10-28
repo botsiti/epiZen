@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { VaultFile } from '../lib/api';
@@ -66,7 +66,19 @@ describe('NoteContent', () => {
     expect(screen.getByRole('link', { name: '← Yesterday' })).toHaveClass('is-missing');
 
     await userEvent.click(week);
-    expect(onOpenLink).toHaveBeenCalledWith('2026-W33 - 10.08.26', 'Calendar/2026/days 2026/14.08.2026.md');
+    expect(onOpenLink).toHaveBeenCalledWith('2026-W33 - 10.08.26', 'Calendar/2026/days 2026/14.08.2026.md', false);
+  });
+
+  it('opens a wikilink in a new tab on a ⌘-click or a middle click, and leaves a right click alone', () => {
+    const onOpenLink = renderDay();
+    const week = screen.getByRole('link', { name: 'Week' });
+    fireEvent.click(week, { metaKey: true });
+    fireEvent(week, new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
+    fireEvent(week, new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 2 }));
+    expect(onOpenLink.mock.calls).toEqual([
+      ['2026-W33 - 10.08.26', 'Calendar/2026/days 2026/14.08.2026.md', true],
+      ['2026-W33 - 10.08.26', 'Calendar/2026/days 2026/14.08.2026.md', true],
+    ]);
   });
 
   it('renders callouts and leaves code blocks as written', () => {

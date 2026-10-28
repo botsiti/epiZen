@@ -74,3 +74,42 @@ export function findNode(nodes: GraphNode[], query: string): GraphNode | undefin
   const starts = nodes.filter((node) => node.title.toLowerCase().startsWith(wanted)).sort(byDegree);
   return starts[0] ?? nodes.filter((node) => node.title.toLowerCase().includes(wanted)).sort(byDegree)[0];
 }
+
+/**
+ * A note and the notes within `depth` links of it, with the links among them: the local graph.
+ * Its nodes are new ones, so laying it out leaves the whole graph's layout alone; each keeps its
+ * folder's colour and its size from the whole graph.
+ */
+export function localGraph(graph: Graph, center: string, depth = 1): Graph {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  if (!byId.has(center)) return { nodes: [], links: [], groups: graph.groups, neighbours: new Map() };
+  const seen = new Set([center]);
+  let ring = [center];
+  for (let step = 0; step < depth; step += 1) {
+    const next: string[] = [];
+    for (const id of ring) {
+      for (const other of graph.neighbours.get(id) ?? []) {
+        if (seen.has(other)) continue;
+        seen.add(other);
+        next.push(other);
+      }
+    }
+    ring = next;
+  }
+  const ids = [...seen];
+  const neighbours = new Map(ids.map((id) => [id, new Set([...(graph.neighbours.get(id) ?? [])].filter((other) => seen.has(other)))]));
+  const links: GraphLink[] = [];
+  for (const id of ids) for (const other of neighbours.get(id) ?? []) if (id < other) links.push({ source: id, target: other });
+  const nodes = ids.flatMap((id) => {
+    const node = byId.get(id);
+    return node ? [{ id, title: node.title, group: node.group, degree: node.degree, radius: node.radius }] : [];
+  });
+  return { nodes, links, groups: graph.groups, neighbours };
+}
+
+const endOf = (end: string | GraphNode) => (typeof end === 'string' ? end : end.id);
+
+/** Changes only when the graph's notes, colours, sizes or links do, so a graph that is the same isn't laid out again. */
+export function graphKey(graph: Graph): string {
+  return JSON.stringify([graph.nodes.map((node) => [node.id, node.group, node.radius]), graph.links.map((link) => [endOf(link.source), endOf(link.target)])]);
+}

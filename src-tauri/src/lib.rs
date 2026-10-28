@@ -7,6 +7,8 @@
 mod calendar;
 #[cfg(target_os = "macos")]
 mod eventkit;
+#[cfg(target_os = "macos")]
+mod menu;
 mod net;
 mod settings;
 mod vault;
@@ -391,6 +393,12 @@ pub fn run() {
             calendar_delete,
             calendar_open_settings
         ]);
+
+    // ⌘W closes a tab (src/lib/tabs.ts), not the window.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(menu::build)
+        .on_menu_event(|app, event| menu::handle(app, event.id().as_ref()));
 
     #[cfg(feature = "e2e")]
     let builder = builder

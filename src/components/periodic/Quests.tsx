@@ -1,9 +1,11 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { formatDate } from '../../lib/dates';
-import { dueDate, earned, MYTHIC, penalty, progress, sphereColor, TIERS, type Quest, type QuestEntry } from '../../lib/quests';
+import { dueDate, earned, MYTHIC, penalty, progress, sphereColor, TIERS, type Quest, type QuestChange, type QuestEntry } from '../../lib/quests';
 import { VaultImage } from '../VaultImage';
 import { order, spark } from './effects';
 import { Section } from './parts';
+import { QuestDetail } from './QuestDetail';
+import { steps, timeChip } from './questTime';
 
 interface Actions {
   onToggle: (quest: Quest) => void;
@@ -17,13 +19,27 @@ interface BoardProps extends Actions {
   today: Date;
   /** Labels for the weekly and monthly groups, such as "This week". */
   groups?: { weekly: string; monthly: string };
+  /** A chapter or a deadline from a quest's detail. Without it, a card doesn't open its detail. */
+  onChange?: (quest: Quest, change: QuestChange) => Promise<string | undefined>;
 }
+
+/** Which quest's detail is open: its note, its line and its title, to find it again after a write. */
+type Opened = { path: string; line: number; title: string };
+
+const opened = (quests: QuestEntry[], open?: Opened) => {
+  if (!open) return undefined;
+  const at = (test: (quest: Quest) => boolean) => quests.find(({ quest }) => quest.path === open.path && test(quest));
+  return at((q) => q.line === open.line && q.title === open.title) ?? at((q) => q.title === open.title) ?? at((q) => q.line === open.line);
+};
 
 type Filter = 'all' | 'weekly' | 'monthly';
 
 /** Mythic quests pinned on top, then weekly and monthly quests behind filter chips. */
-export function QuestBoard({ quests, art, today, onToggle, onProgress, groups = { weekly: 'This week', monthly: 'This month' } }: BoardProps) {
+export function QuestBoard({ quests, art, today, onToggle, onProgress, onChange, groups = { weekly: 'This week', monthly: 'This month' } }: BoardProps) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [open, setOpen] = useState<Opened>();
+  const detail = opened(quests, open);
+  const onOpen = onChange && ((quest: Quest) => setOpen({ path: quest.path, line: quest.line, title: quest.title }));
   const mythic = useMemo(
     () =>
       quests
@@ -50,7 +66,7 @@ export function QuestBoard({ quests, art, today, onToggle, onProgress, groups = 
           </div>
           <div className="quest-grid">
             {mythic.map((entry, i) => (
-              <QuestCard key={`${entry.quest.path}:${entry.quest.line}`} entry={entry} i={i} art={art(entry.quest)} today={today} onToggle={onToggle} onProgress={onProgress} />
+              <QuestCard key={`${entry.quest.path}:${entry.quest.line}`} entry={entry} i={i} art={art(entry.quest)} today={today} onToggle={onToggle} onProgress={onProgress} onOpen={onOpen} />
             ))}
           </div>
         </section>
@@ -71,7 +87,7 @@ export function QuestBoard({ quests, art, today, onToggle, onProgress, groups = 
               <Section key={scope} title={groups[scope]} note={`${list.filter(({ quest }) => quest.done).length}/${list.length} done`}>
                 <div className="quest-grid">
                   {list.map((entry, i) => (
-                    <QuestCard key={`${entry.quest.path}:${entry.quest.line}`} entry={entry} i={i} art={art(entry.quest)} today={today} onToggle={onToggle} onProgress={onProgress} />
+                    <QuestCard key={`${entry.quest.path}:${entry.quest.line}`} entry={entry} i={i} art={art(entry.quest)} today={today} onToggle={onToggle} onProgress={onProgress} onOpen={onOpen} />
                   ))}
                 </div>
               </Section>
@@ -79,29 +95,14 @@ export function QuestBoard({ quests, art, today, onToggle, onProgress, groups = 
           })}
         </>
       )}
+      {detail && onChange && (
+        <QuestDetail entry={detail} art={art(detail.quest)} today={today} onToggle={onToggle} onProgress={onProgress} onChange={onChange} onClose={() => setOpen(undefined)} />
+      )}
     </div>
   );
 }
 
-/** Days from one ISO date to another. */
-const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
-
-/** The chip on a quest's art: how its time stands. */
-function timeChip(quest: Quest, due: string | undefined, today: string): string | undefined {
-  if (quest.done) {
-    if (!quest.deadline || !quest.doneOn) return 'Done';
-    const early = daysBetween(quest.doneOn, quest.deadline);
-    return early > 0 ? `Done ${early}d early` : early < 0 ? `Done ${-early}d late` : 'Done on time';
-  }
-  if (!due) return undefined;
-  const left = daysBetween(today, due);
-  return left < 0 ? `Overdue ${-left}d` : left === 0 ? 'Due today' : `${left}d left`;
-}
-
-/** Counter steps that suit the target: +10/+30/+60 for a hundred or more, +1/+5 from ten, else +1. */
-const steps = (target: number) => (target >= 100 ? [10, 30, 60] : target >= 10 ? [1, 5] : [1]);
-
-export function QuestCard({ entry, i, art, today, onToggle, onProgress }: Actions & { entry: QuestEntry; i: number; art?: string; today: Date }) {
+export function QuestCard({ entry, i, art, today, onToggle, onProgress, onOpen }: Actions & { entry: QuestEntry; i: number; art?: string; today: Date; onOpen?: (quest: Quest) => void }) {
   const { quest, period } = entry;
   const mythic = quest.scope === 'custom';
   const tier = TIERS[quest.tier];
@@ -118,7 +119,7 @@ export function QuestCard({ entry, i, art, today, onToggle, onProgress }: Action
       data-testid="quest-card"
       data-scope={quest.scope}
     >
-      <div className="quest-art">
+      <QuestArt quest={quest} onOpen={onOpen}>
         {art ? <VaultImage path={art} alt="" className="quest-art-image" /> : <span className="quest-art-blank" aria-hidden="true" />}
         <span className="quest-veil" aria-hidden="true" />
         {sphere && <span className="quest-sphere">{sphere}</span>}
@@ -127,7 +128,7 @@ export function QuestCard({ entry, i, art, today, onToggle, onProgress }: Action
         </span>
         <span className="quest-tier">{mythic ? `${MYTHIC.glyph} Mythic` : `${tier.glyph} ${quest.tier}`}</span>
         {chip && <span className="quest-when">{chip}</span>}
-      </div>
+      </QuestArt>
       <div className="quest-body">
         <div className="quest-meta">
           <span className="quest-scope">{mythic ? 'Mythic quest' : quest.scope}</span>
@@ -150,7 +151,15 @@ export function QuestCard({ entry, i, art, today, onToggle, onProgress }: Action
             }}
             data-testid="quest-toggle"
           />
-          <h3 className="quest-title">{quest.title}</h3>
+          <h3 className="quest-title">
+            {onOpen ? (
+              <button type="button" className="quest-title-open" onClick={() => onOpen(quest)}>
+                {quest.title}
+              </button>
+            ) : (
+              quest.title
+            )}
+          </h3>
         </div>
         {quest.desc && <p className="quest-desc">{quest.desc}</p>}
         {quest.target !== undefined && (
@@ -178,5 +187,15 @@ export function QuestCard({ entry, i, art, today, onToggle, onProgress }: Action
         {lost > 0 && <p className="quest-penalty">⚠ Penalty −{lost} XP</p>}
       </div>
     </article>
+  );
+}
+
+/** A quest's art; with `onOpen`, a button that opens its detail. */
+function QuestArt({ quest, onOpen, children }: { quest: Quest; onOpen?: (quest: Quest) => void; children: ReactNode }) {
+  if (!onOpen) return <div className="quest-art">{children}</div>;
+  return (
+    <button type="button" className="quest-art is-open" onClick={() => onOpen(quest)} aria-label={`Details of ${quest.title}`} title="Open the quest's details" data-testid="quest-open">
+      {children}
+    </button>
   );
 }

@@ -39,6 +39,8 @@ Tauri 2 (Rust) with React, TypeScript and Vite. macOS first.
 - `src/`: the React UI. `src/lib/` holds parsing (frontmatter, wikilinks, callouts) and
   dates and periodic notes (moment.js formats, templates, what a day holds, week and month
   totals), tests beside it. `src/components/periodic/` draws daily, weekly and monthly notes as pages.
+- `src/lib/tabs.ts`: the tabs (open, pin, close, each tab's history) and what the app's settings keep of
+  them, checked when read back. `src-tauri/src/menu.rs` makes ⌘W close a tab rather than the window.
 - `src/lib/library.ts`: the library's kinds (one place maps `Rating/music`, `kino`, `books`, `podcasts`,
   `youtube` to albums, films, books, podcasts, videos), reading their notes and writing new ones in the
   vault's format. `src/lib/lookup.ts`: the lookup sources' URLs and parsers. `src/components/library/`

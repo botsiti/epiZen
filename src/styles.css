@@ -88,8 +88,13 @@ code {
 
 .app {
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   height: 100%;
+}
+
+/* The right sidebar, when it is open, as wide as the left one. */
+.app.has-right {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--sidebar-width);
 }
 
 .main {
@@ -796,31 +801,23 @@ code {
   gap: var(--space-4);
 }
 
-/* Backlinks */
-
-.backlinks {
-  max-width: var(--reading-width);
-  margin: var(--space-8) auto 0;
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border);
-}
+/* Backlinks, in the right sidebar */
 
 .backlinks ul {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--space-1);
+  gap: 2px;
 }
 
 .backlink {
   display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: var(--space-3);
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  column-gap: var(--space-2);
   row-gap: 2px;
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  margin-left: calc(-1 * var(--space-3));
   border-radius: var(--radius);
   text-align: left;
   transition: background-color var(--ease);
@@ -832,7 +829,10 @@ code {
 
 .backlink-title {
   color: var(--accent);
-  font-size: 15px;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .backlink-folder {
@@ -844,13 +844,16 @@ code {
   white-space: nowrap;
 }
 
+/* The line that links, at most two lines of it. */
 .backlink-context {
   grid-column: 1 / -1;
+  display: -webkit-box;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 13.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* Graph */
@@ -1083,4 +1086,31 @@ button.dash-row:hover {
 
 .dash-list + .dash-list {
   margin-top: var(--space-5);
+}
+
+/* A part of the app that broke while drawing: what went wrong, and a way to try again. */
+.crashed {
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.crashed-where {
+  overflow-x: auto;
+  color: var(--text-faint);
+  font: 12px/1.6 var(--font-mono);
+  white-space: pre;
+}
+
+.crashed-retry {
+  margin-top: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.crashed-retry:hover {
+  border-color: var(--accent);
 }

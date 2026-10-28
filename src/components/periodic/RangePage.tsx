@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, addMonths, formatDate, isoWeek, monthGrid, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
@@ -7,12 +7,14 @@ import { reflections, rollup, spread, type DayEntry, type Rollup } from '../../l
 import { Donut, LineChart, Ring, Sparkline } from './charts';
 import { order } from './effects';
 import { CountUp } from './motion';
-import { Bar, CategoryBars, Covers, HabitGrid, Hero, NavButton, Section, Tabs, Tile, TimeTrack } from './parts';
+import { Bar, CategoryBars, Covers, HabitGrid, Hero, NavButton, Section, Tabs, Tile } from './parts';
 import { questsIn } from '../../lib/quests';
+import { readSection, sectionWords, WEEK_HEADINGS, type WeekHeading } from '../../lib/sections';
+import { QuestComposer } from './QuestComposer';
 import { QuestBoard } from './Quests';
 import type { PeriodicActions, PeriodicSpec } from './types';
 
-const WEEK_TABS = ['Overview', 'Days', 'Quests', 'Timeline', 'Habits', 'Stats'] as const;
+const WEEK_TABS = ['Overview', 'Days', 'Quests', 'Habits', 'Stats'] as const;
 const MONTH_TABS = ['Overview', 'Weeks', 'Quests', 'Days', 'Habits', 'Stats'] as const;
 type WeekTab = (typeof WEEK_TABS)[number];
 type MonthTab = (typeof MONTH_TABS)[number];
@@ -80,25 +82,23 @@ export function WeekPage({ spec, path, text, actions }: Props) {
                 ))}
               </div>
             </Section>
-            <WeekReflections text={text} i={13} />
+            <WeekReflections text={text} i={13} onSave={actions.onSetSection} />
             <Media days={days} spec={spec} actions={actions} title="Listened and watched this week" />
           </>
         )}
         {tab === 'Days' && <DayRows days={days} actions={actions} />}
         {tab === 'Quests' && (
-          <QuestBoard quests={questsIn(spec.quests, monday, addDays(monday, 7))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} />
-        )}
-        {tab === 'Timeline' && (
-          <Section title="Time logged, day by day">
-            <TimeTrack
-              rows={days.map((entry) => ({
-                key: String(entry.date.getTime()),
-                label: formatDate(entry.date, 'ddd D'),
-                onOpen: () => actions.onOpenPeriod('day', entry.date),
-                blocks: (entry.day?.tasks ?? []).flatMap((task) => task.blocks.map((block) => ({ block, color: task.category?.color ?? 'var(--accent)', title: task.label }))),
-              }))}
+          <>
+            <QuestComposer scope="weekly" onAdd={actions.onAddQuest} />
+            <QuestBoard
+              quests={questsIn(spec.quests, monday, addDays(monday, 7))}
+              art={spec.art}
+              today={today()}
+              onToggle={actions.onQuestToggle}
+              onProgress={actions.onQuestProgress}
+              onChange={actions.onQuestChange}
             />
-          </Section>
+          </>
         )}
         {tab === 'Habits' && <Habits sum={sum} labels={days.map((entry) => formatDate(entry.date, 'dd'))} />}
         {tab === 'Stats' && <Stats sum={sum} spec={spec} labels={days.map((entry) => formatDate(entry.date, 'ddd'))} />}
@@ -168,14 +168,18 @@ export function MonthPage({ spec, path, actions }: Props) {
         )}
         {tab === 'Weeks' && <Weeks spec={spec} actions={actions} />}
         {tab === 'Quests' && (
-          <QuestBoard
-            quests={questsIn(spec.quests, first, next)}
-            art={spec.art}
-            today={now}
-            onToggle={actions.onQuestToggle}
-            onProgress={actions.onQuestProgress}
-            groups={{ weekly: 'Weeks of the month', monthly: 'This month' }}
-          />
+          <>
+            <QuestComposer scope="monthly" onAdd={actions.onAddQuest} />
+            <QuestBoard
+              quests={questsIn(spec.quests, first, next)}
+              art={spec.art}
+              today={now}
+              onToggle={actions.onQuestToggle}
+              onProgress={actions.onQuestProgress}
+              onChange={actions.onQuestChange}
+              groups={{ weekly: 'Weeks of the month', monthly: 'This month' }}
+            />
+          </>
         )}
         {tab === 'Days' && <DayRows days={days} actions={actions} />}
         {tab === 'Habits' && <Habits sum={sum} labels={days.map((entry) => String(entry.date.getDate()))} />}
@@ -274,29 +278,67 @@ function DayCard({ entry, i, spec, actions }: { entry: DayEntry; i: number; spec
   );
 }
 
-/** The weekly note's Plus, Minus and Next, as three cards. */
-function WeekReflections({ text, i }: { text: string; i: number }) {
-  const found = useMemo(() => reflections(text), [text]);
-  if (!found.plus.length && !found.minus.length && !found.next.length) return null;
+/** The weekly note's Plus, Minus and Next, three cards to write in, as the Obsidian weekly dashboard has them. */
+function WeekReflections({ text, i, onSave }: { text: string; i: number; onSave: PeriodicActions['onSetSection'] }) {
   return (
     <Section title="The week, looking back" i={i} testId="reflections">
       <div className="reflections">
-        {(['plus', 'minus', 'next'] as const).map((kind, n) => (
-          <div key={kind} className={`card glass rise reflection is-${kind}`} style={order(n)}>
-            <p className="tile-label">{kind}</p>
-            {found[kind].length ? (
-              <ul>
-                {found[kind].map((item, k) => (
-                  <li key={k}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="faint">Nothing yet.</p>
-            )}
-          </div>
+        {WEEK_HEADINGS.map((heading, n) => (
+          <Reflection key={heading} heading={heading} value={readSection(text, heading)} n={n} onSave={onSave} />
         ))}
       </div>
     </Section>
+  );
+}
+
+/** One of Plus, Minus and Next: what the note says, to rewrite and save. */
+function Reflection({ heading, value, n, onSave }: { heading: WeekHeading; value: string; n: number; onSave: PeriodicActions['onSetSection'] }) {
+  const [draft, setDraft] = useState(value);
+  const [seen, setSeen] = useState(value);
+  const [state, setState] = useState<{ saving?: boolean; saved?: boolean; problem?: string }>({});
+  // The note changed (this save, or another): show what it says now, unless something else is typed.
+  if (value !== seen) {
+    setSeen(value);
+    if (sectionWords(draft) === sectionWords(seen) || sectionWords(draft) === sectionWords(value)) setDraft(value);
+  }
+  const changed = sectionWords(draft) !== sectionWords(value);
+  const field = useRef<HTMLTextAreaElement>(null);
+  // Tall enough to show all of it.
+  useLayoutEffect(() => {
+    const box = field.current;
+    if (!box) return;
+    box.style.height = 'auto';
+    box.style.height = `${box.scrollHeight}px`;
+  }, [draft]);
+  const save = () => {
+    setState({ saving: true });
+    void onSave(heading, draft).then((problem) => setState(problem ? { problem } : { saved: true }));
+  };
+  const kind = heading.toLowerCase();
+  return (
+    <div className={`card glass rise reflection is-${kind}`} style={order(n)} data-testid="reflection" data-heading={heading}>
+      <div className="reflection-head">
+        <p className="tile-label">{heading}</p>
+        <span className={state.problem ? 'reflection-status is-problem' : 'reflection-status'} role="status">
+          {state.problem ?? (state.saved ? 'Saved' : '')}
+        </span>
+      </div>
+      <textarea
+        ref={field}
+        rows={2}
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setState({});
+        }}
+        placeholder={`${heading}…`}
+        aria-label={heading}
+        data-testid="reflection-field"
+      />
+      <button type="button" className="primary-button reflection-save" disabled={!changed || Boolean(state.saving)} onClick={save} data-testid="reflection-save">
+        Save
+      </button>
+    </div>
   );
 }
 

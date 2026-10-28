@@ -53,6 +53,9 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 ## Shape and motion
 
 - Radius 6px. Borders are 1px hairlines. No shadows, gradients or blur.
+- Never a `backdrop-filter` on anything as big as the window (a dialog's backdrop, an overlay):
+  past 4096 device pixels, a full-screen window on a 5K display, WebKit draws it, and all inside
+  it, black. Dim with a tint instead. `test/css-guards.test.ts` checks it.
 - Motion only for a change of state (hover, a folder opening), 120ms ease-out. Nothing bounces
   and nothing moves on load. `prefers-reduced-motion` turns it off.
 - The periodic pages, the homepage and the library are the exception to both, on purpose: they are
@@ -93,8 +96,8 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Editor**: the note's source on the left and a live preview on the right, with space between them
   and no line. Headings and emphasis show in the source; Markdown's own marks are faint. A faint
   "Saving…" or "Saved" sits by the title.
-- **Backlinks**: under the note, after a hairline: a label with the count, then each linking note's
-  title in accent, its folder faint beside it, and the line that links, as plain text.
+- **Tabs and the right sidebar**: see "Tabs and the right sidebar" below. Backlinks live there now,
+  not under the note.
 - **Link suggestions**: after `[[` in the editor, a surface list with a hairline; the matched letters
   in accent, the note's folder faint.
 - **Forms**: a label above each field in the label style. Fields are surface fills with a hairline
@@ -137,20 +140,35 @@ content, and the moves are written here after react-bits (`src/components/period
   veil, glass chips for the sphere, tier and time left, the scope and XP in mono caps, a round tick
   that fills with a counter's progress, and the title in the serif. Mythic quests sit on top,
   "pinned above every filter", in a slowly turning holo foil frame; All / Weekly / Monthly chips
-  filter the rest. A quest past its time shows its penalty and a rose edge.
+  filter the rest. A quest past its time shows its penalty and a rose edge. On a week's and a month's
+  Quests tab, "+ New quest" opens a glass composer above the cards: what counts as done in the serif,
+  the life spheres as chips (the first pick filled, as the main sphere, each further one outlined with
+  its bonus share, a − / + step for it and the XP it earns), the tiers as chips that set the XP
+  (Common 150, Rare 500, Epic 1000, Legendary 2000), the XP, which lights the tier it falls in, and a
+  target (0 for done or not).
+- **Quest detail**: a quest's art or title opens it, a glass dialog over the window like the thought
+  record's, edged in the quest's sphere colour: the art under its veil with the sphere and tier chips
+  and the scope in mono caps, the title in the serif, when it started and when it is due (an edit for
+  the deadline), what it has earned of its XP with a counter's bar and steps, its description in the
+  serif's italic, and the adventure log: each chapter with its date on a thread of dots, rewritten in
+  place, deleted on a second click ("Delete?"), XP stamps faint and left as they are; a field to add a
+  chapter (⌘ + Enter). Mark complete or Reopen at its foot. Escape or a click outside closes it.
 - **Week and month**: totals as tiles, each daily number's average with its line across the days,
-  the days as cards (a week) or a heatmap lit by plan done (a month), Plus, Minus and Next from the
-  weekly notes, and covers of what was listened to or watched. Further tabs: the days as rows with
-  time stacked by category, the quests, the time blocks day by day (week), the habit grid, and charts
-  (numbers over the days, plan done with its spread, time by category).
+  the days as cards (a week) or a heatmap lit by plan done (a month), and covers of what was listened
+  to or watched. A week's Overview has Plus, Minus and Next as three cards written in place, in the
+  serif, each with its Save, as on the Obsidian weekly dashboard. Further tabs: the days as rows with
+  time stacked by category, the quests, the habit grid, and charts (numbers over the days, plan done
+  with its spread, time by category). No timeline: the calendar draws time.
 - **Motion**: cards rise into place in turn (560ms, staggered 45ms); arcs sweep, lines draw and
   bars grow in; ticks spark. Selection and presses use a spring that overshoots slightly. All of it
   stops under `prefers-reduced-motion`, and the e2e run turns it off (`data-motion="off"`) so
   screenshots show end states.
 - **Writes**: only what is tapped or typed: on a day's page a tick, one property's value, a new task
-  under the Tasks heading, or a thought-record row; on a quest, its box, done date, counter and the
-  day's XP stamp, in the quest's own note. Each is made over the note as it is on disk, and written
-  only while the note still holds that.
+  under the Tasks heading, or a thought-record row; on a week's page its Plus, Minus or Next section;
+  a new quest's line under a week's or month's Quest XP heading; on a quest, its box, done date,
+  counter and the day's XP stamp, its deadline, or a chapter added, rewritten or taken out, in the
+  quest's own note. Each is written as the vault's Obsidian scripts write it, made over the note as it
+  is on disk, and written only while the note still holds that.
 
 ## Calendar and timer
 
@@ -216,8 +234,8 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   rating as a ring out of 100, after the timer's: a thin sage arc with a glowing dot at its end and a
   faint tick every ten; drag round it or use the arrow keys (Shift for tens), or type the number below
   it. An album's favourite tracks follow in a glass card, numbered in accent, in the serif's italic;
-  then the note's own text in a glass card (the cover embed left out, since the hero shows it), and its
-  backlinks.
+  then the note's own text in a glass card (the cover embed left out, since the hero shows it). Its
+  backlinks are in the right sidebar.
 - **Add**: a dark glass sheet over the window. A large search field that asks the kind's source as
   typing pauses (MusicBrainz and the Cover Art Archive for albums, iTunes for films and podcasts, Open
   Library for books); result rows with their cover, the title in semibold, the maker and year muted,
@@ -229,6 +247,25 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   the note already uses (`rating` or `Rating`), over the note as it is on disk. Add writes a new note in
   the vault's format for its kind and its cover as a new file in the kind's `_attachments`; neither
   ever replaces a file.
+
+## Tabs and the right sidebar
+
+Obsidian's workspace in Epizen's own chrome: the sidebar's dark, hairlines, no glass.
+
+- **Tab bar**: a 40px strip of `--bg-sidebar` across the top of the main pane, a hairline under it.
+  Back and forward for the tab in front at its left, then the tabs (up to 184px each, the name ending
+  in "…"), + for a new one, and at the right the right sidebar's switch, in accent while it is open.
+  The tab in front takes the page's `--bg` and a hairline round its top, so it joins the page below;
+  the others are faint words on the strip. Its × shows on the tab in front and under the pointer.
+- **Pinned tabs** sit at the left with a small pin in accent where the × would be; a click on the pin
+  unpins. A right-click on a tab opens a small surface menu with a hairline: Pin or Unpin, and Close.
+- **Right sidebar**: as wide as the left one, `--bg-sidebar`, a hairline on its left. Its 40px head,
+  level with the tab bar, names the note in front in the label style. Below, panels that fold like
+  folders, with the same chevron, a label and a count: **Backlinks** (each linking note's title in
+  accent, its folder faint beside it, and up to two lines of the line that links) and **Local graph**
+  (the graph's look in a framed 248px panel: the note lit, its neighbours named, a faint hint under
+  it). When the tab in front isn't a note, each panel says so in one faint line.
+- Hover, a tab coming forward and a panel folding take 120ms; nothing else moves.
 
 ## Checking a UI change
 

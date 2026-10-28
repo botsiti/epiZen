@@ -21,6 +21,7 @@ import { SOURCE_NAMES } from '../../lib/lookup';
 import { followPointer, order } from '../periodic/effects';
 import { BlurText, CountUp } from '../periodic/motion';
 import { Section, Tabs } from '../periodic/parts';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { VaultImage } from '../VaultImage';
 import { AddMedia } from './AddMedia';
 import '../periodic/periodic.css';
@@ -54,13 +55,13 @@ const MONTH_LETTERS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /**
- * The library, after Bookmory's: a tab per kind (albums, films, books, podcasts, and videos when
- * the vault has them), each with its counts and the spread of its ratings, a grid of covers to
+ * The library, after Bookmory's: a tab per kind (albums, films, books and podcasts), each with its counts and the spread of its ratings, a grid of covers to
  * sort and filter by genre, and a calendar of covers by the day they were listened to, watched or
  * finished. "Add" looks a new one up and writes its note.
  */
 export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onCreated }: Props) {
-  const kinds = KINDS.filter((spec) => spec.kind !== 'video' || (library.get('video')?.length ?? 0) > 0);
+  // Videos are read as pages, not shelved here: the library is what is rated and added.
+  const kinds = KINDS.filter((spec) => spec.kind !== 'video');
   const spec = kinds.find((candidate) => candidate.kind === tab) ?? kindSpec('album');
   const entries = library.get(spec.kind) ?? NONE;
   const [choice, setChoice] = useState<{ sort: SortOrder; genre?: string }>(() => chosen.get(spec.kind) ?? { sort: 'recent' });
@@ -155,7 +156,14 @@ export function LibraryView({ library, files, tab, onTab, today, onOpenNote, onC
         </div>
       )}
 
-      {adding && source && createPortal(<AddMedia spec={{ ...spec, source }} files={files} today={today} onClose={() => setAdding(false)} onCreated={onCreated} />, document.body)}
+      {adding &&
+        source &&
+        createPortal(
+          <ErrorBoundary label={`Adding ${spec.one === 'album' ? 'an' : 'a'} ${spec.one}`} frame={(message) => <div className="add-backdrop" onMouseDown={() => setAdding(false)}>{message}</div>}>
+            <AddMedia spec={{ ...spec, source }} files={files} today={today} onClose={() => setAdding(false)} onCreated={onCreated} />
+          </ErrorBoundary>,
+          document.body,
+        )}
     </div>
   );
 }

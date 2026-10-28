@@ -1,10 +1,17 @@
 import { forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
 import { useEffect, useRef, useState } from 'react';
 import { findNode, nodeAt, PALETTE_SIZE, type Graph, type GraphLink, type GraphNode } from '../lib/graph';
+import { opensInNewTab } from '../lib/tabs';
 
 interface Props {
   graph: Graph;
-  onOpen: (path: string) => void;
+  /** A note was clicked; `newTab` for a ⌘-click or a middle click. */
+  onOpen: (path: string, newTab: boolean) => void;
+  /**
+   * The local graph in the right sidebar: a note (`center`, lit) and its neighbours, in a panel,
+   * without the legend, the search and the hint.
+   */
+  local?: { center: string };
 }
 
 /** Shared between the canvas loop and the React handlers, which shouldn't re-render per frame. */
@@ -28,18 +35,21 @@ const MAX_ZOOM = 8;
  * thousands of notes stay smooth. Dots take their top-level folder's colour; pointing at one
  * lights it and its neighbours up and dims the rest. Scroll zooms, dragging moves, a click opens.
  */
-export function GraphView({ graph, onOpen }: Props) {
+export function GraphView({ graph, onOpen, local }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const view = useRef<View>({ k: 1, x: 0, y: 0, fitting: true, redraw: () => undefined });
   const [settled, setSettled] = useState(false);
   const [focus, setFocus] = useState<string>();
   const [query, setQuery] = useState('');
 
+  const own = local?.center;
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
     const v = view.current;
+    // The local graph keeps its note lit, as a search does.
+    if (own) v.searched = own;
     const css = getComputedStyle(canvas);
     const token = (name: string) => css.getPropertyValue(name).trim();
     const colors = Array.from({ length: PALETTE_SIZE }, (_, i) => token(`--graph-${i + 1}`));
@@ -48,9 +58,11 @@ export function GraphView({ graph, onOpen }: Props) {
     // Many links read as a grey cloud; thin them out as they grow.
     const linkAlpha = Math.min(1, Math.sqrt(300 / Math.max(links.length, 1)));
 
+    // A local graph has few notes and a small panel: they stand further apart, so their names can be read.
+    const spread = own ? { distance: 72, charge: -240, pad: 90, zoom: 2.5 } : { distance: 36, charge: -55, pad: 160, zoom: 2 };
     const simulation = forceSimulation(nodes)
-      .force('link', forceLink<GraphNode, GraphLink>(links).id((node) => node.id).distance(36).strength(0.25))
-      .force('charge', forceManyBody<GraphNode>().strength(-55).distanceMax(420).theta(0.9))
+      .force('link', forceLink<GraphNode, GraphLink>(links).id((node) => node.id).distance(spread.distance).strength(0.25))
+      .force('charge', forceManyBody<GraphNode>().strength(spread.charge).distanceMax(420).theta(0.9))
       .force('x', forceX<GraphNode>(0).strength(0.05))
       .force('y', forceY<GraphNode>(0).strength(0.05))
       .alphaDecay(0.028)
@@ -72,7 +84,7 @@ export function GraphView({ graph, onOpen }: Props) {
         minY = Math.min(minY, node.y ?? 0);
         maxY = Math.max(maxY, node.y ?? 0);
       }
-      v.k = Math.min(Math.max(Math.min(width / (maxX - minX + 160), height / (maxY - minY + 160)), MIN_ZOOM), 2);
+      v.k = Math.min(Math.max(Math.min(width / (maxX - minX + spread.pad), height / (maxY - minY + spread.pad)), MIN_ZOOM), spread.zoom);
       v.x = -((minX + maxX) / 2) * v.k;
       v.y = -((minY + maxY) / 2) * v.k;
     };
@@ -134,8 +146,10 @@ export function GraphView({ graph, onOpen }: Props) {
       ctx.textBaseline = 'top';
       const left = (-width / 2 - v.x) / v.k;
       const top = (-height / 2 - v.y) / v.k;
+      // A local graph of many notes names only its own note until one is pointed at.
+      const crowded = Boolean(own) && !v.hovered && nodes.length > 16;
       for (const node of nodes) {
-        const show = lit ? isLit(node.id) : v.k > 1.4;
+        const show = lit ? (crowded ? node.id === own : isLit(node.id)) : v.k > 1.4;
         if (!show) continue;
         const x = node.x ?? 0;
         const y = node.y ?? 0;
@@ -183,7 +197,7 @@ export function GraphView({ graph, onOpen }: Props) {
       observer.disconnect();
       simulation.stop();
     };
-  }, [graph]);
+  }, [graph, own]);
 
   // Pointer: hover lights a note up, scroll zooms around the pointer, drag pans, a click opens.
   useEffect(() => {
@@ -218,16 +232,19 @@ export function GraphView({ graph, onOpen }: Props) {
       setFocus(hovered ?? v.searched);
       v.redraw();
     };
+    // The left button drags and clicks, the middle one clicks (into a new tab); the right one is left alone.
     const down = (event: MouseEvent) => {
+      if (event.button > 1) return;
+      if (event.button === 1) event.preventDefault();
       drag = { x: event.clientX, y: event.clientY, moved: false };
     };
     const up = (event: MouseEvent) => {
       const clicked = drag && !drag.moved;
       drag = undefined;
-      if (!clicked) return;
+      if (!clicked || event.button > 1) return;
       const point = toGraph(event);
       const node = nodeAt(graph.nodes, point.x, point.y, 4 / v.k);
-      if (node) onOpen(node.id);
+      if (node) onOpen(node.id, opensInNewTab(event));
     };
     const leave = () => {
       drag = undefined;
@@ -270,6 +287,13 @@ export function GraphView({ graph, onOpen }: Props) {
   };
   const focused = focus ? graph.nodes.find((node) => node.id === focus) : undefined;
 
+  if (local) {
+    return (
+      <div className="graph is-local" data-testid="local-graph" data-settled={settled} data-focus={focus ?? ''} data-center={local.center} data-nodes={graph.nodes.length} data-links={graph.links.length}>
+        <canvas ref={canvasRef} className="graph-canvas" aria-label={`Local graph of ${graph.nodes.length} notes and ${graph.links.length} links`} />
+      </div>
+    );
+  }
   return (
     <div className="graph" data-testid="graph" data-settled={settled} data-focus={focus ?? ''} data-nodes={graph.nodes.length} data-links={graph.links.length}>
       <canvas ref={canvasRef} className="graph-canvas" aria-label={`Graph of ${graph.nodes.length} notes and ${graph.links.length} links`} />
@@ -290,7 +314,7 @@ export function GraphView({ graph, onOpen }: Props) {
         className="graph-search"
         onSubmit={(event) => {
           event.preventDefault();
-          if (focused) onOpen(focused.id);
+          if (focused) onOpen(focused.id, false);
         }}
       >
         <input value={query} onChange={(event) => search(event.target.value)} placeholder="Find a note" aria-label="Find a note" data-testid="graph-search" />

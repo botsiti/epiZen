@@ -2,8 +2,8 @@ import { useMemo, type PointerEvent, type ReactNode } from 'react';
 import { formatMinutes } from '../../lib/day';
 import { addMonths, formatDate, startOfMonth } from '../../lib/dates';
 import { lifeXp, progress, rankOf, sphereXp, streak } from '../../lib/home';
-import { questsIn, questSphereXp, questXp, type Quest, type QuestEntry } from '../../lib/quests';
-import type { Shelf } from '../../lib/media';
+import { questsIn, questSphereXp, questXp, type Quest, type QuestChange, type QuestEntry } from '../../lib/quests';
+import { homeShelves, type Shelf } from '../../lib/media';
 import type { Period } from '../../lib/periodic';
 import type { DayEntry } from '../../lib/rollup';
 import { followPointer, order } from '../periodic/effects';
@@ -42,6 +42,8 @@ export interface HomeProps {
   art: (quest: Quest) => string | undefined;
   onQuestToggle: (quest: Quest) => void;
   onQuestProgress: (quest: Quest, value: number) => void;
+  /** A chapter or a deadline from a quest's detail; without it, a card doesn't open its detail. */
+  onQuestChange?: (quest: Quest, change: QuestChange) => Promise<string | undefined>;
   /** A shelf's "See all": its folder's tab in the library. */
   onSeeAll?: (folder: string) => void;
 }
@@ -75,9 +77,9 @@ export function Home(props: HomeProps) {
         <LeadSphere spheres={spheres} dayOf={dayOf} today={today} i={6} />
       </div>
       <Section title={`Quests · ${formatDate(month, 'MMMM')}`} note={`${thisMonth.filter(({ quest }) => quest.done).length}/${thisMonth.length} done`} i={7} testId="home-quests">
-        <QuestBoard quests={thisMonth} art={props.art} today={today} onToggle={props.onQuestToggle} onProgress={props.onQuestProgress} />
+        <QuestBoard quests={thisMonth} art={props.art} today={today} onToggle={props.onQuestToggle} onProgress={props.onQuestProgress} onChange={props.onQuestChange} />
       </Section>
-      <Shelves shelves={props.shelves} today={today} onOpen={props.onOpenNote} onSeeAll={props.onSeeAll} i={8} />
+      <Shelves shelves={homeShelves(props.shelves)} today={today} onOpen={props.onOpenNote} onSeeAll={props.onSeeAll} i={8} />
     </div>
   );
 }

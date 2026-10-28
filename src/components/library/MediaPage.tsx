@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { useMemo, type CSSProperties, type PointerEvent } from 'react';
 import type { VaultFile } from '../../lib/api';
 import { parseNote } from '../../lib/frontmatter';
 import { bodyWithoutCover, coverEmbed, keyIn, readEntry, type KindSpec } from '../../lib/library';
@@ -15,15 +15,13 @@ interface Props {
   path: string;
   text: string;
   files: VaultFile[];
-  onOpenLink: (target: string, fromPath: string) => void;
+  onOpenLink: (target: string, fromPath: string, newTab?: boolean) => void;
   /** Writes one property of this note, over the note as it is on disk now. */
   onSetProperty: (key: string, value: string) => void;
   onEdit: () => void;
   onOpenLibrary: () => void;
   /** Why the last change didn't reach the note, if it didn't. */
   warning?: string;
-  /** Under the page: the backlinks. */
-  footer?: ReactNode;
 }
 
 const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
@@ -34,7 +32,7 @@ const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.par
  * made it, its genres, its rating as a ring, and when it was listened to, watched or finished.
  * Setting the rating or a date writes that one property; the note's own text follows below.
  */
-export function MediaPage({ spec, path, text, files, onOpenLink, onSetProperty, onEdit, onOpenLibrary, warning, footer }: Props) {
+export function MediaPage({ spec, path, text, files, onOpenLink, onSetProperty, onEdit, onOpenLibrary, warning }: Props) {
   const resolve = useMemo(() => linkResolver(files), [files]);
   const { properties, body } = useMemo(() => parseNote(text), [text]);
   const entry = useMemo(() => readEntry(path, text, resolve), [path, text, resolve]);
@@ -151,7 +149,6 @@ export function MediaPage({ spec, path, text, files, onOpenLink, onSetProperty, 
           <NoteMarkdown path={path} body={shown} files={files} onOpenLink={onOpenLink} />
         </section>
       )}
-      {footer && <div className="media-footer">{footer}</div>}
     </div>
   );
 }

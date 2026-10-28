@@ -65,6 +65,14 @@ export async function guardClose(handler: () => void): Promise<() => void> {
 }
 export const closeNow = () => invoke<void>('close_now');
 
+/** An item of the menu bar the page acts on (src-tauri/src/menu.rs). */
+export type MenuItemId = 'new-tab' | 'close-tab' | 'right-sidebar';
+
+/** Calls `handler` when one of those items is chosen. Returns a function that stops listening. */
+export async function onMenu(handler: (item: MenuItemId) => void): Promise<() => void> {
+  return listen<MenuItemId>('epizen://menu', (event) => handler(event.payload));
+}
+
 
 // Apple Calendar, through EventKit (src-tauri/src/calendar.rs). Nothing here touches the vault.
 // Times are milliseconds since the epoch; an occurrence is an event's id and where it starts.

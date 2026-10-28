@@ -2,7 +2,8 @@ import type { RecordInput, ThoughtRecord } from '../../lib/cbt';
 import type { FocusHow } from '../calendar/FocusMenu';
 import type { MediaItem } from '../../lib/media';
 import type { Period } from '../../lib/periodic';
-import type { Quest, QuestEntry } from '../../lib/quests';
+import type { Quest, QuestChange, QuestEntry } from '../../lib/quests';
+import type { WeekHeading } from '../../lib/sections';
 import type { DayEntry } from '../../lib/rollup';
 import type { TaskEdit } from '../../lib/timeblocks';
 
@@ -54,4 +55,10 @@ export interface PeriodicActions {
   /** Quests live in their own notes; these write there. */
   onQuestToggle: (quest: Quest) => void;
   onQuestProgress: (quest: Quest, value: number) => void;
+  /** A chapter or a deadline from a quest's detail. Settles with why it wasn't written, if it wasn't. */
+  onQuestChange: (quest: Quest, change: QuestChange) => Promise<string | undefined>;
+  /** A new quest's line, added to the open weekly or monthly note's Quest XP section. */
+  onAddQuest: (line: string) => Promise<string | undefined>;
+  /** The weekly note's Plus, Minus or Next, written in place. */
+  onSetSection: (heading: WeekHeading, value: string) => Promise<string | undefined>;
 }

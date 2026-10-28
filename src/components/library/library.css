@@ -668,10 +668,6 @@
   max-width: var(--reading-width);
 }
 
-.media-footer .backlinks {
-  margin-top: var(--space-6);
-}
-
 /* The rating ring: an arc in accent with a glowing dot at its end, ticks every ten. */
 
 .rating-ring {
@@ -742,8 +738,8 @@
   display: grid;
   place-items: center;
   padding: var(--space-6);
-  background: rgb(6 8 9 / 70%);
-  backdrop-filter: blur(14px);
+  /* A tint, not a blur: WebKit draws a backdrop blur as big as the window black (DESIGN.md). */
+  background: rgb(6 8 9 / 82%);
   animation: panel 240ms ease-out both;
 }
 

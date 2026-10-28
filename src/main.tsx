@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './styles.css';
 
 async function start() {
@@ -11,7 +12,9 @@ async function start() {
   if (!root) throw new Error('index.html has no #root element');
   createRoot(root).render(
     <StrictMode>
-      <App />
+      <ErrorBoundary label="Epizen">
+        <App />
+      </ErrorBoundary>
     </StrictMode>,
   );
 }

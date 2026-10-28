@@ -13,7 +13,7 @@ interface Props {
   i: number;
 }
 
-/** Every rated album, film and video as covers, a glass shelf per folder. */
+/** The rated albums, films, books and podcasts as covers, a glass shelf per kind; an empty one says how to start it. */
 export function Shelves({ shelves, today, onOpen, onSeeAll, i }: Props) {
   if (!shelves.length) return null;
   return (
@@ -36,12 +36,22 @@ function ShelfCard({ shelf, today, onOpen, onSeeAll, i }: Omit<Props, 'shelves'>
           {shelf.items.length} rated · {thisYear(shelf.items, today)} this year
         </span>
         <span className="nav-space" />
-        {kind && onSeeAll && (
+        {kind && onSeeAll && shelf.items.length > 0 && (
           <button type="button" className="shelf-all" onClick={() => onSeeAll(shelf.folder)} data-testid="shelf-see-all">
             See all →
           </button>
         )}
       </div>
+      {shelf.items.length === 0 && (
+        <p className="shelf-empty" data-testid="shelf-empty">
+          Nothing rated yet.{' '}
+          {kind && onSeeAll && (
+            <button type="button" className="shelf-all" onClick={() => onSeeAll(shelf.folder)}>
+              Add the first {kind.one} →
+            </button>
+          )}
+        </p>
+      )}
       <ul className="covers">
         {shelf.items.map((item) => (
           <li key={item.path}>

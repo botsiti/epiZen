@@ -1,6 +1,6 @@
 import { forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
 import { describe, expect, it } from 'vitest';
-import { buildGraph, findNode, nodeAt, type GraphLink, type GraphNode } from './graph';
+import { buildGraph, findNode, graphKey, localGraph, nodeAt, type GraphLink, type GraphNode } from './graph';
 
 describe('buildGraph', () => {
   const graph = buildGraph(
@@ -38,6 +38,55 @@ describe('buildGraph', () => {
     expect(nodeAt(graph.nodes.slice(0, 2), 20, 20, 4)).toBeUndefined();
     expect(findNode(graph.nodes, 'glass')?.title).toBe('Glasshouse Weather');
     expect(findNode(graph.nodes, 'RPG')?.title).toBe('08.26 RPG');
+  });
+});
+
+describe('localGraph', () => {
+  const DAY = 'Calendar/2026/days 2026/10.08.2026.md';
+  const MONTH = 'Calendar/2026/months 2026/08.26 RPG.md';
+  const ALBUM = 'Rating/music/Glasshouse Weather.md';
+  const HOME = '00. Home 2026.md';
+  const WEEK = 'Calendar/2026/weeks/2026-W33 - 10.08.26.md';
+  const graph = buildGraph(
+    [DAY, MONTH, ALBUM, HOME, WEEK],
+    new Map([
+      [DAY, [ALBUM, WEEK]],
+      [MONTH, [ALBUM, DAY]],
+      [HOME, [MONTH]],
+    ]),
+  );
+
+  it('has the note, its neighbours and the links among them', () => {
+    const local = localGraph(graph, ALBUM);
+    expect(local.nodes.map((node) => node.title).sort()).toEqual(['08.26 RPG', '10.08.2026', 'Glasshouse Weather']);
+    // Album to day, album to month, and day to month between the neighbours.
+    expect(local.links).toHaveLength(3);
+    expect([...(local.neighbours.get(DAY) ?? [])].sort()).toEqual([MONTH, ALBUM].sort());
+  });
+
+  it('reaches further with a greater depth', () => {
+    expect(localGraph(graph, ALBUM, 2).nodes.map((node) => node.title).sort()).toEqual(['00. Home 2026', '08.26 RPG', '10.08.2026', '2026-W33 - 10.08.26', 'Glasshouse Weather']);
+  });
+
+  it('keeps the whole graph’s colours and sizes on nodes of its own', () => {
+    const local = localGraph(graph, ALBUM);
+    for (const node of local.nodes) {
+      const whole = graph.nodes.find((n) => n.id === node.id);
+      expect(node).not.toBe(whole);
+      expect([node.group, node.radius]).toEqual([whole?.group, whole?.radius]);
+    }
+    expect(local.groups).toBe(graph.groups);
+  });
+
+  it('is empty for a note that isn’t in the graph, and alone for one without links', () => {
+    expect(localGraph(graph, 'Gone.md').nodes).toEqual([]);
+    const alone = buildGraph([HOME], new Map());
+    expect(localGraph(alone, HOME).nodes.map((node) => node.title)).toEqual(['00. Home 2026']);
+  });
+
+  it('keys a graph by its notes and links, so the same one isn’t laid out again', () => {
+    expect(graphKey(localGraph(graph, ALBUM))).toBe(graphKey(localGraph(buildGraph([DAY, MONTH, ALBUM, HOME, WEEK], new Map([[DAY, [ALBUM, WEEK]], [MONTH, [ALBUM, DAY]], [HOME, [MONTH]]])), ALBUM)));
+    expect(graphKey(localGraph(graph, ALBUM))).not.toBe(graphKey(localGraph(graph, DAY)));
   });
 });
 
