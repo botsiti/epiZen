@@ -50,7 +50,7 @@ import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
 import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
-import { collectLibrary, kindOfFolder, kindOfPath, type MediaKind } from './lib/library';
+import { collectLibrary, kindOfFolder, kindOfPath, type LibraryTab } from './lib/library';
 import { collectMedia } from './lib/media';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
@@ -194,10 +194,10 @@ export function App() {
   const openNote = useCallback((path: string, newTab?: boolean) => go({ kind: 'note', path }, newTab), [go]);
   const shelves = useMemo(() => collectMedia([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
   const library = useMemo(() => collectLibrary([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
-  const openLibrary = useCallback((kind: MediaKind, newTab?: boolean) => go({ kind: 'library', tab: kind }, newTab), [go]);
+  const openLibrary = useCallback((tab: LibraryTab, newTab?: boolean) => go({ kind: 'library', tab }, newTab), [go]);
   // The library remembers its tab in its place in its tab's history, so coming back finds it again.
   const setLibraryTab = useCallback(
-    (id: number, kind: MediaKind) => update((prev) => replaceView(prev, (v) => (v.kind === 'library' ? { ...v, tab: kind } : v), id)),
+    (id: number, tab: LibraryTab) => update((prev) => replaceView(prev, (v) => (v.kind === 'library' ? { ...v, tab } : v), id)),
     [update],
   );
   const mediaPage = useMemo(() => {
@@ -615,7 +615,7 @@ export function App() {
         onSettings={(newTab) => go({ kind: 'settings' }, newTab)}
         onGraph={(newTab) => go({ kind: 'graph' }, newTab)}
         onCalendar={(newTab) => go({ kind: 'calendar' }, newTab)}
-        onLibrary={(newTab) => openLibrary('album', newTab)}
+        onLibrary={(newTab) => openLibrary('all', newTab)}
         timer={<TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
         folderError={folderError}
         calendar={
@@ -722,7 +722,7 @@ export function App() {
                 library={library}
                 files={files}
                 tab={view.tab}
-                onTab={(kind) => setLibraryTab(tab.id, kind)}
+                onTab={(shown) => setLibraryTab(tab.id, shown)}
                 today={now}
                 onOpenNote={openNote}
                 onCreated={mediaCreated}

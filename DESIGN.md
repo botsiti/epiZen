@@ -102,6 +102,15 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   in accent, the note's folder faint.
 - **Forms**: a label above each field in the label style. Fields are surface fills with a hairline
   that turns accent on focus.
+- **Date fields**: a faint calendar mark inside the field's right edge. A click or focus opens a small
+  month calendar under the field (over it when there's no room), in the pages' glass: the field's
+  label small and faint, the month in the serif with the year faint, ‹ › as round chips; weekday
+  initials Monday first, today's in accent; six weeks of round days, the other months' faint, today
+  a thin sage ring, the chosen day a lit sage disc. Under a hairline, Today and Yesterday as quiet
+  chips and the chosen day in the serif's italic. The field keeps the focus, so YYYY-MM-DD can still be
+  typed and the calendar follows it; ↓ goes into the days, the arrows move by day and week, Page Up
+  and Down by month, Enter picks, Escape closes it and nothing behind it. After Notion's and
+  Calendars' date sheets, Timepage and Booking.com, in Epizen's look (`src/components/DateField.tsx`).
 - **Empty and error screens**: a label, a title and one or two quiet lines. No illustrations.
 
 ## Periodic pages
@@ -213,18 +222,25 @@ display face, count-up numbers, staggered rise and spring), opened from "Library
 shelf's "See all", or the note itself. Their structure is Bookmory's library and book page and
 Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
 
-- **Library**: a hero with the kind's name in the serif, a line about it, "+ Add" in the primary
-  button, and on the right three numbers (in all, this year, the average in accent) over the spread
-  of ratings, a bar per tenth of the scale (Letterboxd's histogram, in sage). Word tabs below: Albums,
-  Films, Books, Podcasts, and Videos when the vault has any. Then sort chips (Recent, Rating, Title)
-  and the twelve most used genres as filter chips, each with its count; the choice is kept per tab for
-  the session. The covers in a grid, each with its rating on a small glass pill in the corner (a faint
+- **Library**: a hero with the kind's name in the serif ("Library" on All), a line about it, an Add
+  for every kind on every tab (the tab's own kind in the primary button, "+ Add film", the others as
+  quiet chips beside it: "+ Album", "+ Book", "+ Episode"), and on the right three numbers (in all,
+  this year, the average in accent) over the spread of ratings, a bar per tenth of the scale
+  (Letterboxd's histogram, in sage). Word tabs below: All, where the library opens, then Albums,
+  Films, Books and Podcasts. Then sort chips (Recent, Rating, Title) and the twelve most used genres
+  as filter chips, each with its count; the choice is kept per tab for the session.
+- **All**: every album, film, book and podcast together. The hero counts all of them. Above the
+  sorts, a chip per kind with its line-drawn mark (a record, a strip of film, a book, a microphone)
+  and its count; several can be on, and none on is all of them. They narrow the grid and the
+  calendar. Each card says its kind, faint, before the maker, and posters and square covers stand on
+  one line with their titles level. The covers in a grid, each with its rating on a small glass pill in the corner (a faint
   dash when not rated yet), the title, and the maker and year faint. Covers lift under the pointer and
   load as they near the view. Last, a calendar of covers (Bookmory's book calendar): the month's name in
   the serif beside a strip of the year's twelve months, each a small bar of how many (the shown month in
   accent, with a glow), ‹ › to step, and the month's days as a grid, Monday first, each day showing the
-  cover of what was listened to, watched or finished, "+n" when there were more. It opens on this month,
-  or the latest month that has something.
+  covers of what was listened to, watched or finished: up to three fanned like cards in a hand, the
+  best rated in front and the others tilted behind, a little darker, spreading when pointed at; "+n"
+  when there were more. It opens on this month, or the latest month that has something.
 - **Empty tab**: a glass card: a kicker, "Your first book" in the serif, one line on what Add does,
   and the Add button. Videos aren't added from Epizen; their empty card says so.
 - **Media page**: a rated note in those folders opens as a page; Edit note opens its text in the
@@ -243,10 +259,21 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   a rating ring on the left; title, maker, year, genres (pills to remove, a field to add), rating and
   date on the right, the date set to today; the path it will be saved at, faint, and Save in the
   primary button. Nothing goes out until something is typed, and nothing is written until Save.
-- **Writes**: on a media page, setting the rating or a date writes that one property, under the key
-  the note already uses (`rating` or `Rating`), over the note as it is on disk. Add writes a new note in
-  the vault's format for its kind and its cover as a new file in the kind's `_attachments`; neither
-  ever replaces a file.
+  The dates are date fields (above).
+- **Adding a podcast episode**: the search finds shows; picking one lists its latest episodes (up to
+  the 200 iTunes gives) under the show's own row, with a field that narrows them as it is typed, here,
+  without asking again. Each episode is a row with the day it came out as a small leaf (the month in
+  accent caps, the day in the serif, the year faint), its title, its date and length muted, and two
+  faint lines of what it is about. Picking one fills the form: its title without its number (the
+  vault's notes leave "#494 –" and "- #1073" out), the show as Author, the year it came out, the show's
+  genre and the episode's artwork as the cover. "Enter it yourself" is there too, with the show filled
+  in. Escape steps back: the form, the episodes, the shows.
+- **Writes**: on a media page, setting the rating or a date (typed, or picked in the calendar) writes
+  that one property, under the key the note already uses (`rating` or `Rating`), over the note as it is
+  on disk. Add writes a new note in the vault's format for its kind and its cover as a new file in the
+  kind's `_attachments`; neither ever replaces a file. A podcast note is one episode, named after it,
+  with Author (the show), Rating, Year (only when known, where the vault's notes that have one put it),
+  Genre and Listened.
 
 ## Tabs and the right sidebar
 

@@ -37,6 +37,8 @@ export interface KindSpec {
   dateLabel: string;
   /** A new note's properties, in the order the vault's notes have them. */
   order: (keyof KindSpec['keys'])[];
+  /** Properties written only with a value: the vault's template leaves them out, some of its notes have them. */
+  sparse?: (keyof KindSpec['keys'])[];
   /** The overview note a new one links to first: one per year ("00. Music 2026 MOC"), or one for all ("00. Books"). */
   moc: 'year' | 'single';
   /** The alias the link to a yearly overview carries, as the vault's albums do: `[[00. Music 2026 MOC|music 2026]]`. */
@@ -100,10 +102,13 @@ export const KINDS: readonly KindSpec[] = [
     folder: 'podcasts',
     tab: 'Podcasts',
     one: 'podcast',
-    keys: { maker: 'Author', genre: 'Genre', rating: 'Rating', date: 'Listened' },
+    // A note is one episode, named after it; Author is the show. The year it came out sits
+    // between Rating and Genre, as the vault's notes that have one put it ("Ilya Sutskever").
+    keys: { maker: 'Author', year: 'Year', genre: 'Genre', rating: 'Rating', date: 'Listened' },
     makerLabel: 'Author',
     dateLabel: 'Listened',
-    order: ['maker', 'rating', 'genre', 'date'],
+    order: ['maker', 'rating', 'year', 'genre', 'date'],
+    sparse: ['year'],
     moc: 'year',
     coverWidth: 240,
     aspect: 1,
@@ -270,6 +275,37 @@ export function genreCounts(entries: MediaEntry[]): [string, number][] {
 }
 
 export const withGenre = (entries: MediaEntry[], genre?: string) => (genre ? entries.filter((entry) => entry.genres.includes(genre)) : entries);
+
+// ---------------------------------------------------------------- everything together
+
+/** The kinds the library shelves and adds, in its tabs' order. Videos are read as pages, not shelved. */
+export const SHELVED_KINDS: readonly MediaKind[] = ['album', 'film', 'book', 'podcast'];
+
+/** A library tab: everything together ("all"), or one kind. */
+export type LibraryTab = 'all' | MediaKind;
+
+export const isLibraryTab = (value: unknown): value is LibraryTab => value === 'all' || KINDS.some((spec) => spec.kind === value);
+
+/**
+ * Every shelved entry together, in the kinds' order, or only the kinds chosen (none chosen is all
+ * of them, as a filter that lets everything through).
+ */
+export function allEntries(library: ReadonlyMap<MediaKind, MediaEntry[]>, kinds: ReadonlySet<MediaKind> = new Set()): MediaEntry[] {
+  return SHELVED_KINDS.filter((kind) => !kinds.size || kinds.has(kind)).flatMap((kind) => library.get(kind) ?? []);
+}
+
+/** How many of each shelved kind there are, for the kind chips. */
+export function kindCounts(library: ReadonlyMap<MediaKind, MediaEntry[]>): [MediaKind, number][] {
+  return SHELVED_KINDS.map((kind) => [kind, library.get(kind)?.length ?? 0]);
+}
+
+/** Turns a kind on or off among the chosen ones. Choosing every kind is choosing none: everything shows. */
+export function toggleKind(kinds: ReadonlySet<MediaKind>, kind: MediaKind): Set<MediaKind> {
+  const next = new Set(kinds);
+  if (next.has(kind)) next.delete(kind);
+  else next.add(kind);
+  return SHELVED_KINDS.every((shelved) => next.has(shelved)) ? new Set() : next;
+}
 
 /** How many were listened to, watched or finished in each month of a year. */
 export function monthCounts(entries: MediaEntry[], year: number): number[] {
@@ -455,6 +491,7 @@ export function mediaNoteText(spec: KindSpec, draft: MediaDraft, links: { overvi
     const key = spec.keys[name];
     if (!key) continue;
     const value = values[name];
+    if (!value.length && spec.sparse?.includes(name)) continue;
     if (Array.isArray(value)) {
       lines.push(`${key}:`, ...value.map((item) => `  - ${yamlText(item)}`));
     } else {

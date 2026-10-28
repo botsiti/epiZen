@@ -251,6 +251,8 @@ describe('remembering the tabs', () => {
     expect(parseView({ kind: 'note', path: DAY, editing: true }, notes)).toEqual(note(DAY));
     expect(parseView({ kind: 'note', path: 7 }, notes)).toBeUndefined();
     expect(parseView({ kind: 'library', tab: 'album' }, notes)).toEqual({ kind: 'library', tab: 'album' });
+    expect(parseView({ kind: 'library', tab: 'all' }, notes)).toEqual({ kind: 'library', tab: 'all' });
+    expect(parseView({ kind: 'library', tab: 'toString' }, notes)).toBeUndefined();
     expect(parseView({ kind: 'settings', extra: 1 }, notes)).toEqual({ kind: 'settings' });
     expect(parseView({ kind: 'new', folder: '' }, notes)).toBeUndefined();
     expect(parseView({ kind: 'toString' }, notes)).toBeUndefined();

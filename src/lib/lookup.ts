@@ -1,7 +1,7 @@
 import { genreName, type KindSpec } from './library';
 
-// Where "Add" finds an album, film, book or podcast: public services that need no account,
-// asked only when the user types a search. The backend (src-tauri/src/net.rs) refuses any
+// Where "Add" finds an album, film, book or podcast episode: public services that need no account,
+// asked only when the user types a search or picks a show. The backend (src-tauri/src/net.rs) refuses any
 // other host. Each source has a search URL and a parser for its answer; tests feed the parsers
 // recorded answers from test/fixtures/lookup/.
 
@@ -19,6 +19,18 @@ export interface LookupResult {
   note?: string;
   /** MusicBrainz: the page with its genres, read once it is picked. */
   details?: string;
+  /** iTunes: a podcast's episodes, listed once the show is picked. */
+  episodes?: string;
+}
+
+/** One episode of a show, with what the list of them shows besides the card. */
+export interface EpisodeResult extends LookupResult {
+  /** The day it came out, YYYY-MM-DD. */
+  released?: string;
+  /** How long it runs, in whole minutes. */
+  minutes?: number;
+  /** The show's words about it, as plain text. */
+  about?: string;
 }
 
 /** The hosts a lookup may reach. The backend's list (HOSTS in src-tauri/src/net.rs) is the one enforced; a test keeps the two the same. */
@@ -159,6 +171,7 @@ function iTunes(answer: unknown, kind: 'feature-movie' | 'podcast'): LookupResul
     if (!id || !title) return [];
     const art = string(item.artworkUrl100) ?? string(item.artworkUrl600);
     const genre = string(item.primaryGenreName);
+    const show = kind === 'podcast' ? string(item.collectionId) : undefined;
     return [
       {
         id,
@@ -169,9 +182,87 @@ function iTunes(answer: unknown, kind: 'feature-movie' | 'podcast'): LookupResul
         thumb: artwork(art, 200),
         cover: artwork(art, 600),
         note: kind === 'podcast' ? (string(item.trackCount) ? `${string(item.trackCount)} episodes` : undefined) : genre,
+        episodes: show && /^\d+$/.test(show) ? episodesUrl(show) : undefined,
       },
     ];
   });
+}
+
+/** A show's latest episodes, up to the 200 iTunes gives, newest first. */
+export const episodesUrl = (show: string) => `https://itunes.apple.com/lookup?id=${encodeURIComponent(show)}&media=podcast&entity=podcastEpisode&limit=200`;
+
+// An episode's number, as shows put it first ("#494 – ", "Ep. 12: ", "Episode 3 | ") or last
+// (" - #1073"). The vault's notes leave it out: "19 Uncomfortable Truths About Human Nature - Gurwinder Bhogal".
+const NUMBER_FIRST = /^\s*(?:#\s*|ep(?:isode)?\.?\s*#?\s*)\d+\s*(?:[-–—:|.]\s*)?/i;
+const NUMBER_LAST = /\s*[-–—|:]\s*(?:#\s*|ep(?:isode)?\.?\s*#?\s*)\d+\s*$/i;
+
+/** An episode's title as a note is named after it: without its number, at either end. */
+export function episodeTitle(name: string): string {
+  const plain = name.replace(NUMBER_FIRST, '').replace(NUMBER_LAST, '').trim();
+  return plain || name.trim();
+}
+
+/**
+ * A show's episodes from its iTunes lookup, newest first: each a card whose maker is the show (as
+ * the vault's podcast notes name it), with the year it came out, the show's genre and the
+ * episode's own artwork, or the show's. Anything that isn't an episode is skipped, never thrown.
+ */
+export function parseEpisodes(answer: unknown, show: LookupResult): EpisodeResult[] {
+  const results = array(object(answer).results).map(object);
+  const own = results.find((item) => item.kind === 'podcast');
+  const genre = string(own?.primaryGenreName);
+  const genres = show.genres.length ? show.genres : genre ? unique([genre]) : [];
+  const episodes = results.flatMap((item): EpisodeResult[] => {
+    if (item.kind !== 'podcast-episode') return [];
+    const id = string(item.trackId);
+    const name = string(item.trackName);
+    if (!id || !name) return [];
+    const released = /^\d{4}-\d{2}-\d{2}/.exec(string(item.releaseDate) ?? '')?.[0];
+    const millis = Number(item.trackTimeMillis);
+    const art = string(item.artworkUrl600) ?? string(item.artworkUrl160) ?? string(item.artworkUrl60);
+    const about = string(item.description) ?? string(item.shortDescription);
+    return [
+      {
+        id,
+        title: episodeTitle(name),
+        maker: string(item.collectionName) ?? show.title,
+        year: yearOf(released),
+        // The show's genre, as its card had it; the episode's own only when the show has none.
+        genres: genres.length ? genres : unique(array(item.genres).map((g) => string(object(g).name) ?? '')).slice(0, 1),
+        thumb: artwork(art, 200) ?? show.thumb,
+        cover: artwork(art, 600) ?? show.cover,
+        released,
+        minutes: Number.isFinite(millis) && millis > 0 ? Math.round(millis / 60_000) : undefined,
+        about: about?.replace(/\s+/g, ' ').trim(),
+      },
+    ];
+  });
+  return episodes.sort((a, b) => (b.released ?? '').localeCompare(a.released ?? ''));
+}
+
+const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+/** The episodes that have every typed word in their title or their description, those with them in the title first. */
+export function filterEpisodes(episodes: EpisodeResult[], query: string): EpisodeResult[] {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return episodes;
+  const inTitle: EpisodeResult[] = [];
+  const inAbout: EpisodeResult[] = [];
+  for (const episode of episodes) {
+    const title = fold(episode.title);
+    const all = `${title} ${fold(episode.about ?? '')}`;
+    if (!words.every((word) => all.includes(word))) continue;
+    (words.every((word) => title.includes(word)) ? inTitle : inAbout).push(episode);
+  }
+  return [...inTitle, ...inAbout];
+}
+
+/** An episode's length: "52 min", "3 h 43 min", "2 h". */
+export function episodeLength(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
 
 // Open Library's subjects mix genres with shelving notes ("nyt:business-books=2017-09-10",
