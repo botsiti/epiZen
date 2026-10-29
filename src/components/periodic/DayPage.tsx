@@ -583,8 +583,15 @@ function Composer({ categories, onAdd }: { categories: string[]; onAdd: (categor
   };
   return (
     <form className="composer glass rise" onSubmit={submit} data-testid="composer">
-      <div className="composer-categories" role="radiogroup" aria-label="Category">
-        {categories.slice(0, 10).map((name) => {
+      <div className="composer-row">
+        <input value={words} onChange={(event) => setWords(event.target.value)} placeholder="What would you like to do?" aria-label="Task" data-testid="composer-text" />
+        <button type="submit" className="primary-button" disabled={!words.trim()} data-testid="composer-add">
+          Add task
+        </button>
+      </div>
+      <span className="composer-label">Category</span>
+      <div className="composer-categories composer-category-grid" role="radiogroup" aria-label="Category">
+        {categories.map((name, index) => {
           const meta = category(name);
           return (
             <button
@@ -592,22 +599,27 @@ function Composer({ categories, onAdd }: { categories: string[]; onAdd: (categor
               type="button"
               role="radio"
               aria-checked={name === chosen}
+              tabIndex={name === chosen ? 0 : -1}
               className={name === chosen ? 'chip is-chosen' : 'chip'}
               style={{ '--tone': meta.color } as CSSProperties}
               onClick={() => setChosen(name)}
+              onKeyDown={(event) => {
+                const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+                if (!direction) return;
+                event.preventDefault();
+                const next = (index + direction + categories.length) % categories.length;
+                setChosen(categories[next] as string);
+                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+              }}
               data-testid="composer-category"
               data-category={name}
             >
-              {name}
+              <span className="composer-category-dot" aria-hidden="true" />
+              <span className="composer-category-name">{name}</span>
+              {name === chosen && <span className="composer-category-check" aria-hidden="true">✓</span>}
             </button>
           );
         })}
-      </div>
-      <div className="composer-row">
-        <input value={words} onChange={(event) => setWords(event.target.value)} placeholder={`A ${chosen} task for today`} aria-label="Task" data-testid="composer-text" />
-        <button type="submit" className="primary-button" disabled={!words.trim()} data-testid="composer-add">
-          Add task
-        </button>
       </div>
     </form>
   );

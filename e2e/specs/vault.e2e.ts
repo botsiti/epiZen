@@ -978,7 +978,10 @@ describe('the demo vault', () => {
     await browser.waitUntil(() => read() === summarised, { timeout: 5000, timeoutMsg: 'the summary never reached the note' });
 
     await showTab('Tasks');
+    expect(await $$('[data-testid="composer-category"][aria-checked="true"]').length).toBe(1);
     await $('[data-testid="composer-category"][data-category="sport"]').click();
+    await expect($('[data-testid="composer-category"][data-category="sport"]')).toHaveAttribute('aria-checked', 'true');
+    await screenshot('25-day-task-composer');
     await $('[data-testid="composer-text"]').setValue('evening run');
     await $('[data-testid="composer-add"]').click();
     // A new task has no minutes; they are set on its card once it is on the list.
