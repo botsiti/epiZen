@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -265,7 +265,9 @@ it('offers library genre matches in the add form and saves the selection', async
   await user.type(screen.getByTestId('add-title'), 'New album');
   await user.type(screen.getByTestId('add-genre'), 'psycho');
   expect(screen.getByRole('group', { name: 'Suggested genres' })).toHaveTextContent('psychedelic rock');
-  await user.click(screen.getByRole('button', { name: 'psychedelic' }));
+  const suggestion = screen.getByRole('button', { name: 'psychedelic' });
+  expect(fireEvent.mouseDown(suggestion)).toBe(false);
+  await user.click(suggestion);
   expect(screen.getByTestId('add-genre')).toHaveValue('');
   await user.click(screen.getByTestId('add-save'));
   await waitFor(() => expect(createNote).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('  - psychedelic\n')));

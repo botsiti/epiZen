@@ -14,6 +14,6 @@ export function GenreSuggestions({ query, selected, suggestions, onSelect }: { q
   const matches = suggestions.filter((value) => !chosen.has(genreName(value)) && match(value) < 2).sort((a, b) => match(a) - match(b)).slice(0, 8);
   if (!matches.length) return null;
   return <div className="genre-suggestions" role="group" aria-label="Suggested genres">
-    {matches.map((value) => <button type="button" key={value} onClick={() => onSelect(value)}>{value}</button>)}
+    {matches.map((value) => <button type="button" key={value} onMouseDown={(event) => event.preventDefault()} onClick={() => onSelect(value)}>{value}</button>)}
   </div>;
 }
