@@ -131,12 +131,30 @@ fn adding_a_podcast_episode_writes_its_cover_and_its_note_and_nothing_else() {
         "Rating/podcasts/_attachments/jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png"
     );
     let note = "---\nAuthor: Lex Fridman Podcast\nRating: 77\nYear: 2026\nGenre:\n  - technology\nListened: 2026-09-21\n---\n[[00. Podcast 2026]]\n\n![[jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png|240]]\n";
-    let path = "Rating/podcasts/Jensen Huang - NVIDIA – The $4 Trillion Company & the AI Revolution.md";
+    let path =
+        "Rating/podcasts/Jensen Huang - NVIDIA – The $4 Trillion Company & the AI Revolution.md";
     vault.create_note(path, note).unwrap();
 
     let mut after = snapshot(&copy);
     assert_eq!(after.remove(Path::new(&cover)).unwrap(), png);
     assert_eq!(after.remove(Path::new(path)).unwrap(), note.as_bytes());
-    assert_eq!(after, before, "only the new episode and its cover may differ");
+    assert_eq!(
+        after, before,
+        "only the new episode and its cover may differ"
+    );
     assert!(vault.create_note(path, "again").is_err());
+}
+
+#[test]
+fn deleting_a_library_note_moves_only_its_markdown_file_to_recoverable_trash() {
+    let (_dir, copy) = copy_of_demo_vault();
+    let before = snapshot(&copy);
+    let vault = Vault::open(&copy).unwrap();
+    let path = "Rating/music/Monastery Wi-Fi.md";
+    let text = vault.read_note(path).unwrap();
+    let trashed = vault.trash_note(path, &text).unwrap();
+    let mut expected = before;
+    let bytes = expected.remove(&PathBuf::from(path)).unwrap();
+    expected.insert(PathBuf::from(trashed), bytes);
+    assert_eq!(snapshot(&copy), expected);
 }

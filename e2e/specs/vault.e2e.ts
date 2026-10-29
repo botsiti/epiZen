@@ -1,10 +1,11 @@
 import { $, $$, browser, expect } from '@wdio/globals';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { DEMO_VAULT, FIXTURES, vaultCopy } from '../paths';
 import {
   clickAs,
+  clickInPage,
   clickCanvas,
   closeOtherTabs,
   closeTool,
@@ -41,6 +42,7 @@ const TODAY = (() => {
 const title = () => $('[data-testid="note-title"]');
 const ALBUM = 'Rating/music/Glasshouse Weather.md';
 const FILM = 'Rating/kino/The Lighthouse Accountant.md';
+let deletedLibraryNote: string | undefined;
 const INBOX = 'Inbox idea.md';
 const DAY = `${DAYS}/14.08.2026.md`;
 // The Lex Fridman Podcast's episode #494, from the recorded iTunes answers (test/fixtures/lookup/).
@@ -230,10 +232,11 @@ describe('the demo vault', () => {
     await expect($('[data-testid="library-card"]')).toHaveAttribute('data-path', 'Rating/music/Monastery Wi-Fi.md');
 
     // The calendar opens on the latest month with something in it.
-    await $('[data-testid="cover-calendar"]').scrollIntoView();
+    await $('[data-testid="library-calendar-open"]').click();
     await expect($('[data-testid="cover-calendar-month"]')).toHaveText('September 2026');
     expect(await $$('[data-testid="cover-day"] .cover-day-cover').length).toBe(9);
     await screenshot('48-library-calendar');
+    await browser.keys(['Escape']);
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
 
     await showTab('Films');
@@ -267,8 +270,8 @@ describe('the demo vault', () => {
     await expect($('[data-testid="library"]')).toHaveAttribute('data-layout', 'list');
     await expect($('[data-testid="library-view-menu-menu"]')).not.toBeExisting();
     expect(await $$('[data-testid="library-card"]').length).toBe(0);
-    expect(await $$('[data-testid="library-row"]').length).toBe(34);
-    await expect($('[data-testid="library-count"]')).toHaveText('34 results');
+    expect(await $$('[data-testid="library-row"]').length).toBe(10);
+    await expect($('[data-testid="library-count"]')).toHaveText('Showing 10 of 34');
     expect(await heads()).toEqual(['Cover', 'Title', 'By', 'Year', 'Kind', 'Genres', 'Rating', 'Date']);
     // Kept in the app's settings, beside the vault copy, never in the vault.
     await browser.waitUntil(() => kept('libraryLayout') === 'list', { timeout: 5000, timeoutMsg: 'the list was never kept in the settings' });
@@ -280,7 +283,7 @@ describe('the demo vault', () => {
     // Sort, and the headers with it.
     await openTool('library-sort');
     await $('[data-testid="sort"][data-sort="rating"]').click();
-    await expect($('[data-testid="library-sort-menu"]')).not.toBeExisting();
+    await closeTool('library-sort');
     await expect($('[data-testid="list-head"][data-column="rating"]')).toHaveAttribute('aria-sort', 'descending');
     await expect(firstRow()).toHaveAttribute('data-path', 'Rating/music/Seven Bells for Nobody.md');
     await $('[data-testid="list-sort"][data-sort="title"]').click();
@@ -295,7 +298,7 @@ describe('the demo vault', () => {
     expect(await $$('[data-testid="library-row"]').length).toBe(6);
     await filterBy('[data-testid="filter-clear"]');
     await closeTool('library-filter');
-    expect(await $$('[data-testid="library-row"]').length).toBe(34);
+    expect(await $$('[data-testid="library-row"]').length).toBe(10);
 
     // Search: titles, makers and genres.
     await $('[data-testid="library-search-open"]').click();
@@ -304,7 +307,7 @@ describe('the demo vault', () => {
     expect(new Set(await kinds())).toEqual(new Set(['album', 'book']));
     await expect($('[data-testid="library-count"]')).toHaveText('2 results');
     await $('[data-testid="library-search-clear"]').click();
-    await browser.waitUntil(async () => (await $$('[data-testid="library-row"]').length) === 34, { timeoutMsg: 'the search was never cleared' });
+    await browser.waitUntil(async () => (await $$('[data-testid="library-row"]').length) === 10, { timeoutMsg: 'the search was never cleared' });
 
     // Properties: the columns, kept in the settings.
     await openTool('library-columns');
@@ -344,6 +347,7 @@ describe('the demo vault', () => {
     // Older than the latest 15 the covers show: it is in the list.
     await expect($(`[data-testid="library-card"][data-path="${path}"]`)).not.toBeExisting();
     await showLibraryAs('list');
+    while (!(await $(`[data-testid="library-row"][data-path="${path}"]`).isExisting()) && await $('[data-testid="library-show-more"]').isExisting()) await $('[data-testid="library-show-more"]').click();
     await $(`[data-testid="library-row"][data-path="${path}"]`).click();
     await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
     await expect(title()).toHaveText('Glasshouse Weather');
@@ -562,7 +566,7 @@ describe('the demo vault', () => {
     await expect($('[data-testid="library"]')).toHaveAttribute('data-tab', 'all');
     // The calendar is under the covers; the album was opened from the list.
     await showLibraryAs('covers');
-    await $('[data-testid="cover-calendar"]').scrollIntoView();
+    await $('[data-testid="library-calendar-open"]').click();
     // September, from the year's strip: the 21st has an album, the new episode and a film.
     await $$('[data-testid="year-month"]')[8]?.click();
     await expect($('[data-testid="cover-calendar-month"]')).toHaveText('September 2026');
@@ -572,11 +576,14 @@ describe('the demo vault', () => {
     await expect($('[data-testid="cover-day"][data-day="3"]')).toHaveAttribute('data-count', '2');
     await browser.waitUntil(async () => (await $$('.cover-day-image[data-testid="vault-image"]').length) >= 17, { timeoutMsg: 'the calendar covers never loaded' });
     await screenshot('85-library-all-calendar');
+    await browser.keys(['Escape']);
 
     await filterBy('[data-testid="kind-chip"][data-kind="podcast"]');
     await closeTool('library-filter');
+    await $('[data-testid="library-calendar-open"]').click();
     await expect(day21).toHaveAttribute('data-count', '1');
     expect(await $$('[data-testid="cover-day"][data-count]').length).toBe(3);
+    await browser.keys(['Escape']);
     await filterBy('[data-testid="kind-chip"][data-kind="podcast"]');
     await closeTool('library-filter');
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
@@ -997,12 +1004,12 @@ describe('the demo vault', () => {
 
     await showTab('Tasks');
     expect(await $$('[data-testid="composer-category"][aria-checked="true"]').length).toBe(1);
-    await $('[data-testid="composer-category"][data-category="sport"]').click();
+    await clickInPage('[data-testid="composer-category"][data-category="sport"]');
     await expect($('[data-testid="composer-category"][data-category="sport"]')).toHaveAttribute('aria-checked', 'true');
     await expect($('[data-testid="composer-text"]')).toBeFocused();
     await screenshot('25-day-task-composer');
     await browser.keys('evening run');
-    await $('[data-testid="composer-add"]').click();
+    await clickInPage('[data-testid="composer-add"]');
     await expect($('[data-testid="composer-text"]')).toBeFocused();
     // A new task has no minutes; they are set on its card once it is on the list.
     const listed = summarised
@@ -1271,7 +1278,7 @@ describe('the demo vault', () => {
     await popover.waitForDisplayed();
     await expect(popover).toHaveText(expect.stringContaining('19:00–20:00'));
     await $('[data-testid="block-popover"] [data-testid="pick-new"]').setValue('evening run');
-    await $('[data-testid="block-popover"] [data-testid="pick-category"][data-category="sport"]').click();
+    await clickInPage('[data-testid="block-popover"] [data-testid="pick-category"][data-category="sport"]');
     await expect($('[data-testid="block-popover"] [data-testid="pick-new"]')).toBeFocused();
     // No calendar is called sport, so the plan goes to the default one.
     await expect($('[data-testid="plan-calendar"]')).toHaveValue('home');
@@ -1299,6 +1306,27 @@ describe('the demo vault', () => {
     await expect($('[data-testid="settings-day-format"]')).toHaveValue('DD.MM.YYYY');
     await expect($('[data-testid="settings-day"]')).toHaveText(expect.stringContaining('This day:'));
     await screenshot('16-settings');
+  });
+
+  it('keeps the podcast artwork preference in app settings without changing existing notes', async () => {
+    const before = snapshotVault(vaultCopy());
+    const settings = join(dirname(vaultCopy()), 'config', 'settings.json');
+    const kept = () => (JSON.parse(readFileSync(settings, 'utf8')) as { podcasts?: { artwork?: string } }).podcasts?.artwork;
+    const artwork = () => $('[data-testid="settings-podcast-artwork"]');
+    await $('[data-testid="settings-podcasts"]').scrollIntoView();
+    await expect(artwork()).toHaveValue('show');
+    await artwork().selectByAttribute('value', 'episode');
+    await $('[data-testid="settings-save"]').click();
+    await browser.waitUntil(() => kept() === 'episode', { timeoutMsg: 'the podcast preference was not saved' });
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="open-settings"]').click();
+    await expect(artwork()).toHaveValue('episode');
+    await artwork().selectByAttribute('value', 'show');
+    await $('[data-testid="settings-save"]').click();
+    await browser.waitUntil(() => kept() === 'show', { timeoutMsg: 'show thumbnails were not saved as the preference' });
+    await $('[data-testid="settings-podcasts"]').scrollIntoView();
+    await screenshot('85-settings-podcasts');
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
   });
 
   it('counts the weeks till 30 on the home screen from the birth date in Settings', async () => {
@@ -1352,12 +1380,108 @@ describe('the demo vault', () => {
     expect(readFileSync(today, 'utf8')).not.toMatch(/e2e focus[^\n]*\n {4}- \d\d:\d\d/);
   });
 
+  it('library controls: edits tags and Wikipedia favorites, opens new tabs and deletes the Markdown file', async () => {
+    const before = snapshotVault(vaultCopy());
+    const path = 'Rating/music/Library controls test.md';
+    await addByHand('album', { title: 'Library controls test', maker: 'Suede', rating: '80' });
+    await $('[aria-label="Edit genres"]').click();
+    await $('.library-dialog input').setValue('art rock');
+    await $('.library-dialog .primary-button').click();
+    await browser.waitUntil(() => readFileSync(join(vaultCopy(), path), 'utf8').includes('art rock'));
+    await $('[aria-label="Edit tags"]').click();
+    await $('.library-dialog input').setValue('relisten');
+    await $('.library-dialog .primary-button').click();
+    await browser.waitUntil(() => readFileSync(join(vaultCopy(), path), 'utf8').includes('relisten'));
+    await $('[data-testid="find-tracks"]').click();
+    await $('.track-search button').click();
+    await $('.track-picker .add-result').waitForDisplayed();
+    await $('.track-picker .add-result').click();
+    await $('.track-picker [aria-label="Favorite We Are the Pigs"]').click();
+    await screenshot('110-library-track-picker');
+    await $('.track-picker .primary-button').click();
+    await browser.waitUntil(() => readFileSync(join(vaultCopy(), path), 'utf8').includes('favorite tracks: ["We Are the Pigs"]'));
+    await expect($('[data-testid="media-tracks"] [aria-label="Favorite We Are the Pigs"]')).toHaveAttribute('aria-pressed', 'true');
+    await screenshot('111-library-properties');
+    await $('[data-testid="media-library"]').click();
+    await showLibraryAs('covers');
+    const tabs = await workspaceTabs().length;
+    await clickAs(`[data-testid="library-card"][data-path="${path}"]`, 'meta');
+    await waitForNote(path);
+    expect(await workspaceTabs().length).toBe(tabs + 1);
+    await $('[data-testid="media-library"]').click();
+    await clickAs(`[data-testid="library-card"][data-path="${path}"]`, 'right');
+    await screenshot('112-library-context');
+    await $('[data-testid="library-delete"]').click();
+    await $('[data-testid="library-delete-confirm"]').click();
+    await browser.waitUntil(() => !existsSync(join(vaultCopy(), path)), { timeoutMsg: 'the Markdown file was not removed' });
+    await expect($(`[data-testid="library-card"][data-path="${path}"]`)).not.toBeExisting();
+    const after = snapshotVault(vaultCopy());
+    const added = [...after.keys()].filter((key) => !before.has(key));
+    expect(added).toHaveLength(1);
+    deletedLibraryNote = added[0];
+    expect(deletedLibraryNote).toMatch(/^\.trash\/epizen-[^/]+\/Library controls test\.md$/);
+    expect(readFileSync(join(vaultCopy(), deletedLibraryNote!), 'utf8')).toContain('favorite tracks: ["We Are the Pigs"]');
+    after.delete(deletedLibraryNote!);
+    expect(diffSnapshots(before, after)).toEqual([]);
+  });
+
+  it('library controls: pages the list, reverses dates, filters by listened year and opens a calendar overlay', async () => {
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="open-library"]').click();
+    await showTab('Albums');
+    await showLibraryAs('list');
+    expect(await $$('[data-testid="library-row"]').length).toBe(10);
+    await $('[data-testid="library-show-more"]').click();
+    expect(await $$('[data-testid="library-row"]').length).toBe(20);
+    await $('[data-testid="list-sort"][data-sort="recent"]').click();
+    await expect($('[data-testid="list-head"][data-column="date"]')).toHaveAttribute('aria-sort', 'ascending');
+    await filterBy('[data-testid="year-filter"][data-year="2026"]');
+    await closeTool('library-filter');
+    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="row-date"]')].every((cell) => cell.textContent?.includes('2026')))).toBe(true);
+    await openTool('library-sort');
+    await screenshot('113-library-sort');
+    await closeTool('library-sort');
+    await $('[data-testid="library-calendar-open"]').click();
+    await expect($('[role="dialog"][aria-label="Library calendar"]')).toBeDisplayed();
+    await screenshot('114-library-calendar-overlay');
+    await browser.keys(['Escape']);
+    await expect($('[role="dialog"][aria-label="Library calendar"]')).not.toBeExisting();
+  });
+
+  it('library controls: retains the sidebar arrows and immediate task typing from PR 31', async () => {
+    await showMonth('September 2026');
+    const visible = await browser.execute(() => {
+      const calendar = document.querySelector('[data-testid="calendar"]');
+      if (!calendar) return false;
+      const bounds = calendar.getBoundingClientRect();
+      return [...calendar.querySelectorAll('.calendar-head .icon-button')].every((button) => {
+        const box = button.getBoundingClientRect();
+        return box.left >= bounds.left && box.right <= bounds.right && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)?.closest('button') === button;
+      });
+    });
+    expect(visible).toBe(true);
+    await $('[data-testid="calendar-next"]').click();
+    await expect($('[data-testid="calendar-month"]')).toHaveText('October 2026');
+    await showMonth('August 2026');
+    await $('[data-testid="calendar-day"][data-date="2026-08-14"]').click();
+    await showTab('Tasks');
+    await clickInPage('[data-testid="composer-category"][data-category="sport"]');
+    await expect($('[data-testid="composer-text"]')).toBeFocused();
+    await browser.keys('combined install check');
+    await clickInPage('[data-testid="composer-add"]');
+    await expect($('[data-testid="composer-text"]')).toBeFocused();
+    await expect($('[data-testid="composer-text"]')).toHaveValue('');
+    await browser.waitUntil(() => readFileSync(join(vaultCopy(), DAY), 'utf8').includes('- [ ] #daily/sport — combined install check'));
+    await screenshot('115-combined-task-entry');
+  });
+
   it('changed nothing in the vault copy but the new notes, the added album, episode and film and their covers, the album and film entered by hand and the covers found for them, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
         `added: ${DAYS}/30.07.2026.md`,
         `added: ${DAYS}/31.07.2026.md`,
         `added: ${DAYS}/${TODAY}.md`,
+        ...(deletedLibraryNote ? [`added: ${deletedLibraryNote}`] : []),
         'added: Inbox idea.md',
         'added: Rating/music/Dog Man Star.md',
         'added: Rating/music/_attachments/dog-man-star.png',

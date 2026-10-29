@@ -1,5 +1,5 @@
-//! Epizen's backend. The frontend reaches the vault only through the commands below. Three of
-//! them write: `create_note` and `write_note`, both in `vault.rs`, and `fetch_image_into_vault`,
+//! Epizen's backend. The frontend reaches the vault only through the commands below.
+//! `create_note`, `write_note` and `trash_note` use `vault.rs`; `fetch_image_into_vault`,
 //! which saves a cover through `Vault::create_file`. The lookups (`lookup_json`, `lookup_image`
 //! and that one) are the only network access, in `net.rs`. The `calendar_*` commands reach
 //! Apple Calendar, through `calendar.rs`, and never the vault.
@@ -187,6 +187,11 @@ async fn read_image(state: Shared<'_>, path: String) -> Result<Response, String>
 #[tauri::command]
 async fn create_note(state: Shared<'_>, path: String, text: String) -> Result<(), String> {
     with_vault(state, |vault| vault.create_note(&path, &text))
+}
+
+#[tauri::command]
+async fn trash_note(state: Shared<'_>, path: String, expected: String) -> Result<String, String> {
+    with_vault(state, |vault| vault.trash_note(&path, &expected))
 }
 
 #[tauri::command]
@@ -389,6 +394,7 @@ pub fn run() {
             read_all_notes,
             read_image,
             create_note,
+            trash_note,
             write_note,
             lookup_json,
             lookup_image,

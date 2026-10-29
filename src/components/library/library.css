@@ -2279,3 +2279,34 @@
 :root[data-motion='off'] .add-backdrop * {
   animation: none !important;
 }
+/* Library dialogs and compact property controls share the pages' calm glass. */
+.library-dialog { max-height: 86vh; overflow: auto; }
+.library-calendar-dialog { width: min(1080px, calc(100vw - 64px)); }
+.library-calendar-dialog > section { padding: 0 32px 32px; }
+.library-sort-secondary { display: grid; gap: 12px; padding: 12px 16px; }
+.library-sort-secondary .field select { width: 100%; }
+.library-toolbar .tool-menu { max-height: min(650px, 75vh); overflow-y: auto; }
+.library-menu-backdrop { position: fixed; inset: 0; z-index: 90; }
+.library-context-menu { position: absolute; width: 232px; }
+.library-context-menu .tool-label { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.media-labels { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.media-labels > .tile-label { min-width: 48px; }
+.media-labels .media-genres { margin: 0; align-items: center; }
+.library-section-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.track-star { margin-left: auto; border: 0; background: transparent; font-size: 24px; color: var(--text-faint); padding: 4px 8px; cursor: pointer; }
+.track-star[aria-pressed="true"] { color: var(--accent); }
+.track-star:hover, .track-star:focus-visible { color: var(--accent); background: var(--surface); border-radius: 6px; }
+.track-choices { list-style: none; padding: 0; margin: 16px 0; }
+.track-choices li { display: flex; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.track-search { display: flex; align-items: end; gap: 12px; }
+.track-search .field { flex: 1; }
+.library-dialog { overflow: hidden; }
+.library-dialog > .add-top, .library-dialog-foot { flex-shrink: 0; }
+.library-dialog > .add-body { min-height: 0; }
+.library-dialog-foot { padding: 16px 32px 24px; border-top: 1px solid var(--border); }
+.library-dialog-foot .add-actions { margin: 0; }
+.library-calendar-dialog > section { overflow: auto; min-height: 0; }
+.library-calendar-dialog .cover-calendar { padding: 16px; }
+.library-calendar-dialog .cover-day { min-height: clamp(58px, calc((86vh - 260px) / 6), 82px); padding: 4px; }
+.library-calendar-dialog .cover-day-cover { height: clamp(32px, calc((86vh - 260px) / 6 - 24px), 54px); }
+.library-calendar-dialog .cover-fan { height: clamp(32px, calc((86vh - 260px) / 6 - 24px), 54px); }

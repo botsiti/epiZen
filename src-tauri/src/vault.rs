@@ -2,9 +2,10 @@
 //!
 //! This is the only code that touches the vault. Every path that comes from the frontend
 //! goes through [`Vault::resolve`] or [`Vault::new_path`], which keep it inside the vault
-//! folder. It writes in three ways only: a new note or a new image (a cover the library
+//! folder. It creates a new note or a new image (a cover the library
 //! downloaded), neither of which can replace an existing file, and a note's new text, renamed
-//! over it whole and only while the note still holds what the app read.
+//! over it whole and only while the note still holds what the app read. Deleting a note moves
+//! it to a unique hidden trash folder, with the same expected-content check.
 
 use std::fmt;
 use std::fs;
@@ -144,6 +145,79 @@ impl Vault {
     /// and the create are one step (`create_new`), so a name taken a moment ago is refused.
     pub fn create_note(&self, path: &str, text: &str) -> Result<(), VaultError> {
         self.create(path, FileKind::Note, text.as_bytes())
+    }
+
+    /// Removes a note from the library by moving it into a unique folder in the vault's
+    /// hidden `.trash`. No image or other note is removed, and no trash entry is replaced.
+    pub fn trash_note(&self, path: &str, expected: &str) -> Result<String, VaultError> {
+        self.trash_note_with(path, expected, || {})
+    }
+
+    fn trash_note_with(
+        &self,
+        path: &str,
+        expected: &str,
+        before_move: impl FnOnce(),
+    ) -> Result<String, VaultError> {
+        let real = self.resolve(path, FileKind::Note)?;
+        // Never delete the target of an alias, including an alias to another note in the vault.
+        let mut checked = self.root.clone();
+        for part in plain_path(path, FileKind::Note)?.components() {
+            checked.push(part);
+            if fs::symlink_metadata(&checked)?.file_type().is_symlink() {
+                return Err(VaultError::InvalidPath(path.to_owned()));
+            }
+        }
+        if fs::read(&real)? != expected.as_bytes() {
+            return Err(VaultError::Changed(path.to_owned()));
+        }
+        let trash = self.root.join(".trash");
+        match fs::create_dir(&trash) {
+            Ok(()) => (),
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => (),
+            Err(err) => return Err(err.into()),
+        }
+        let metadata = fs::symlink_metadata(&trash)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(VaultError::InvalidPath(".trash".to_owned()));
+        }
+        static DELETIONS: AtomicU64 = AtomicU64::new(0);
+        let folder = loop {
+            let id = DELETIONS.fetch_add(1, Ordering::Relaxed);
+            let folder = trash.join(format!("epizen-{}-{id}", std::process::id()));
+            match fs::create_dir(&folder) {
+                Ok(()) => break folder,
+                Err(err) if err.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(err) => return Err(err.into()),
+            }
+        };
+        let target = folder.join(
+            real.file_name()
+                .ok_or_else(|| VaultError::InvalidPath(path.to_owned()))?,
+        );
+        before_move();
+        if let Err(err) = fs::rename(&real, &target) {
+            let _ = fs::remove_dir(&folder);
+            return Err(err.into());
+        }
+        // Check the file actually moved, not just the earlier read. Restore a conflicting
+        // version without ever replacing a note another writer created in the meantime.
+        if !fs::read(&target).is_ok_and(|bytes| bytes == expected.as_bytes()) {
+            if fs::hard_link(&target, &real).is_ok() {
+                fs::remove_file(&target)?;
+                fs::remove_dir(&folder)?;
+                return Err(VaultError::Changed(path.to_owned()));
+            }
+            return Err(VaultError::Io(io::Error::other(format!(
+                "the note changed while deleting; its moved version is preserved at {}",
+                target.display()
+            ))));
+        }
+        Ok(target
+            .strip_prefix(&self.root)
+            .map_err(|_| VaultError::InvalidPath(path.to_owned()))?
+            .to_string_lossy()
+            .into_owned())
     }
 
     /// Creates an image (a cover the library downloaded), and its folders inside the vault.
@@ -447,6 +521,70 @@ mod tests {
         }
         let vault = Vault::open(dir.path()).unwrap();
         (dir, vault)
+    }
+
+    #[test]
+    fn trash_keeps_each_markdown_file_recoverable_and_never_replaces_a_previous_one() {
+        let (dir, vault) =
+            vault_with(&[("Rating/music/Album.md", "first"), ("cover.png", "image")]);
+        let first = vault.trash_note("Rating/music/Album.md", "first").unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join(&first)).unwrap(),
+            "first"
+        );
+        assert!(!dir.path().join("Rating/music/Album.md").exists());
+        vault
+            .create_note("Rating/music/Album.md", "second")
+            .unwrap();
+        let second = vault.trash_note("Rating/music/Album.md", "second").unwrap();
+        assert_ne!(first, second);
+        assert_eq!(fs::read_to_string(dir.path().join(first)).unwrap(), "first");
+        assert_eq!(
+            fs::read_to_string(dir.path().join(second)).unwrap(),
+            "second"
+        );
+        assert_eq!(vault.list_files().unwrap().len(), 1);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("cover.png")).unwrap(),
+            "image"
+        );
+    }
+
+    #[test]
+    fn trash_refuses_stale_text_and_restores_a_note_changed_during_the_move() {
+        let (dir, vault) = vault_with(&[("note.md", "current")]);
+        assert!(matches!(
+            vault.trash_note("note.md", "old"),
+            Err(VaultError::Changed(_))
+        ));
+        let result = vault.trash_note_with("note.md", "current", || {
+            fs::write(dir.path().join("note.md"), "changed meanwhile").unwrap();
+        });
+        assert!(matches!(result, Err(VaultError::Changed(_))));
+        assert_eq!(vault.read_note("note.md").unwrap(), "changed meanwhile");
+        for path in ["../note.md", "/note.md", "cover.png", ".trash/note.md"] {
+            assert!(vault.trash_note(path, "").is_err());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn trash_refuses_symlinked_notes_folders_and_trash() {
+        use std::os::unix::fs::symlink;
+        let (dir, vault) = vault_with(&[("folder/note.md", "keep")]);
+        symlink(
+            dir.path().join("folder/note.md"),
+            dir.path().join("alias.md"),
+        )
+        .unwrap();
+        symlink(dir.path().join("folder"), dir.path().join("alias-folder")).unwrap();
+        assert!(vault.trash_note("alias.md", "keep").is_err());
+        assert!(vault.trash_note("alias-folder/note.md", "keep").is_err());
+        let outside = tempfile::tempdir().unwrap();
+        symlink(outside.path(), dir.path().join(".trash")).unwrap();
+        assert!(vault.trash_note("folder/note.md", "keep").is_err());
+        assert_eq!(vault.read_note("folder/note.md").unwrap(), "keep");
+        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
     }
 
     #[test]

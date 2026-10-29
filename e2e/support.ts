@@ -115,6 +115,20 @@ export async function clickAs(selector: string, how: 'meta' | 'middle' | 'right'
   );
 }
 
+/**
+ * The embedded driver's ElementClick (platform/executor.rs) calls el.focus() after el.click(),
+ * undoing an onClick handler that moves focus to a text field. Match a real pointer click's
+ * order for these controls: focus the button first, then let its click handler choose focus.
+ */
+export async function clickInPage(selector: string) {
+  await browser.execute((css) => {
+    const element = document.querySelector<HTMLElement>(css);
+    if (!element) throw new Error(`nothing matches ${css}`);
+    element.focus();
+    element.click();
+  }, selector);
+}
+
 /** Presses ⌘ and a key (⌥ too with `alt`), as the page sees it. */
 export async function pressCommand(key: string, options: { alt?: boolean } = {}) {
   await browser.execute(

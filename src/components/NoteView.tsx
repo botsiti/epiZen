@@ -1,3 +1,4 @@
+import { setMediaLists } from '../lib/mediaProperties';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { readNote, writeNote, type VaultFile } from '../lib/api';
 import type { LinkTarget } from '../lib/completion';
@@ -215,6 +216,7 @@ export function NoteView(props: ViewProps) {
         text={note.text}
         files={files}
         onOpenLink={onOpenLink}
+        onSaveLists={(edits) => new Promise<void>((resolve, reject) => change((text) => setMediaLists(text, edits), undefined, undefined, (problem) => problem ? reject(new Error(problem)) : resolve()))}
         onSetProperty={actions.onSetProperty}
         onSaveThoughts={(before, after) =>
           new Promise<void>((resolve, reject) =>

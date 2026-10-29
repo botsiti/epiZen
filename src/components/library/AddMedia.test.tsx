@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNote, fetchImageIntoVault, lookupJson, type VaultFile } from '../../lib/api';
 import { kindSpec } from '../../lib/library';
+import { podcastSettings, type PodcastArtwork } from '../../lib/podcasts';
 import { AddMedia } from './AddMedia';
+import { LibraryView } from './LibraryView';
 
 // The recorded answers (test/fixtures/lookup/), picked by URL as the e2e build picks them: iTunes's
 // search for "lex fridman" and the show's episodes, Wikipedia's for "american fiction film" and
@@ -52,6 +54,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.mocked(lookupJson).mockReset();
   vi.mocked(lookupJson).mockImplementation((url: string) => Promise.resolve(recorded(answerFor(url))));
+  vi.mocked(fetchImageIntoVault).mockReset();
   vi.mocked(fetchImageIntoVault).mockImplementation((_url: string, path: string) => Promise.resolve(path.replace(/\.jpg$/, '.png')));
   vi.mocked(createNote).mockClear();
 });
@@ -69,6 +72,25 @@ async function toEpisodes() {
 }
 
 describe('adding a podcast episode', () => {
+  it.each<PodcastArtwork>(['show', 'episode'])('downloads the artwork chosen in the %s setting through the library', async (artwork) => {
+    const user = userEvent.setup();
+    const onCreated = vi.fn(() => Promise.resolve());
+    const showArt = 'https://is1-ssl.mzstatic.com/show/600x600bb.jpg';
+    const episodeArt = 'https://is1-ssl.mzstatic.com/episode/600x600bb.jpg';
+    vi.mocked(lookupJson).mockImplementation((url) => Promise.resolve({ results: url.includes('/lookup')
+      ? [{ kind: 'podcast-episode', trackId: 2, trackName: 'Sleep', collectionName: 'Huberman Lab', artworkUrl600: episodeArt }]
+      : [{ kind: 'podcast', collectionId: 1, collectionName: 'Huberman Lab', artworkUrl600: showArt }] }));
+    render(<LibraryView library={new Map()} files={files} tab="podcast" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} today={new Date(2026, 9, 28)}
+      podcastArtwork={podcastSettings({ artwork }).artwork} onOpenNote={vi.fn()} onCreated={onCreated} onChanged={vi.fn(() => Promise.resolve())} />);
+    await user.click(screen.getAllByTestId('library-add').find((button) => button.getAttribute('data-kind') === 'podcast')!);
+    await user.type(screen.getByTestId('add-search'), 'Huberman');
+    await user.click(await screen.findByTestId('add-result'));
+    await user.click(await screen.findByTestId('add-episode'));
+    await user.click(screen.getByTestId('add-save'));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(fetchImageIntoVault).toHaveBeenCalledWith(artwork === 'show' ? showArt : episodeArt, 'Rating/podcasts/_attachments/sleep.jpg');
+  });
+
   it('finds the show, lists its episodes newest first, and narrows them by what is typed', async () => {
     const { user } = await toEpisodes();
     expect(lookupJson).toHaveBeenLastCalledWith('https://itunes.apple.com/lookup?id=1434243584&media=podcast&entity=podcastEpisode&limit=200');
@@ -110,7 +132,7 @@ describe('adding a podcast episode', () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     const path = 'Rating/podcasts/Jensen Huang - NVIDIA – The $4 Trillion Company & the AI Revolution.md';
     expect(fetchImageIntoVault).toHaveBeenCalledWith(
-      expect.stringMatching(/^https:\/\/is1-ssl\.mzstatic\.com\/.+\/600x600bb\.jpg$/),
+      'https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/ea/42/d7/ea42d7b1-8d4e-dd97-da5d-c508756550ca/mza_16782152345430036863.jpg/600x600bb.jpg',
       'Rating/podcasts/_attachments/jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.jpg',
     );
     expect(createNote).toHaveBeenCalledWith(
@@ -136,12 +158,19 @@ describe('adding a podcast episode', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('enters an episode by hand with the show filled in', async () => {
+  it('enters an episode by hand with the show and its cover filled in', async () => {
     const { user } = await toEpisodes();
     await user.click(screen.getByTestId('add-manual'));
     expect(screen.getByTestId('add-title')).toHaveValue('');
     expect(screen.getByTestId('add-maker')).toHaveValue('Lex Fridman Podcast');
     expect(screen.getByTestId('add-year')).toHaveValue('');
+    await user.type(screen.getByTestId('add-title'), 'An older episode');
+    await user.click(screen.getByTestId('add-save'));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(fetchImageIntoVault).toHaveBeenCalledWith(
+      'https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/ea/42/d7/ea42d7b1-8d4e-dd97-da5d-c508756550ca/mza_16782152345430036863.jpg/600x600bb.jpg',
+      'Rating/podcasts/_attachments/an-older-episode.jpg',
+    );
   });
 });
 

@@ -16,6 +16,7 @@ export function KindMark({ kind }: { kind: MediaKind }) {
 }
 
 const TOOLS = {
+  calendar: 'M3 3.5h10v10H3zM3 6.5h10M5.5 2v3M10.5 2v3M5.5 9h.5M9.5 9h.5',
   covers: 'M2.75 2.75h4v4h-4zM9.25 2.75h4v4h-4zM2.75 9.25h4v4h-4zM9.25 9.25h4v4h-4z',
   list: 'M2.75 3.75h1.5M6.75 3.75h6.5M2.75 8h1.5M6.75 8h6.5M2.75 12.25h1.5M6.75 12.25h6.5',
   choose: 'M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5',
