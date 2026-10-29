@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { VaultFile } from '../../lib/api';
@@ -121,17 +121,27 @@ describe("the library's All tab", () => {
     const user = userEvent.setup();
     renderLibrary();
     const day = (n: number) => screen.getAllByTestId('cover-day').find((cell) => cell.getAttribute('data-day') === String(n))!;
+    await user.click(screen.getByTestId('library-calendar-open'));
     expect(day(21)).toHaveAttribute('data-count', '2');
+    await user.keyboard('{Escape}');
     await openTool(user, 'library-filter');
     await user.click(byData('genre-chip', 'data-genre', 'sci-fi'));
     expect(cards()).toEqual(['Rating/kino/Static Bloom.md']);
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByTestId('library-calendar-open'));
     expect(day(21)).toHaveAttribute('data-count', '1');
+    await user.keyboard('{Escape}');
+    await openTool(user, 'library-filter');
     await user.click(byData('genre-chip', 'data-genre', ''));
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByTestId('library-calendar-open'));
     expect(day(21)).toHaveAttribute('data-count', '2');
   });
 
-  it('draws several covers on a day of the calendar, the best rated in front', () => {
+  it('draws several covers on a day of the calendar, the best rated in front', async () => {
+    const user = userEvent.setup();
     renderLibrary();
+    await user.click(screen.getByTestId('library-calendar-open'));
     expect(screen.getByTestId('cover-calendar-month')).toHaveTextContent('September 2026');
     const day = (n: number) => screen.getAllByTestId('cover-day').find((cell) => cell.getAttribute('data-day') === String(n))!;
     expect(day(21)).toHaveAttribute('data-count', '2');
@@ -189,7 +199,7 @@ describe("the library's list", () => {
     const menu = await openTool(user, 'library-view-menu');
     expect(within(menu).getAllByTestId('library-view').map((option) => [option.textContent, option.getAttribute('aria-checked')])).toEqual([
       ['Coversthe latest 15', 'true'],
-      ['Listall of them, as a table', 'false'],
+      ['Listthe latest 10, with more on demand', 'false'],
     ]);
     // The menu takes the focus on the chosen one; the arrows move in it.
     expect(byData('library-view', 'data-view', 'covers')).toHaveFocus();
@@ -266,7 +276,8 @@ describe("the library's list", () => {
       ['Yearnewest first', 'false'],
     ]);
     await user.click(byData('sort', 'data-sort', 'title'));
-    expect(screen.queryByTestId('library-sort-menu')).not.toBeInTheDocument();
+    expect(screen.getByTestId('library-sort-menu')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
     expect(sorted()).toEqual([['Title', 'ascending']]);
     expect(rows()).toEqual(['Rating/music/Monastery Wi-Fi.md', 'Rating/music/Salt & Graphite.md', 'Rating/kino/Static Bloom.md', 'Rating/books/Thinking in Seasons.md', 'Rating/podcasts/Why Dogs Dream.md']);
 
@@ -277,10 +288,10 @@ describe("the library's list", () => {
     expect(rows()[0]).toBe('Rating/books/Thinking in Seasons.md');
     view.unmount();
 
-    // The covers are the latest, whatever the list is sorted by; the list keeps its sort.
+    // Covers and list share the same sort controls.
     const covers = renderLibrary('all', 'covers');
-    expect(screen.queryByTestId('library-sort')).not.toBeInTheDocument();
-    expect(cards()[0]).toBe('Rating/music/Monastery Wi-Fi.md');
+    expect(screen.getByTestId('library-sort')).toBeInTheDocument();
+    expect(cards()[0]).toBe('Rating/books/Thinking in Seasons.md');
     covers.view.unmount();
     renderLibrary('all', 'list');
     expect(sorted()).toEqual([['By', 'ascending']]);
@@ -378,15 +389,56 @@ describe('a long library', () => {
     view.rerender(<LibraryView {...props} layout="covers" />);
     expect(screen.getByTestId('library-see-all')).toHaveTextContent('See all 40 in the list');
     view.rerender(<LibraryView {...props} layout="list" />);
-    expect(screen.getByTestId('library-count')).toHaveTextContent('40 results');
+    expect(screen.getByTestId('library-count')).toHaveTextContent('Showing 10 of 40');
     expect(screen.queryByTestId('library-search')).not.toBeInTheDocument();
   });
 
-  it('puts the list on the page a few screens at once and the rest just after, only the first screen rising into place', async () => {
+  it('loads ten rows at a time only when more are requested', async () => {
+    const user = userEvent.setup();
     renderLibrary('album', 'list', shelved);
-    const rising = (items: Element[]) => items.map((item) => item.classList.contains('rise'));
-    expect(screen.getAllByTestId('library-row')).toHaveLength(36);
-    await waitFor(() => expect(screen.getAllByTestId('library-row')).toHaveLength(40));
-    expect(rising(screen.getAllByTestId('library-row'))).toEqual(Array.from({ length: 40 }, (_, i) => i < 24));
+    expect(screen.getAllByTestId('library-row')).toHaveLength(10);
+    await user.click(screen.getByTestId('library-show-more'));
+    expect(screen.getAllByTestId('library-row')).toHaveLength(20);
+    await user.click(screen.getByTestId('library-show-more'));
+    expect(screen.getAllByTestId('library-row')).toHaveLength(30);
+  });
+});
+
+describe('library controls', () => {
+  it('opens cards and rows in a new tab with Command-click and offers deletion on right-click', async () => {
+    const user = userEvent.setup();
+    const { view, props, onOpenNote } = renderLibrary('album');
+    const onDelete = vi.fn(() => Promise.resolve('.trash/test.md'));
+    view.rerender(<LibraryView {...props} onDelete={onDelete} />);
+    fireEvent.click(screen.getAllByTestId('library-card')[0]!, { metaKey: true });
+    expect(onOpenNote).toHaveBeenLastCalledWith(expect.any(String), true);
+    fireEvent.contextMenu(screen.getAllByTestId('library-card')[0]!, { clientX: 30, clientY: 40 });
+    await user.click(screen.getByTestId('library-delete'));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onDelete).not.toHaveBeenCalled();
+    view.rerender(<LibraryView {...props} layout="list" onDelete={onDelete} />);
+    fireEvent.click(screen.getAllByTestId('library-row')[0]!, { metaKey: true });
+    expect(onOpenNote).toHaveBeenLastCalledWith(expect.any(String), true);
+  });
+  it('starts with ten rows, reveals more, filters by listened year and reverses date order', async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 23 }, (_, i) => ({ ...library.get('album')![0]!, path: `Rating/music/Album ${i}.md`, title: `Album ${i}`, date: i < 10 ? `2025-01-${String(i + 1).padStart(2, '0')}` : `2026-02-${String(i).padStart(2, '0')}`, year: '1994' }));
+    renderLibrary('album', 'list', new Map([['album', many]]));
+    expect(screen.getAllByTestId('library-row')).toHaveLength(10);
+    await user.click(screen.getByTestId('library-show-more'));
+    expect(screen.getAllByTestId('library-row')).toHaveLength(20);
+    await openTool(user, 'library-filter');
+    await user.click(byData('year-filter', 'data-year', '2025'));
+    expect(screen.getAllByTestId('library-row')).toHaveLength(10);
+    await user.keyboard('{Escape}');
+    await user.click(screen.getAllByTestId('list-sort').find((button) => button.dataset.sort === 'recent')!);
+    expect(screen.getAllByTestId('library-row')[0]).toHaveAttribute('data-path', 'Rating/music/Album 0.md');
+    await user.click(screen.getByTestId('library-calendar-open'));
+    expect(screen.getByRole('dialog', { name: 'Library calendar' })).toBeInTheDocument();
+    expect(screen.getByTestId('cover-calendar-month')).toHaveTextContent('January 2025');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await openTool(user, 'library-filter');
+    await user.click(screen.getByTestId('filter-clear'));
   });
 });

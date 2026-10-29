@@ -1,26 +1,30 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { formatDate, parseDate, today } from '../lib/dates';
 import { parseBirthDate } from '../lib/home';
 import { PERIODS, startOfPeriod, type Period, type PeriodicSettings } from '../lib/periodic';
+import { podcastSettings, type PodcastSettings } from '../lib/podcasts';
 
 interface Props {
   periodic: PeriodicSettings;
   /** As stored, `YYYY-MM-DD`, or `''` when there is none. */
   birthDate: string;
+  podcasts: PodcastSettings;
   folders: string[];
   notes: string[];
-  onSave: (settings: { periodic: PeriodicSettings; birthDate: string }) => Promise<void>;
+  onSave: (settings: { periodic: PeriodicSettings; birthDate: string; podcasts: PodcastSettings }) => Promise<void>;
 }
 
 const TITLES: Record<Period, string> = { day: 'Daily notes', week: 'Weekly notes', month: 'Monthly notes' };
 
 /**
  * Where periodic notes go, how they are named and which template they start from, as in
- * Obsidian's daily notes settings; and the birth date the homepage counts from.
+ * Obsidian's daily notes settings; the homepage's birth date; and artwork for new podcast episodes.
  */
-export function SettingsScreen({ periodic, birthDate, folders, notes, onSave }: Props) {
+export function SettingsScreen({ periodic, birthDate, podcasts, folders, notes, onSave }: Props) {
+  const artworkId = useId();
   const [draft, setDraft] = useState(periodic);
   const [birth, setBirth] = useState(birthDate);
+  const [podcastDraft, setPodcastDraft] = useState(podcasts);
   const [state, setState] = useState<{ saved?: boolean; error?: string }>({});
   const set = (period: Period, key: 'folder' | 'format' | 'template', value: string) => {
     setDraft((prev) => ({ ...prev, [period]: { ...prev[period], [key]: value } }));
@@ -45,7 +49,7 @@ export function SettingsScreen({ periodic, birthDate, folders, notes, onSave }: 
       setState({ error: 'A birth date is a day that has been, written YYYY-MM-DD, like 1990-04-21.' });
       return;
     }
-    onSave({ periodic: draft, birthDate: birth.trim() }).then(
+    onSave({ periodic: draft, birthDate: birth.trim(), podcasts: podcastDraft }).then(
       () => setState({ saved: true }),
       (err: unknown) => setState({ error: String(err) }),
     );
@@ -54,8 +58,8 @@ export function SettingsScreen({ periodic, birthDate, folders, notes, onSave }: 
   return (
     <section className="screen" data-testid="settings">
       <p className="eyebrow">Settings</p>
-      <h1>Periodic notes</h1>
-      <p className="muted">The calendar and links like [[24.10.2026]] open these notes, or create them from their template.</p>
+      <h1>Preferences</h1>
+      <p className="muted">Set up your periodic notes, homepage and podcast artwork.</p>
       <form className="form" onSubmit={submit}>
         {PERIODS.map((period) => (
           <fieldset className="settings-group" key={period} data-testid={`settings-${period}`}>
@@ -90,6 +94,28 @@ export function SettingsScreen({ periodic, birthDate, folders, notes, onSave }: 
               data-testid="settings-birth-date"
             />
             <small className="field-hint">For the memento mori: the weeks till 30. It stays in Epizen’s settings, never in the vault.</small>
+          </label>
+        </fieldset>
+        <fieldset className="settings-group" data-testid="settings-podcasts">
+          <legend className="eyebrow">Podcasts</legend>
+          <label className="field">
+            <span id={`${artworkId}-label`}>Artwork for new episodes</span>
+            <select
+              value={podcastDraft.artwork}
+              onChange={(event) => {
+                setPodcastDraft(podcastSettings({ artwork: event.target.value }));
+                setState({});
+              }}
+              data-testid="settings-podcast-artwork"
+              aria-labelledby={`${artworkId}-label`}
+              aria-describedby={`${artworkId}-hint`}
+            >
+              <option value="show">Show thumbnail</option>
+              <option value="episode">Episode artwork</option>
+            </select>
+            <small className="field-hint" id={`${artworkId}-hint`}>
+              New episodes automatically use this artwork when saved. If it is unavailable, the other artwork is used. Manually entered episodes use the selected show’s thumbnail.
+            </small>
           </label>
         </fieldset>
         <datalist id="vault-folders">

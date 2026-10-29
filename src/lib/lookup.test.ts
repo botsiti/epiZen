@@ -271,6 +271,18 @@ describe('a show\'s episodes', () => {
     expect(episodeTitle('10 years result in 1 year')).toBe('10 years result in 1 year');
   });
 
+  it('uses the selected show’s artwork even when an episode has its own, and falls back when the show has none', () => {
+    const answer = { results: [{ kind: 'podcast-episode', trackId: 1, trackName: 'An episode', artworkUrl600: 'https://example.com/episode/600x600bb.jpg' }] };
+    const withShow = parseEpisodes(answer, { ...show, thumb: 'https://example.com/show/200x200bb.jpg', cover: 'https://example.com/show/600x600bb.jpg' })[0];
+    expect(withShow).toMatchObject({ thumb: 'https://example.com/show/200x200bb.jpg', cover: 'https://example.com/show/600x600bb.jpg' });
+    const withoutShow = parseEpisodes(answer, { ...show, thumb: undefined, cover: undefined })[0];
+    expect(withoutShow).toMatchObject({ thumb: 'https://example.com/episode/200x200bb.jpg', cover: 'https://example.com/episode/600x600bb.jpg' });
+    const preferEpisode = parseEpisodes(answer, show, 'episode')[0];
+    expect(preferEpisode).toMatchObject({ thumb: 'https://example.com/episode/200x200bb.jpg', cover: 'https://example.com/episode/600x600bb.jpg' });
+    const noEpisodeArt = parseEpisodes({ results: [{ kind: 'podcast-episode', trackId: 2, trackName: 'Without episode art' }] }, show, 'episode')[0];
+    expect(noEpisodeArt).toMatchObject({ thumb: show.thumb, cover: show.cover });
+  });
+
   it('narrows the episodes by every typed word, in the title first, then in what they are about', () => {
     expect(filterEpisodes(episodes, 'jensen').map((episode) => episode.id)).toEqual(['1000756806357']);
     expect(filterEpisodes(episodes, '  NVIDIA  revolution ')).toHaveLength(1);

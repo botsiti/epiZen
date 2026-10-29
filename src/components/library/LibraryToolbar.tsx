@@ -1,8 +1,19 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { kindSpec, LATEST, type KindSpec, type LibraryLayout, type ListColumn, type MediaKind, type SortOrder } from '../../lib/library';
+import { LIST_PAGE_SIZE, type LibrarySort, type SortDirection } from '../../lib/libraryViews';
 import { KindMark, ToolMark } from './marks';
 
 interface Props {
+  years: string[];
+  selectedYears: string[];
+  onYears: (years: string[]) => void;
+  minimumRating?: number;
+  onMinimumRating: (rating?: number) => void;
+  direction: SortDirection;
+  onDirection: (direction: SortDirection) => void;
+  secondary?: LibrarySort;
+  onSecondary: (sort?: LibrarySort) => void;
+  onCalendar: () => void;
   layout: LibraryLayout;
   onLayout: (layout: LibraryLayout) => void;
   /** "533 results", or "The latest 15 of 533". */
@@ -27,7 +38,7 @@ interface Props {
 }
 
 /** The menu items in a panel, in order, for the arrow keys. */
-const itemsIn = (panel: HTMLElement | null) => [...(panel?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? [])];
+const itemsIn = (panel: HTMLElement | null) => [...(panel?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled), select:not(:disabled)') ?? [])];
 
 /**
  * A word in the toolbar that opens a small glass menu under it. The menu takes the focus (the
@@ -78,6 +89,7 @@ function Tool({
     if (open && panel.current && !panel.current.contains(document.activeElement)) itemsIn(panel.current)[0]?.focus();
   });
   const keys = (event: KeyboardEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).matches('select, input') && event.key !== 'Escape') return;
     const items = itemsIn(panel.current);
     const at = items.indexOf(document.activeElement as HTMLElement);
     const to = { ArrowDown: (at + 1) % items.length, ArrowUp: (at - 1 + items.length) % items.length, Home: 0, End: items.length - 1 }[event.key];
@@ -160,7 +172,7 @@ export function LibraryToolbar(props: Props) {
   const [searching, setSearching] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   const list = layout === 'list';
-  const filters = onKinds.size + (genre ? 1 : 0);
+  const filters = onKinds.size + (genre ? 1 : 0) + props.selectedYears.length + (props.minimumRating !== undefined ? 1 : 0);
   const columns: { column: ListColumn; name: string }[] = [
     { column: 'cover', name: 'Cover' },
     { column: 'maker', name: spec?.makerLabel ?? 'By' },
@@ -182,7 +194,7 @@ export function LibraryToolbar(props: Props) {
             <Item key={name} checked={layout === name} onSelect={() => onLayout(name)} testId="library-view" data={{ 'data-view': name }}>
               <ToolMark name={name} />
               <span className="tool-item-name">{names[name]}</span>
-              <span className="tool-item-hint">{name === 'covers' ? `the latest ${LATEST}` : 'all of them, as a table'}</span>
+              <span className="tool-item-hint">{name === 'covers' ? `the latest ${LATEST}` : `the latest ${LIST_PAGE_SIZE}, with more on demand`}</span>
             </Item>
           ))}
         </Tool>
@@ -196,16 +208,24 @@ export function LibraryToolbar(props: Props) {
         )}
       </div>
       <div className="toolbar-end">
-        {list && (
-          <Tool label="Sort" mark="sort" testId="library-sort" menuLabel="Sort" closes>
+        <button type="button" className="tool-button" onClick={props.onCalendar} aria-label="Open library calendar" title="Calendar" data-testid="library-calendar-open"><ToolMark name="calendar" /></button>
+        {
+          <Tool label="Sort" mark="sort" testId="library-sort" menuLabel="Sort">
             {SORTS.map((option) => (
               <Item key={option.sort} checked={sort === option.sort} onSelect={() => onSort(option.sort)} testId="sort" data={{ 'data-sort': option.sort }}>
                 <span className="tool-item-name">{option.name ?? spec?.makerLabel ?? 'By'}</span>
                 <span className="tool-item-hint">{option.hint}</span>
               </Item>
             ))}
+            <div className="tool-group" role="group" aria-label="Direction">
+              {(['asc', 'desc'] as const).map((direction) => <Item key={direction} checked={props.direction === direction} onSelect={() => props.onDirection(direction)} testId="sort-direction" data={{ 'data-direction': direction }}><span className="tool-item-name">{direction === 'asc' ? 'Ascending' : 'Descending'}</span><span className="tool-item-hint">{sort === 'recent' || sort === 'year' ? direction === 'asc' ? 'oldest first' : 'newest first' : direction === 'asc' ? 'A–Z / low to high' : 'Z–A / high to low'}</span></Item>)}
+            </div>
+            <div className="tool-group library-sort-secondary">
+              <label className="field"><span>Then by</span><select aria-label="Then by" value={props.secondary?.field ?? ''} onChange={(event) => props.onSecondary(event.target.value ? { field: event.target.value as SortOrder, direction: props.secondary?.direction ?? 'asc' } : undefined)}><option value="">None</option>{SORTS.filter((option) => option.sort !== sort).map((option) => <option key={option.sort} value={option.sort}>{option.name ?? spec?.makerLabel ?? 'By'}</option>)}</select></label>
+              {props.secondary && <label className="field"><span>Direction</span><select aria-label="Secondary direction" value={props.secondary.direction} onChange={(event) => props.secondary && props.onSecondary({ ...props.secondary, direction: event.target.value as SortDirection })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>}
+            </div>
           </Tool>
-        )}
+        }
         <Tool label="Filter" mark="filter" testId="library-filter" menuLabel="Filter" badge={filters}>
           <>
             {!spec && (
@@ -234,6 +254,13 @@ export function LibraryToolbar(props: Props) {
                 ))}
               </div>
             )}
+            <div role="group" aria-label="Year listened, watched or finished" className="tool-group">
+              <p className="tool-label">{spec?.dateLabel ?? 'Listened / watched / finished'} in</p>
+              {props.years.map((year) => <Item key={year} role="menuitemcheckbox" checked={props.selectedYears.includes(year)} onSelect={() => props.onYears(props.selectedYears.includes(year) ? props.selectedYears.filter((value) => value !== year) : [...props.selectedYears, year])} testId="year-filter" data={{ 'data-year': year }}><span className="tool-item-name">{year}</span></Item>)}
+            </div>
+            <div className="tool-group" role="group" aria-label="Minimum rating"><p className="tool-label">Rating at least</p>
+              {[undefined, 50, 70, 80, 90].map((rating) => <Item key={rating ?? 'any'} checked={props.minimumRating === rating} onSelect={() => props.onMinimumRating(rating)} testId="rating-filter" data={{ 'data-rating': String(rating ?? '') }}><span className="tool-item-name">{rating ?? 'Any rating'}</span></Item>)}
+            </div>
             {filters > 0 && (
               <button type="button" role="menuitem" className="tool-clear" onClick={onClear} tabIndex={-1} data-testid="filter-clear">
                 Clear the filters

@@ -27,6 +27,7 @@ import { useWorkspace } from './components/workspace/useWorkspace';
 import {
   closeNow,
   createNote,
+  trashNote,
   getSettings,
   guardClose,
   listFiles,
@@ -53,6 +54,7 @@ import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
 import { collectLibrary, hiddenColumns, isLibraryLayout, kindOfFolder, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
 import { collectMedia } from './lib/media';
+import { podcastSettings, type PodcastSettings } from './lib/podcasts';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
   fillTemplate,
@@ -185,6 +187,7 @@ export function App() {
   );
   const notes = useMemo(() => files.filter((file) => file.kind === 'note').map((file) => file.path.replace(/\.md$/i, '')), [files]);
   const periodic = useMemo(() => periodicSettings(settings), [settings]);
+  const podcasts = useMemo(() => podcastSettings(settings.podcasts), [settings.podcasts]);
   const periodicNotes = useMemo(() => periodicIndex(files, periodic), [files, periodic]);
   // Opens a screen in the tab in front, or in a new tab (⌘-click, or when the tab in front is pinned).
   const go = useCallback((next: View, newTab?: boolean) => update((prev) => open(prev, next, { newTab })), [update]);
@@ -307,6 +310,17 @@ export function App() {
     setFiles(found);
     setTexts(new Map(read.map((note) => [note.path, note.text])));
   }, []);
+  const deleteLibraryNote = useCallback(async (path: string) => {
+    if (!kindOfPath(path)) throw new Error('Only library notes can be deleted here.');
+    const unsaved = await flushAll();
+    if (unsaved.length) throw new Error('Save or recover the unsaved notes before deleting.');
+    const expected = await readNote(path);
+    const destination = await trashNote(path, expected);
+    update((previous) => previous.tabs.filter((tab) => notePath(currentView(tab)) === path).reduce((next, tab) => closeTab(next, tab.id), previous));
+    setFiles((previous) => previous.filter((file) => file.path !== path));
+    setTexts((previous) => { const next = new Map(previous); next.delete(path); return next; });
+    return destination;
+  }, [update]);
   // A library note opens as its media page; finding it a cover reads the vault again, for the note and its new image.
   const mediaPage = useMemo(() => {
     const spec = view.kind === 'note' ? kindOfPath(view.path) : undefined;
@@ -472,8 +486,8 @@ export function App() {
   );
   // An empty birth date removes the setting rather than keeping an empty one.
   const saveSettings = useCallback(
-    async (next: { periodic: PeriodicSettings; birthDate: string }) =>
-      setSettings(await updateSettings({ periodic: next.periodic, birthDate: next.birthDate.trim() || null })),
+    async (next: { periodic: PeriodicSettings; birthDate: string; podcasts: PodcastSettings }) =>
+      setSettings(await updateSettings({ periodic: next.periodic, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts })),
     [],
   );
 
@@ -771,6 +785,8 @@ export function App() {
                 today={now}
                 onOpenNote={openNote}
                 onCreated={mediaCreated}
+                onDelete={deleteLibraryNote}
+                podcastArtwork={podcasts.artwork}
                 onChanged={refresh}
               />
             )}
@@ -778,7 +794,7 @@ export function App() {
             {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
             {view.kind === 'new' && <NewNote key={tab.index} folders={folders} folder={view.folder} onCreate={create} />}
             {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
-            {view.kind === 'settings' && <SettingsScreen periodic={periodic} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} folders={folders} notes={notes} onSave={saveSettings} />}
+            {view.kind === 'settings' && <SettingsScreen periodic={periodic} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} folders={folders} notes={notes} onSave={saveSettings} />}
             {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
           </Fragment>
         </main>

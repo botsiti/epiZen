@@ -4,6 +4,7 @@ import { kindSpec, type KindSpec, type ListColumn, type MediaEntry, type SortOrd
 import { order } from '../periodic/effects';
 import { VaultImage } from '../VaultImage';
 import { KindMark } from './marks';
+import { sortDirection, type SortDirection } from '../../lib/libraryViews';
 import { useInBatches } from './useInBatches';
 
 interface Props {
@@ -12,10 +13,11 @@ interface Props {
   /** The tab's kind; none on All, where each row says its kind. */
   spec?: KindSpec;
   sort: SortOrder;
+  direction?: SortDirection;
   onSort: (sort: SortOrder) => void;
   /** The columns hidden from Properties. */
   hidden: readonly ListColumn[];
-  onOpen: (path: string) => void;
+  onOpen: (path: string, newTab?: boolean) => void;
   /** How many rows rise into place as it opens: those on its first screen. */
   rising: number;
 }
@@ -33,7 +35,7 @@ interface ColumnSpec {
 }
 
 /** The sorts that run A to Z; the others put the latest, the best or the newest first. */
-const ASCENDING: readonly SortOrder[] = ['title', 'maker'];
+
 
 /** A day as the list shows it: "27 Sep 2026". */
 function day(date: string): string {
@@ -63,7 +65,7 @@ const dash = <span className="faint">—</span>;
  * the kind, the year and the rating's bar. The headers sort, the same sorts as Sort. A row opens the note's page; ↑ and
  * ↓ move between rows. Rows are put on the page in batches, so 600 of them open as quickly as 20.
  */
-export function LibraryList({ entries, spec, sort, onSort, hidden, onOpen, rising }: Props) {
+export function LibraryList({ entries, spec, sort, direction = sortDirection(sort), onSort, hidden, onOpen, rising }: Props) {
   const count = useInBatches(entries.length);
   const { ref, width } = useWidth();
   // In a narrow pane the rating is its number alone.
@@ -155,7 +157,7 @@ export function LibraryList({ entries, spec, sort, onSort, hidden, onOpen, risin
         <div role="row" className="library-list-row">
           {columns.map((column) => {
             const on = column.sort === sort;
-            const ascending = column.sort !== undefined && ASCENDING.includes(column.sort);
+            const ascending = (on ? direction : column.sort ? sortDirection(column.sort) : 'desc') === 'asc';
             return (
               <div
                 key={column.column}
@@ -191,7 +193,7 @@ export function LibraryList({ entries, spec, sort, onSort, hidden, onOpen, risin
               role="row"
               className={i < rising ? 'library-list-row library-row rise' : 'library-list-row library-row'}
               style={style}
-              onClick={() => onOpen(entry.path)}
+              onClick={(event) => (event.metaKey || event.ctrlKey) ? onOpen(entry.path, true) : onOpen(entry.path)}
               data-testid="library-row"
               data-path={entry.path}
               data-kind={entry.kind}

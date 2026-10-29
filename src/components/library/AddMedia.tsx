@@ -14,6 +14,7 @@ import {
 } from '../../lib/library';
 import { formatDate } from '../../lib/dates';
 import { readDay } from '../../lib/datePicker';
+import type { PodcastArtwork } from '../../lib/podcasts';
 import {
   episodeLength,
   filterEpisodes,
@@ -39,6 +40,7 @@ interface Props {
   spec: KindSpec & { source: NonNullable<KindSpec['source']> };
   files: VaultFile[];
   today: Date;
+  podcastArtwork?: PodcastArtwork;
   onClose: () => void;
   /** The note was created: read the vault again and open it. */
   onCreated: (path: string) => Promise<void>;
@@ -84,7 +86,7 @@ function details(result: LookupResult): Promise<LookupResult> {
  * filled in, set the rating and the date, save. Saving downloads the cover into the kind's
  * `_attachments` folder and writes the note in the vault's format.
  */
-export function AddMedia({ spec, files, today, onClose, onCreated }: Props) {
+export function AddMedia({ spec, files, today, podcastArtwork = 'show', onClose, onCreated }: Props) {
   const [query, setQuery] = useState('');
   const [answer, setAnswer] = useState<Answers>();
   // A podcast's show, picked: its episodes are listed to pick one from.
@@ -178,6 +180,7 @@ export function AddMedia({ spec, files, today, onClose, onCreated }: Props) {
         ) : show ? (
           <Episodes
             show={show}
+            artwork={podcastArtwork}
             onPick={setPicked}
             onManual={() => setPicked({ id: `manual-${show.id}`, title: '', maker: show.title, genres: show.genres, thumb: show.thumb, cover: show.cover })}
             onBack={() => setShow(undefined)}
@@ -417,19 +420,19 @@ const SHOWN_EPISODES = 60;
 type Listing = { state: 'loading' } | { state: 'done'; episodes: EpisodeResult[] } | { state: 'error'; message: string };
 
 /** A picked show's latest episodes, newest first, narrowed by what is typed (here, without asking again). */
-function Episodes({ show, onPick, onManual, onBack }: { show: LookupResult; onPick: (episode: EpisodeResult) => void; onManual: () => void; onBack: () => void }) {
+function Episodes({ show, artwork, onPick, onManual, onBack }: { show: LookupResult; artwork: PodcastArtwork; onPick: (episode: EpisodeResult) => void; onManual: () => void; onBack: () => void }) {
   const [listing, setListing] = useState<Listing>({ state: 'loading' });
   const [filter, setFilter] = useState('');
   useEffect(() => {
     if (!show.episodes) return;
     let cancelled = false;
     lookupJson(show.episodes)
-      .then((json) => !cancelled && setListing({ state: 'done', episodes: parseEpisodes(json, show) }))
+      .then((json) => !cancelled && setListing({ state: 'done', episodes: parseEpisodes(json, show, artwork) }))
       .catch((err: unknown) => !cancelled && setListing({ state: 'error', message: reason(err) }));
     return () => {
       cancelled = true;
     };
-  }, [show]);
+  }, [show, artwork]);
   const episodes = listing.state === 'done' ? listing.episodes : [];
   const shown = filterEpisodes(episodes, filter);
   const words = filter.trim();
@@ -482,7 +485,7 @@ function Episodes({ show, onPick, onManual, onBack }: { show: LookupResult; onPi
             </span>
             <span className="add-result-text">
               <span className="add-result-title">Not there? Enter it yourself</span>
-              <span className="add-result-meta">The form with {show.title} filled in</span>
+              <span className="add-result-meta">The form with {show.title}{show.cover ? ' and its cover' : ''} filled in</span>
             </span>
           </button>
         </li>

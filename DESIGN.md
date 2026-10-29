@@ -104,6 +104,9 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   in accent, the note's folder faint.
 - **Forms**: a label above each field in the label style. Fields are surface fills with a hairline
   that turns accent on focus.
+- **Podcast settings**: one artwork preference for newly added episodes, defaulting to the show's
+  thumbnail. Episode artwork can be chosen instead; either falls back to the other when missing.
+  An episode entered by hand uses its selected show's thumbnail. The preference lives in app settings.
 - **Date fields**: a faint calendar mark inside the field's right edge. A click or focus opens a small
   month calendar under the field (over it when there's no room), in the pages' glass: the field's
   label small and faint, the month in the serif with the year faint, ‹ › as round chips; weekday
@@ -278,7 +281,7 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   before the maker, and posters and square covers stand on one line with their titles level. The
   covers in a grid, each with its rating on a small glass pill in the corner (a faint dash when not
   rated yet), the title, and the maker and year faint. Covers lift under the pointer and load as they
-  near the view. Last, a calendar of covers (Bookmory's book calendar), of everything the filters
+  near the view. A calendar button opens a dimmed dialog with a calendar of covers (Bookmory's book calendar), of everything the filters
   show: the month's name in the serif beside a strip of the year's twelve months, each a small bar of
   how many (the shown month in accent, with a glow), ‹ › to step, and the month's days as a grid,
   Monday first, each day showing the covers of what was listened to, watched or finished: up to
@@ -297,8 +300,9 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   and the newest, up for A to Z). A row lights softly under the pointer and in accent when focused;
   a click opens its page, ↑ ↓ Home End and Page Up and Down move between rows, Enter opens. In a
   narrower pane the genres go first, then the kind, the year and the rating's bar. A search that
-  finds nothing says so in one line, with "Clear the search". The rows go on the page a few screens
-  at a time, and only the first screen rises in, so six hundred open at once.
+  finds nothing says so in one line, with "Clear the search". The list starts with ten rows and offers Show 10 more. Sort direction can be reversed,
+  with a second sort for ties. Year filters use the listened, watched or finished date; kind,
+  genre and minimum rating filters combine. A calendar icon opens all matching dates in a dimmed dialog.
 - **Without a cover**: when notes in view have no cover, a faint line under the toolbar says how
   many of all that are in view (not only the latest fifteen), "533 without a cover · Find covers",
   the last two words in accent. A cover is the note's first
@@ -370,6 +374,17 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   new image; the old file stays (`src/lib/coverEdits.ts`). A podcast note is one episode, named after it,
   with Author (the show), Rating, Year (only when known, where the vault's notes that have one put it),
   Genre and Listened.
+
+### Library actions and properties
+
+- A right-click on a cover, calendar item or list row opens a compact action menu. Open in new
+  tab matches Command-click. Delete note asks once, then moves only the Markdown file into the
+  vault's hidden `.trash` folder, where it can be restored. Attachments remain available.
+- Genres and tags have an add/edit chip on the media page. Their values are ordinary YAML lists;
+  each save checks that the edited property still matches what the dialog opened with.
+- Albums can look up track listings on Wikipedia. Choose the album page and track listing, then
+  star favorites. Stars use the sage accent. The full `tracks` list and `favorite tracks` are
+  saved together in the Markdown frontmatter; the free-text Thoughts section stays editable below.
 
 ## Tabs and the right sidebar
 

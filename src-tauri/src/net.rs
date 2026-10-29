@@ -357,6 +357,12 @@ mod e2e {
             "en.wikipedia.org" if param("gsrsearch").ends_with(" film") => {
                 include_bytes!("../../test/fixtures/lookup/wikipedia-film.json")
             }
+            "en.wikipedia.org" if param("action") == "parse" => {
+                include_bytes!("../../test/fixtures/lookup/wikipedia-album-tracks.json")
+            }
+            "en.wikipedia.org" if param("list") == "search" => {
+                include_bytes!("../../test/fixtures/lookup/wikipedia-album-search.json")
+            }
             "en.wikipedia.org" => include_bytes!("../../test/fixtures/lookup/wikipedia-book.json"),
             // A picked one's Wikidata item (Life 3.0's for a book, American Fiction's for a
             // film), then the names of the people and genres in it.
@@ -369,7 +375,9 @@ mod e2e {
             "www.wikidata.org" if param("ids").contains("Q2076321") => {
                 include_bytes!("../../test/fixtures/lookup/wikidata-book-labels.json")
             }
-            "www.wikidata.org" => include_bytes!("../../test/fixtures/lookup/wikidata-film-labels.json"),
+            "www.wikidata.org" => {
+                include_bytes!("../../test/fixtures/lookup/wikidata-film-labels.json")
+            }
             "itunes.apple.com" if query.contains("media=podcast") => {
                 include_bytes!("../../test/fixtures/lookup/itunes-podcast.json")
             }

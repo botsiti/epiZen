@@ -1,4 +1,5 @@
 import { genreName, type KindSpec } from './library';
+import type { PodcastArtwork } from './podcasts';
 
 // Where "Add" finds an album, film, book or podcast episode: public services that need no account,
 // asked only when the user types a search, picks a result or a show. The backend
@@ -265,9 +266,10 @@ export function episodeTitle(name: string): string {
 /**
  * A show's episodes from its iTunes lookup, newest first: each a card whose maker is the show (as
  * the vault's podcast notes name it), with the year it came out, the show's genre and the
- * episode's own artwork, or the show's. Anything that isn't an episode is skipped, never thrown.
+ * preferred artwork (the show's by default), falling back to the other when missing.
+ * Anything that isn't an episode is skipped, never thrown.
  */
-export function parseEpisodes(answer: unknown, show: LookupResult): EpisodeResult[] {
+export function parseEpisodes(answer: unknown, show: LookupResult, preferredArtwork: PodcastArtwork = 'show'): EpisodeResult[] {
   const results = array(object(answer).results).map(object);
   const own = results.find((item) => item.kind === 'podcast');
   const genre = string(own?.primaryGenreName);
@@ -289,8 +291,8 @@ export function parseEpisodes(answer: unknown, show: LookupResult): EpisodeResul
         year: yearOf(released),
         // The show's genre, as its card had it; the episode's own only when the show has none.
         genres: genres.length ? genres : unique(array(item.genres).map((g) => string(object(g).name) ?? '')).slice(0, 1),
-        thumb: artwork(art, 200) ?? show.thumb,
-        cover: artwork(art, 600) ?? show.cover,
+        thumb: preferredArtwork === 'show' ? show.thumb ?? artwork(art, 200) : artwork(art, 200) ?? show.thumb,
+        cover: preferredArtwork === 'show' ? show.cover ?? artwork(art, 600) : artwork(art, 600) ?? show.cover,
         released,
         minutes: Number.isFinite(millis) && millis > 0 ? Math.round(millis / 60_000) : undefined,
         about: about?.replace(/\s+/g, ' ').trim(),

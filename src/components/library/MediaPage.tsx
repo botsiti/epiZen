@@ -3,13 +3,16 @@ import { createPortal } from 'react-dom';
 import type { VaultFile } from '../../lib/api';
 import type { LinkTarget } from '../../lib/completion';
 import { parseNote } from '../../lib/frontmatter';
-import { coverEmbed, keyIn, readEntry, type KindSpec } from '../../lib/library';
+import { coverEmbed, field, keyIn, readEntry, type KindSpec } from '../../lib/library';
 import { linkResolver } from '../../lib/links';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { followPointer, order } from '../periodic/effects';
 import { useVaultImage } from '../useVaultImage';
 import { FindCover } from './FindCover';
 import { RatingRing, ValueField } from './parts';
+import { MediaLabels } from './MediaLabels';
+import { AlbumTracks } from './AlbumTracks';
+import { propertyList, type ListChange } from '../../lib/mediaProperties';
 import { Thoughts } from './Thoughts';
 import '../periodic/periodic.css';
 import './library.css';
@@ -22,6 +25,7 @@ interface Props {
   onOpenLink: (target: string, fromPath: string, newTab?: boolean) => void;
   /** Writes one property of this note, over the note as it is on disk now. */
   onSetProperty: (key: string, value: string) => void;
+  onSaveLists?: (changes: ListChange[]) => Promise<void>;
   /** Writes the note's own text, under its properties, link and cover, from `before` to `after`. */
   onSaveThoughts: (before: string, after: string) => Promise<void>;
   /** The page was left with text that couldn't be saved. */
@@ -46,7 +50,7 @@ const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.par
  * is written right there.
  */
 export function MediaPage(props: Props) {
-  const { spec, path, text, files, onOpenLink, onSetProperty, onSaveThoughts, onUnsavedThoughts, linkTargets, onEdit, onOpenLibrary, warning, onCoverSaved } = props;
+  const { spec, path, text, files, onOpenLink, onSetProperty, onSaveThoughts, onUnsavedThoughts, linkTargets, onEdit, onOpenLibrary, warning, onCoverSaved, onSaveLists } = props;
   const resolve = useMemo(() => linkResolver(files), [files]);
   const { properties, body } = useMemo(() => parseNote(text), [text]);
   const entry = useMemo(() => readEntry(path, text, resolve), [path, text, resolve]);
@@ -128,15 +132,10 @@ export function MediaPage(props: Props) {
               {entry.year && <span className="media-year">{entry.year}</span>}
             </p>
           )}
-          {entry.genres.length > 0 && (
-            <ul className="media-genres" data-testid="media-genres">
-              {entry.genres.map((genre) => (
-                <li key={genre} className="media-genre">
-                  {genre}
-                </li>
-              ))}
-            </ul>
-          )}
+          {onSaveLists ? <>
+            {keys.genre && <MediaLabels label="Genres" property={key(keys.genre)} values={propertyList(field(properties, keys.genre))} onSave={onSaveLists} />}
+            <MediaLabels label="Tags" property={key('tags')} values={propertyList(field(properties, 'tags'))} onSave={onSaveLists} />
+          </> : <ul className="media-genres" data-testid="media-genres">{entry.genres.map((genre) => <li key={genre} className="media-genre">{genre}</li>)}</ul>}
           <div className="media-fields">
             <ValueField label={spec.dateLabel} value={entry.date} kind="date" onCommit={(value) => onSetProperty(key(keys.date), value)} testId="media-date" />
             {keys.started && (
@@ -165,19 +164,7 @@ export function MediaPage(props: Props) {
         </nav>
       </header>
 
-      {entry.tracks.length > 0 && (
-        <section className="card glass rise media-tracks" style={order(1)} data-testid="media-tracks">
-          <p className="tile-label">Favorite tracks</p>
-          <ol>
-            {entry.tracks.map((track, i) => (
-              <li key={`${track}-${i}`}>
-                <span className="media-track-number">{String(i + 1).padStart(2, '0')}</span>
-                <span>{/^\d+$/.test(track) ? `Track ${track}` : track}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
+      {spec.kind === 'album' && onSaveLists ? <AlbumTracks title={entry.title} maker={entry.maker} tracks={propertyList(field(properties, 'tracks'))} favorites={entry.tracks} favoriteKey={key(keys.tracks ?? 'favorite tracks')} onSave={onSaveLists} /> : entry.tracks.length > 0 && <section className="card glass media-tracks" data-testid="media-tracks"><p className="tile-label">Favorite tracks</p><ol>{entry.tracks.map((track) => <li key={track}><span>{/^\d+$/.test(track) ? `Track ${track}` : track}</span><span className="track-star">★</span></li>)}</ol></section>}
 
       <Thoughts
         spec={spec}
