@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -255,4 +255,20 @@ describe('adding a book from Wikipedia and Open Library', () => {
     await waitFor(() => expect(screen.getByTestId('add-hint')).toHaveTextContent("Open Library didn't answer; these are from Wikipedia."));
     expect(screen.getAllByTestId('add-result')).toHaveLength(1);
   });
+});
+
+it('offers library genre matches in the add form and saves the selection', async () => {
+  const user = userEvent.setup();
+  const album = kindSpec('album') as ReturnType<typeof kindSpec> & { source: 'musicbrainz' };
+  render(<AddMedia spec={album} files={files} today={new Date(2026, 9, 28)} genreSuggestions={['psychedelic', 'psychedelic rock', 'ambient']} onClose={vi.fn()} onCreated={vi.fn().mockResolvedValue(undefined)} />);
+  await user.click(screen.getByTestId('add-manual'));
+  await user.type(screen.getByTestId('add-title'), 'New album');
+  await user.type(screen.getByTestId('add-genre'), 'psycho');
+  expect(screen.getByRole('group', { name: 'Suggested genres' })).toHaveTextContent('psychedelic rock');
+  const suggestion = screen.getByRole('button', { name: 'psychedelic' });
+  expect(fireEvent.mouseDown(suggestion)).toBe(false);
+  await user.click(suggestion);
+  expect(screen.getByTestId('add-genre')).toHaveValue('');
+  await user.click(screen.getByTestId('add-save'));
+  await waitFor(() => expect(createNote).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('  - psychedelic\n')));
 });

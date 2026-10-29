@@ -52,7 +52,7 @@ import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
 import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
-import { collectLibrary, hiddenColumns, isLibraryLayout, kindOfFolder, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
+import { collectLibrary, genreCounts, hiddenColumns, isLibraryLayout, kindOfFolder, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
 import { collectMedia } from './lib/media';
 import { podcastSettings, type PodcastSettings } from './lib/podcasts';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
@@ -746,6 +746,7 @@ export function App() {
                 linkTargets={linkTargets}
                 periodic={periodicPage}
                 media={mediaPage}
+                genreSuggestions={mediaPage ? genreCounts(library.get(mediaPage.spec.kind) ?? []).map(([name]) => name) : []}
                 onQuestToggle={onQuestToggle}
                 onQuestProgress={onQuestProgress}
                 onQuestChange={onQuestChange}

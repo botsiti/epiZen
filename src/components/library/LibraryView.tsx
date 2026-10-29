@@ -299,7 +299,7 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
       {adder?.source &&
         createPortal(
           <ErrorBoundary label={`Adding ${a(adder.one)}`} frame={(message) => <div className="add-backdrop" onMouseDown={() => setAdding(undefined)}>{message}</div>}>
-            <AddMedia key={adder.kind} spec={{ ...adder, source: adder.source }} files={files} today={today} podcastArtwork={podcastArtwork} onClose={() => setAdding(undefined)} onCreated={onCreated} />
+            <AddMedia key={adder.kind} spec={{ ...adder, source: adder.source }} genreSuggestions={genreCounts(library.get(adder.kind) ?? []).map(([name]) => name)} files={files} today={today} podcastArtwork={podcastArtwork} onClose={() => setAdding(undefined)} onCreated={onCreated} />
           </ErrorBoundary>,
           document.body,
         )}

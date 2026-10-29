@@ -14,3 +14,15 @@ it('edits genres, retaining the draft after a save failure', async () => {
   await user.click(screen.getByRole('button', { name: 'Save' }));
   expect(onSave).toHaveBeenLastCalledWith([{ key: 'Genre', before: ['rock'], after: ['ambient'] }]);
 });
+
+it('suggests matching genres and saves a selected suggestion once', async () => {
+  const user = userEvent.setup(), onSave = vi.fn().mockResolvedValue(undefined);
+  render(<MediaLabels label="Genres" property="Genre" values={['rock']} suggestions={['psychedelic', 'psychedelic rock', 'rock']} onSave={onSave} />);
+  await user.click(screen.getByRole('button', { name: 'Edit genres' }));
+  await user.type(screen.getByRole('textbox'), 'PSYCHO');
+  expect(screen.getByRole('group', { name: 'Suggested genres' })).toHaveTextContent('psychedelic rock');
+  await user.click(screen.getByRole('button', { name: 'psychedelic' }));
+  expect(screen.getByRole('textbox')).toHaveValue('');
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  expect(onSave).toHaveBeenCalledWith([{ key: 'Genre', before: ['rock'], after: ['rock', 'psychedelic'] }]);
+});

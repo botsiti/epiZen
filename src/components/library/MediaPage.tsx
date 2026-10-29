@@ -19,6 +19,7 @@ import './library.css';
 
 interface Props {
   spec: KindSpec;
+  genreSuggestions?: string[];
   path: string;
   text: string;
   files: VaultFile[];
@@ -133,7 +134,7 @@ export function MediaPage(props: Props) {
             </p>
           )}
           {onSaveLists ? <>
-            {keys.genre && <MediaLabels label="Genres" property={key(keys.genre)} values={propertyList(field(properties, keys.genre))} onSave={onSaveLists} />}
+            {keys.genre && <MediaLabels suggestions={props.genreSuggestions} label="Genres" property={key(keys.genre)} values={propertyList(field(properties, keys.genre))} onSave={onSaveLists} />}
             <MediaLabels label="Tags" property={key('tags')} values={propertyList(field(properties, 'tags'))} onSave={onSaveLists} />
           </> : <ul className="media-genres" data-testid="media-genres">{entry.genres.map((genre) => <li key={genre} className="media-genre">{genre}</li>)}</ul>}
           <div className="media-fields">
