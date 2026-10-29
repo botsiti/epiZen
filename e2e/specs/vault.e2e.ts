@@ -914,6 +914,24 @@ describe('the demo vault', () => {
   });
 
   it('opens the day, week and month notes from the calendar', async () => {
+    await showMonth('September 2026');
+    // Library styles must not push the sidebar's month controls outside its hit area.
+    const controlsVisible = await browser.execute(() => {
+      const calendar = document.querySelector('[data-testid="calendar"]');
+      if (!calendar) return false;
+      const bounds = calendar.getBoundingClientRect();
+      return [...calendar.querySelectorAll('.calendar-head .icon-button')].every((button) => {
+        const box = button.getBoundingClientRect();
+        return box.left >= bounds.left && box.right <= bounds.right &&
+          document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)?.closest('button') === button;
+      });
+    });
+    expect(controlsVisible).toBe(true);
+    await $('[data-testid="calendar-next"]').click();
+    await expect($('[data-testid="calendar-month"]')).toHaveText('October 2026');
+    await $('[data-testid="calendar-prev"]').click();
+    await expect($('[data-testid="calendar-month"]')).toHaveText('September 2026');
+    await screenshot('14-calendar-month-controls');
     await showMonth('August 2026');
     await $('[data-testid="calendar-day"][data-date="2026-08-14"]').click();
     await expect(title()).toHaveText('14.08.2026');
@@ -981,9 +999,11 @@ describe('the demo vault', () => {
     expect(await $$('[data-testid="composer-category"][aria-checked="true"]').length).toBe(1);
     await $('[data-testid="composer-category"][data-category="sport"]').click();
     await expect($('[data-testid="composer-category"][data-category="sport"]')).toHaveAttribute('aria-checked', 'true');
+    await expect($('[data-testid="composer-text"]')).toBeFocused();
     await screenshot('25-day-task-composer');
-    await $('[data-testid="composer-text"]').setValue('evening run');
+    await browser.keys('evening run');
     await $('[data-testid="composer-add"]').click();
+    await expect($('[data-testid="composer-text"]')).toBeFocused();
     // A new task has no minutes; they are set on its card once it is on the list.
     const listed = summarised
       .replace('    - 16:37–17:09\n', '    - 16:37–17:09\n- [ ] #daily/sport — evening run\n')
@@ -1252,6 +1272,7 @@ describe('the demo vault', () => {
     await expect(popover).toHaveText(expect.stringContaining('19:00–20:00'));
     await $('[data-testid="block-popover"] [data-testid="pick-new"]').setValue('evening run');
     await $('[data-testid="block-popover"] [data-testid="pick-category"][data-category="sport"]').click();
+    await expect($('[data-testid="block-popover"] [data-testid="pick-new"]')).toBeFocused();
     // No calendar is called sport, so the plan goes to the default one.
     await expect($('[data-testid="plan-calendar"]')).toHaveValue('home');
     await browser.execute(() => document.querySelector('[data-testid="block-popover"]')?.scrollIntoView({ block: 'center' }));

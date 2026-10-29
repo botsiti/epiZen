@@ -585,7 +585,7 @@
   margin-bottom: var(--space-4);
 }
 
-.calendar-month {
+.cover-calendar-month {
   min-width: 180px;
   margin: 0;
   font: 500 30px/1 var(--display);
