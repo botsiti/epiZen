@@ -5,6 +5,7 @@ import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { DEMO_VAULT, FIXTURES, vaultCopy } from '../paths';
 import {
   clickAs,
+  clickInPage,
   clickCanvas,
   closeOtherTabs,
   closeTool,
@@ -1003,12 +1004,12 @@ describe('the demo vault', () => {
 
     await showTab('Tasks');
     expect(await $$('[data-testid="composer-category"][aria-checked="true"]').length).toBe(1);
-    await $('[data-testid="composer-category"][data-category="sport"]').click();
+    await clickInPage('[data-testid="composer-category"][data-category="sport"]');
     await expect($('[data-testid="composer-category"][data-category="sport"]')).toHaveAttribute('aria-checked', 'true');
     await expect($('[data-testid="composer-text"]')).toBeFocused();
     await screenshot('25-day-task-composer');
     await browser.keys('evening run');
-    await $('[data-testid="composer-add"]').click();
+    await clickInPage('[data-testid="composer-add"]');
     await expect($('[data-testid="composer-text"]')).toBeFocused();
     // A new task has no minutes; they are set on its card once it is on the list.
     const listed = summarised
@@ -1277,7 +1278,7 @@ describe('the demo vault', () => {
     await popover.waitForDisplayed();
     await expect(popover).toHaveText(expect.stringContaining('19:00–20:00'));
     await $('[data-testid="block-popover"] [data-testid="pick-new"]').setValue('evening run');
-    await $('[data-testid="block-popover"] [data-testid="pick-category"][data-category="sport"]').click();
+    await clickInPage('[data-testid="block-popover"] [data-testid="pick-category"][data-category="sport"]');
     await expect($('[data-testid="block-popover"] [data-testid="pick-new"]')).toBeFocused();
     // No calendar is called sport, so the plan goes to the default one.
     await expect($('[data-testid="plan-calendar"]')).toHaveValue('home');
@@ -1464,10 +1465,10 @@ describe('the demo vault', () => {
     await showMonth('August 2026');
     await $('[data-testid="calendar-day"][data-date="2026-08-14"]').click();
     await showTab('Tasks');
-    await $('[data-testid="composer-category"][data-category="sport"]').click();
+    await clickInPage('[data-testid="composer-category"][data-category="sport"]');
     await expect($('[data-testid="composer-text"]')).toBeFocused();
     await browser.keys('combined install check');
-    await $('[data-testid="composer-add"]').click();
+    await clickInPage('[data-testid="composer-add"]');
     await expect($('[data-testid="composer-text"]')).toBeFocused();
     await expect($('[data-testid="composer-text"]')).toHaveValue('');
     await browser.waitUntil(() => readFileSync(join(vaultCopy(), DAY), 'utf8').includes('- [ ] #daily/sport — combined install check'));
