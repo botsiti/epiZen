@@ -13,9 +13,12 @@ describe('a vault of 2,000 notes', () => {
       () =>
         new Promise<number>((done) => {
           const canvas = document.querySelector('.graph-canvas');
-          const start = performance.now();
+          let start: number | undefined;
           let frames = 0;
           const frame = () => {
+            // A background window can wait a long time for its first frame. Measure the
+            // frames after it starts, not that unrelated scheduling delay.
+            start ??= performance.now();
             frames += 1;
             const rect = canvas?.getBoundingClientRect();
             if (rect) {

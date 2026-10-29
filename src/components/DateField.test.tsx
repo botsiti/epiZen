@@ -111,6 +111,21 @@ describe('DateField', () => {
     expect(screen.getByTestId('date')).toHaveFocus();
   });
 
+  it('picks the focused day on Enter even without a synthesized button click', async () => {
+    const user = userEvent.setup();
+    const onPick = vi.fn();
+    render(<Field onPick={onPick} />);
+    await user.click(screen.getByTestId('date'));
+    await user.keyboard('{ArrowDown}{ArrowRight}');
+    const next = dayButton('2026-09-22');
+    expect(next).toHaveFocus();
+    fireEvent.keyDown(next!, { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledOnce();
+    expect(onPick).toHaveBeenCalledWith('2026-09-22');
+    expect(picker()).toBeNull();
+    expect(screen.getByTestId('date')).toHaveFocus();
+  });
+
   it('closes with Escape, from the field or the calendar, and the Escape goes no further', async () => {
     const user = userEvent.setup();
     const behind = vi.fn();

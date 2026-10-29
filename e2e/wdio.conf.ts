@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TauriCapabilities } from '@wdio/tauri-service';
 import { makeBigVault } from './big-vault';
+import { failureScreenshotName } from './failure-screenshot';
 import { APP, COPY_PREFIX, DEMO_VAULT, EVIDENCE, PERIODIC, vaultCopy } from './paths';
 
 // Tests only ever touch a copy of the demo vault. The launcher makes the copy once;
@@ -62,7 +63,7 @@ export const config: WebdriverIO.Config = {
     mkdirSync(EVIDENCE, { recursive: true });
   },
   async afterTest(test, _context, { passed }) {
-    if (!passed) await browser.saveScreenshot(join(EVIDENCE, `FAILED ${test.parent} - ${test.title}.png`));
+    if (!passed) await browser.saveScreenshot(join(EVIDENCE, failureScreenshotName(test.parent, test.title)));
   },
   onComplete() {
     rmSync(dirname(vaultCopy()), { recursive: true, force: true });

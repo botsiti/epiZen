@@ -215,6 +215,13 @@ function Calendar({ id, anchor, panelRef, value, today, label, keyboard, onPick,
       onLeave();
       return;
     }
+    if (event.key === 'Enter' && grid.current?.contains(event.target as Node)) {
+      // Pick explicitly: WebKit's WebDriver does not synthesize a button click for Enter.
+      event.preventDefault();
+      event.stopPropagation();
+      onPick(dayValue(focus));
+      return;
+    }
     const next = moveDay(focus, event.key, event.shiftKey);
     if (!next) return;
     event.preventDefault();
