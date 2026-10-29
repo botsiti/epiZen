@@ -149,6 +149,24 @@ describe('the day page', () => {
     expect(act.onSetMinutes).toHaveBeenCalledWith(expect.objectContaining({ line: 19 }), 75);
   });
 
+  it('offers every category and supports keyboard selection when adding a task', async () => {
+    const user = userEvent.setup();
+    const act = actions();
+    const categories = ['code', 'business', 'sport', 'kaizen', 'meditation', 'leisure', 'book', 'english', 'biology', 'cinema', 'extra'];
+    render(<PeriodicPage spec={{ ...spec('day'), categories }} path="d.md" text={DAY} actions={act} />);
+    await user.click(screen.getByRole('tab', { name: 'Tasks' }));
+    const last = screen.getByRole('radio', { name: 'extra' });
+    await user.click(last);
+    expect(last).toHaveAttribute('aria-checked', 'true');
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: 'code' })).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(last).toHaveFocus();
+    await user.type(screen.getByTestId('composer-text'), 'A new task{Enter}');
+    expect(act.onAddTask).toHaveBeenCalledWith('extra', 'A new task');
+    expect(screen.getByTestId('composer-text')).toHaveValue('');
+  });
+
   it('shows a task card’s minutes, not its time blocks', async () => {
     const user = userEvent.setup();
     render(<PeriodicPage spec={spec('day')} path="d.md" text={DAY} actions={actions()} />);
