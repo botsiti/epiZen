@@ -41,6 +41,7 @@ interface ViewProps extends NoteProps {
   /** For a daily, weekly or monthly note: what its page reads from the rest of the vault. */
   periodic?: PeriodicSpec;
   /** For a note in one of the library's folders: its kind. A rated one opens as a media page. */
+  genreSuggestions?: string[];
   media?: { spec: KindSpec; onOpenLibrary: () => void; onCoverSaved: () => Promise<void> };
   onOpenNote: (path: string) => void;
   /** Opens a day, week or month, creating its note from the template if it has none. */
@@ -212,6 +213,7 @@ export function NoteView(props: ViewProps) {
     return (
       <MediaPage
         spec={media.spec}
+        genreSuggestions={props.genreSuggestions}
         path={path}
         text={note.text}
         files={files}

@@ -35,11 +35,13 @@ import { useEscape } from '../calendar/useEscape';
 import { DateField } from '../DateField';
 import { order } from '../periodic/effects';
 import { LookupCover, RatingRing } from './parts';
+import { GenreSuggestions } from './GenreSuggestions';
 
 interface Props {
   spec: KindSpec & { source: NonNullable<KindSpec['source']> };
   files: VaultFile[];
   today: Date;
+  genreSuggestions?: string[];
   podcastArtwork?: PodcastArtwork;
   onClose: () => void;
   /** The note was created: read the vault again and open it. */
@@ -86,7 +88,7 @@ function details(result: LookupResult): Promise<LookupResult> {
  * filled in, set the rating and the date, save. Saving downloads the cover into the kind's
  * `_attachments` folder and writes the note in the vault's format.
  */
-export function AddMedia({ spec, files, today, podcastArtwork = 'show', onClose, onCreated }: Props) {
+export function AddMedia({ spec, files, today, genreSuggestions = [], podcastArtwork = 'show', onClose, onCreated }: Props) {
   const [query, setQuery] = useState('');
   const [answer, setAnswer] = useState<Answers>();
   // A podcast's show, picked: its episodes are listed to pick one from.
@@ -171,6 +173,7 @@ export function AddMedia({ spec, files, today, podcastArtwork = 'show', onClose,
             key={picked?.id ?? 'manual'}
             spec={spec}
             files={files}
+            genreSuggestions={genreSuggestions}
             today={today}
             result={picked}
             backLabel={show ? '← Episodes' : '← Results'}
@@ -263,6 +266,7 @@ function ResultCard({ spec, result, mixed, onPick }: { spec: KindSpec; result: L
 function AddForm({
   spec,
   files,
+  genreSuggestions,
   today,
   result,
   backLabel,
@@ -271,6 +275,7 @@ function AddForm({
 }: {
   spec: KindSpec;
   files: VaultFile[];
+  genreSuggestions: string[];
   today: Date;
   result?: LookupResult;
   backLabel: string;
@@ -350,7 +355,7 @@ function AddForm({
             </label>
           )}
         </div>
-        <div className="field">
+        <div className="field" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) addGenre(); }}>
           <span>Genres</span>
           <div className="add-genres">
             {draft.genres.map((name) => (
@@ -367,11 +372,12 @@ function AddForm({
                   addGenre();
                 }
               }}
-              onBlur={addGenre}
+              aria-label="Add genres"
               placeholder="add a genre"
               data-testid="add-genre"
             />
           </div>
+          <GenreSuggestions query={genre} selected={draft.genres} suggestions={genreSuggestions} onSelect={(name) => { set({ genres: [...draft.genres, name] }); setGenre(''); }} />
         </div>
         <div className="add-pair">
           <label className="field is-short">

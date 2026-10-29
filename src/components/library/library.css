@@ -2310,3 +2310,7 @@
 .library-calendar-dialog .cover-day { min-height: clamp(58px, calc((86vh - 260px) / 6), 82px); padding: 4px; }
 .library-calendar-dialog .cover-day-cover { height: clamp(32px, calc((86vh - 260px) / 6 - 24px), 54px); }
 .library-calendar-dialog .cover-fan { height: clamp(32px, calc((86vh - 260px) / 6 - 24px), 54px); }
+
+.genre-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.genre-suggestions button { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-muted); padding: 6px 10px; cursor: pointer; }
+.genre-suggestions button:hover, .genre-suggestions button:focus-visible { color: var(--text); border-color: var(--accent); }

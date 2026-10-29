@@ -407,6 +407,11 @@ describe('the demo vault', () => {
     await expect($('[data-testid="add-title"]')).toHaveValue('Dog Man Star');
     await expect($('[data-testid="add-maker"]')).toHaveValue('Suede');
     await expect($('[data-testid="add-year"]')).toHaveValue('1994');
+    await $('[data-testid="add-genre"]').setValue('ambie');
+    const suggestedAmbient = $('[aria-label="Suggested genres"]').$('button=ambient');
+    await suggestedAmbient.waitForDisplayed();
+    await suggestedAmbient.click();
+    await $('[title="Remove ambient"]').click();
     // Typed, not picked: the field still takes a date. Pressing the rating closes its calendar.
     await $('[data-testid="add-date"]').click();
     await $('[data-testid="add-date"]').setValue('2026-10-07');
@@ -426,6 +431,12 @@ describe('the demo vault', () => {
     const saved = readFileSync(join(vaultCopy(), 'Rating/music/_attachments/dog-man-star.png'));
     expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);
     await expect($('[data-testid="rating-ring"]')).toHaveAttribute('data-value', '86');
+    await $('[aria-label="Edit genres"]').click();
+    await $('input[placeholder="Type a value and press Enter"]').setValue('ambie');
+    await $('[aria-label="Suggested genres"]').$('button=ambient').waitForDisplayed();
+    await $('[aria-label="Suggested genres"]').$('button=ambient').click();
+    await $('[aria-label="Remove ambient"]').waitForDisplayed();
+    await $('button=Cancel').click();
   });
 
   it("adds a podcast episode: the show, its episodes narrowed by typing, the day picked in the calendar, the note in the vault's format", async () => {

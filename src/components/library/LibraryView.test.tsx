@@ -442,3 +442,13 @@ describe('library controls', () => {
     await user.click(screen.getByTestId('filter-clear'));
   });
 });
+
+it('uses album genres from the library when adding an album', async () => {
+  const user = userEvent.setup();
+  renderLibrary('album');
+  await user.click(byData('library-add', 'data-kind', 'album'));
+  await user.click(screen.getByTestId('add-manual'));
+  await user.type(screen.getByTestId('add-genre'), 'ambi');
+  expect(screen.getByRole('button', { name: 'ambient' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'science' })).not.toBeInTheDocument();
+});
