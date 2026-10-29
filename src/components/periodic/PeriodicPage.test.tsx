@@ -134,12 +134,17 @@ describe('the day page', () => {
     expect(act.onToggle).toHaveBeenCalledWith(expect.objectContaining({ line: 19, done: false }));
 
     await user.click(screen.getByRole('tab', { name: 'Tasks' }));
+    expect(screen.getByTestId('composer-text')).toHaveFocus();
     await user.click(screen.getByRole('radio', { name: 'sport' }));
-    await user.type(screen.getByTestId('composer-text'), 'evening run');
+    expect(screen.getByTestId('composer-text')).toHaveFocus();
+    await user.keyboard('evening run');
     // A new task has no minutes yet: they go on tasks already on the list.
     expect(screen.queryByTestId('composer-minutes')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('composer-add'));
     expect(act.onAddTask).toHaveBeenCalledWith('sport', 'evening run');
+    expect(screen.getByTestId('composer-text')).toHaveFocus();
+    await user.keyboard('morning run{Enter}');
+    expect(act.onAddTask).toHaveBeenLastCalledWith('sport', 'morning run');
 
     const [first] = screen.getAllByTestId('task-minutes');
     await user.click(first as HTMLElement);
@@ -158,6 +163,10 @@ describe('the day page', () => {
     const last = screen.getByRole('radio', { name: 'extra' });
     await user.click(last);
     expect(last).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('composer-text')).toHaveFocus();
+    // Tab still reaches the selected category; arrow navigation keeps focus in the group.
+    await user.tab();
+    expect(last).toHaveFocus();
     await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('radio', { name: 'code' })).toHaveFocus();
     await user.keyboard('{ArrowLeft}');

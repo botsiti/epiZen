@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { category } from '../../lib/categories';
 import { formatMinutes } from '../../lib/day';
 import type { DayTaskRef, TaskChoice } from './types';
@@ -18,6 +18,7 @@ interface Props {
  * day page's composer.
  */
 export function TaskPicker({ tasks, categories, value, onChange, onSubmit, autoFocus }: Props) {
+  const input = useRef<HTMLInputElement>(null);
   const [words, setWords] = useState(value?.kind === 'new' ? value.words : '');
   const [chosen, setChosen] = useState(value?.kind === 'new' ? value.category : (categories[0] ?? 'code'));
   const typing = (next: string, cat = chosen) => {
@@ -56,6 +57,7 @@ export function TaskPicker({ tasks, categories, value, onChange, onSubmit, autoF
         </ul>
       )}
       <input
+        ref={input}
         className="pick-new"
         value={words}
         autoFocus={autoFocus && !tasks.length}
@@ -80,7 +82,10 @@ export function TaskPicker({ tasks, categories, value, onChange, onSubmit, autoF
               aria-checked={name === chosen}
               className={name === chosen ? 'chip is-chosen' : 'chip'}
               style={{ '--tone': category(name).color } as CSSProperties}
-              onClick={() => typing(words, name)}
+              onClick={() => {
+                typing(words, name);
+                input.current?.focus({ preventScroll: true });
+              }}
               data-testid="pick-category"
               data-category={name}
             >

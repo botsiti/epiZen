@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import { useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { category } from '../../lib/categories';
 import { formatDate, sameDay } from '../../lib/dates';
 import { useEscape } from './useEscape';
@@ -15,6 +15,7 @@ interface Props {
 
 /** A task for a day, with no time yet: its time comes later, from a block or the timer. */
 export function NewTask({ days, initial, categories, onCancel, onSave }: Props) {
+  const input = useRef<HTMLInputElement>(null);
   const [day, setDay] = useState(initial);
   const [chosen, setChosen] = useState(categories[0] ?? 'code');
   const [words, setWords] = useState('');
@@ -37,7 +38,10 @@ export function NewTask({ days, initial, categories, onCancel, onSave }: Props) 
                   role="radio"
                   aria-checked={sameDay(date, day)}
                   className={sameDay(date, day) ? 'new-task-day is-chosen' : 'new-task-day'}
-                  onClick={() => setDay(date)}
+                  onClick={() => {
+                    setDay(date);
+                    input.current?.focus({ preventScroll: true });
+                  }}
                   data-testid="new-task-day"
                   data-date={formatDate(date, 'YYYY-MM-DD')}
                 >
@@ -57,7 +61,10 @@ export function NewTask({ days, initial, categories, onCancel, onSave }: Props) 
                 aria-checked={name === chosen}
                 className={name === chosen ? 'chip is-chosen' : 'chip'}
                 style={{ '--tone': category(name).color } as CSSProperties}
-                onClick={() => setChosen(name)}
+                onClick={() => {
+                  setChosen(name);
+                  input.current?.focus({ preventScroll: true });
+                }}
                 data-testid="new-task-category"
                 data-category={name}
               >
@@ -65,7 +72,7 @@ export function NewTask({ days, initial, categories, onCancel, onSave }: Props) 
               </button>
             ))}
           </div>
-          <input autoFocus value={words} onChange={(event) => setWords(event.target.value)} placeholder={`A ${chosen} task`} aria-label="Task" data-testid="new-task-text" />
+          <input ref={input} autoFocus value={words} onChange={(event) => setWords(event.target.value)} placeholder={`A ${chosen} task`} aria-label="Task" data-testid="new-task-text" />
           <div className="popover-actions">
             <button type="button" className="quiet-chip" onClick={onCancel}>
               Cancel

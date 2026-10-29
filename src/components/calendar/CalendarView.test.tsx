@@ -188,8 +188,10 @@ describe('the calendar', () => {
     draw(column, 18 * 60 + 10, 18 * 60 + 10);
     const popover = screen.getByTestId('block-popover');
     expect(popover).toHaveTextContent('18:00–18:30');
-    await userEvent.type(within(popover).getByTestId('pick-new'), 'evening run');
+    await userEvent.type(within(popover).getByTestId('pick-new'), 'evening ');
     await userEvent.click(within(popover).getByRole('radio', { name: 'sport' }));
+    expect(within(popover).getByTestId('pick-new')).toHaveFocus();
+    await userEvent.keyboard('run');
     await waitFor(() => expect(within(popover).getByTestId('plan-calendar')).toHaveValue('sport'));
     await userEvent.click(within(popover).getByTestId('block-save'));
     const id = `${dayKey(DAY).replaceAll('-', '')}-01`;
@@ -269,9 +271,12 @@ describe('the calendar', () => {
     const user = userEvent.setup();
     const { onWrite } = setup();
     await user.click(screen.getByTestId('cal-new-task'));
+    expect(screen.getByTestId('new-task-text')).toHaveFocus();
     await user.click(document.querySelector(`[data-testid="new-task-day"][data-date="${dayKey(DAY)}"]`) as HTMLElement);
+    expect(screen.getByTestId('new-task-text')).toHaveFocus();
     await user.click(screen.getByRole('radio', { name: 'book' }));
-    await user.type(screen.getByTestId('new-task-text'), 'read 30 pages');
+    expect(screen.getByTestId('new-task-text')).toHaveFocus();
+    await user.keyboard('read 30 pages');
     await user.click(screen.getByTestId('new-task-add'));
     const call = onWrite.mock.calls.at(-1);
     expect(call?.[0]).toEqual(DAY);

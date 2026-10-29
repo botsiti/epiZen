@@ -402,7 +402,7 @@ function CoverCalendar({ spec, entries, today, onOpen }: { spec?: KindSpec; entr
     <Section title="Calendar" note={`${counts[month.month] ?? 0}${verb} in ${formatDate(first, 'MMMM YYYY')}`} testId="cover-calendar">
       <div className="card glass cover-calendar">
         <div className="calendar-top">
-          <h3 className="calendar-month" data-testid="cover-calendar-month">
+          <h3 className="cover-calendar-month" data-testid="cover-calendar-month">
             {formatDate(first, 'MMMM')} <span className="faint">{month.year}</span>
           </h3>
           <div className="year-strip" role="group" aria-label={`${month.year} by month`}>

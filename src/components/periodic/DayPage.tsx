@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
 import { category, habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, formatDate, isoWeek, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
@@ -573,6 +573,7 @@ function Minutes({ value, onSet }: { value?: number; onSet: (minutes: number) =>
 
 /** Adds a task under the note's Tasks heading: a category and the words. Its time comes later. */
 function Composer({ categories, onAdd }: { categories: string[]; onAdd: (category: string, words: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
   const [chosen, setChosen] = useState(categories[0] ?? 'code');
   const [words, setWords] = useState('');
   const submit = (event: FormEvent) => {
@@ -580,11 +581,12 @@ function Composer({ categories, onAdd }: { categories: string[]; onAdd: (categor
     if (!words.trim()) return;
     onAdd(chosen, words);
     setWords('');
+    input.current?.focus({ preventScroll: true });
   };
   return (
     <form className="composer glass rise" onSubmit={submit} data-testid="composer">
       <div className="composer-row">
-        <input value={words} onChange={(event) => setWords(event.target.value)} placeholder="What would you like to do?" aria-label="Task" data-testid="composer-text" />
+        <input ref={input} autoFocus value={words} onChange={(event) => setWords(event.target.value)} placeholder="What would you like to do?" aria-label="Task" data-testid="composer-text" />
         <button type="submit" className="primary-button" disabled={!words.trim()} data-testid="composer-add">
           Add task
         </button>
@@ -602,7 +604,10 @@ function Composer({ categories, onAdd }: { categories: string[]; onAdd: (categor
               tabIndex={name === chosen ? 0 : -1}
               className={name === chosen ? 'chip is-chosen' : 'chip'}
               style={{ '--tone': meta.color } as CSSProperties}
-              onClick={() => setChosen(name)}
+              onClick={() => {
+                setChosen(name);
+                input.current?.focus({ preventScroll: true });
+              }}
               onKeyDown={(event) => {
                 const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
                 if (!direction) return;
