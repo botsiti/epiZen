@@ -23,6 +23,7 @@ import {
   prepareWindow,
   pressCommand,
   screenshot,
+  scrollIntoView,
   setRightSidebar,
   showLibraryAs,
   showMonth,
@@ -113,10 +114,10 @@ describe('the demo vault', () => {
     await expect($('[data-testid="hero-stats"]')).toHaveText(expect.stringContaining('Life XP'));
     await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Add your birth date in Settings'));
     await screenshot('03-home');
-    await $('[data-testid="spheres"]').scrollIntoView();
+    await scrollIntoView('[data-testid="spheres"]');
     await expect($('[data-testid="lead-sphere"]')).toHaveText(expect.stringContaining('Personal Growth'));
     await screenshot('34-home-spheres');
-    await $('[data-testid="recent-library"]').scrollIntoView();
+    await scrollIntoView('[data-testid="recent-library"]');
     await screenshot('36-home-shelves');
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
   });
@@ -1186,7 +1187,7 @@ describe('the demo vault', () => {
 
     // Each card writes its own section, in place, as the Obsidian weekly dashboard's Save does.
     await showTab('Overview');
-    await $('[data-testid="reflections"]').scrollIntoView();
+    await scrollIntoView('[data-testid="reflections"]');
     const card = (heading: string) => `[data-testid="reflection"][data-heading="${heading}"]`;
     await $(`${card('Plus')} [data-testid="reflection-field"]`).setValue('Two deep mornings');
     await $(`${card('Plus')} [data-testid="reflection-save"]`).click();
@@ -1224,7 +1225,7 @@ describe('the demo vault', () => {
     const added = reflected.replace('\nAdd real weekly quests', `\n${quest}\nAdd real weekly quests`);
     await browser.waitUntil(() => read() === added, { timeout: 5000, timeoutMsg: 'the quest never reached the weekly note' });
     await expect($('[data-testid="quest-status"]')).toHaveText('Saved');
-    await $('button[aria-label="Details of Read 100 pages"]').scrollIntoView();
+    await scrollIntoView('button[aria-label="Details of Read 100 pages"]');
     await screenshot('62-quest-added');
 
     // Its detail, and a chapter for its adventure log, added with ⌘ + Enter.
@@ -1378,7 +1379,7 @@ describe('the demo vault', () => {
       }, value);
       await expect(artwork()).toHaveValue(value);
     };
-    await $('[data-testid="settings-podcasts"]').scrollIntoView();
+    await scrollIntoView('[data-testid="settings-podcasts"]');
     await expect(artwork()).toHaveValue('show');
     await selectArtwork('episode');
     await $('[data-testid="settings-save"]').click();
@@ -1389,7 +1390,7 @@ describe('the demo vault', () => {
     await selectArtwork('show');
     await $('[data-testid="settings-save"]').click();
     await browser.waitUntil(() => kept() === 'show', { timeoutMsg: 'show thumbnails were not saved as the preference' });
-    await $('[data-testid="settings-podcasts"]').scrollIntoView();
+    await scrollIntoView('[data-testid="settings-podcasts"]');
     await screenshot('85-settings-podcasts');
     expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
   });
@@ -1399,7 +1400,7 @@ describe('the demo vault', () => {
     await $('[data-testid="settings-birth-date"]').setValue('1998-03-21');
     await $('[data-testid="settings-save"]').click();
     await $('[data-testid="settings"] .save-state').waitForDisplayed();
-    await $('[data-testid="settings-home"]').scrollIntoView();
+    await scrollIntoView('[data-testid="settings-home"]');
     await screenshot('37-settings-birth-date');
     await $('[data-testid="sidebar-vault"]').click();
     await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Till 30'));
@@ -1407,7 +1408,7 @@ describe('the demo vault', () => {
     const grid = $('[data-testid="weeks-grid"]');
     await grid.waitForDisplayed();
     expect(await browser.execute(() => document.querySelectorAll('[data-testid="weeks-grid"] rect').length)).toBe(1560);
-    await grid.scrollIntoView();
+    await scrollIntoView('[data-testid="weeks-grid"]');
     await screenshot('35-home-weeks');
   });
 

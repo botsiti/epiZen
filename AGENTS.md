@@ -185,7 +185,8 @@ Use the intended pushed branch in `--ref` if the work is not on `main`.
    WebdriverIO journeys, followed by the fixture-integrity check. The configured journeys
    cover no vault, a missing vault, the demo-vault copy and the large graph fixture.
 3. Keep one full run per checkout. E2E regenerates `evidence/`; preserve any evidence needed
-   before another run. Windows open without taking focus; do not interact with them. The
+   before another run. Test windows stay visible without taking keyboard focus so macOS keeps rendering them;
+   do not interact with them. The
    bottom 32px of captures are below the page because of the title bar.
 4. Wait for completion and inspect every result. For GitHub, identify the run for the intended
    workflow/ref/commit, then use `gh run watch RUN_ID --exit-status`. A dispatched, queued or

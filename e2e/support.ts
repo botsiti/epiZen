@@ -9,6 +9,12 @@ import { EVIDENCE } from './paths';
  */
 export async function prepareWindow() {
   await browser.setWindowSize(1280, 820);
+  // Keep WebKit painting without taking keyboard focus. Fully occluded macOS windows suspend
+  // requestAnimationFrame, including graph layout and the driver's own animation waits.
+  await browser.execute(async () => {
+    const tauri = (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { setAlwaysOnTop: (value: boolean) => Promise<void> } } } }).__TAURI__;
+    await tauri.window.getCurrentWindow().setAlwaysOnTop(true);
+  });
   await browser.execute(() => {
     document.documentElement.dataset.motion = 'off';
     const style = document.createElement('style');
@@ -20,6 +26,15 @@ export async function prepareWindow() {
 /** Waits until the page has drawn its next frame, for a canvas that redraws on the next one. */
 export async function nextFrame() {
   await browser.execute(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+}
+
+/** Synchronous scrolling: no WebDriver animation-frame wait in a non-focused desktop window. */
+export async function scrollIntoView(selector: string) {
+  await browser.execute((css) => {
+    const element = document.querySelector(css);
+    if (!element) throw new Error(`nothing matches ${css}`);
+    element.scrollIntoView({ block: 'center', behavior: 'instant' });
+  }, selector);
 }
 
 /** Saves what the window shows to evidence/<name>.png. */
