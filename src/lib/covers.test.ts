@@ -4,7 +4,7 @@
 // the URL that asked; the Life 3.0 and Lex Fridman answers are Add's, in test/fixtures/lookup/).
 // A URL no answer was recorded for fails the test, so the requests themselves are checked too.
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { albumSearchUrl, describe as said, findCover, findEpisode, makerScore, searchTitle, titleLanguage, titleScore, wantedOf, yearScore, type Wanted } from './covers';
 import { parseEpisodes, parseSearch } from './lookup';
 import { allowedUrl } from './lookup';
@@ -20,6 +20,7 @@ function recorded() {
     expect(allowedUrl(url), url).toBe(true);
     const file = index[url];
     if (file) return Promise.resolve(read(`covers/${file}`));
+    if (url.includes('gsrsearch=') && url.includes('%20album&')) return Promise.resolve({ query: { pages: [] } });
     // Add's recordings: Life 3.0 on Wikipedia, Open Library and Wikidata; the Lex Fridman Podcast and its episodes on iTunes.
     if (url === 'https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&generator=search&gsrsearch=Life%203.0%20book&gsrlimit=8&gsrnamespace=0&prop=pageimages|description|pageprops&piprop=thumbnail&pithumbsize=500&pilicense=any&ppprop=wikibase_item')
       return Promise.resolve(read('lookup/wikipedia-book.json'));
@@ -93,12 +94,80 @@ describe('comparing a note with a result', () => {
 describe('finding a cover', () => {
   it('finds an album by its title and artist, and checks its art is there', async () => {
     const { found, asked } = await find({ kind: 'album', title: 'Antics', maker: 'Interpol' }, () => Promise.resolve(true));
-    expect(asked).toEqual(['https://musicbrainz.org/ws/2/release-group?query=releasegroup%3A(antics)%20AND%20artist%3A(interpol)&fmt=json&limit=10']);
+    expect(asked[0]).toContain('gsrsearch=Antics%20Interpol%20album');
+    expect(asked[1]).toContain('gsrsearch=Antics%20album');
+    expect(asked[2]).toBe('https://musicbrainz.org/ws/2/release-group?query=releasegroup%3A(antics)%20AND%20artist%3A(interpol)&fmt=json&limit=10');
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({ sure: true, result: { id: 'bc7740e1-02c9-3ab7-9869-0e0c79acf941', cover: 'https://coverartarchive.org/release-group/bc7740e1-02c9-3ab7-9869-0e0c79acf941/front-500' } });
     expect(said(found[0]!)).toBe('Antics · Interpol · 2004');
     // An album the Cover Art Archive has no art for has no cover to give.
     expect((await find({ kind: 'album', title: 'Antics', maker: 'Interpol' }, () => Promise.resolve(false))).found).toEqual([]);
+  });
+
+  it('uses a matching Wikipedia album first and avoids MusicBrainz', async () => {
+    const ask = vi.fn((url: string) => { expect(url).toContain('wikipedia'); return Promise.resolve(read('covers/wikipedia-album.json')); });
+    const found = await findCover({ kind: 'album', title: 'Antics', maker: 'Interpol', year: '2004' }, { ask });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ sure: true, result: { title: 'Antics', maker: 'Interpol', year: '2004', from: 'wikipedia' } });
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask.mock.calls[0]?.[0]).toContain('gsrsearch=Antics%20Interpol%20album');
+  });
+
+  it('falls back when a Wikipedia album image is missing or temporarily unavailable', async () => {
+    const wanted = { kind: 'album' as const, title: 'Antics', maker: 'Interpol', year: '2004' };
+    for (const failure of ['missing', 'offline'] as const) {
+      const ask = vi.fn((url: string) => Promise.resolve(read(url.includes('wikipedia.org') ? 'covers/wikipedia-album.json' : 'covers/musicbrainz-antics.json')));
+      const hasImage = vi.fn((url: string) => url.includes('wikimedia.org')
+        ? failure === 'missing' ? Promise.resolve(false) : Promise.reject(new Error('offline'))
+        : Promise.resolve(true));
+      const found = await findCover(wanted, { ask, hasImage });
+      expect(found[0]).toMatchObject({ sure: true, result: { from: 'musicbrainz' } });
+      expect(hasImage).toHaveBeenCalledTimes(2);
+      expect(ask.mock.calls.some(([url]) => url.includes('musicbrainz.org'))).toBe(true);
+    }
+  });
+
+  it('keeps a verified MusicBrainz cover when another image request fails', async () => {
+    const answer = structuredClone(read('covers/musicbrainz-antics.json')) as { 'release-groups': { id: string }[] };
+    const first = answer['release-groups'][0]!;
+    answer['release-groups'].push({ ...first, id: '11111111-1111-4111-8111-111111111111' });
+    const ask = (url: string) => Promise.resolve(url.includes('wikipedia.org') ? { query: { pages: [] } } : answer);
+    const hasImage = vi.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('the service is busy'));
+    const found = await findCover({ kind: 'album', title: 'Antics', maker: 'Interpol', year: '2004' }, { ask, hasImage });
+    expect(found).toHaveLength(1);
+    expect(found[0]?.result.id).toBe(first.id);
+    expect(hasImage).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a retryable failure when no album image was verified', async () => {
+    const ask = (url: string) => Promise.resolve(url.includes('wikipedia.org') ? { query: { pages: [] } } : read('covers/musicbrainz-antics.json'));
+    await expect(findCover({ kind: 'album', title: 'Antics', maker: 'Interpol' }, { ask, hasImage: () => Promise.reject(new Error('the service is busy')) })).rejects.toThrow('the service is busy');
+  });
+
+  it('tries the title alone on Wikipedia before falling back', async () => {
+    const ask = vi.fn((url: string) => Promise.resolve(url.includes('Antics%20Interpol') ? { query: { pages: [] } } : read('covers/wikipedia-album.json')));
+    const found = await findCover({ kind: 'album', title: 'Antics', maker: 'Interpol' }, { ask });
+    expect(found[0]?.result.from).toBe('wikipedia');
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(ask.mock.calls[1]?.[0]).toContain('gsrsearch=Antics%20album');
+  });
+
+  it('uses MusicBrainz when Wikipedia is unavailable', async () => {
+    const ask = vi.fn((url: string) => url.includes('wikipedia') ? Promise.reject(new Error('offline')) : Promise.resolve(read('covers/musicbrainz-antics.json')));
+    const found = await findCover({ kind: 'album', title: 'Antics', maker: 'Interpol' }, { ask, hasImage: () => Promise.resolve(true) });
+    expect(found[0]).toMatchObject({ sure: true, result: { from: 'musicbrainz', title: 'Antics' } });
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back on missing or uncertain Wikipedia results, and preserves partial results on fallback failure', async () => {
+    const wiki = read('covers/wikipedia-album.json');
+    const wanted = { kind: 'album' as const, title: 'Antics', maker: 'Someone Else', year: '2004' };
+    const ask = vi.fn((url: string) => url.includes('wikipedia') ? Promise.resolve(wiki) : Promise.reject(new Error('the service is busy')));
+    const found = await findCover(wanted, { ask });
+    expect(found[0]?.sure).toBe(false);
+    expect(found[0]?.doubt).toContain('MusicBrainz unavailable');
+    expect(ask.mock.calls.some(([url]) => url.includes('musicbrainz'))).toBe(true);
+    await expect(findCover({ ...wanted, title: 'No match' }, { ask: () => Promise.reject(new Error('offline')) })).rejects.toThrow('offline');
   });
 
   it("tells one album from another of the same name by who made it, and isn't sure without that", async () => {

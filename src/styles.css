@@ -308,6 +308,19 @@ code {
   overflow-wrap: break-word;
 }
 
+.note-body .note-highlight {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0.08em 0.22em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.note-body .note-colored-text {
+  font-weight: 500;
+}
+
 .note-body > :first-child {
   margin-top: 0;
 }
@@ -776,6 +789,19 @@ code {
 }
 
 /* Settings */
+
+.settings-screen { max-width: 760px; }
+.settings-screen .form { max-width: 680px; gap: var(--space-5); }
+.settings-intro h2 { margin: 0 0 var(--space-2); font-size: 20px; font-weight: 600; }
+.settings-intro p { margin: 0; color: var(--text-muted); line-height: 1.5; }
+.settings-screen .settings-group { padding: var(--space-5) 0; margin: 0; border-top: 1px solid var(--border); }
+.settings-screen .settings-group legend { padding: 0; }
+.settings-feature { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); color: var(--text); }
+.settings-feature span { display: grid; gap: var(--space-1); }
+.settings-feature strong { font-size: 14px; font-weight: 600; }
+.settings-feature small { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.settings-feature input { flex: none; width: 18px; height: 18px; accent-color: var(--accent); }
+
 
 .settings-group {
   display: grid;

@@ -3,7 +3,7 @@ import { formatMinutes } from '../../lib/day';
 import { addMonths, formatDate, startOfMonth } from '../../lib/dates';
 import { lifeXp, progress, rankOf, sphereXp, streak } from '../../lib/home';
 import { questsIn, questSphereXp, questXp, type Quest, type QuestChange, type QuestEntry } from '../../lib/quests';
-import { homeShelves, type Shelf } from '../../lib/media';
+import type { MediaEntry } from '../../lib/library';
 import type { Period } from '../../lib/periodic';
 import type { DayEntry } from '../../lib/rollup';
 import { followPointer, order } from '../periodic/effects';
@@ -11,7 +11,7 @@ import { BlurText, CountUp } from '../periodic/motion';
 import { Bar, Section } from '../periodic/parts';
 import { QuestBoard } from '../periodic/Quests';
 import { Memento } from './Memento';
-import { Shelves } from './Shelves';
+import { RecentLibrary } from './RecentLibrary';
 import { LeadSphere, Spheres } from './Spheres';
 import { Averages, Focus, Today } from './Week';
 import '../periodic/periodic.css';
@@ -31,11 +31,11 @@ export interface HomeProps {
   exists: (period: Period, date: Date) => boolean;
   /** What each daily number is out of (5, 10 or 100), read from every day that logged it. */
   scales: Record<string, number>;
-  shelves: Shelf[];
+  library: MediaEntry[];
   /** From the app's settings; the vault doesn't hold it. */
   birthDate?: Date;
   onOpenNote: (path: string) => void;
-  /** Opens the note of that day, week or month, or creates it from its template. */
+  /** Opens the note of that day, week or month, or creates it with built-in starting text. */
   onOpenPeriod: (period: Period, date: Date) => void;
   /** Every weekly, monthly and mythic quest, their art, and the writes back into their notes. */
   quests: QuestEntry[];
@@ -44,8 +44,9 @@ export interface HomeProps {
   onQuestProgress: (quest: Quest, value: number) => void;
   /** A chapter or a deadline from a quest's detail; without it, a card doesn't open its detail. */
   onQuestChange?: (quest: Quest, change: QuestChange) => Promise<string | undefined>;
-  /** A shelf's "See all": its folder's tab in the library. */
-  onSeeAll?: (folder: string) => void;
+  onSeeLibrary: () => void;
+  onSeeQuests: () => void;
+  onSeeStatistics: () => void;
 }
 
 const thousands = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -67,6 +68,7 @@ export function Home(props: HomeProps) {
     <div className="periodic-frame home-frame" data-testid="home" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
       <Hero {...props} xp={xp} streak={run} todayEntry={todayEntry} />
       <Memento today={today} birth={props.birthDate} i={1} />
+      <div className="home-shortcuts"><button className="shelf-all" onClick={props.onSeeStatistics}>Statistics →</button></div>
       <div className="home-row">
         <Averages dayOf={dayOf} today={today} scales={props.scales} i={2} />
         <Focus dayOf={dayOf} today={today} onOpenNote={props.onOpenNote} i={3} />
@@ -77,9 +79,10 @@ export function Home(props: HomeProps) {
         <LeadSphere spheres={spheres} dayOf={dayOf} today={today} i={6} />
       </div>
       <Section title={`Quests · ${formatDate(month, 'MMMM')}`} note={`${thisMonth.filter(({ quest }) => quest.done).length}/${thisMonth.length} done`} i={7} testId="home-quests">
-        <QuestBoard quests={thisMonth} art={props.art} today={today} onToggle={props.onQuestToggle} onProgress={props.onQuestProgress} onChange={props.onQuestChange} />
+        <button className="shelf-all home-see-all" onClick={props.onSeeQuests}>See all quests →</button>
+        <QuestBoard pageSize={8} quests={thisMonth} art={props.art} today={today} onToggle={props.onQuestToggle} onProgress={props.onQuestProgress} onChange={props.onQuestChange} />
       </Section>
-      <Shelves shelves={homeShelves(props.shelves)} today={today} onOpen={props.onOpenNote} onSeeAll={props.onSeeAll} i={8} />
+      <RecentLibrary items={props.library} onOpen={props.onOpenNote} onSeeAll={props.onSeeLibrary} />
     </div>
   );
 }

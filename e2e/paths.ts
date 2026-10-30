@@ -15,7 +15,7 @@ export const COPY_PREFIX = 'epizen-e2e-';
 
 /** How the demo vault names its periodic notes; the e2e config seeds the app's settings with it. */
 export const PERIODIC = {
-  day: { folder: 'Calendar/2026/days 2026', format: 'DD.MM.YYYY', template: 'Templates/Daily' },
+  day: { folder: 'Calendar/2026/days 2026', format: 'DD.MM.YYYY', template: 'Templates/Missing legacy template' },
   week: { folder: 'Calendar/2026/weeks', format: 'GGGG-[W]WW - DD.MM.YY', template: 'Templates/Weekly' },
   month: { folder: 'Calendar/2026/months 2026', format: 'MM.YY [RPG]', template: 'Templates/Monthly' },
 };

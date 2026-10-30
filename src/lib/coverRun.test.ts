@@ -269,3 +269,39 @@ describe('the run', () => {
     expect(run.snapshot().rows[0]?.message).toMatch(/changed since/);
   });
 });
+
+it('retries a failed row without re-searching successful rows', async () => {
+  const io = runIO({ 'Rating/music/Antics.md': NOTE, 'Rating/music/Untitled.md': NOTE });
+  let offline = true;
+  const ask = vi.fn((url: string) => offline ? Promise.reject(new Error('offline')) : io.ask(url));
+  const run = new CoverRun([entry('Antics', 'Interpol'), entry('Untitled')], [], { ...io, ask });
+  run.start();
+  await settled(run);
+  expect(run.snapshot().rows.map((row) => row.status)).toEqual(['failed', 'failed']);
+  offline = false;
+  run.retry('Rating/music/Antics.md');
+  await settled(run);
+  expect(run.snapshot().rows.map((row) => row.status)).toEqual(['found', 'failed']);
+  expect(run.snapshot().rows[0]?.ticked).toBe(true);
+});
+
+it('retries rate limits and timeouts but does not retry an ordinary error', async () => {
+  const clock = fakeClock();
+  const ask = vi.fn().mockRejectedValueOnce(new Error('the service is rate limiting requests')).mockRejectedValueOnce(new Error('the service took too long to answer')).mockResolvedValueOnce({ ok: true });
+  await expect(pacedAsk(ask, new Map(), clock)('https://en.wikipedia.org/x')).resolves.toEqual({ ok: true });
+  expect(ask).toHaveBeenCalledTimes(3);
+  expect(clock.slept).toEqual([2000, 4000]);
+});
+
+it('backs off a persistently busy service while allowing other services to continue', async () => {
+  const clock = fakeClock();
+  const ask = vi.fn((url: string) => url.includes('musicbrainz') ? Promise.reject(new Error('the service is busy')) : Promise.resolve({ ok: true }));
+  const paced = pacedAsk(ask, new Map(), clock);
+  await expect(paced('https://musicbrainz.org/a')).rejects.toThrow('busy');
+  await expect(paced('https://musicbrainz.org/b')).rejects.toThrow('cooling down');
+  expect(ask).toHaveBeenCalledTimes(4);
+  await expect(paced('https://en.wikipedia.org/a')).resolves.toEqual({ ok: true });
+  await clock.sleep(30_000);
+  await expect(paced('https://musicbrainz.org/b')).rejects.toThrow('busy');
+  expect(ask).toHaveBeenCalledTimes(9);
+});

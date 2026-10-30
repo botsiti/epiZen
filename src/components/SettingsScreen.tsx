@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { formatDate, parseDate, today } from '../lib/dates';
 import { parseBirthDate } from '../lib/home';
-import { PERIODS, startOfPeriod, type Period, type PeriodicSettings } from '../lib/periodic';
+import { PERIODS, startOfPeriod, type Period, type PeriodicSettings, type PeriodicFeatures } from '../lib/periodic';
 import { podcastSettings, type PodcastSettings } from '../lib/podcasts';
 
 interface Props {
@@ -10,23 +10,23 @@ interface Props {
   birthDate: string;
   podcasts: PodcastSettings;
   folders: string[];
-  notes: string[];
-  onSave: (settings: { periodic: PeriodicSettings; birthDate: string; podcasts: PodcastSettings }) => Promise<void>;
+  features: PeriodicFeatures;
+  onSave: (settings: { periodic: PeriodicSettings; birthDate: string; podcasts: PodcastSettings; features: PeriodicFeatures }) => Promise<void>;
 }
 
 const TITLES: Record<Period, string> = { day: 'Daily notes', week: 'Weekly notes', month: 'Monthly notes' };
 
 /**
- * Where periodic notes go, how they are named and which template they start from, as in
- * Obsidian's daily notes settings; the homepage's birth date; and artwork for new podcast episodes.
+ * Built-in periodic features, note locations, and personal preferences.
  */
-export function SettingsScreen({ periodic, birthDate, podcasts, folders, notes, onSave }: Props) {
+export function SettingsScreen({ periodic, birthDate, podcasts, features, folders, onSave }: Props) {
   const artworkId = useId();
   const [draft, setDraft] = useState(periodic);
   const [birth, setBirth] = useState(birthDate);
+  const [featureDraft, setFeatureDraft] = useState(features);
   const [podcastDraft, setPodcastDraft] = useState(podcasts);
   const [state, setState] = useState<{ saved?: boolean; error?: string }>({});
-  const set = (period: Period, key: 'folder' | 'format' | 'template', value: string) => {
+  const set = (period: Period, key: 'folder' | 'format', value: string) => {
     setDraft((prev) => ({ ...prev, [period]: { ...prev[period], [key]: value } }));
     setState({});
   };
@@ -49,18 +49,35 @@ export function SettingsScreen({ periodic, birthDate, podcasts, folders, notes, 
       setState({ error: 'A birth date is a day that has been, written YYYY-MM-DD, like 1990-04-21.' });
       return;
     }
-    onSave({ periodic: draft, birthDate: birth.trim(), podcasts: podcastDraft }).then(
+    onSave({ periodic: draft, birthDate: birth.trim(), podcasts: podcastDraft, features: featureDraft }).then(
       () => setState({ saved: true }),
       (err: unknown) => setState({ error: String(err) }),
     );
   };
 
   return (
-    <section className="screen" data-testid="settings">
+    <section className="screen settings-screen" data-testid="settings">
       <p className="eyebrow">Settings</p>
       <h1>Preferences</h1>
-      <p className="muted">Set up your periodic notes, homepage and podcast artwork.</p>
+      <p className="muted">Make Epizen your own. Changes are saved in app settings.</p>
       <form className="form" onSubmit={submit}>
+        <div className="settings-intro">
+          <h2>Periodic notes</h2>
+          <p>Daily, weekly and monthly pages are built in. Choose where their Markdown notes live and which features appear.</p>
+        </div>
+        <fieldset className="settings-group settings-features" data-testid="settings-features">
+          <legend className="eyebrow">Features</legend>
+          {([
+            ['habits', 'Habits', 'Show habits on daily, weekly and monthly pages.'],
+            ['thoughtRecords', 'Thought records', 'Show the thought record tool and sessions on daily pages.'],
+          ] as const).map(([key, label, description]) => (
+            <label className="settings-feature" key={key}>
+              <span><strong>{label}</strong><small>{description}</small></span>
+              <input type="checkbox" data-testid={`settings-feature-${key}`} checked={featureDraft[key]} onChange={(event) => { setFeatureDraft((prev) => ({ ...prev, [key]: event.target.checked })); setState({}); }} />
+            </label>
+          ))}
+          <small className="field-hint">Turning a feature off hides it; your notes stay intact.</small>
+        </fieldset>
         {PERIODS.map((period) => (
           <fieldset className="settings-group" key={period} data-testid={`settings-${period}`}>
             <legend className="eyebrow">{TITLES[period]}</legend>
@@ -72,10 +89,6 @@ export function SettingsScreen({ periodic, birthDate, podcasts, folders, notes, 
               <span>Name format</span>
               <input value={draft[period].format} onChange={(e) => set(period, 'format', e.target.value)} data-testid={`settings-${period}-format`} />
               <small className="field-hint">{example(period) ? `This ${period}: ${example(period)}` : 'This format doesn’t give a name Epizen can read back.'}</small>
-            </label>
-            <label className="field">
-              <span>Template</span>
-              <input value={draft[period].template} onChange={(e) => set(period, 'template', e.target.value)} list="vault-notes" placeholder="None" />
             </label>
           </fieldset>
         ))}
@@ -121,11 +134,6 @@ export function SettingsScreen({ periodic, birthDate, podcasts, folders, notes, 
         <datalist id="vault-folders">
           {folders.map((folder) => (
             <option key={folder} value={folder} />
-          ))}
-        </datalist>
-        <datalist id="vault-notes">
-          {notes.map((note) => (
-            <option key={note} value={note} />
           ))}
         </datalist>
         {state.error && <p className="form-error">{state.error}</p>}

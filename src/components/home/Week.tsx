@@ -133,7 +133,7 @@ export function Today({ entry, today, todayNote, exists, onOpenPeriod, i }: Toda
           ))}
         </ul>
       ) : (
-        <p className="today-empty">{entry.day ? 'No tasks logged today.' : `No daily note for today yet. ${todayNote.name} starts from its template.`}</p>
+        <p className="today-empty">{entry.day ? 'No tasks logged today.' : `No daily note for today yet. ${todayNote.name} will be created when you open it.`}</p>
       )}
       {tasks.length > 9 && <p className="faint today-more">and {tasks.length - 9} more</p>}
       <nav className="today-nav">

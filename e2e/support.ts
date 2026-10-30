@@ -72,6 +72,8 @@ export async function typeInEditor(text: string) {
 
 /** Steps the sidebar calendar to a month, such as "August 2026". */
 export async function showMonth(label: string) {
+  // The folder tree can leave the sidebar scrolled below the calendar even when the month already matches.
+  await browser.execute(() => document.querySelector('[data-testid="calendar"]')?.scrollIntoView({ block: 'start' }));
   const title = $('[data-testid="calendar-month"]');
   const [name, year] = label.split(' ');
   for (let i = 0; i < 120 && (await title.getText()) !== label; i += 1) {

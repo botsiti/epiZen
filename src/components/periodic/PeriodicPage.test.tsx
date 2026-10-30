@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { addDays, sameDay } from '../../lib/dates';
+import { addDays, sameDay, today } from '../../lib/dates';
 import { parseDay } from '../../lib/day';
 import { parseQuests } from '../../lib/quests';
 import type { DayEntry } from '../../lib/rollup';
@@ -424,4 +424,36 @@ describe('the week page writes', () => {
     expect(act.onQuestChange).toHaveBeenCalledWith(expect.objectContaining({ title: 'Two long runs' }), { kind: 'deadline', date: '2026-10-02' });
     expect(await screen.findByTestId('quest-detail-problem')).toHaveTextContent('That quest has changed in its note.');
   });
+});
+
+it('hides optional features on periodic pages without changing the note', async () => {
+  const user = userEvent.setup();
+  const act = actions();
+  const hidden = { habits: false, thoughtRecords: false };
+  const view = render(<PeriodicPage spec={{ ...spec('day'), features: hidden }} path="d.md" text={DAY} actions={act} />);
+  expect(screen.queryByRole('tab', { name: 'Habits' })).not.toBeInTheDocument();
+  expect(screen.queryByTestId('tile-habits')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('hero-record')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('tab', { name: 'Stream' }));
+  expect(screen.queryByTestId('records')).not.toBeInTheDocument();
+  expect(act.onToggle).not.toHaveBeenCalled();
+  view.rerender(<PeriodicPage spec={{ ...spec('week'), features: hidden }} path="w.md" text="" actions={act} />);
+  expect(screen.queryByRole('tab', { name: 'Habits' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('tab', { name: 'Overview' }));
+  expect(within(screen.getByTestId('totals')).queryByText('Habits')).not.toBeInTheDocument();
+});
+
+it('omits hidden habits from yesterday’s reminders but keeps other missing fields', () => {
+  const date = today();
+  const yesterday = addDays(date, -1);
+  const text = '---\nmood: 5\nenergy:\nfocus: 5\nsoc: 5\nsleep: 8\n---\n\n> [!habits] Habits\n> - [ ] no news\n';
+  const dayOf = (value: Date): DayEntry => sameDay(value, yesterday) ? { date: value, path: 'yesterday.md', day: parseDay(text) } : { date: value };
+  const hidden = { ...spec('day', date), dayOf, features: { habits: false, thoughtRecords: true } };
+  const view = render(<PeriodicPage spec={hidden} path="today.md" text="" actions={actions()} />);
+  expect(screen.getByTestId('yesterday-gaps')).toHaveTextContent('Yesterday is missing energy.');
+  view.rerender(<PeriodicPage spec={{ ...hidden, features: { habits: true, thoughtRecords: true } }} path="today.md" text="" actions={actions()} />);
+  expect(screen.getByTestId('yesterday-gaps')).toHaveTextContent('Yesterday is missing energy, habits.');
+  const onlyHabits = (value: Date): DayEntry => sameDay(value, yesterday) ? { date: value, path: 'yesterday.md', day: parseDay(text.replace('energy:', 'energy: 5')) } : { date: value };
+  view.rerender(<PeriodicPage spec={{ ...hidden, dayOf: onlyHabits }} path="today.md" text="" actions={actions()} />);
+  expect(screen.queryByTestId('yesterday-gaps')).not.toBeInTheDocument();
 });
