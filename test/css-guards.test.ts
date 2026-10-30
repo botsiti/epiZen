@@ -25,7 +25,7 @@ describe('the CSS', () => {
 
   // The small things that may blur what is behind them: a badge on a cover, a chip. A new one
   // goes here on purpose, never a backdrop, an overlay or anything else that can be window-sized.
-  const SMALL = ['.cover-rating', '.quest-sphere', '.quest-tier', '.quest-when', '.quest-dialog-chip', '.quest-dialog-close', '.library-badge', '.media-genre'];
+  const SMALL = ['.cover-rating', '.quest-sphere', '.quest-tier', '.quest-when', '.quest-dialog-chip', '.quest-dialog-close', '.library-badge', '.media-kind-badge', '.media-genre'];
 
   it('blurs behind small things only, never behind something as big as the window', () => {
     const offenders = sheets.flatMap((file) =>
