@@ -26,6 +26,8 @@ Built with Tauri 2, Rust, React and TypeScript.
 - **Plan and focus.** Built-in daily, weekly and monthly pages, local Apple Calendar integration,
   and a focus timer with a menu-bar panel. Logged time stays in your daily notes.
 
+![The mixed library with media-type badges](docs/images/library.png)
+
 ## Your vault stays yours
 
 Notes remain plain Obsidian-compatible Markdown. There is no app database, account, app-managed
