@@ -60,6 +60,7 @@ describe("the library's All tab", () => {
     // The latest first.
     expect(cards()[0]).toBe('Rating/music/Monastery Wi-Fi.md');
     expect(screen.getAllByTestId('library-card-kind').map((kind) => kind.textContent)).toEqual(['album', 'album', 'film', 'podcast', 'book']);
+    expect(screen.getAllByTestId('media-kind-badge').map((badge) => badge.getAttribute('aria-label'))).toEqual(['Album', 'Album', 'Film', 'Podcast', 'Book']);
   });
 
   it('narrows the covers and the calendar by kind from Filter, several at once', async () => {

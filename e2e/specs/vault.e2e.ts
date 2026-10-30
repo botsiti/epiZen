@@ -105,6 +105,7 @@ describe('the demo vault', () => {
     await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('119 notes · 12 folders · 46 images'));
     await expect($('[data-testid="today-create"]')).toBeDisplayed();
     await expect($('[data-testid="recent-library"]')).toBeDisplayed();
+    expect(await $$('[data-testid="recent-library"] [data-testid="media-kind-badge"]').length).toBe(10);
     expect(await $$('[data-testid="recent-library"] [data-testid="cover-card"]').length).toBeLessThanOrEqual(10);
     // Life XP is the demo's 60 days (12,296 XP) plus its quests, less what open quests have lost
     // by today's date, so it moves with the clock; src/lib/home.test.ts and quests.test.ts pin the sums.
@@ -194,6 +195,7 @@ describe('the demo vault', () => {
     // The covers are the latest 15, the latest first; the list has them all.
     expect(await $$('[data-testid="library-card"]').length).toBe(15);
     expect(await $$('[data-testid="library-card-kind"]').length).toBe(15);
+    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-card"]')].every((card) => card.querySelector('[data-testid="media-kind-badge"]')?.getAttribute('data-kind') === card.getAttribute('data-kind')))).toBe(true);
     await expect($('[data-testid="library-card"]')).toHaveAttribute('data-path', 'Rating/music/Monastery Wi-Fi.md');
     await expect($('[data-testid="library-count"]')).toHaveText('The latest 15 of 34');
     await expect($('[data-testid="library-see-all"]')).toHaveText('See all 34 in the list');
