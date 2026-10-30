@@ -9,7 +9,7 @@ import { QuestPage, StatisticsPage } from './Insights';
 
 const today = day(2026, 9, 30);
 const entries: DayEntry[] = [
-  { date: day(2026, 9, 1), day: parseDay('### Tasks\n- [x] #daily/code — Build [minutes::60]\n> - [x] Exercise\n') },
+  { date: day(2026, 9, 1), day: parseDay('### Tasks\n- [x] #daily/code — Build [minutes::60]\n- [ ] #daily/code — Review\n> - [x] Exercise\n') },
   { date: day(2026, 9, 2), day: parseDay('### Tasks\n- [ ] #daily/business — Plan [minutes::30]\n> - [ ] Exercise\n') },
   { date: day(2026, 8, 1), day: parseDay('### Tasks\n- [x] #daily/code — Earlier [minutes::120]\n') },
 ];
@@ -21,6 +21,7 @@ describe('statistics', () => {
     render(<StatisticsPage days={entries} dayOf={dayOf} today={today} showHabits />);
     await user.hover(screen.getByRole('button', { name: 'Oct 1, 2026: 1h 0m' }));
     expect(screen.getByTestId('activity-detail')).toHaveTextContent('Build');
+    expect(screen.getByTestId('activity-detail')).toHaveTextContent('Review');
     expect(screen.getByTestId('activity-detail')).toHaveTextContent('code');
     expect(screen.getByText('1h 30m')).toBeInTheDocument();
     const habit = screen.getByRole('img', { name: 'Exercise · October 2026: 1/31 days (3%)' });
