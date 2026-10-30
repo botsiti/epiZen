@@ -20,19 +20,20 @@ interface Props {
   onSaved: () => Promise<void>;
 }
 
-type Filter = 'all' | 'sure' | 'unsure' | 'none';
+type Filter = 'all' | 'sure' | 'unsure' | 'none' | 'failed';
 
 const FILTERS: [Filter, string][] = [
   ['all', 'All'],
   ['sure', 'Sure'],
   ['unsure', 'Unsure'],
   ['none', 'Nothing found'],
+  ['failed', 'Failed'],
 ];
 
 const isFound = (row: Row) => row.candidates.length > 0 && row.status !== 'waiting' && row.status !== 'searching';
 const sure = (row: Row) => isFound(row) && Boolean(row.candidates[row.pick]?.sure);
 const shows = (filter: Filter, row: Row) =>
-  filter === 'all' || (filter === 'sure' ? sure(row) : filter === 'unsure' ? isFound(row) && !sure(row) : row.status === 'none' || row.status === 'failed');
+  filter === 'all' || (filter === 'sure' ? sure(row) : filter === 'unsure' ? isFound(row) && !sure(row) : filter === 'failed' ? row.status === 'failed' : row.status === 'none');
 
 const minutes = (seconds: number) => (seconds < 60 ? 'under a minute' : `${Math.ceil(seconds / 60)} min`);
 const plural = (count: number, one: string) => `${count} ${one}${count === 1 ? '' : 's'}`;
@@ -65,10 +66,11 @@ export function FindCovers({ entries, files, scope, onClose, onSaved }: Props) {
   const sureCount = rows.filter(sure).length;
   const ticked = rows.filter((row) => row.ticked && (row.status === 'found' || row.status === 'unsaved')).length;
   const unsaved = count(['unsaved']);
+  const failed = count(['failed']);
   const waiting = count(['waiting']);
   const kinds = new Set(rows.map((row) => row.entry.kind));
-  const pace = [kinds.has('album') && 'MusicBrainz takes one search a second', kinds.has('podcast') && 'iTunes about twenty a minute'].filter(Boolean).join(', ');
-  const tally = found ? ` · ${found} found, ${sureCount} sure` : '';
+  const pace = [kinds.has('album') && 'Wikipedia first; MusicBrainz fallback takes one request a second', kinds.has('podcast') && 'iTunes about twenty a minute'].filter(Boolean).join(', ');
+  const tally = `${found ? ` · ${found} found, ${sureCount} sure` : ''}${failed ? ` · ${failed} failed` : ''}`;
 
   const hint = saving
     ? `Saving ${count(['saved'])} of ${count(['saved', 'saving']) + ticked}…`
@@ -78,7 +80,7 @@ export function FindCovers({ entries, files, scope, onClose, onSaved }: Props) {
         ? `Searched ${searched} of ${total}${tally} · about ${minutes(secondsLeft)} left${pace ? `. ${pace}.` : '.'}`
         : waiting
           ? `Stopped at ${searched} of ${total}${tally}. Go on to search the rest.`
-          : `Searched all ${total}${tally}. The ticked ones are saved; untick any that look wrong.`;
+          : `Searched all ${total}${tally}. ${failed ? 'Retry failed searches or save the ticked covers.' : 'Review the ticked covers before saving.'}`;
 
   // Not while saving: each cover is saved before the sheet goes. With ticked ones unsaved, it asks first.
   const close = () => {
@@ -196,7 +198,7 @@ const CoverRow = memo(function CoverRow({ row, run }: { row: Row; run: CoverRun 
         : status === 'skipped'
           ? 'Skipped'
           : candidate
-            ? [candidate.sure ? 'Sure' : candidate.doubt, fills.length ? `fills ${fills.map((fill) => fill.key).join(', ')}` : undefined].filter(Boolean).join(' · ')
+            ? [candidate.sure ? 'Sure' : candidate.doubt, candidate.result.from === 'wikipedia' && entry.kind === 'album' ? 'Wikipedia' : undefined, fills.length ? `fills ${fills.map((fill) => fill.key).join(', ')}` : undefined].filter(Boolean).join(' · ')
             : undefined;
   return (
     <li className={`covers-row is-${status}`} data-testid="covers-row" data-path={entry.path} data-status={status} data-ticked={row.ticked}>
@@ -220,7 +222,7 @@ const CoverRow = memo(function CoverRow({ row, run }: { row: Row; run: CoverRun 
       )}
       <span className="covers-match">
         <span className={status === 'searching' ? 'covers-found is-searching' : 'covers-found'} data-testid="covers-found">
-          {candidate ? describe(candidate) : status === 'failed' ? 'Not searched' : (STATUS[status] ?? '')}
+          {candidate ? describe(candidate) : status === 'failed' ? 'Search failed' : (STATUS[status] ?? '')}
         </span>
         {why && <span className="covers-why">{why}</span>}
       </span>
@@ -228,6 +230,11 @@ const CoverRow = memo(function CoverRow({ row, run }: { row: Row; run: CoverRun 
         {open && row.candidates.length > 1 && (
           <button type="button" className="covers-next" onClick={() => run.next(entry.path)} title="The next match" data-testid="covers-next">
             {row.pick + 1}/{row.candidates.length} ›
+          </button>
+        )}
+        {status === 'failed' && (
+          <button type="button" className="covers-next" onClick={() => run.retry(entry.path)} disabled={run.snapshot().saving} aria-label={`Retry ${entry.title}`} data-testid="covers-retry">
+            Retry
           </button>
         )}
         {status === 'skipped' ? (

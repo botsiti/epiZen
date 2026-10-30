@@ -1,7 +1,7 @@
 import type { RecordInput, ThoughtRecord } from '../../lib/cbt';
 import type { FocusHow } from '../calendar/FocusMenu';
 import type { MediaItem } from '../../lib/media';
-import type { Period } from '../../lib/periodic';
+import type { Period, PeriodicFeatures } from '../../lib/periodic';
 import type { Quest, QuestChange, QuestEntry } from '../../lib/quests';
 import type { WeekHeading } from '../../lib/sections';
 import type { DayEntry } from '../../lib/rollup';
@@ -10,6 +10,7 @@ import type { TaskEdit } from '../../lib/timeblocks';
 /** What a periodic page reads besides its own note. Built by App from the vault; nothing in the note is code. */
 export interface PeriodicSpec {
   period: Period;
+  features?: PeriodicFeatures;
   /** The day, the week's Monday or the month's first day. */
   date: Date;
   /** The day behind a date: its note, if it has one, and what the note holds. */
@@ -30,7 +31,7 @@ export interface PeriodicSpec {
 }
 
 export interface PeriodicActions {
-  /** Opens the note of that day, week or month, or creates it from its template. */
+  /** Opens the note of that day, week or month, or creates it with built-in starting text. */
   onOpenPeriod: (period: Period, date: Date) => void;
   onOpenNote: (path: string) => void;
   onEdit: () => void;

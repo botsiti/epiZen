@@ -19,6 +19,8 @@ interface BoardProps extends Actions {
   today: Date;
   /** Labels for the weekly and monthly groups, such as "This week". */
   groups?: { weekly: string; monthly: string };
+  /** Limit the initial board, with more available on demand. */
+  pageSize?: number;
   /** A chapter or a deadline from a quest's detail. Without it, a card doesn't open its detail. */
   onChange?: (quest: Quest, change: QuestChange) => Promise<string | undefined>;
 }
@@ -35,9 +37,10 @@ const opened = (quests: QuestEntry[], open?: Opened) => {
 type Filter = 'all' | 'weekly' | 'monthly';
 
 /** Mythic quests pinned on top, then weekly and monthly quests behind filter chips. */
-export function QuestBoard({ quests, art, today, onToggle, onProgress, onChange, groups = { weekly: 'This week', monthly: 'This month' } }: BoardProps) {
+export function QuestBoard({ quests, art, today, onToggle, onProgress, onChange, pageSize, groups = { weekly: 'This week', monthly: 'This month' } }: BoardProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [open, setOpen] = useState<Opened>();
+  const [limit, setLimit] = useState(pageSize ?? Infinity);
   const detail = opened(quests, open);
   const onOpen = onChange && ((quest: Quest) => setOpen({ path: quest.path, line: quest.line, title: quest.title }));
   const mythic = useMemo(
@@ -50,6 +53,8 @@ export function QuestBoard({ quests, art, today, onToggle, onProgress, onChange,
   const regular = quests.filter(({ quest }) => quest.scope !== 'custom');
   const count = (scope: Filter) => regular.filter(({ quest }) => scope === 'all' || quest.scope === scope).length;
   const shown = (['weekly', 'monthly'] as const).filter((scope) => filter === 'all' || filter === scope);
+  const visible = [...mythic, ...regular.filter(({ quest }) => filter === 'all' || quest.scope === filter)].slice(0, limit);
+  const hasMore = mythic.length + regular.filter(({ quest }) => filter === 'all' || quest.scope === filter).length > limit;
   if (!quests.length) return <p className="empty-line">No quests here. A line like “- [ ] #quest/weekly - Two long runs [xp::300]” in a weekly note shows as a card.</p>;
   return (
     <div className="quest-board" data-testid="quest-board">
@@ -65,7 +70,7 @@ export function QuestBoard({ quests, art, today, onToggle, onProgress, onChange,
             <span className="section-note mythic-pin">Pinned above every filter</span>
           </div>
           <div className="quest-grid">
-            {mythic.map((entry, i) => (
+            {mythic.filter((entry) => visible.includes(entry)).map((entry, i) => (
               <QuestCard key={`${entry.quest.path}:${entry.quest.line}`} entry={entry} i={i} art={art(entry.quest)} today={today} onToggle={onToggle} onProgress={onProgress} onOpen={onOpen} />
             ))}
           </div>
@@ -75,7 +80,7 @@ export function QuestBoard({ quests, art, today, onToggle, onProgress, onChange,
         <>
           <div className="quest-filters" role="tablist">
             {(['all', 'weekly', 'monthly'] as const).map((scope) => (
-              <button key={scope} type="button" role="tab" aria-selected={filter === scope} className={filter === scope ? 'chip-filter is-on' : 'chip-filter'} onClick={() => setFilter(scope)} data-testid="quest-filter" data-filter={scope}>
+              <button key={scope} type="button" role="tab" aria-selected={filter === scope} className={filter === scope ? 'chip-filter is-on' : 'chip-filter'} onClick={() => { setFilter(scope); setLimit(pageSize ?? Infinity); }} data-testid="quest-filter" data-filter={scope}>
                 {scope === 'all' ? 'All' : scope === 'weekly' ? 'Weekly' : 'Monthly'} · {count(scope)}
               </button>
             ))}
@@ -86,7 +91,7 @@ export function QuestBoard({ quests, art, today, onToggle, onProgress, onChange,
             return (
               <Section key={scope} title={groups[scope]} note={`${list.filter(({ quest }) => quest.done).length}/${list.length} done`}>
                 <div className="quest-grid">
-                  {list.map((entry, i) => (
+                  {list.filter((entry) => visible.includes(entry)).map((entry, i) => (
                     <QuestCard key={`${entry.quest.path}:${entry.quest.line}`} entry={entry} i={i} art={art(entry.quest)} today={today} onToggle={onToggle} onProgress={onProgress} onOpen={onOpen} />
                   ))}
                 </div>
@@ -95,6 +100,7 @@ export function QuestBoard({ quests, art, today, onToggle, onProgress, onChange,
           })}
         </>
       )}
+      {pageSize && hasMore && <button type="button" className="shelf-all" onClick={() => setLimit((n) => n + pageSize)}>See {pageSize} more</button>}
       {detail && onChange && (
         <QuestDetail entry={detail} art={art(detail.quest)} today={today} onToggle={onToggle} onProgress={onProgress} onChange={onChange} onClose={() => setOpen(undefined)} />
       )}

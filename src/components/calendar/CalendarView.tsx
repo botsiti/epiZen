@@ -34,7 +34,7 @@ interface Props {
   onStartTimer: (choice: TaskChoice, how?: FocusHow) => void;
   /** Opens a day's page. */
   onOpenDay: (date: Date) => void;
-  /** Changes a day's note, creating it from its template first. The note's path once the change is in it. */
+  /** Changes a day's note, creating it with built-in starting text first. The note's path once the change is in it. */
   onWrite: (date: Date, edit: (text: string) => string, failed: string) => Promise<string | undefined>;
   /** A task edited or deleted here, once its note holds the change. */
   onTaskChanged: (change: TaskChange) => void;

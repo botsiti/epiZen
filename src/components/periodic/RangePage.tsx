@@ -70,9 +70,9 @@ export function WeekPage({ spec, path, text, actions }: Props) {
           {sum.noted} of 7 days written · {formatMinutes(sum.totals.logged)} logged
         </p>
       </Hero>
-      <Tabs tabs={WEEK_TABS} active={tab} onChange={choose} />
+      <Tabs tabs={WEEK_TABS.filter((item) => spec.features?.habits !== false || item !== 'Habits')} active={spec.features?.habits === false && tab === 'Habits' ? 'Overview' : tab} onChange={choose} />
       <div className="tab-panel" key={tab}>
-        {tab === 'Overview' && (
+        {(tab === 'Overview' || (tab === 'Habits' && spec.features?.habits === false)) && (
           <>
             <Totals sum={sum} spec={spec} span={7} />
             <Section title="The days" i={12}>
@@ -100,7 +100,7 @@ export function WeekPage({ spec, path, text, actions }: Props) {
             />
           </>
         )}
-        {tab === 'Habits' && <Habits sum={sum} labels={days.map((entry) => formatDate(entry.date, 'dd'))} />}
+        {tab === 'Habits' && spec.features?.habits !== false && <Habits sum={sum} labels={days.map((entry) => formatDate(entry.date, 'dd'))} />}
         {tab === 'Stats' && <Stats sum={sum} spec={spec} labels={days.map((entry) => formatDate(entry.date, 'ddd'))} />}
       </div>
     </article>
@@ -155,9 +155,9 @@ export function MonthPage({ spec, path, actions }: Props) {
           <span className="faint">{current ? `day ${elapsed} of ${days.length}` : elapsed ? 'the whole month' : 'still to come'}</span>
         </div>
       </Hero>
-      <Tabs tabs={MONTH_TABS} active={tab} onChange={choose} />
+      <Tabs tabs={MONTH_TABS.filter((item) => spec.features?.habits !== false || item !== 'Habits')} active={spec.features?.habits === false && tab === 'Habits' ? 'Overview' : tab} onChange={choose} />
       <div className="tab-panel" key={tab}>
-        {tab === 'Overview' && (
+        {(tab === 'Overview' || (tab === 'Habits' && spec.features?.habits === false)) && (
           <>
             <Totals sum={sum} spec={spec} span={days.length} />
             <Section title="The month, day by day" note="each day by how much of its plan was done" i={12}>
@@ -182,7 +182,7 @@ export function MonthPage({ spec, path, actions }: Props) {
           </>
         )}
         {tab === 'Days' && <DayRows days={days} actions={actions} />}
-        {tab === 'Habits' && <Habits sum={sum} labels={days.map((entry) => String(entry.date.getDate()))} />}
+        {tab === 'Habits' && spec.features?.habits !== false && <Habits sum={sum} labels={days.map((entry) => String(entry.date.getDate()))} />}
         {tab === 'Stats' && <Stats sum={sum} spec={spec} labels={days.map((entry) => String(entry.date.getDate()))} />}
       </div>
     </article>
@@ -221,10 +221,10 @@ function Totals({ sum, spec, span }: { sum: Rollup; spec: PeriodicSpec; span: nu
           <CountUp value={totals.tasksDone} />
           <span className="of"> / {totals.tasks}</span>
         </Tile>
-        <Tile label="Habits" i={4} meta={<Bar share={totals.habits ? totals.habitsDone / totals.habits : 0} />}>
+        {spec.features?.habits !== false && <Tile label="Habits" i={4} meta={<Bar share={totals.habits ? totals.habitsDone / totals.habits : 0} />}>
           <CountUp value={totals.habitsDone} />
           <span className="of"> / {totals.habits}</span>
-        </Tile>
+        </Tile>}
         <Tile label="Perfect days" i={5} meta="every task of the plan done">
           <CountUp value={sum.perfect} />
           <span className="of"> / {span}</span>

@@ -103,14 +103,8 @@ describe('the demo vault', () => {
     await expect($('[data-testid="vault-name"]')).toHaveText('demo-vault');
     await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('119 notes · 12 folders · 46 images'));
     await expect($('[data-testid="today-create"]')).toBeDisplayed();
-    // Albums, films, books and podcasts, never videos: books and podcasts write `Rating`, and count too.
-    expect(await $$('[data-testid="shelf"]').length).toBe(4);
-    await expect($('[data-testid="shelf"][data-folder="Rating/youtube"]')).not.toBeExisting();
-    expect(await $$('[data-testid="cover-card"]').length).toBe(34);
-    await expect($('[data-testid="shelf"][data-folder="Rating/music"]')).toHaveText(expect.stringContaining('88'));
-    await browser.waitUntil(async () => (await $$('.cover-image[data-testid="vault-image"]').length) === 34, {
-      timeoutMsg: 'the covers never loaded',
-    });
+    await expect($('[data-testid="recent-library"]')).toBeDisplayed();
+    expect(await $$('[data-testid="recent-library"] [data-testid="cover-card"]').length).toBeLessThanOrEqual(10);
     // Life XP is the demo's 60 days (12,296 XP) plus its quests, less what open quests have lost
     // by today's date, so it moves with the clock; src/lib/home.test.ts and quests.test.ts pin the sums.
     await expect($('[data-testid="hero-title"]')).toHaveText(expect.stringMatching(/^Level \d+$/));
@@ -120,14 +114,27 @@ describe('the demo vault', () => {
     await $('[data-testid="spheres"]').scrollIntoView();
     await expect($('[data-testid="lead-sphere"]')).toHaveText(expect.stringContaining('Personal Growth'));
     await screenshot('34-home-spheres');
-    await $('[data-testid="shelf"][data-folder="Rating/music"]').scrollIntoView();
+    await $('[data-testid="recent-library"]').scrollIntoView();
     await screenshot('36-home-shelves');
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
   });
 
   it('opens an album from its cover on the home screen', async () => {
-    await $('[data-testid="cover-card"][data-path="Rating/music/Glasshouse Weather.md"]').click();
-    await expect(title()).toHaveText('Glasshouse Weather');
+    const cover = $('[data-testid="recent-library"] [data-testid="cover-card"]');
+    const name = await cover.$('.cover-title').getText();
+    await cover.click();
+    await expect(title()).toHaveText(name);
+  });
+
+  it('opens quests and statistics with period navigation', async () => {
+    await $('[data-testid="open-quests"]').click();
+    await expect($('[data-testid="quests-page"]')).toBeDisplayed();
+    await $('[aria-label="Previous month"]').click();
+    await screenshot('100-quests');
+    await $('[data-testid="open-statistics"]').click();
+    await expect($('[data-testid="statistics-page"]')).toBeDisplayed();
+    await $('[data-testid="activity-detail"]').waitForDisplayed();
+    await screenshot('101-statistics');
   });
 
   it('opens a daily note from the sidebar as its page', async () => {
@@ -613,7 +620,7 @@ describe('the demo vault', () => {
     await expect($('[data-testid="library-missing"]')).toHaveText('2 without a cover · Find covers');
     await $('[data-testid="find-covers-open"]').click();
     await $('[data-testid="find-covers"]').waitForDisplayed();
-    // The e2e build answers from test/fixtures/covers/: MusicBrainz for the album, Wikipedia and Wikidata for the film.
+    // The e2e build answers from test/fixtures/covers/: Wikipedia for the album, Wikipedia and Wikidata for the film.
     await browser.waitUntil(async () => (await $$('[data-testid="covers-row"][data-status="found"]').length) === 2, { timeoutMsg: 'the covers were never found' });
     await browser.waitUntil(async () => (await $$('[data-testid="covers-row"] [data-testid="lookup-cover"]').length) === 2, { timeoutMsg: 'the found covers never loaded' });
     const rows = () =>
@@ -627,10 +634,10 @@ describe('the demo vault', () => {
           ),
       );
     expect(await rows()).toEqual({
-      [ANTICS]: ['true', 'Antics · Interpol · 2004', 'Sure · fills Year, genre'],
+      [ANTICS]: ['true', 'Antics · Interpol · 2004', 'Sure · Wikipedia · fills Year'],
       [IKIRU]: ['true', 'Ikiru · Akira Kurosawa · 1952', 'Sure · fills Director, Genre'],
     });
-    await expect($('[data-testid="covers-hint"]')).toHaveText('Searched all 2 · 2 found, 2 sure. The ticked ones are saved; untick any that look wrong.');
+    await expect($('[data-testid="covers-hint"]')).toHaveText('Searched all 2 · 2 found, 2 sure. Review the ticked covers before saving.');
     await screenshot('89-find-covers');
 
     // The film's is left for its page: unticked, it isn't saved.
@@ -641,7 +648,7 @@ describe('the demo vault', () => {
     await expect($(`[data-testid="covers-row"][data-path="${ANTICS}"]`)).toHaveAttribute('data-status', 'saved');
     await screenshot('90-find-covers-saved');
     expect(readFileSync(join(vaultCopy(), ANTICS), 'utf8')).toBe(
-      '---\nArtist: Interpol\nYear: 2004\nlistened: 2026-10-07\ngenre:\n  - indie rock\n  - alternative rock\n  - indie\nrating: 77\nfavorite tracks:\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[antics.png|240]]\n',
+      '---\nArtist: Interpol\nYear: 2004\nlistened: 2026-10-07\ngenre:\nrating: 77\nfavorite tracks:\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[antics.png|240]]\n',
     );
     const saved = readFileSync(join(vaultCopy(), 'Rating/music/_attachments/antics.png'));
     expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);
@@ -684,11 +691,11 @@ describe('the demo vault', () => {
     expect(readFileSync(join(vaultCopy(), 'Rating/kino/_attachments/ikiru.png')).length).toBeGreaterThan(0);
   });
 
-  it('creates the missing day before from its template', async () => {
+  it('creates the missing day before with built-in text', async () => {
     await openNote(`${DAYS}/01.08.2026.md`);
     await $('[data-testid="nav-prev"]').click();
     await expect(title()).toHaveText('31.07.2026');
-    expect(readFileSync(join(vaultCopy(), `${DAYS}/31.07.2026.md`), 'utf8')).toContain('[[01.08.2026|Tomorrow →]]');
+    expect(readFileSync(join(vaultCopy(), `${DAYS}/31.07.2026.md`), 'utf8')).toContain('### Tasks');
     await screenshot('10-day-from-link');
   });
 
@@ -714,7 +721,14 @@ describe('the demo vault', () => {
     await screenshot('12-new-note');
     await $('[data-testid="new-note-create"]').click();
     await $('[data-testid="editor"] .cm-content').waitForDisplayed();
-    await typeInEditor('Hello from Epizen, see [[Someday maybe]] and [[Glass');
+    // Highlights appear as soon as their closing markup is typed.
+    const highlights = '==A quiet thought== and <mark style="background: #FFF3A3A6;">a warm highlight</mark> and <font color="#00b050">green words</font>\n\n';
+    await typeInEditor(highlights + 'Hello from Epizen, see [[Someday maybe]] and [[Glass');
+    const preview = $('[data-testid="preview"]');
+    await expect(preview.$$('mark')[0]).toHaveText('A quiet thought');
+    await expect(preview.$$('mark')[1]).toHaveText('a warm highlight');
+    await expect(preview.$('.note-colored-text')).toHaveText('green words');
+    await screenshot('13a-live-highlights');
     const suggestion = $('.cm-tooltip-autocomplete li');
     await suggestion.waitForDisplayed();
     await expect(suggestion).toHaveText(expect.stringContaining('Glasshouse Weather'));
@@ -723,13 +737,14 @@ describe('the demo vault', () => {
     await browser.execute(() => {
       document.querySelector('.cm-tooltip-autocomplete li')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
-    const typed = 'Hello from Epizen, see [[Someday maybe]] and [[Glasshouse Weather]]';
+    const typed = highlights + 'Hello from Epizen, see [[Someday maybe]] and [[Glasshouse Weather]]';
     const saved = () => readFileSync(join(vaultCopy(), 'Inbox idea.md'), 'utf8');
     await browser.waitUntil(() => saved() === typed, { timeout: 5000, timeoutMsg: 'the link was never completed and saved' });
     await expect($('[data-testid="save-state"]')).toHaveText('Saved');
     await expect($('[data-testid="preview"]')).toHaveText(expect.stringContaining('Hello from Epizen'));
     await expect($('[data-testid="tree-note"][data-path="Inbox idea.md"]')).toBeDisplayed();
     await $('[data-testid="edit-done"]').click();
+    await expect($('[data-testid="note"] .note-body mark')).toHaveText('A quiet thought');
   });
 
   it('explains a link to a note that does not exist, and creates nothing', async () => {
@@ -960,13 +975,15 @@ describe('the demo vault', () => {
     await expect(title()).toHaveText('08.26 RPG');
   });
 
-  it('creates a missing day from its template, in its folder', async () => {
+  it('creates a missing day with built-in text, in its folder', async () => {
+    const before = snapshotVault(vaultCopy());
     await showMonth('July 2026');
     await $('[data-testid="calendar-day"][data-date="2026-07-30"]').click();
     await expect(title()).toHaveText('30.07.2026');
     const text = readFileSync(join(vaultCopy(), `${DAYS}/30.07.2026.md`), 'utf8');
-    expect(text).toMatch(/^---\ndate: 2026-07-30T\d\d:\d\d\n/);
-    expect(text).toContain('[[29.07.2026|← Yesterday]] | [[31.07.2026|Tomorrow →]] | [[2026-W31 - 27.07.26|Week]]');
+    expect(text).toMatch(/^---\ndate: 2026-07-30\n/);
+    expect(text).toContain('### Tasks');
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`added: ${DAYS}/30.07.2026.md`]);
     await screenshot('15-new-day');
   });
 
@@ -1319,20 +1336,54 @@ describe('the demo vault', () => {
     await screenshot('16-settings');
   });
 
+  it('keeps optional periodic features in settings without changing notes', async () => {
+    const before = snapshotVault(vaultCopy());
+    const habits = () => $('[data-testid="settings-feature-habits"]');
+    const records = () => $('[data-testid="settings-feature-thoughtRecords"]');
+    await habits().click();
+    await records().click();
+    await $('[data-testid="settings-save"]').click();
+    await $('[data-testid="settings"] .save-state').waitForDisplayed();
+    await openNote(DAY);
+    await showTab('Overview');
+    await expect($('[data-testid="hero-record"]')).not.toBeExisting();
+    await expect($('[data-testid="tile-habits"]')).not.toBeExisting();
+    await $('[data-testid="open-settings"]').click();
+    expect(await habits().isSelected()).toBe(false);
+    expect(await records().isSelected()).toBe(false);
+    await habits().click();
+    await records().click();
+    await $('[data-testid="settings-save"]').click();
+    await $('[data-testid="settings"] .save-state').waitForDisplayed();
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+  });
+
   it('keeps the podcast artwork preference in app settings without changing existing notes', async () => {
     const before = snapshotVault(vaultCopy());
     const settings = join(dirname(vaultCopy()), 'config', 'settings.json');
     const kept = () => (JSON.parse(readFileSync(settings, 'utf8')) as { podcasts?: { artwork?: string } }).podcasts?.artwork;
     const artwork = () => $('[data-testid="settings-podcast-artwork"]');
+    // The WebDriver's native option click does nothing in a non-focused macOS window.
+    // Dispatch the select's normal events; the assertions below still verify the UI and persisted setting.
+    const selectArtwork = async (value: 'show' | 'episode') => {
+      await browser.execute((next) => {
+        const select = document.querySelector<HTMLSelectElement>('[data-testid="settings-podcast-artwork"]');
+        if (!select) throw new Error('The podcast artwork control is missing');
+        select.value = next;
+        select.dispatchEvent(new Event('input', { bubbles: true }));
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }, value);
+      await expect(artwork()).toHaveValue(value);
+    };
     await $('[data-testid="settings-podcasts"]').scrollIntoView();
     await expect(artwork()).toHaveValue('show');
-    await artwork().selectByAttribute('value', 'episode');
+    await selectArtwork('episode');
     await $('[data-testid="settings-save"]').click();
     await browser.waitUntil(() => kept() === 'episode', { timeoutMsg: 'the podcast preference was not saved' });
     await $('[data-testid="sidebar-vault"]').click();
     await $('[data-testid="open-settings"]').click();
     await expect(artwork()).toHaveValue('episode');
-    await artwork().selectByAttribute('value', 'show');
+    await selectArtwork('show');
     await $('[data-testid="settings-save"]').click();
     await browser.waitUntil(() => kept() === 'show', { timeoutMsg: 'show thumbnails were not saved as the preference' });
     await $('[data-testid="settings-podcasts"]').scrollIntoView();

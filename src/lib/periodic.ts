@@ -10,7 +10,7 @@ export interface PeriodSettings {
   folder: string;
   /** moment.js format of the note name, as in Obsidian's daily notes settings. */
   format: string;
-  /** Vault path or name of the template note; `''` for an empty note. */
+  /** Legacy setting, retained for compatibility; new notes use built-in text. */
   template: string;
 }
 export type PeriodicSettings = Record<Period, PeriodSettings>;
@@ -130,4 +130,38 @@ export function fillTemplate(template: string, { title, date, format, now }: Tem
     }
     return whole;
   });
+}
+
+/** Built-in starting text for new notes. Existing vault notes are never rewritten. */
+export function builtInPeriodicText(period: Period, date: Date): string {
+  if (period === 'day') return `---
+date: ${formatDate(date, 'YYYY-MM-DD')}
+done:
+sleep:
+focus:
+energy:
+mood:
+---
+
+> [!tldr]+ Summary of the day
+>
+
+### Tasks
+
+**Gratitude practice:**
+
+### stream of consc
+`;
+  if (period === 'week') return '---\ncssclasses:\n  - rpg-week\n---\n\n#### Plus\n\n#### Minus\n\n#### Next\n';
+  return '---\ncssclasses:\n  - rpg-month\n---\n\n## Month Summary\n';
+}
+
+export interface PeriodicFeatures { habits: boolean; thoughtRecords: boolean }
+export const DEFAULT_PERIODIC_FEATURES: PeriodicFeatures = { habits: true, thoughtRecords: true };
+export function periodicFeatures(value: unknown): PeriodicFeatures {
+  const stored = record(value);
+  return {
+    habits: typeof stored.habits === 'boolean' ? stored.habits : true,
+    thoughtRecords: typeof stored.thoughtRecords === 'boolean' ? stored.thoughtRecords : true,
+  };
 }
