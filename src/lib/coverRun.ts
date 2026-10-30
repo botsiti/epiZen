@@ -48,6 +48,7 @@ const reason = (err: unknown) => (err instanceof Error ? err.message : String(er
  */
 export function pacedAsk(ask: Ask, pacers: Map<string, () => Promise<void>>, clock: Clock = realClock): Ask {
   const asked = new Map<string, Promise<unknown>>();
+  const cooling = new Map<string, number>();
   const turn = (host: string) => {
     let wait = pacers.get(host);
     if (!wait) {
@@ -57,14 +58,22 @@ export function pacedAsk(ask: Ask, pacers: Map<string, () => Promise<void>>, clo
     return wait();
   };
   const once = async (url: string): Promise<unknown> => {
+    const host = hostOf(url);
+    const until = cooling.get(host) ?? 0;
+    if (until > clock.now()) throw new Error(`the service is cooling down; retry in ${Math.ceil((until - clock.now()) / 1000)} seconds`);
     for (let attempt = 0; ; attempt += 1) {
-      await turn(hostOf(url));
+      await turn(host);
       try {
         return await ask(url);
       } catch (err) {
         // The backend says "the service is busy" for a 503: MusicBrainz's word for "slower".
         const pause = RETRIES[attempt];
-        if (pause === undefined || !/busy/i.test(reason(err))) throw err;
+        const transient = /busy|rate limit|too many requests|took too long|answered (?:429|502|503|504)/i.test(reason(err));
+        if (!transient) throw err;
+        if (pause === undefined) {
+          cooling.set(host, clock.now() + 30_000);
+          throw new Error(`${reason(err)}; retry in 30 seconds`, { cause: err });
+        }
         await clock.sleep(pause);
       }
     }
@@ -283,6 +292,14 @@ export class CoverRun {
 
   tick(path: string, ticked: boolean) {
     this.update(path, (row) => (row.status === 'found' || row.status === 'unsaved' ? { ticked } : {}));
+  }
+
+  /** Retry a failed search without touching found or saved rows. */
+  retry(path: string) {
+    if (this.state.saving || !this.state.rows.some((row) => row.entry.path === path && row.status === 'failed')) return;
+    this.update(path, () => ({ status: 'waiting', message: undefined }));
+    this.stopped = true;
+    this.start();
   }
 
   /** Shows the next match the search found for a note, round to the first again. */

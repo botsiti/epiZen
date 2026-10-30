@@ -27,7 +27,7 @@ use tauri::{Emitter, Manager, RunEvent, State, WindowEvent};
 pub use calendar::{Access, CalendarInfo, Calendars, Event, EventChange, MemoryCalendars, NewEvent, Occurrence};
 pub use net::{Net, NetError, store_image};
 pub use settings::Settings;
-pub use vault::{FileKind, NoteText, Vault, VaultError, VaultFile};
+pub use vault::{FileKind, NoteEdit, NoteText, Vault, VaultError, VaultFile};
 
 #[cfg(all(feature = "e2e", not(debug_assertions)))]
 compile_error!("the `e2e` feature opens a WebDriver port; build it in debug mode only");
@@ -192,6 +192,34 @@ async fn create_note(state: Shared<'_>, path: String, text: String) -> Result<()
 #[tauri::command]
 async fn trash_note(state: Shared<'_>, path: String, expected: String) -> Result<String, String> {
     with_vault(state, |vault| vault.trash_note(&path, &expected))
+}
+
+#[tauri::command]
+async fn rename_note(
+    state: Shared<'_>,
+    path: String,
+    destination: String,
+    expected: String,
+    edits: Vec<NoteEdit>,
+) -> Result<(), String> {
+    // Keep other Epizen commands out until the rename and its link updates settle.
+    let guard = state.write().unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.vault()?.rename_note_and_links(&path, &destination, &expected, &edits).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+async fn reveal_note(state: Shared<'_>, path: String) -> Result<(), String> {
+    let real = with_vault(state, |vault| vault.note_path(&path))?;
+    let status = std::process::Command::new("open")
+        .arg("-R")
+        .arg(real)
+        .status()
+        .map_err(|err| err.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Finder couldn't reveal the note.".to_owned())
+    }
 }
 
 #[tauri::command]
@@ -395,6 +423,8 @@ pub fn run() {
             read_image,
             create_note,
             trash_note,
+            rename_note,
+            reveal_note,
             write_note,
             lookup_json,
             lookup_image,

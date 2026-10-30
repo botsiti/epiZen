@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use epizen_lib::{FileKind, Vault, store_image};
+use epizen_lib::{FileKind, NoteEdit, Vault, store_image};
 use tempfile::TempDir;
 
 fn copy_of_demo_vault() -> (TempDir, PathBuf) {
@@ -156,5 +156,29 @@ fn deleting_a_library_note_moves_only_its_markdown_file_to_recoverable_trash() {
     let mut expected = before;
     let bytes = expected.remove(&PathBuf::from(path)).unwrap();
     expected.insert(PathBuf::from(trashed), bytes);
+    assert_eq!(snapshot(&copy), expected);
+}
+
+#[test]
+fn renaming_and_duplicating_a_note_changes_only_the_requested_paths() {
+    let (_dir, copy) = copy_of_demo_vault();
+    let before = snapshot(&copy);
+    let vault = Vault::open(&copy).unwrap();
+    let source = "Rating/music/Glasshouse Weather.md";
+    let renamed = "Rating/music/Glasshouse renamed.md";
+    let duplicate = "Rating/music/Glasshouse copy.md";
+    let text = vault.read_note(source).unwrap();
+    let edits: Vec<NoteEdit> = vault.read_all_notes().unwrap().into_iter().filter_map(|note| {
+        let next = note.text.replace("[[Glasshouse Weather", "[[Glasshouse renamed");
+        if next == note.text { None } else { Some(NoteEdit { path: note.path, expected: note.text, text: next }) }
+    }).collect();
+    assert!(!edits.is_empty());
+    vault.rename_note_and_links(source, renamed, &text, &edits).unwrap();
+    vault.create_note(duplicate, &text).unwrap();
+    let mut expected = before;
+    for edit in edits { expected.insert(PathBuf::from(edit.path), edit.text.into_bytes()); }
+    let bytes = expected.remove(Path::new(source)).unwrap();
+    expected.insert(PathBuf::from(renamed), bytes.clone());
+    expected.insert(PathBuf::from(duplicate), bytes);
     assert_eq!(snapshot(&copy), expected);
 }

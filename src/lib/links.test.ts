@@ -44,6 +44,11 @@ describe('resolveLink', () => {
     expect(resolveLink('Projects/Plan', files)?.path).toBe('Projects/Plan.md');
   });
 
+  it('prefers an explicit vault path to a same-folder suffix match', () => {
+    const paths = [note('Notes/New.md'), note('Archive/Notes/New.md')];
+    expect(resolveLink('Notes/New', paths, 'Archive/Notes/Index.md')?.path).toBe('Notes/New.md');
+  });
+
   it('matches names whatever their Unicode normalization', () => {
     const decomposed = [note('Notes/Йога.md'.normalize('NFD'))];
     expect(resolveLink('Йога'.normalize('NFC'), decomposed)).toBeDefined();

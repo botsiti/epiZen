@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { day, sameDay } from '../../lib/dates';
 import { parseDay } from '../../lib/day';
-import type { Shelf } from '../../lib/media';
+import type { MediaEntry } from '../../lib/library';
 import type { DayEntry } from '../../lib/rollup';
 import { Home, type HomeProps } from './Home';
 
@@ -50,14 +50,9 @@ const DAYS: DayEntry[] = [
   { date: day(2026, 8, 28), path: 'Calendar/28.09.2026.md', day: parseDay(SEP_28) },
   { date: TODAY, path: 'Calendar/29.09.2026.md', day: parseDay(SEP_29) },
 ];
-const SHELVES: Shelf[] = [
-  {
-    folder: 'Rating/music',
-    items: [
-      { path: 'Rating/music/Glasshouse Weather.md', title: 'Glasshouse Weather', subtitle: 'Mira Okonkwo', rating: 88, date: '2026-08-10' },
-      { path: 'Rating/music/Old.md', title: 'Old', rating: 70, date: '2025-05-01' },
-    ],
-  },
+const LIBRARY: MediaEntry[] = [
+  { path: 'Rating/music/Glasshouse Weather.md', title: 'Glasshouse Weather', kind: 'album', maker: 'Mira Okonkwo', rating: 88, date: '2026-08-10', genres: [], tracks: [] },
+  { path: 'Rating/music/Old.md', title: 'Old', kind: 'album', rating: 70, date: '2025-05-01', genres: [], tracks: [] },
 ];
 
 const props = (overrides: Partial<HomeProps> = {}): HomeProps => ({
@@ -73,7 +68,10 @@ const props = (overrides: Partial<HomeProps> = {}): HomeProps => ({
   onQuestToggle: vi.fn(),
   onQuestProgress: vi.fn(),
   scales: { mood: 5, energy: 5, focus: 5, soc: 5 },
-  shelves: SHELVES,
+  library: LIBRARY,
+  onSeeLibrary: vi.fn(),
+  onSeeQuests: vi.fn(),
+  onSeeStatistics: vi.fn(),
   onOpenNote: vi.fn(),
   onOpenPeriod: vi.fn(),
   ...overrides,
@@ -132,7 +130,7 @@ describe('the homepage', () => {
 
   it('offers to create today’s note when there is none', () => {
     render(<Home {...props({ today: day(2026, 8, 30), todayNote: { name: '30.09.2026' } })} />);
-    expect(screen.getByTestId('today-create')).toHaveAttribute('title', expect.stringContaining('creates it from its template'));
+    expect(screen.getByTestId('today-create')).toHaveAttribute('title', expect.stringContaining('creates it with built-in starting text'));
     expect(screen.getByTestId('today')).toHaveTextContent('No daily note for today yet.');
   });
 
@@ -170,18 +168,18 @@ describe('the homepage', () => {
     expect(screen.getByTestId('hero-title')).toHaveTextContent('Level 1');
   });
 
-  it("shows the shelves with this year's count", async () => {
+  it('shows at most ten recent library items and opens the library', async () => {
     const user = userEvent.setup();
     const onOpenNote = vi.fn();
-    const onSeeAll = vi.fn();
-    render(<Home {...props({ onOpenNote, onSeeAll })} />);
-    // Albums, films, books and podcasts: the kinds with nothing rated yet say how to start.
-    const shelves = screen.getAllByTestId('shelf');
-    expect(shelves.map((shelf) => shelf.dataset.folder)).toEqual(['Rating/music', 'Rating/kino', 'Rating/books', 'Rating/podcasts']);
-    expect(shelves[0]).toHaveTextContent('2 rated · 1 this year');
-    await user.click(within(shelves[1] as HTMLElement).getByRole('button', { name: 'Add the first film →' }));
-    expect(onSeeAll).toHaveBeenCalledWith('Rating/kino');
-    await user.click(screen.getAllByTestId('cover-card')[0] as HTMLElement);
-    expect(onOpenNote).toHaveBeenCalledWith('Rating/music/Glasshouse Weather.md');
+    const onSeeLibrary = vi.fn();
+    const extra = Array.from({ length: 10 }, (_, i): MediaEntry => ({ path: `new-${i}`, title: `New ${i}`, kind: 'film', date: '2026-09-01', genres: [], tracks: [] }));
+    render(<Home {...props({ library: [...LIBRARY, ...extra], onOpenNote, onSeeLibrary })} />);
+    const recent = screen.getByTestId('recent-library');
+    expect(within(recent).getAllByTestId('cover-card')).toHaveLength(10);
+    expect(within(recent).queryByText('Old')).not.toBeInTheDocument();
+    await user.click(within(recent).getByRole('button', { name: 'See all →' }));
+    expect(onSeeLibrary).toHaveBeenCalled();
+    await user.click(within(recent).getAllByTestId('cover-card')[0] as HTMLElement);
+    expect(onOpenNote).toHaveBeenCalled();
   });
 });

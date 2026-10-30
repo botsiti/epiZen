@@ -189,3 +189,23 @@ describe('Find cover, on a media page', () => {
     expect(api.writeNote).not.toHaveBeenCalled();
   });
 });
+
+it('explains a failed album search, keeps film search working, and lets the album be retried', async () => {
+  const user = userEvent.setup();
+  let offline = true;
+  vi.mocked(api.lookupJson).mockImplementation((url) => {
+    if (offline && (url.includes('Antics%20Interpol%20album') || url.includes('releasegroup%3A(antics)'))) return Promise.reject(new Error('offline'));
+    return index[url] ? Promise.resolve(fixture(index[url])) : Promise.resolve({});
+  });
+  render(<LibraryView library={collectLibrary(notes, files)} files={files} tab="all" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} today={new Date(2026, 9, 28)} onOpenNote={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} onChanged={vi.fn(() => Promise.resolve())} />);
+  await user.click(screen.getByTestId('find-covers-open'));
+  await waitFor(() => expect(row('Antics')).toHaveAttribute('data-status', 'failed'), { timeout: 5000 });
+  await waitFor(() => expect(row('Ikiru')).toHaveAttribute('data-status', 'found'), { timeout: 5000 });
+  expect(row('Antics')).toHaveTextContent('Search failed');
+  expect(row('Antics')).toHaveTextContent('offline');
+  expect(screen.getByTestId('covers-hint')).toHaveTextContent('1 failed');
+  offline = false;
+  await user.click(within(row('Antics')).getByRole('button', { name: 'Retry Antics' }));
+  await waitFor(() => expect(row('Antics')).toHaveAttribute('data-status', 'found'), { timeout: 5000 });
+  expect(row('Antics')).toHaveTextContent('Antics · Interpol · 2004');
+});

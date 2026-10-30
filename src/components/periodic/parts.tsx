@@ -35,7 +35,7 @@ export function NavButton({ label, onClick, exists, testId, title }: { label: st
       type="button"
       className={exists ? 'nav-chip' : 'nav-chip is-missing'}
       onClick={onClick}
-      title={exists ? title : `${title}: no note yet; opening it creates it from its template`}
+      title={exists ? title : `${title}: no note yet; opening it creates it with built-in starting text`}
       data-testid={testId}
     >
       {label}

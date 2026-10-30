@@ -48,6 +48,8 @@ export function resolveLink(target: string, files: VaultFile[], fromPath?: strin
     const path = normalize(file.path);
     return byPath ? path === wanted || path.endsWith(`/${wanted}`) : baseName(path) === wanted;
   });
+  // An explicit vault path wins over an identically named suffix elsewhere.
+  if (byPath) { const exact = matches.find((file) => normalize(file.path) === wanted); if (exact) return exact; }
   if (matches.length <= 1) return matches[0];
 
   const home = fromPath === undefined ? undefined : normalize(folderOf(fromPath));

@@ -9,7 +9,7 @@ interface Props {
   has: (period: Period, date: Date) => boolean;
   /** The day, week or month whose note is open. */
   selected?: { period: Period; date: Date };
-  /** Opens the note, or creates it from its template; `newTab` for a ⌘-click or a middle click. */
+  /** Opens the note, or creates it with built-in starting text; `newTab` for a ⌘-click or a middle click. */
   onOpen: (period: Period, date: Date, newTab: boolean) => void;
   /** Opens the big calendar: the time blocks of a week or a day, and the timer. */
   onOpenCalendar: (newTab: boolean) => void;

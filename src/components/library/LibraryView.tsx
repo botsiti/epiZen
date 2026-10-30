@@ -39,6 +39,7 @@ import { LibraryActions, type LibrarySelection } from './LibraryActions';
 import { LibraryDialog } from './LibraryDialog';
 import { filterLibrary, libraryYears, sortLibrary, sortDirection, LIST_PAGE_SIZE, type SortDirection, type LibrarySort } from '../../lib/libraryViews';
 import { KindMark, ToolMark } from './marks';
+import { KindBadge } from './KindBadge';
 import '../periodic/periodic.css';
 import './library.css';
 
@@ -359,6 +360,7 @@ function Card({ entry, mixed, onOpen }: { entry: MediaEntry; mixed?: boolean; on
       data-kind={entry.kind}
     >
       <span className="library-cover">
+        {mixed && <KindBadge kind={entry.kind} />}
         {entry.cover ? <VaultImage path={entry.cover} alt={entry.title} className="library-cover-image" lazy /> : <span className="library-cover-blank">{entry.title}</span>}
         <span className={entry.rating === undefined ? 'library-badge is-unrated' : 'library-badge'} data-testid="library-rating">
           {entry.rating ?? '—'}

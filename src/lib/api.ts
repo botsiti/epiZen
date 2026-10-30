@@ -35,7 +35,10 @@ export const readAllNotes = () => invoke<NoteText[]>('read_all_notes');
 // The note writes go through src-tauri/src/vault.rs: a new note never replaces a file, and
 // a note's text is replaced only while it still holds `expected`. Covers are saved separately below.
 export const createNote = (path: string, text: string) => invoke<void>('create_note', { path, text });
-/** Moves only this Markdown file into the vault's .trash, conditional on its expected text. */
+export interface NoteEdit { path: string; expected: string; text: string }
+/** Renames the file and conditionally updates its incoming links, rolling back on a conflict. */
+export const renameNote = (path: string, destination: string, expected: string, edits: NoteEdit[]) => invoke<void>('rename_note', { path, destination, expected, edits });
+export const revealNote = (path: string) => invoke<void>('reveal_note', { path });
 export const trashNote = (path: string, expected: string) => invoke<string>('trash_note', { path, expected });
 export const writeNote = (path: string, text: string, expected: string) =>
   invoke<void>('write_note', { path, text, expected });

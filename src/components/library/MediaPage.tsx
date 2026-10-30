@@ -14,6 +14,7 @@ import { MediaLabels } from './MediaLabels';
 import { AlbumTracks } from './AlbumTracks';
 import { propertyList, type ListChange } from '../../lib/mediaProperties';
 import { Thoughts } from './Thoughts';
+import { NoteTitle } from '../workspace/NoteTitle';
 import '../periodic/periodic.css';
 import './library.css';
 
@@ -34,6 +35,7 @@ interface Props {
   /** What `[[` offers while writing. */
   linkTargets: LinkTarget[];
   onEdit: () => void;
+  onRename?: () => void;
   onOpenLibrary: () => void;
   /** Why the last change didn't reach the note, if it didn't. */
   warning?: string;
@@ -123,9 +125,7 @@ export function MediaPage(props: Props) {
             {spec.one}
             {entry.date && <span className="media-kicker-date"> · {spec.dateLabel.toLowerCase()} {entry.date}</span>}
           </p>
-          <h1 className="hero-title media-title" data-testid="note-title">
-            {entry.title}
-          </h1>
+          <NoteTitle className="hero-title media-title" title={entry.title} onRename={props.onRename} />
           {facts.length > 0 && (
             <p className="media-byline">
               {entry.maker && <span className="media-maker">{entry.maker}</span>}

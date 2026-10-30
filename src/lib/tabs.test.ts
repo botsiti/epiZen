@@ -24,6 +24,7 @@ import {
   showIn,
   tabTitle,
   toStored,
+  renameNoteViews,
   type View,
   type Workspace,
 } from './tabs';
@@ -175,6 +176,18 @@ describe('text an editor could not save', () => {
   it('gets a new tab when its tab was closed', () => {
     const ws = showIn(close(openTab(open(newWorkspace(), note(DAY)), note(ALBUM)), 1), 1, unsaved);
     expect(shown(ws)).toEqual(['Glasshouse Weather', '*unsaved']);
+  });
+});
+
+describe('renaming an open note', () => {
+  it('updates every tab and its history without disturbing other views or editing state', () => {
+    let ws = open(newWorkspace(), { kind: 'note', path: DAY, editing: true });
+    ws = open(ws, note(ALBUM));
+    ws = openTab(ws, note(DAY));
+    const renamed = renameNoteViews(ws, DAY, 'renamed.md');
+    expect(renamed.tabs[0]?.history).toContainEqual({ kind: 'note', path: 'renamed.md', editing: true });
+    expect(renamed.tabs[0]?.history).toContainEqual(note(ALBUM));
+    expect(currentView(renamed.tabs[1]!)).toEqual(note('renamed.md'));
   });
 });
 

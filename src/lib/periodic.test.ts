@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { VaultFile } from './api';
 import { day } from './dates';
+import { addTask, setSummary } from './edits';
+import { parseDay } from './day';
 import {
   DEFAULT_PERIODIC,
+  builtInPeriodicText,
+  periodicFeatures,
   fillTemplate,
   periodicIndex,
   periodicPath,
@@ -95,5 +99,21 @@ date: {{date:YYYY-MM-DDTHH:mm}}
     expect(fillTemplate('{{date+1M}} {{date-1M}}', at(day(2026, 0, 31)))).toBe('2026-02-28 2025-12-31');
     expect(fillTemplate('{{date+1y}}', at(day(2028, 1, 29)))).toBe('2029-02-28');
     expect(fillTemplate('[[{{date+1M:MM.YY [RPG]}}]]', at(day(2026, 0, 31)))).toBe('[[02.26 RPG]]');
+  });
+});
+
+describe('built-in periodic notes and optional features', () => {
+  it('creates usable daily and weekly Markdown without a vault template', () => {
+    const date = day(2026, 6, 30);
+    const text = builtInPeriodicText('day', date);
+    expect(text).toContain('date: 2026-07-30');
+    expect(parseDay(addTask(text, 'code', 'Write')).tasks[0]?.label).toContain('Write');
+    expect(parseDay(setSummary(text, 'A good day')).summary).toBe('A good day');
+    expect(builtInPeriodicText('week', date)).toContain('#### Plus');
+    expect(builtInPeriodicText('month', date)).toContain('## Month Summary');
+  });
+  it('defaults malformed or missing feature settings to enabled', () => {
+    expect(periodicFeatures(undefined)).toEqual({ habits: true, thoughtRecords: true });
+    expect(periodicFeatures({ habits: false, thoughtRecords: 'false' })).toEqual({ habits: false, thoughtRecords: true });
   });
 });

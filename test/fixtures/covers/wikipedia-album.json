@@ -1,0 +1,8 @@
+{
+  "query": {
+    "pages": [
+      {"pageid": 101, "index": 1, "title": "Antics (album)", "description": "2004 album by Interpol", "thumbnail": {"source": "https://upload.wikimedia.org/wikipedia/en/0/00/Antics_album_cover.jpg"}},
+      {"pageid": 102, "index": 2, "title": "Antics (song)", "description": "2004 song by Interpol", "thumbnail": {"source": "https://upload.wikimedia.org/wikipedia/en/0/00/song.jpg"}}
+    ]
+  }
+}

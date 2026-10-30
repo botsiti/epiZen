@@ -407,7 +407,26 @@ async function detailed(wanted: Wanted, candidates: Candidate[], ask: Ask, match
   return ranked(wanted, [...top.filter((candidate): candidate is Candidate => Boolean(candidate)), ...sorted.slice(read)]);
 }
 
-async function albums(wanted: Wanted, { ask, hasImage }: FindOptions): Promise<Candidate[]> {
+/** Keep available images even if another candidate's image service fails. */
+async function availableAlbums(wanted: Wanted, candidates: Candidate[], hasImage?: FindOptions['hasImage']): Promise<Candidate[]> {
+  if (!hasImage) return candidates;
+  const checked: Candidate[] = [];
+  let failed = false;
+  let failure: unknown;
+  for (const candidate of candidates.slice(0, 3)) {
+    if (!candidate.result.thumb) continue;
+    try {
+      if (await hasImage(candidate.result.thumb)) checked.push(candidate);
+    } catch (error) {
+      failed = true;
+      failure = error;
+    }
+  }
+  if (!checked.length && failed) throw failure;
+  return ranked(wanted, checked);
+}
+
+async function musicBrainzAlbums(wanted: Wanted, { ask, hasImage }: FindOptions): Promise<Candidate[]> {
   const url = albumSearchUrl(wanted);
   let results = url ? parseSearch('musicbrainz', { musicbrainz: await ask(url) }) : [];
   if (!settled(assessAll(wanted, results))) {
@@ -419,14 +438,37 @@ async function albums(wanted: Wanted, { ask, hasImage }: FindOptions): Promise<C
     const note = candidate.result.note ?? '';
     return { ...candidate, score: candidate.score + (/^Album$/.test(note) ? 0.25 : /^Album/.test(note) ? 0.1 : 0) };
   });
-  const sorted = ranked(wanted, candidates);
-  if (!hasImage) return sorted;
   // The Cover Art Archive has art for most albums, not all: the best three are checked, and only those with some are kept.
-  const checked: Candidate[] = [];
-  for (const candidate of sorted.slice(0, 3)) {
-    if (candidate.result.thumb && (await hasImage(candidate.result.thumb))) checked.push(candidate);
+  return availableAlbums(wanted, ranked(wanted, candidates), hasImage);
+}
+
+/** Prefer a confident Wikipedia cover; search MusicBrainz when Wikipedia is missing or uncertain. */
+async function albums(wanted: Wanted, options: FindOptions): Promise<Candidate[]> {
+  let wiki: Candidate[] = [];
+  let wikiError: unknown;
+  try {
+    const query = joined(searchTitle(wanted.title), wanted.maker);
+    const url = requestOf('wikipedia-album', query, 'wikipedia');
+    let results = url ? parseSearch('wikipedia-album', { wikipedia: await options.ask(url) }) : [];
+    if (!results.length && wanted.maker) {
+      const plain = requestOf('wikipedia-album', searchTitle(wanted.title), 'wikipedia');
+      if (plain && plain !== url) results = parseSearch('wikipedia-album', { wikipedia: await options.ask(plain) });
+    }
+    const candidates = (await detailed(wanted, assessAll(wanted, results), options.ask, new Set())).filter((candidate) => candidate.result.cover);
+    wiki = await availableAlbums(wanted, candidates, options.hasImage);
+    if (wiki[0]?.sure) return wiki;
+  } catch (error) {
+    wikiError = error;
   }
-  return ranked(wanted, checked);
+  try {
+    const fallback = await musicBrainzAlbums(wanted, options);
+    if (!fallback.length && !wiki.length && wikiError) throw new Error(wikiError instanceof Error ? wikiError.message : typeof wikiError === 'string' ? wikiError : 'Wikipedia could not be reached', { cause: wikiError });
+    return ranked(wanted, [...wiki, ...fallback]);
+  } catch (error) {
+    if (!wiki.length) throw error;
+    // Preserve an uncertain result but do not auto-select it if the fallback was unavailable.
+    return wiki.map((candidate) => ({ ...candidate, sure: false, doubt: [candidate.doubt, 'MusicBrainz unavailable'].filter(Boolean).join(' · ') }));
+  }
 }
 
 async function podcasts(wanted: Wanted, ask: Ask): Promise<Candidate[]> {

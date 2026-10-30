@@ -13,7 +13,7 @@ use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Extensions served as images (covers, embeds). Everything else that isn't `.md` is ignored.
 const IMAGE_EXTENSIONS: &[&str] = &["svg", "png", "jpg", "jpeg", "gif", "webp"];
@@ -42,6 +42,14 @@ pub struct VaultFile {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NoteText {
     pub path: String,
+    pub text: String,
+}
+
+/// One source-preserving link update, conditional on the text the frontend parsed.
+#[derive(Debug, Deserialize)]
+pub struct NoteEdit {
+    pub path: String,
+    pub expected: String,
     pub text: String,
 }
 
@@ -218,6 +226,120 @@ impl Vault {
             .map_err(|_| VaultError::InvalidPath(path.to_owned()))?
             .to_string_lossy()
             .into_owned())
+    }
+
+    /// Renames one note within its folder without replacing a destination. The moved file is
+    /// checked after the atomic move, so an outside edit between the read and move survives.
+    pub fn rename_note(
+        &self,
+        path: &str,
+        destination: &str,
+        expected: &str,
+    ) -> Result<(), VaultError> {
+        self.rename_note_with(path, destination, expected, || {})
+    }
+
+    fn rename_note_with(
+        &self,
+        path: &str,
+        destination: &str,
+        expected: &str,
+        before_move: impl FnOnce(),
+    ) -> Result<(), VaultError> {
+        let source = self.resolve(path, FileKind::Note)?;
+        let from = plain_path(path, FileKind::Note)?;
+        let to = plain_path(destination, FileKind::Note)?;
+        if from.parent() != to.parent() || path == destination {
+            return Err(VaultError::InvalidPath(destination.to_owned()));
+        }
+        let mut checked = self.root.clone();
+        for part in from.components() {
+            checked.push(part);
+            if fs::symlink_metadata(&checked)?.file_type().is_symlink() {
+                return Err(VaultError::InvalidPath(path.to_owned()));
+            }
+        }
+        if fs::read(&source)? != expected.as_bytes() {
+            return Err(VaultError::Changed(path.to_owned()));
+        }
+        let target = self.new_path(destination, FileKind::Note)?;
+        before_move();
+        rename_exclusive(&source, &target).map_err(|err| match err.kind() {
+            io::ErrorKind::AlreadyExists => VaultError::Exists(destination.to_owned()),
+            _ => VaultError::Io(err),
+        })?;
+        if !fs::read(&target).is_ok_and(|bytes| bytes == expected.as_bytes()) {
+            if rename_exclusive(&target, &source).is_ok() {
+                return Err(VaultError::Changed(path.to_owned()));
+            }
+            return Err(VaultError::Io(io::Error::other(format!(
+                "the note changed while renaming; its moved version is preserved at {destination}"
+            ))));
+        }
+        Ok(())
+    }
+
+    /// Preflight every affected note, apply guarded link edits, and rename last. If any step
+    /// conflicts, restore completed edits only while they still contain our text.
+    pub fn rename_note_and_links(&self, path: &str, destination: &str, expected: &str, edits: &[NoteEdit]) -> Result<(), VaultError> {
+        self.rename_note_and_links_with(path, destination, expected, edits, |_| {})
+    }
+
+    fn rename_note_and_links_with(&self, path: &str, destination: &str, expected: &str, edits: &[NoteEdit], mut before_step: impl FnMut(usize)) -> Result<(), VaultError> {
+        let source = self.resolve(path, FileKind::Note)?;
+        if path == destination || plain_path(path, FileKind::Note)?.parent() != plain_path(destination, FileKind::Note)?.parent() {
+            return Err(VaultError::InvalidPath(destination.to_owned()));
+        }
+        let target = self.new_path(destination, FileKind::Note)?;
+        if let Ok(meta) = fs::symlink_metadata(&target)
+            && (meta.file_type().is_symlink() || target.canonicalize()? != source)
+        {
+            return Err(VaultError::Exists(destination.to_owned()));
+        }
+        if fs::read(&source)? != expected.as_bytes() { return Err(VaultError::Changed(path.to_owned())); }
+        let mut seen = std::collections::HashSet::new();
+        for edit in edits {
+            let real = self.resolve(&edit.path, FileKind::Note)?;
+            if !seen.insert(real.clone()) || (real == source && (edit.path != path || edit.expected != expected)) {
+                return Err(VaultError::InvalidPath(edit.path.clone()));
+            }
+            let mut checked = self.root.clone();
+            for part in plain_path(&edit.path, FileKind::Note)?.components() {
+                checked.push(part);
+                if fs::symlink_metadata(&checked)?.file_type().is_symlink() { return Err(VaultError::InvalidPath(edit.path.clone())); }
+            }
+            if fs::read(&real)? != edit.expected.as_bytes() { return Err(VaultError::Changed(edit.path.clone())); }
+        }
+        let mut applied: Vec<&NoteEdit> = Vec::new();
+        for (index, edit) in edits.iter().enumerate() {
+            before_step(index);
+            if let Err(error) = self.write_note(&edit.path, &edit.text, &edit.expected) {
+                return Err(self.rollback_link_edits(&applied, error));
+            }
+            applied.push(edit);
+        }
+        before_step(edits.len());
+        let renamed_text = edits.iter().find(|edit| edit.path == path).map_or(expected, |edit| edit.text.as_str());
+        if let Err(error) = self.rename_note(path, destination, renamed_text) {
+            return Err(self.rollback_link_edits(&applied, error));
+        }
+        Ok(())
+    }
+
+    fn rollback_link_edits(&self, applied: &[&NoteEdit], cause: VaultError) -> VaultError {
+        let mut conflicts = Vec::new();
+        for edit in applied.iter().rev() {
+            if self.write_note(&edit.path, &edit.expected, &edit.text).is_err() { conflicts.push(edit.path.as_str()); }
+        }
+        if conflicts.is_empty() { return cause; }
+        VaultError::Io(io::Error::other(format!(
+            "{cause}. These notes changed again and could not be rolled back; their current text was preserved: {}", conflicts.join(", ")
+        )))
+    }
+
+    /// A validated local note path for Finder; aliases may not escape the vault.
+    pub fn note_path(&self, path: &str) -> Result<PathBuf, VaultError> {
+        self.resolve(path, FileKind::Note)
     }
 
     /// Creates an image (a cover the library downloaded), and its folders inside the vault.
@@ -439,6 +561,29 @@ fn copy_metadata(from: &Path, to: &Path, file: &fs::File) -> io::Result<()> {
     file.set_permissions(metadata.permissions())
 }
 
+/// Atomically move only when the destination does not exist.
+#[cfg(target_os = "macos")]
+fn rename_exclusive(from: &Path, to: &Path) -> io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let from = CString::new(from.as_os_str().as_bytes())?;
+    let to = CString::new(to.as_os_str().as_bytes())?;
+    // SAFETY: both paths are NUL-terminated and live for the duration of this call.
+    if unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn rename_exclusive(_: &Path, _: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Renaming notes requires macOS.",
+    ))
+}
+
 /// Trades the two paths' files in one step (macOS `renamex_np` with `RENAME_SWAP`). A volume
 /// that can't (exFAT, FAT, some network shares) gets no weaker way to save: the save fails and
 /// says why, and the note is left as it is.
@@ -521,6 +666,117 @@ mod tests {
         }
         let vault = Vault::open(dir.path()).unwrap();
         (dir, vault)
+    }
+
+    fn link_edit(path: &str, expected: &str, text: &str) -> NoteEdit {
+        NoteEdit { path: path.to_owned(), expected: expected.to_owned(), text: text.to_owned() }
+    }
+
+    #[test]
+    fn rename_links_preflights_every_note_before_changing_anything() {
+        let (dir, vault) = vault_with(&[("Old.md", "note"), ("a.md", "[[Old]]"), ("b.md", "outside edit")]);
+        let before = snapshot(dir.path());
+        let edits = [link_edit("a.md", "[[Old]]", "[[New]]"), link_edit("b.md", "stale", "[[New]]")];
+        assert!(matches!(vault.rename_note_and_links("Old.md", "New.md", "note", &edits), Err(VaultError::Changed(_))));
+        assert_eq!(snapshot(dir.path()), before);
+    }
+
+    #[test]
+    fn rename_links_rolls_back_completed_edits_on_a_conflict() {
+        let (dir, vault) = vault_with(&[("Old.md", "note"), ("a.md", "[[Old]]"), ("b.md", "[[Old]]")]);
+        let edits = [link_edit("a.md", "[[Old]]", "[[New]]"), link_edit("b.md", "[[Old]]", "[[New]]")];
+        let result = vault.rename_note_and_links_with("Old.md", "New.md", "note", &edits, |step| {
+            if step == 1 { fs::write(dir.path().join("b.md"), "outside edit").unwrap(); }
+        });
+        assert!(matches!(result, Err(VaultError::Changed(_))));
+        assert_eq!(vault.read_note("a.md").unwrap(), "[[Old]]");
+        assert_eq!(vault.read_note("b.md").unwrap(), "outside edit");
+        assert_eq!(vault.read_note("Old.md").unwrap(), "note");
+        assert!(!dir.path().join("New.md").exists());
+    }
+
+    #[test]
+    fn rename_links_never_rolls_back_over_a_second_outside_edit() {
+        let (dir, vault) = vault_with(&[("Old.md", "note"), ("a.md", "[[Old]]"), ("b.md", "[[Old]]")]);
+        let edits = [link_edit("a.md", "[[Old]]", "[[New]]"), link_edit("b.md", "[[Old]]", "[[New]]")];
+        let result = vault.rename_note_and_links_with("Old.md", "New.md", "note", &edits, |step| {
+            if step == 1 {
+                fs::write(dir.path().join("a.md"), "keep this outside edit").unwrap();
+                fs::write(dir.path().join("b.md"), "conflict").unwrap();
+            }
+        });
+        assert!(result.unwrap_err().to_string().contains("could not be rolled back"));
+        assert_eq!(vault.read_note("a.md").unwrap(), "keep this outside edit");
+        assert_eq!(vault.read_note("b.md").unwrap(), "conflict");
+        assert_eq!(vault.read_note("Old.md").unwrap(), "note");
+    }
+
+    #[test]
+    fn rename_links_restores_links_when_the_destination_is_taken_during_the_operation() {
+        let (dir, vault) = vault_with(&[("Old.md", "[[Old#Self]]"), ("a.md", "[[Old|label]]")]);
+        let edits = [link_edit("Old.md", "[[Old#Self]]", "[[New#Self]]"), link_edit("a.md", "[[Old|label]]", "[[New|label]]")];
+        let result = vault.rename_note_and_links_with("Old.md", "New.md", "[[Old#Self]]", &edits, |step| {
+            if step == edits.len() { fs::write(dir.path().join("New.md"), "belongs to someone else").unwrap(); }
+        });
+        assert!(matches!(result, Err(VaultError::Exists(_))));
+        assert_eq!(vault.read_note("Old.md").unwrap(), "[[Old#Self]]");
+        assert_eq!(vault.read_note("a.md").unwrap(), "[[Old|label]]");
+        assert_eq!(vault.read_note("New.md").unwrap(), "belongs to someone else");
+    }
+
+    #[test]
+    fn rename_links_updates_self_links_and_incoming_links_together() {
+        let (_dir, vault) = vault_with(&[("Old.md", "[[Old#Self]]"), ("a.md", "[[Old|label]]")]);
+        let edits = [link_edit("Old.md", "[[Old#Self]]", "[[New#Self]]"), link_edit("a.md", "[[Old|label]]", "[[New|label]]")];
+        vault.rename_note_and_links("Old.md", "New.md", "[[Old#Self]]", &edits).unwrap();
+        assert_eq!(vault.read_note("New.md").unwrap(), "[[New#Self]]");
+        assert_eq!(vault.read_note("a.md").unwrap(), "[[New|label]]");
+    }
+
+    #[test]
+    fn rename_preserves_bytes_and_refuses_collisions_and_stale_text() {
+        let (dir, vault) = vault_with(&[("folder/Old.md", "---\r\nname: Тест\r\n---\r\n"), ("folder/Taken.md", "keep")]);
+        let text = vault.read_note("folder/Old.md").unwrap();
+        assert!(matches!(vault.rename_note("folder/Old.md", "folder/Taken.md", &text), Err(VaultError::Exists(_))));
+        assert!(matches!(vault.rename_note("folder/Old.md", "folder/New.md", "stale"), Err(VaultError::Changed(_))));
+        for path in ["../New.md", "other/New.md", "folder/.hidden.md", "folder/cover.png"] {
+            assert!(vault.rename_note("folder/Old.md", path, &text).is_err());
+        }
+        vault.rename_note("folder/Old.md", "folder/New.md", &text).unwrap();
+        assert!(!dir.path().join("folder/Old.md").exists());
+        assert_eq!(fs::read(dir.path().join("folder/New.md")).unwrap(), text.as_bytes());
+        assert_eq!(fs::read_to_string(dir.path().join("folder/Taken.md")).unwrap(), "keep");
+    }
+
+    #[test]
+    fn rename_supports_a_case_only_change() {
+        let (dir, vault) = vault_with(&[("Album.md", "keep")]);
+        vault.rename_note("Album.md", "album.md", "keep").unwrap();
+        assert_eq!(fs::read_to_string(dir.path().join("album.md")).unwrap(), "keep");
+        assert!(vault.list_files().unwrap().iter().any(|file| file.path == "album.md"));
+    }
+
+    #[test]
+    fn rename_restores_an_outside_edit_and_never_replaces_a_racing_destination() {
+        let (dir, vault) = vault_with(&[("a.md", "before")]);
+        let changed = vault.rename_note_with("a.md", "b.md", "before", || fs::write(dir.path().join("a.md"), "outside").unwrap());
+        assert!(matches!(changed, Err(VaultError::Changed(_))));
+        assert_eq!(fs::read_to_string(dir.path().join("a.md")).unwrap(), "outside");
+        assert!(!dir.path().join("b.md").exists());
+        let occupied = vault.rename_note_with("a.md", "b.md", "outside", || fs::write(dir.path().join("b.md"), "other").unwrap());
+        assert!(matches!(occupied, Err(VaultError::Exists(_))));
+        assert_eq!(fs::read_to_string(dir.path().join("a.md")).unwrap(), "outside");
+        assert_eq!(fs::read_to_string(dir.path().join("b.md")).unwrap(), "other");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rename_refuses_symlinked_sources() {
+        use std::os::unix::fs::symlink;
+        let (dir, vault) = vault_with(&[("original.md", "keep")]);
+        symlink(dir.path().join("original.md"), dir.path().join("alias.md")).unwrap();
+        assert!(vault.rename_note("alias.md", "new.md", "keep").is_err());
+        assert_eq!(fs::read_to_string(dir.path().join("original.md")).unwrap(), "keep");
     }
 
     #[test]

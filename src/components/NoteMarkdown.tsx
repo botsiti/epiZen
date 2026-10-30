@@ -3,11 +3,12 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { VaultFile } from '../lib/api';
 import { resolveLink } from '../lib/links';
+import { highlightInk, remarkHighlights } from '../lib/highlights';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
 import { VaultImage } from './VaultImage';
 import { openClicks } from './workspace/clicks';
 
-const remarkPlugins = [remarkGfm, remarkCallouts, remarkWikilinks];
+const remarkPlugins = [remarkGfm, remarkCallouts, remarkHighlights, remarkWikilinks];
 
 interface Props {
   path: string;
@@ -22,6 +23,15 @@ interface Props {
 export function NoteMarkdown({ path, body, files, onOpenLink }: Props) {
   const components = useMemo<Components>(
     () => ({
+      mark({ node, children }) {
+        const color = node?.properties?.dataHighlightColor;
+        const hex = typeof color === 'string' ? color : undefined;
+        return <mark className="note-highlight" style={hex ? { backgroundColor: hex, color: highlightInk(hex) } : undefined}>{children}</mark>;
+      },
+      span({ node, children, className }) {
+        const color = node?.properties?.dataHighlightColor;
+        return <span className={className} style={typeof color === 'string' ? { color } : undefined}>{children}</span>;
+      },
       a({ href, children }) {
         const link = parseVaultUrl(href);
         if (link?.kind === 'link') {

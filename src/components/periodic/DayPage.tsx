@@ -40,6 +40,9 @@ export function DayPage({ spec, path, text, actions }: Props) {
     lastTab = next;
     setTab(next);
   };
+  const habits = spec.features?.habits !== false;
+  const thoughtRecords = spec.features?.thoughtRecords !== false;
+  const activeTab = !habits && tab === 'Habits' ? 'Overview' : tab;
   const { date } = spec;
   const done = day.numbers.done;
   const monday = startOfWeek(date);
@@ -66,9 +69,9 @@ export function DayPage({ spec, path, text, actions }: Props) {
             <NavButton label={formatDate(date, 'MMMM')} title="This month's note" onClick={() => actions.onOpenPeriod('month', month)} exists={spec.exists('month', month)} testId="nav-month" />
             {!isToday && <NavButton label="Today" title="Today's note" onClick={() => actions.onOpenPeriod('day', today())} exists={spec.exists('day', today())} testId="nav-today" />}
             <span className="nav-space" />
-            <button type="button" className="nav-chip" onClick={() => setWizard({})} data-testid="hero-record">
+            {thoughtRecords && <button type="button" className="nav-chip" onClick={() => setWizard({})} data-testid="hero-record">
               Thought record
-            </button>
+            </button>}
             <button type="button" className="nav-chip is-action" onClick={actions.onEdit} data-testid="edit-note">
               Edit note
             </button>
@@ -85,17 +88,17 @@ export function DayPage({ spec, path, text, actions }: Props) {
 
       {isToday && <YesterdayGaps spec={spec} onOpen={() => actions.onOpenPeriod('day', addDays(date, -1))} />}
 
-      <Tabs tabs={TABS} active={tab} onChange={choose} />
-      <div className="tab-panel" key={tab}>
-        {tab === 'Overview' && <Overview day={day} spec={spec} actions={actions} isToday={isToday} />}
-        {tab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} isToday={isToday} />}
-        {tab === 'Habits' && <HabitsTab day={day} spec={spec} actions={actions} />}
-        {tab === 'Quests' && (
+      <Tabs tabs={TABS.filter((item) => habits || item !== 'Habits')} active={activeTab} onChange={choose} />
+      <div className="tab-panel" key={activeTab}>
+        {activeTab === 'Overview' && <Overview day={day} spec={spec} actions={actions} isToday={isToday} />}
+        {activeTab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} isToday={isToday} />}
+        {activeTab === 'Habits' && <HabitsTab day={day} spec={spec} actions={actions} />}
+        {activeTab === 'Quests' && (
           <QuestBoard quests={questsIn(spec.quests, date, addDays(date, 1))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} onChange={actions.onQuestChange} />
         )}
-        {tab === 'Stream' && <StreamTab day={day} actions={actions} onOpen={(record) => setWizard({ record })} />}
+        {activeTab === 'Stream' && <StreamTab day={day} actions={actions} thoughtRecords={thoughtRecords} onOpen={(record) => setWizard({ record })} />}
       </div>
-      {wizard && (
+      {thoughtRecords && wizard && (
         <ThoughtWizard
           record={wizard.record}
           onClose={() => setWizard(undefined)}
@@ -150,7 +153,7 @@ function Summary({ text, onSave }: { text?: string; onSave: (summary: string) =>
 /** On today's note: what yesterday's note never got, with a way back to it. */
 function YesterdayGaps({ spec, onOpen }: { spec: PeriodicSpec; onOpen: () => void }) {
   const yesterday = spec.dayOf(addDays(spec.date, -1));
-  const missing = yesterday.day ? missingFromDay(yesterday.day) : [];
+  const missing = yesterday.day ? missingFromDay(yesterday.day).filter((item) => spec.features?.habits !== false || item !== 'habits') : [];
   if (!missing.length) return null;
   return (
     <div className="notice glass rise" data-testid="yesterday-gaps">
@@ -191,10 +194,10 @@ function Overview({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpe
         >
           <CountUp value={day.numbers.done ?? 0} format={(n) => `${Math.round(n)}%`} />
         </Tile>
-        <Tile label="Habits" i={3} testId="tile-habits" meta={<HabitDots habits={day.habits} />}>
+        {spec.features?.habits !== false && <Tile label="Habits" i={3} testId="tile-habits" meta={<HabitDots habits={day.habits} />}>
           <CountUp value={totals.habitsDone} />
           <span className="of"> / {totals.habits}</span>
-        </Tile>
+        </Tile>}
       </div>
       <div className="split">
         <CheckIn day={day} spec={spec} onSet={actions.onSetProperty} />
@@ -672,7 +675,7 @@ function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actio
   );
 }
 
-function StreamTab({ day, actions, onOpen }: { day: Day; actions: PeriodicActions; onOpen: (record?: ThoughtRecord) => void }) {
+function StreamTab({ day, actions, onOpen, thoughtRecords }: { day: Day; actions: PeriodicActions; onOpen: (record?: ThoughtRecord) => void; thoughtRecords: boolean }) {
   const [deleting, setDeleting] = useState<number>();
   return (
     <>
@@ -701,7 +704,7 @@ function StreamTab({ day, actions, onOpen }: { day: Day; actions: PeriodicAction
           </div>
         </Section>
       )}
-      <Section
+      {thoughtRecords && <Section
         title="Thought records"
         note={
           <button type="button" className="nav-chip is-action" onClick={() => onOpen()} data-testid="new-record">
@@ -758,7 +761,7 @@ function StreamTab({ day, actions, onOpen }: { day: Day; actions: PeriodicAction
         ) : (
           <p className="empty-line">No sessions yet today. Start one when a thought keeps pulling at you.</p>
         )}
-      </Section>
+      </Section>}
     </>
   );
 }

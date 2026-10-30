@@ -8,7 +8,7 @@ import type { PodcastArtwork } from './podcasts';
 // from test/fixtures/lookup/.
 
 /** Where a kind is looked up: albums on MusicBrainz, films on Wikipedia, books on Wikipedia and Open Library, podcasts on iTunes. */
-export type Source = NonNullable<KindSpec['source']>;
+export type Source = NonNullable<KindSpec['source']> | 'wikipedia-album';
 /** One service a search asks. */
 export type Service = 'musicbrainz' | 'wikipedia' | 'openlibrary' | 'itunes';
 
@@ -31,7 +31,7 @@ export interface LookupResult {
   /** MusicBrainz: the page with its genres, read once it is picked. */
   details?: string;
   /** Wikipedia: its Wikidata item, read once it is picked for who made it (director or author), its year and genres. */
-  wikidata?: { item: string; maker: 'P57' | 'P50' };
+  wikidata?: { item: string; maker: 'P57' | 'P50' | 'P175' };
   /** iTunes: a podcast's episodes, listed once the show is picked. */
   episodes?: string;
 }
@@ -86,6 +86,7 @@ export const SERVICE_NAMES: Record<Service, string> = {
 /** The services each source asks, in the order their results are listed. */
 export const SOURCE_SERVICES: Record<Source, Service[]> = {
   musicbrainz: ['musicbrainz'],
+  'wikipedia-album': ['wikipedia'],
   'wikipedia-film': ['wikipedia'],
   'wikipedia-openlibrary': ['wikipedia', 'openlibrary'],
   'itunes-podcast': ['itunes'],
@@ -94,6 +95,7 @@ export const SOURCE_SERVICES: Record<Source, Service[]> = {
 /** Where each kind is looked up, by name, for the search box. */
 export const SOURCE_NAMES: Record<Source, string> = {
   musicbrainz: 'MusicBrainz',
+  'wikipedia-album': 'Wikipedia',
   'wikipedia-film': 'Wikipedia',
   'wikipedia-openlibrary': 'Wikipedia and Open Library',
   'itunes-podcast': 'iTunes',
@@ -105,6 +107,7 @@ export const SOURCE_NAMES: Record<Source, string> = {
  */
 export const SEARCH_PAUSE: Record<Source, number> = {
   musicbrainz: 400,
+  'wikipedia-album': 220,
   'wikipedia-film': 220,
   'wikipedia-openlibrary': 220,
   'itunes-podcast': 220,
@@ -125,6 +128,8 @@ export function searchRequests(source: Source, query: string): { service: Servic
   switch (source) {
     case 'musicbrainz':
       return [{ service: 'musicbrainz', url: `https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(words.replace(LUCENE, '\\$&'))}&fmt=json&limit=12` }];
+    case 'wikipedia-album':
+      return [{ service: 'wikipedia', url: wikipediaSearch(`${words} album`) }];
     case 'wikipedia-film':
       return [{ service: 'wikipedia', url: wikipediaSearch(`${words} film`) }];
     case 'wikipedia-openlibrary':
@@ -154,6 +159,8 @@ export function parseSearch(source: Source, answers: Partial<Record<Service, unk
   switch (source) {
     case 'musicbrainz':
       return has('musicbrainz') ? musicBrainz(answers.musicbrainz) : [];
+    case 'wikipedia-album':
+      return has('wikipedia') ? wikipedia(answers.wikipedia, 'album') : [];
     case 'wikipedia-film':
       return has('wikipedia') ? wikipedia(answers.wikipedia, 'film') : [];
     case 'wikipedia-openlibrary': {
@@ -374,10 +381,11 @@ const FILM_WORDS = new Set(['film', 'movie', 'television series', 'tv series', '
 const BOOK_WORDS = new Set(['graphic novel', 'novella', 'novel', 'book', 'memoir', 'autobiography', 'biography', 'essay collection', 'short story collection', 'poetry collection', 'manga', 'play']);
 const NEITHER = /\b(genre|score|soundtrack|franchise|festival|studio|award|character|company|publisher|identifier)\b/i;
 
-function isKind(description: string, title: string, kind: 'film' | 'book'): boolean {
-  if (/^list of\b/i.test(title) || NEITHER.test(description)) return false;
+function isKind(description: string, title: string, kind: 'film' | 'book' | 'album'): boolean {
+  if (/^list of\b/i.test(title) || (kind !== 'album' && NEITHER.test(description))) return false;
   const head = KIND_WORD.exec(description)?.[1]?.toLowerCase() ?? '';
   if (kind === 'film') return FILM_WORDS.has(head);
+  if (kind === 'album') return ['album', 'ep'].includes(head);
   return BOOK_WORDS.has(head) && (/\bby\b/i.test(description) || /^\d{4}\b/.test(description));
 }
 
@@ -392,7 +400,7 @@ const firstYear = (description: string) => /\b(1[5-9]\d\d|20\d\d)\b/.exec(descri
 /** A Wikimedia image's URL without the tracking Wikipedia adds to it. */
 const imageUrl = (url: string | undefined) => url?.replace(/\?utm_[^#]*$/, '');
 
-function wikipedia(answer: unknown, kind: 'film' | 'book'): LookupResult[] {
+function wikipedia(answer: unknown, kind: 'film' | 'book' | 'album'): LookupResult[] {
   const pages = array(object(object(answer).query).pages)
     .map(object)
     .sort((a, b) => (Number(a.index) || 0) - (Number(b.index) || 0));
@@ -414,7 +422,7 @@ function wikipedia(answer: unknown, kind: 'film' | 'book'): LookupResult[] {
         cover: image,
         about: description || undefined,
         from: 'wikipedia',
-        wikidata: item && /^Q\d+$/.test(item) ? { item, maker: kind === 'film' ? 'P57' : 'P50' } : undefined,
+        wikidata: item && /^Q\d+$/.test(item) ? { item, maker: kind === 'film' ? 'P57' : kind === 'album' ? 'P175' : 'P50' } : undefined,
       },
     ];
   });

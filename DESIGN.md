@@ -30,6 +30,9 @@ from the Obsidian homepage (`SPHERES` in the same file), wherever a sphere is me
 lead sphere, and the sport floor (Health/Fitness). The memento mori's bars mean no sphere, so they
 stay sage.
 
+The app mark is the aqua glass brain in `assets/branding/epizen.png`, shared by the macOS app,
+sidebar, browser icon and repository. The menu-bar timer keeps its functional monochrome dial.
+
 The accent is sage everywhere else. No red for errors, no green for success, no
 colour per callout type. A link to a missing note is muted with a dotted underline, not red.
 Covers and other images bring their own colour; the interface doesn't.
@@ -68,6 +71,11 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Sidebar**: notes only, with image-only folders hidden. Folders first, numbers in natural
   order. A note indents one step past its folder's name. Long names end in "…". The selected
   note gets an accent bar and a soft accent background.
+- **File actions**: a note or media title opens a filename editor. A right-click on a note in the
+  sidebar offers Duplicate, Reveal in Finder, Rename and Delete. Rename updates open tabs and links to the note across the vault, preserving link labels,
+  headings, block references and all text outside the link destinations. Conflicts keep outside
+  edits and roll back completed link updates where they still match. Delete asks once and moves
+  only the Markdown file to the vault’s recoverable `.trash`.
 - **Properties**: a two-column list with faint labels. An empty value shows as a faint "—".
 - **Callouts**: a surface block with a small uppercase title, no icon, no colour by type.
 - **Tasks**: accent-tinted checkboxes. In a note's text they stay disabled; a daily note's page is
@@ -83,10 +91,12 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   (the year, the month and, with a birth date from Settings, life till 30, its weeks behind a click);
   a row of three cards: the last seven days' averages, their focus as bars (pointing at a day shows
   its categories), and today's tasks with Today, Week and Month; the life spheres, a segment per
-  level, beside the lead sphere and the week's sport floor; and a glass shelf per folder of rated
-  covers, the rating in accent on a small glass pill in the cover's corner, the maker faint below,
-  and "See all" to the folder's tab in the library. Nothing on it writes to the vault, except
-  that Today, Week and Month create a missing note from its template, as the calendar does.
+  level, beside the lead sphere and the week's sport floor; and one glass shelf with the ten most recently dated library entries, the rating in accent on a
+  small glass pill in the cover's corner, the maker faint below, and "See all" to the library.
+  Quests start with eight cards and lead to a dedicated month-by-month quest page. Statistics has
+  a selectable daily focus grid, a category donut for a chosen period, and habit bars filled by
+  completed days out of the calendar days in each month. Nothing on it writes to the vault, except
+  that Today, Week and Month create a missing note with built-in starting text, as the calendar does.
 - **Graph**: the whole main pane, no padding. Dots in their folder's colour, sized by how many links
   they have; links as faint hairlines that thin out as they grow in number. Pointing at a note (or
   finding it) lights it and its neighbours up, its links in accent, and dims the rest; their names
@@ -96,14 +106,16 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   A small accent dot under a day or week that has its note; today in accent; the open note's day
   gets the soft accent background. Days of other months are faint.
 - **Editor**: the note's source on the left and a live preview on the right, with space between them
-  and no line. Headings and emphasis show in the source; Markdown's own marks are faint. A faint
-  "Saving…" or "Saved" sits by the title.
+  and no line. Headings and emphasis show in the source; Markdown's own marks are faint. Obsidian
+  highlights and coloured text render in the preview and reading view, with softly rounded highlights;
+  `==text==` uses sage while explicit note colours are preserved. A faint "Saving…" or "Saved" sits by the title.
 - **Tabs and the right sidebar**: see "Tabs and the right sidebar" below. Backlinks live there now,
   not under the note.
 - **Link suggestions**: after `[[` in the editor, a surface list with a hairline; the matched letters
   in accent, the note's folder faint.
 - **Forms**: a label above each field in the label style. Fields are surface fills with a hairline
   that turns accent on focus.
+- **Settings**: a quiet, readable preferences page with built-in periodic features, note locations and naming, homepage and podcast preferences. Habits and thought records can be hidden without changing notes.
 - **Podcast settings**: one artwork preference for newly added episodes, defaulting to the show's
   thumbnail. Episode artwork can be chosen instead; either falls back to the other when missing.
   An episode entered by hand uses its selected show's thumbnail. The preference lives in app settings.
@@ -133,7 +145,7 @@ content, and the moves are written here after react-bits (`src/components/period
   slow aurora of sage, blue and rose drifts behind it under fine grain. The day's summary arrives
   word by word. A ring on the right shows the plan done. Below, chips to the day, week or month
   before and after and up a level; a chip whose note doesn't exist yet is dashed, and opening it
-  creates the note from its template, as the calendar does.
+  creates the note with built-in starting text, as the calendar does.
 - **Tabs**: plain words with a sage line that slides under the chosen one. The page remembers the
   last tab per kind of period for the session.
 - **Numbers**: SF Pro Display, semibold, tabular. They count up as they appear (about 1.1s,
@@ -279,8 +291,9 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
 - **Covers**: the latest fifteen listened to, watched or finished of what the tab and the filters
   show, and under them "See all 533 in the list →" in accent. On All each card says its kind, faint,
   before the maker, and posters and square covers stand on one line with their titles level. The
-  covers in a grid, each with its rating on a small glass pill in the corner (a faint dash when not
-  rated yet), the title, and the maker and year faint. Covers lift under the pointer and load as they
+  covers in a grid, each with its rating on a small glass pill in the top-right corner (a faint dash
+  when not rated yet), the title, and the maker and year faint. Mixed views, including Home, add a
+  matching top-left pill with a thin-line media-type mark: music note, camera, book, microphone or play. Covers lift under the pointer and load as they
   near the view. A calendar button opens a dimmed dialog with a calendar of covers (Bookmory's book calendar), of everything the filters
   show: the month's name in the serif beside a strip of the year's twelve months, each a small bar of
   how many (the shown month in accent, with a glow), ‹ › to step, and the month's days as a grid,
@@ -323,13 +336,13 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
 - **Finding covers**: the sheet "Find covers" opens, in Add's dark glass, wider: the count of notes
   without a cover in the serif, a thin sage line of how many were searched, and one honest line of
   where it is ("Searched 120 of 533 · 98 found, 74 sure · about 7 min left. MusicBrainz takes one
-  search a second."), then chips to show All, Sure, Unsure or Nothing found, each with its count.
+  search a second."), then chips to show All, Sure, Unsure, Nothing found or Failed, each with its count.
   A row per note, filling in as its answer lands: a round sage tick, the note's title with its maker
   and year faint, the cover found, and what it is ("Dog Man Star · Suede · 1994") with, faint under
   it, "Sure" and what it fills in ("fills Year, genre"), or why it isn't sure ("from 1961", "no
   director to check", "or Dog Man Star · NERVE · 2026"). A sure one is ticked; an unsure one isn't.
   "1/3 ›" steps to the next match found, × skips the note (Undo brings it back). At the foot, Stop
-  (or Go on) and "Save N covers" in the primary button. Searches go one note at a time per kind,
+  (or Go on) and "Save N covers" in the primary button. Albums search Wikipedia first, with MusicBrainz as a fallback; failed searches can be retried. Searches go one note at a time per kind,
   the kinds side by side, at each service's pace: MusicBrainz one a second, iTunes about twenty a
   minute; a busy service is asked again after a pause. Closing with ticked covers unsaved asks first.
   A note is sure only when its title, its maker and its year agree with what was found (or, with

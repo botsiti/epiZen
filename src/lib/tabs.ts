@@ -11,6 +11,8 @@ export type View =
   | { kind: 'settings' }
   | { kind: 'graph' }
   | { kind: 'calendar' }
+  | { kind: 'quests' }
+  | { kind: 'statistics' }
   | { kind: 'library'; tab: LibraryTab }
   | { kind: 'problem'; title: string; message: string };
 
@@ -65,6 +67,8 @@ export function sameView(a: View, b: View): boolean {
     case 'settings':
     case 'graph':
     case 'calendar':
+    case 'quests':
+    case 'statistics':
       return a.kind === b.kind;
     default:
       return false;
@@ -112,6 +116,11 @@ export function open(ws: Workspace, view: View, options: { newTab?: boolean } = 
   if (sameView(currentView(tab), view)) return ws;
   if (tab.pinned) return openTab(ws, view);
   return updateTab(ws, tab.id, (t) => push(t, view));
+}
+
+/** Every open and historical view of a renamed note follows its new path. */
+export function renameNoteViews(ws: Workspace, from: string, to: string): Workspace {
+  return { ...ws, tabs: ws.tabs.map((tab) => ({ ...tab, history: tab.history.map((view) => view.kind === 'note' && view.path === from ? { ...view, path: to } : view) })) };
 }
 
 /** Changes the screen a tab shows in place, without a step in its history: the editor opening, the library's tab. */
@@ -197,6 +206,10 @@ export function tabTitle(view: View): string {
       return 'Calendar';
     case 'library':
       return 'Library';
+    case 'quests':
+      return 'Quests';
+    case 'statistics':
+      return 'Statistics';
     case 'problem':
       return view.title;
   }
@@ -235,6 +248,8 @@ function storable(view: View): View | undefined {
     case 'settings':
     case 'graph':
     case 'calendar':
+    case 'quests':
+    case 'statistics':
       return { kind: view.kind };
     default:
       return undefined;
@@ -261,6 +276,8 @@ export function parseView(value: unknown, notes: ReadonlySet<string>): View | un
     case 'settings':
     case 'graph':
     case 'calendar':
+    case 'quests':
+    case 'statistics':
       return { kind: value.kind };
     case 'note':
       return typeof value.path === 'string' && notes.has(value.path) ? { kind: 'note', path: value.path } : undefined;

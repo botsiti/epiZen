@@ -69,6 +69,7 @@ impl fmt::Display for NetError {
                 MAX_BYTES / 1024 / 1024
             ),
             Self::Status(404) => write!(f, "not found"),
+            Self::Status(429) => write!(f, "the service is rate limiting requests; try again in a moment"),
             Self::Status(503) => write!(f, "the service is busy; try again in a moment"),
             Self::Status(code) => write!(f, "the service answered {code}"),
             Self::NotJson(err) => write!(f, "the answer wasn't readable: {err}"),
@@ -333,6 +334,9 @@ mod e2e {
                     && param("query").starts_with("releasegroup:(antics)") =>
             {
                 include_bytes!("../../test/fixtures/covers/musicbrainz-antics.json")
+            }
+            "en.wikipedia.org" if param("gsrsearch") == "Antics Interpol album" => {
+                include_bytes!("../../test/fixtures/covers/wikipedia-album.json")
             }
             "en.wikipedia.org" if param("gsrsearch").starts_with("Ikiru ") => {
                 include_bytes!("../../test/fixtures/covers/wikipedia-ikiru.json")
