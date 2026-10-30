@@ -30,6 +30,9 @@ from the Obsidian homepage (`SPHERES` in the same file), wherever a sphere is me
 lead sphere, and the sport floor (Health/Fitness). The memento mori's bars mean no sphere, so they
 stay sage.
 
+The app mark is the aqua glass brain in `assets/branding/epizen.png`, shared by the macOS app,
+sidebar, browser icon and repository. The menu-bar timer keeps its functional monochrome dial.
+
 The accent is sage everywhere else. No red for errors, no green for success, no
 colour per callout type. A link to a missing note is muted with a dotted underline, not red.
 Covers and other images bring their own colour; the interface doesn't.
@@ -68,6 +71,11 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Sidebar**: notes only, with image-only folders hidden. Folders first, numbers in natural
   order. A note indents one step past its folder's name. Long names end in "…". The selected
   note gets an accent bar and a soft accent background.
+- **File actions**: a note or media title opens a filename editor. A right-click on a note in the
+  sidebar offers Duplicate, Reveal in Finder, Rename and Delete. Rename updates open tabs and links to the note across the vault, preserving link labels,
+  headings, block references and all text outside the link destinations. Conflicts keep outside
+  edits and roll back completed link updates where they still match. Delete asks once and moves
+  only the Markdown file to the vault’s recoverable `.trash`.
 - **Properties**: a two-column list with faint labels. An empty value shows as a faint "—".
 - **Callouts**: a surface block with a small uppercase title, no icon, no colour by type.
 - **Tasks**: accent-tinted checkboxes. In a note's text they stay disabled; a daily note's page is
@@ -283,8 +291,9 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
 - **Covers**: the latest fifteen listened to, watched or finished of what the tab and the filters
   show, and under them "See all 533 in the list →" in accent. On All each card says its kind, faint,
   before the maker, and posters and square covers stand on one line with their titles level. The
-  covers in a grid, each with its rating on a small glass pill in the corner (a faint dash when not
-  rated yet), the title, and the maker and year faint. Covers lift under the pointer and load as they
+  covers in a grid, each with its rating on a small glass pill in the top-right corner (a faint dash
+  when not rated yet), the title, and the maker and year faint. Mixed views, including Home, add a
+  matching top-left pill with a thin-line media-type mark: music note, camera, book, microphone or play. Covers lift under the pointer and load as they
   near the view. A calendar button opens a dimmed dialog with a calendar of covers (Bookmory's book calendar), of everything the filters
   show: the month's name in the serif beside a strip of the year's twelve months, each a small bar of
   how many (the shown month in accent, with a glow), ‹ › to step, and the month's days as a grid,

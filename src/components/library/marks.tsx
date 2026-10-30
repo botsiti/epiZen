@@ -1,11 +1,12 @@
 import type { MediaKind } from '../../lib/library';
 
-/** A kind's small mark, drawn in lines: a record, a strip of film, a book, a microphone. */
+/** A kind's small mark, drawn in lines: a music note, a camera, a book, a microphone and a play symbol. */
 export function KindMark({ kind }: { kind: MediaKind }) {
   const paths: Partial<Record<MediaKind, string>> = {
-    album: 'M8 1.75a6.25 6.25 0 1 0 0 12.5 6.25 6.25 0 0 0 0-12.5ZM8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z',
-    film: 'M3 2.25h10v11.5H3zM5.5 2.25v11.5M10.5 2.25v11.5M3 5.5h2.5M3 8h2.5M3 10.5h2.5M10.5 5.5H13M10.5 8H13M10.5 10.5H13',
+    album: 'M6 11.5V3.75l6.5-1.5v8M6 6l6.5-1.5M6 11.5c0 1-1 1.75-2.25 1.75S1.5 12.5 1.5 11.5s1-1.75 2.25-1.75S6 10.5 6 11.5ZM12.5 10.25c0 1-1 1.75-2.25 1.75S8 11.25 8 10.25 9 8.5 10.25 8.5s2.25.75 2.25 1.75Z',
+    film: 'M2 5h8v8H2zM10 7.25l4-2v7.5l-4-2M3.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM7.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z',
     book: 'M3.25 2.75c1.8-.6 3.4-.4 4.75.6v10.4c-1.35-1-2.95-1.2-4.75-.6zM12.75 2.75c-1.8-.6-3.4-.4-4.75.6v10.4c1.35-1 2.95-1.2 4.75-.6z',
+    video: 'M2 3h12v10H2zM6.25 5.25l4 2.75-4 2.75z',
     podcast: 'M6 2.25h4v6.5a2 2 0 0 1-4 0zM3.75 7.5a4.25 4.25 0 0 0 8.5 0M8 11.75v2.5M5.75 14.25h4.5',
   };
   return (

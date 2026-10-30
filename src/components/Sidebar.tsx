@@ -19,6 +19,7 @@ interface Props {
   onLibrary: Open;
   onQuests: Open;
   onStatistics: Open;
+  onNoteMenu: (path: string, x: number, y: number) => void;
   /** The focus timer while it runs, at the top. */
   timer?: ReactNode;
   /** Why the last folder the user picked couldn't be opened. */
@@ -28,7 +29,7 @@ interface Props {
 }
 
 export function Sidebar(props: Props) {
-  const { vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, onCalendar, onLibrary, onQuests, onStatistics, timer, folderError, calendar } = props;
+  const { vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, onCalendar, onLibrary, onQuests, onStatistics, onNoteMenu, timer, folderError, calendar } = props;
   // Folders the user opened or closed by hand. Untouched folders open when they hold the selected note.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
   const isOpen = (path: string) => toggled.get(path) ?? Boolean(selected?.startsWith(`${path}/`));
@@ -38,6 +39,7 @@ export function Sidebar(props: Props) {
     <nav className="sidebar" aria-label="Notes">
       <div className="sidebar-head">
         <button type="button" className="vault-name" {...openClicks(onHome)} data-testid="sidebar-vault">
+          <img className="app-mark" src="/brand/epizen.png" alt="" />
           {vaultName}
         </button>
         <button type="button" className="icon-button" onClick={onNewNote} title="New note" aria-label="New note" data-testid="new-note-button">
@@ -47,7 +49,7 @@ export function Sidebar(props: Props) {
       {timer}
       {calendar}
       <ul className="tree" role="tree">
-        <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isOpen} toggle={toggle} onOpenNote={onOpenNote} />
+        <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isOpen} toggle={toggle} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} />
       </ul>
       <div className="sidebar-foot">
         <button type="button" className="sidebar-action" {...openClicks(onCalendar)} data-testid="open-calendar">
@@ -80,13 +82,14 @@ interface ItemsProps {
   isOpen: (path: string) => boolean;
   toggle: (path: string) => void;
   onOpenNote: (path: string, newTab: boolean) => void;
+  onNoteMenu: (path: string, x: number, y: number) => void;
 }
 
 // Each level indents one chevron's width, so a folder's notes sit under its name.
 const STEP = 16;
 const CHEVRON = 20;
 
-function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote }: ItemsProps) {
+function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote, onNoteMenu }: ItemsProps) {
   const indent = { paddingLeft: `${12 + depth * STEP}px` };
   return nodes.map((node) => {
     if (node.kind === 'note') {
@@ -99,6 +102,7 @@ function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote }: Items
             style={{ paddingLeft: `${12 + depth * STEP + CHEVRON}px` }}
             title={node.name}
             {...openClicks((newTab) => onOpenNote(node.path, newTab))}
+            onContextMenu={(event) => { event.preventDefault(); onNoteMenu(node.path, event.clientX, event.clientY); }}
             data-testid="tree-note"
             data-path={node.path}
           >
@@ -131,6 +135,7 @@ function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote }: Items
               isOpen={isOpen}
               toggle={toggle}
               onOpenNote={onOpenNote}
+              onNoteMenu={onNoteMenu}
             />
           </ul>
         )}

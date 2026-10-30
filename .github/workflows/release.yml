@@ -1,0 +1,57 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install Rust
+        run: |
+          rustup toolchain install
+          rustup target add aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - name: Verify release version and integrated commit
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          npm run version:check
+          VERSION=$(node -p "require('./package.json').version")
+          test "$TAG" = "v$VERSION"
+          test -s "releases/$VERSION.md"
+          git merge-base --is-ancestor HEAD origin/main
+      - run: npm run check:fast
+      - name: Build production app
+        run: npm run tauri -- build --target aarch64-apple-darwin --bundles app
+      - name: Sign locally and package
+        run: npm run release:package -- src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Epizen.app
+      - name: Publish versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release create "$TAG" "release-artifacts/Epizen_${VERSION}_macOS_arm64.zip" release-artifacts/SHA256SUMS --verify-tag --title "Epizen $VERSION" --notes-file "releases/$VERSION.md" --latest

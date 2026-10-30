@@ -176,6 +176,7 @@ describe('the homepage', () => {
     render(<Home {...props({ library: [...LIBRARY, ...extra], onOpenNote, onSeeLibrary })} />);
     const recent = screen.getByTestId('recent-library');
     expect(within(recent).getAllByTestId('cover-card')).toHaveLength(10);
+    expect(within(recent).getAllByRole('img', { name: 'Film' })).toHaveLength(10);
     expect(within(recent).queryByText('Old')).not.toBeInTheDocument();
     await user.click(within(recent).getByRole('button', { name: 'See all →' }));
     expect(onSeeLibrary).toHaveBeenCalled();

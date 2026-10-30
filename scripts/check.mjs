@@ -13,6 +13,7 @@ const demoVault = fileURLToPath(new URL('../demo-vault', import.meta.url));
 const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 const steps = [
+  ['versions', 'version:check'],
   ['cargo test', 'test:rust'],
   ['cargo clippy -D warnings', 'lint:rust'],
   ['eslint', 'lint'],

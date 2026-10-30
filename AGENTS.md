@@ -143,7 +143,7 @@ The daytime and PR gate is:
 npm run check:fast
 ```
 
-`scripts/check.mjs --fast` runs Rust tests, Clippy on all targets/features with warnings as
+`scripts/check.mjs --fast` verifies version consistency and runs Rust tests, Clippy on all targets/features with warnings as
 errors, ESLint with zero warnings, app and E2E TypeScript checks, all Vitest tests and a check
 that `demo-vault/` was not changed. It runs every step and fails if any step fails. It does
 not launch E2E or produce a production bundle.
@@ -185,7 +185,8 @@ Use the intended pushed branch in `--ref` if the work is not on `main`.
    WebdriverIO journeys, followed by the fixture-integrity check. The configured journeys
    cover no vault, a missing vault, the demo-vault copy and the large graph fixture.
 3. Keep one full run per checkout. E2E regenerates `evidence/`; preserve any evidence needed
-   before another run. Windows open without taking focus; do not interact with them. The
+   before another run. Test windows stay visible without taking keyboard focus so macOS keeps rendering them;
+   do not interact with them. The
    bottom 32px of captures are below the page because of the title bar.
 4. Wait for completion and inspect every result. For GitHub, identify the run for the intended
    workflow/ref/commit, then use `gh run watch RUN_ID --exit-status`. A dispatched, queued or
@@ -210,7 +211,8 @@ Use the intended pushed branch in `--ref` if the work is not on `main`.
 - Fill in `.github/pull_request_template.md`: what changed, checks actually run, deferred
   E2E/visual checks, risk and revert steps. Fix any relevant pre-merge failure before merging.
 - Continuous delivery here means keeping each integrated increment ready to build and ship.
-  The current workflows validate changes; they do not automatically publish or install an app.
+  The check workflows validate changes. The release workflow publishes a production macOS archive
+  for version tags; it does not install an app.
   For authorized feature delivery, open/update the PR, wait for CI, merge and reinstall when
   that is within the user's requested scope or standing authorization. Do not create extra
   approval steps for actions already authorized, or infer a release from a documentation task.
@@ -228,3 +230,13 @@ module boundaries remain clear, the relevant tests and fast gate pass, and requi
 are present with their execution status stated. A shipping PR also needs green CI for its
 latest revision. Full regression validation is complete only after the full run and relevant
 visual review pass. Report what was actually verified; never call deferred checks passed.
+
+## Versioned delivery
+
+Every delivered app version must use a new semantic version and have a matching GitHub Release
+with clear, human-written notes and the production macOS app. Start this release line at `0.2.0`;
+use patch increments for fixes and minor increments for feature releases while pre-1.0. CI and
+local development rebuilds do not consume versions. Use `npm run version:bump` to keep npm, Cargo,
+Tauri and both lockfiles aligned. Never overwrite an already published release asset. Follow
+`RELEASING.md`, keep the required PR `check` gate, and wait for release publishing to finish.
+The master logo is `assets/branding/epizen.png`; use it for app and repository branding.

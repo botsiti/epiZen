@@ -19,6 +19,7 @@ import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { SettingsScreen } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
+import { NoteActionDialog, NoteMenu, type NoteAction } from './components/workspace/NoteActions';
 import { useTrayBridge } from './components/tray/useTrayBridge';
 import { RightSidebar } from './components/workspace/RightSidebar';
 import { TabBar } from './components/workspace/TabBar';
@@ -30,6 +31,8 @@ import {
   closeNow,
   createNote,
   trashNote,
+  renameNote,
+  revealNote,
   getSettings,
   guardClose,
   listFiles,
@@ -54,6 +57,7 @@ import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
 import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
+import { renameLinkEdits } from './lib/rename';
 import { collectLibrary, genreCounts, hiddenColumns, isLibraryLayout, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
 import { collectMedia } from './lib/media';
 import { podcastSettings, type PodcastSettings } from './lib/podcasts';
@@ -89,6 +93,7 @@ import {
   openTab,
   parseRightSidebar,
   replaceView,
+  renameNoteViews,
   setPinned,
   showIn,
   type PanelId,
@@ -557,6 +562,70 @@ export function App() {
   );
   const timerDeps = useMemo((): TimerDeps => ({ save: (state) => updateSettings({ timer: state }), write: writeBlock, chime }), [writeBlock]);
   const timer = useTimer(timerDeps, settings.timer, status?.state === 'open');
+  const [noteMenu, setNoteMenu] = useState<{ path: string; x: number; y: number }>();
+  const [noteAction, setNoteAction] = useState<{ path: string; action: Exclude<NoteAction, 'reveal'> }>();
+  const [fileActionError, setFileActionError] = useState<string>();
+  const [noteVersion, setNoteVersion] = useState(0);
+  const chooseNoteAction = useCallback((path: string, action: NoteAction) => {
+    setNoteMenu(undefined);
+    setFileActionError(undefined);
+    if (action === 'reveal') void revealNote(path).catch((err: unknown) => setFileActionError(`Could not reveal the note: ${reason(err)}`));
+    else setNoteAction({ path, action });
+  }, []);
+  const runNoteAction = useCallback(async (action: Exclude<NoteAction, 'reveal'>, path: string, name: string) => {
+    const unsaved = await flushAll();
+    if (unsaved.length) throw new Error('Save or recover the unsaved notes before changing files.');
+    await edits.current;
+    const isDaily = periodOf(path, periodic)?.period === 'day';
+    const timerOwnsNote = timer.state.session?.task.path === path || timer.state.pending.some((block) => block.task.path === path);
+    if (action !== 'duplicate' && (timerOwnsNote || (isDaily && (timer.state.session || timer.state.pending.length)))) {
+      throw new Error('Finish the focus timer and save its pending time before changing this note.');
+    }
+    const expected = await readNote(path);
+    if (action === 'delete') {
+      await trashNote(path, expected);
+      update((previous) => previous.tabs.filter((item) => notePath(currentView(item)) === path).reduce((next, item) => closeTab(next, item.id), previous));
+      setFiles((previous) => previous.filter((file) => file.path !== path));
+      setTexts((previous) => { const next = new Map(previous); next.delete(path); return next; });
+      return;
+    }
+    const base = name.replace(/\.md$/i, '').trim();
+    if (!base || base.startsWith('.')) throw new Error('Give the note a valid name.');
+    const folder = noteFolder(path);
+    const destination = `${folder ? `${folder}/` : ''}${base}.md`;
+    if (action === 'duplicate') {
+      await createNote(destination, expected);
+      setFiles((previous) => [...previous, { path: destination, kind: 'note' }]);
+      setTexts((previous) => new Map(previous).set(destination, expected));
+      go({ kind: 'note', path: destination }, true);
+      return;
+    }
+    if (destination === path) return;
+    const [snapshot, found] = await Promise.all([readAllNotes(), listFiles()]);
+    const source = snapshot.find((note) => note.path === path);
+    if (!source) throw new Error('The note could not be read. Nothing was renamed.');
+    const linkEdits = renameLinkEdits(snapshot, found, path, destination);
+    try {
+      await renameNote(path, destination, source.text, linkEdits);
+    } catch (err) {
+      // A conflicting external edit remains authoritative, including a failed rollback.
+      try { await refresh(); }
+      catch (refreshError) { throw new Error(`${reason(err)}. Could not refresh the file list: ${reason(refreshError)}`, { cause: refreshError }); }
+      finally { setNoteVersion((version) => version + 1); }
+      throw err;
+    }
+    update((previous) => renameNoteViews(previous, path, destination));
+    setFiles(found.map((file) => file.path === path ? { ...file, path: destination } : file));
+    setTexts((previous) => {
+      const next = new Map(previous);
+      for (const edit of linkEdits) next.set(edit.path, edit.text);
+      const renamedText = linkEdits.find((edit) => edit.path === path)?.text ?? source.text;
+      next.delete(path); next.set(destination, renamedText);
+      return next;
+    });
+    // Editors were flushed above. Reload their rewritten links before accepting new edits.
+    setNoteVersion((version) => version + 1);
+  }, [timer.state.session, timer.state.pending, periodic, update, go, refresh]);
   const vaultName = status?.state === 'open' ? status.name : undefined;
   // A task edited or deleted from a menu: the timer follows it, and so do its plans in Calendar.
   const taskChanged = useCallback(
@@ -668,6 +737,7 @@ export function App() {
         onLibrary={(newTab) => openLibrary('all', newTab)}
         onQuests={(newTab) => go({ kind: 'quests' }, newTab)}
         onStatistics={(newTab) => go({ kind: 'statistics' }, newTab)}
+        onNoteMenu={(path, x, y) => setNoteMenu({ path, x, y })}
         timer={<TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
         folderError={folderError}
         calendar={
@@ -726,6 +796,7 @@ export function App() {
             )}
             {view.kind === 'quests' && <ErrorBoundary label="Quests"><QuestPage quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} /></ErrorBoundary>}
             {view.kind === 'statistics' && <ErrorBoundary label="Statistics"><StatisticsPage days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} /></ErrorBoundary>}
+            {fileActionError && <p className="note-warning" role="alert">{fileActionError}</p>}
             {editError && (
               <p className="note-warning" data-testid="edit-warning">
                 {editError}
@@ -733,12 +804,13 @@ export function App() {
             )}
             {view.kind === 'note' && (
               <NoteView
-                key={view.path}
+                key={`${view.path}:${noteVersion}`}
                 path={view.path}
                 files={files}
                 onOpenLink={openLink}
                 editing={Boolean(view.editing)}
                 onEditingChange={(editing) => setEditing(tab.id, editing)}
+                onRename={() => chooseNoteAction(view.path, 'rename')}
                 onSaved={noteSaved}
                 onUnsaved={(path, text, message) => showUnsaved(tab.id, path, text, message)}
                 linkTargets={linkTargets}
@@ -798,6 +870,8 @@ export function App() {
           </Fragment>
         </main>
       </div>
+      {noteMenu && <NoteMenu {...noteMenu} onClose={() => setNoteMenu(undefined)} onPick={(action) => chooseNoteAction(noteMenu.path, action)} />}
+      {noteAction && <NoteActionDialog key={`${noteAction.action}:${noteAction.path}`} {...noteAction} onClose={() => setNoteAction(undefined)} onRun={runNoteAction} />}
       {right.open && (
         <RightSidebar
           note={frontNote}

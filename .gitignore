@@ -7,3 +7,6 @@ src-tauri/gen/
 demo-vault/.obsidian/
 .DS_Store
 *.log
+
+# Versioned desktop archives are uploaded to GitHub Releases, not committed.
+release-artifacts/

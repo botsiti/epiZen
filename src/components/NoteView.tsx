@@ -17,6 +17,7 @@ import { noteFolder, noteTitle } from '../lib/links';
 import { flushBeforeClose, trackSave, whenSaved } from '../lib/saving';
 import { lineEnding } from '../lib/text';
 import { Editor } from './Editor';
+import { NoteTitle } from './workspace/NoteTitle';
 import { MediaPage } from './library/MediaPage';
 import { NoteMarkdown } from './NoteMarkdown';
 import { PeriodicPage } from './periodic/PeriodicPage';
@@ -32,6 +33,7 @@ interface NoteProps {
 interface ViewProps extends NoteProps {
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
+  onRename: () => void;
   /** A save reached the note. */
   onSaved: (path: string, text: string) => void;
   /** A save failed after the editor was closed: the text that didn't reach the note. */
@@ -83,8 +85,9 @@ export function NoteView(props: ViewProps) {
   // wasn't written if it wasn't. `failed` heads the page's warning; with none, the caller says it.
   const change = useCallback(
     (edit: (text: string) => string | undefined, failed: string | undefined, written?: () => void, settled?: (problem?: string) => void) => {
+      let didFail = false;
       changes.current = changes.current.then(async () => {
-        if (latest.current === undefined) return settled?.('The note is still loading.');
+        if (latest.current === undefined) { didFail = true; return settled?.('The note is still loading.'); }
         try {
           const current = await readNote(path);
           const next = edit(current);
@@ -97,6 +100,7 @@ export function NoteView(props: ViewProps) {
           written?.();
           settled?.();
         } catch (err) {
+          didFail = true;
           const problem = err instanceof Error ? err.message : String(err);
           settled?.(problem);
           if (failed !== undefined) setChangeError(`${failed}: ${problem}. The note is shown as it is now.`);
@@ -107,6 +111,7 @@ export function NoteView(props: ViewProps) {
           }
         }
       });
+      void trackSave(changes.current.then(() => didFail ? path : undefined, () => path));
     },
     [path, onSaved],
   );
@@ -204,6 +209,7 @@ export function NoteView(props: ViewProps) {
           onSaved(path, text);
         }}
         onDone={() => onEditingChange(false)}
+        onRename={props.onRename}
         onUnsaved={(text, message) => onUnsaved(path, text, message)}
         linkTargets={linkTargets}
       />
@@ -233,6 +239,7 @@ export function NoteView(props: ViewProps) {
         }}
         linkTargets={linkTargets}
         onEdit={actions.onEdit}
+        onRename={props.onRename}
         onOpenLibrary={media.onOpenLibrary}
         onCoverSaved={media.onCoverSaved}
         warning={changeError}
@@ -255,12 +262,13 @@ export function NoteView(props: ViewProps) {
       Edit
     </button>
   );
-  return <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} />;
+  return <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} onRename={props.onRename} />;
 }
 
 type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'failed'; message: string };
 
 interface EditorProps extends NoteProps {
+  onRename: () => void;
   text: string;
   onSaved: (text: string) => void;
   onDone: () => void;
@@ -274,7 +282,7 @@ interface EditorProps extends NoteProps {
  * meanwhile, saving stops and says so; nothing is overwritten, and the text that wasn't saved
  * is never dropped without a word: Done stays put, and leaving hands it to `onUnsaved`.
  */
-function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved, linkTargets }: EditorProps) {
+function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved, linkTargets, onRename }: EditorProps) {
   // Decided once: saves keep the note's line ending, so it can't change under the editor.
   const [separator] = useState(() => lineEnding(text));
   const [draft, setDraft] = useState(text);
@@ -349,7 +357,7 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved,
       <header className="note-header">
         {folder && <p className="eyebrow">{folder}</p>}
         <div className="title-row">
-          <h1 data-testid="note-title">{noteTitle(path)}</h1>
+          <NoteTitle title={noteTitle(path)} onRename={onRename} />
           <span className="save-state" data-testid="save-state">
             {label}
           </span>
@@ -379,14 +387,14 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved,
   );
 }
 
-export function NoteContent({ path, text, files, onOpenLink, actions }: NoteProps & { text: string; actions?: ReactNode }) {
+export function NoteContent({ path, text, files, onOpenLink, actions, onRename }: NoteProps & { text: string; actions?: ReactNode; onRename?: () => void }) {
   const folder = noteFolder(path);
   return (
     <article className="note" data-testid="note" data-path={path}>
       <header className="note-header">
         {folder && <p className="eyebrow">{folder}</p>}
         <div className="title-row">
-          <h1 data-testid="note-title">{noteTitle(path)}</h1>
+          <NoteTitle title={noteTitle(path)} onRename={onRename} />
           {actions}
         </div>
       </header>

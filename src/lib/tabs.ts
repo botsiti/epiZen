@@ -118,6 +118,11 @@ export function open(ws: Workspace, view: View, options: { newTab?: boolean } = 
   return updateTab(ws, tab.id, (t) => push(t, view));
 }
 
+/** Every open and historical view of a renamed note follows its new path. */
+export function renameNoteViews(ws: Workspace, from: string, to: string): Workspace {
+  return { ...ws, tabs: ws.tabs.map((tab) => ({ ...tab, history: tab.history.map((view) => view.kind === 'note' && view.path === from ? { ...view, path: to } : view) })) };
+}
+
 /** Changes the screen a tab shows in place, without a step in its history: the editor opening, the library's tab. */
 export function replaceView(ws: Workspace, update: (view: View) => View, id = ws.active): Workspace {
   return updateTab(ws, id, (tab) => {

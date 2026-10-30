@@ -23,6 +23,7 @@ import {
   prepareWindow,
   pressCommand,
   screenshot,
+  scrollIntoView,
   setRightSidebar,
   showLibraryAs,
   showMonth,
@@ -43,6 +44,7 @@ const title = () => $('[data-testid="note-title"]');
 const ALBUM = 'Rating/music/Glasshouse Weather.md';
 const FILM = 'Rating/kino/The Lighthouse Accountant.md';
 let deletedLibraryNote: string | undefined;
+let deletedFileActionNote: string | undefined;
 const INBOX = 'Inbox idea.md';
 const DAY = `${DAYS}/14.08.2026.md`;
 // The Lex Fridman Podcast's episode #494, from the recorded iTunes answers (test/fixtures/lookup/).
@@ -104,6 +106,7 @@ describe('the demo vault', () => {
     await expect($('[data-testid="home"]')).toHaveText(expect.stringContaining('119 notes · 12 folders · 46 images'));
     await expect($('[data-testid="today-create"]')).toBeDisplayed();
     await expect($('[data-testid="recent-library"]')).toBeDisplayed();
+    expect(await $$('[data-testid="recent-library"] [data-testid="media-kind-badge"]').length).toBe(10);
     expect(await $$('[data-testid="recent-library"] [data-testid="cover-card"]').length).toBeLessThanOrEqual(10);
     // Life XP is the demo's 60 days (12,296 XP) plus its quests, less what open quests have lost
     // by today's date, so it moves with the clock; src/lib/home.test.ts and quests.test.ts pin the sums.
@@ -111,10 +114,10 @@ describe('the demo vault', () => {
     await expect($('[data-testid="hero-stats"]')).toHaveText(expect.stringContaining('Life XP'));
     await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Add your birth date in Settings'));
     await screenshot('03-home');
-    await $('[data-testid="spheres"]').scrollIntoView();
+    await scrollIntoView('[data-testid="spheres"]');
     await expect($('[data-testid="lead-sphere"]')).toHaveText(expect.stringContaining('Personal Growth'));
     await screenshot('34-home-spheres');
-    await $('[data-testid="recent-library"]').scrollIntoView();
+    await scrollIntoView('[data-testid="recent-library"]');
     await screenshot('36-home-shelves');
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
   });
@@ -193,6 +196,7 @@ describe('the demo vault', () => {
     // The covers are the latest 15, the latest first; the list has them all.
     expect(await $$('[data-testid="library-card"]').length).toBe(15);
     expect(await $$('[data-testid="library-card-kind"]').length).toBe(15);
+    expect(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-card"]')].every((card) => card.querySelector('[data-testid="media-kind-badge"]')?.getAttribute('data-kind') === card.getAttribute('data-kind')))).toBe(true);
     await expect($('[data-testid="library-card"]')).toHaveAttribute('data-path', 'Rating/music/Monastery Wi-Fi.md');
     await expect($('[data-testid="library-count"]')).toHaveText('The latest 15 of 34');
     await expect($('[data-testid="library-see-all"]')).toHaveText('See all 34 in the list');
@@ -1183,7 +1187,7 @@ describe('the demo vault', () => {
 
     // Each card writes its own section, in place, as the Obsidian weekly dashboard's Save does.
     await showTab('Overview');
-    await $('[data-testid="reflections"]').scrollIntoView();
+    await scrollIntoView('[data-testid="reflections"]');
     const card = (heading: string) => `[data-testid="reflection"][data-heading="${heading}"]`;
     await $(`${card('Plus')} [data-testid="reflection-field"]`).setValue('Two deep mornings');
     await $(`${card('Plus')} [data-testid="reflection-save"]`).click();
@@ -1221,7 +1225,7 @@ describe('the demo vault', () => {
     const added = reflected.replace('\nAdd real weekly quests', `\n${quest}\nAdd real weekly quests`);
     await browser.waitUntil(() => read() === added, { timeout: 5000, timeoutMsg: 'the quest never reached the weekly note' });
     await expect($('[data-testid="quest-status"]')).toHaveText('Saved');
-    await $('button[aria-label="Details of Read 100 pages"]').scrollIntoView();
+    await scrollIntoView('button[aria-label="Details of Read 100 pages"]');
     await screenshot('62-quest-added');
 
     // Its detail, and a chapter for its adventure log, added with ⌘ + Enter.
@@ -1375,7 +1379,7 @@ describe('the demo vault', () => {
       }, value);
       await expect(artwork()).toHaveValue(value);
     };
-    await $('[data-testid="settings-podcasts"]').scrollIntoView();
+    await scrollIntoView('[data-testid="settings-podcasts"]');
     await expect(artwork()).toHaveValue('show');
     await selectArtwork('episode');
     await $('[data-testid="settings-save"]').click();
@@ -1386,7 +1390,7 @@ describe('the demo vault', () => {
     await selectArtwork('show');
     await $('[data-testid="settings-save"]').click();
     await browser.waitUntil(() => kept() === 'show', { timeoutMsg: 'show thumbnails were not saved as the preference' });
-    await $('[data-testid="settings-podcasts"]').scrollIntoView();
+    await scrollIntoView('[data-testid="settings-podcasts"]');
     await screenshot('85-settings-podcasts');
     expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
   });
@@ -1396,7 +1400,7 @@ describe('the demo vault', () => {
     await $('[data-testid="settings-birth-date"]').setValue('1998-03-21');
     await $('[data-testid="settings-save"]').click();
     await $('[data-testid="settings"] .save-state').waitForDisplayed();
-    await $('[data-testid="settings-home"]').scrollIntoView();
+    await scrollIntoView('[data-testid="settings-home"]');
     await screenshot('37-settings-birth-date');
     await $('[data-testid="sidebar-vault"]').click();
     await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Till 30'));
@@ -1404,7 +1408,7 @@ describe('the demo vault', () => {
     const grid = $('[data-testid="weeks-grid"]');
     await grid.waitForDisplayed();
     expect(await browser.execute(() => document.querySelectorAll('[data-testid="weeks-grid"] rect').length)).toBe(1560);
-    await grid.scrollIntoView();
+    await scrollIntoView('[data-testid="weeks-grid"]');
     await screenshot('35-home-weeks');
   });
 
@@ -1537,6 +1541,97 @@ describe('the demo vault', () => {
     await screenshot('115-combined-task-entry');
   });
 
+  it('renames a linked note and updates backlinks while another note is being edited', async () => {
+    const before = snapshotVault(vaultCopy());
+    const index = 'Rating/music/00. Music 2026 MOC.md';
+    const references = [index, `${DAYS}/10.08.2026.md`, 'Calendar/2026/months 2026/08.26 RPG.md'];
+    const originals = references.map((path) => readFileSync(join(vaultCopy(), path), 'utf8'));
+    await openFolders(...foldersOf(index));
+    await openNote(index);
+    await $('[data-testid="edit-note"]').click();
+    await $('[data-testid="editor"] .cm-content').waitForDisplayed();
+    await browser.execute((path) => {
+      const row = [...document.querySelectorAll<HTMLElement>('[data-testid="tree-note"]')].find((item) => item.dataset.path === path);
+      row?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 120, clientY: 300 }));
+    }, ALBUM);
+    await $('[role="menuitem"]=Rename…').click();
+    await $('[data-testid="note-action-name"]').setValue('Backlink rename check');
+    await $('[data-testid="note-action-confirm"]').click();
+    // CodeMirror renders only visible lines. The live preview reflects the editor's full draft.
+    await $('[data-testid="preview"] [data-wikilink="Backlink rename check"]').waitForExist();
+    await expect($('[data-testid="preview"] [data-wikilink="Backlink rename check"]')).not.toHaveElementClass('is-missing');
+    for (const [i, path] of references.entries()) {
+      expect(readFileSync(join(vaultCopy(), path), 'utf8')).toBe(originals[i]!.replaceAll('[[Glasshouse Weather', '[[Backlink rename check'));
+    }
+    await $('[data-testid="edit-done"]').click();
+    await expect($('[data-testid="note"] [data-wikilink="Backlink rename check"]')).not.toHaveElementClass('is-missing');
+    // The background macOS window can suspend WebDriver's animated-scroll wait.
+    await browser.execute(() => document.querySelector('[data-testid="note"] [data-wikilink="Backlink rename check"]')?.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    await screenshot('117-backlinks-renamed');
+    await clickInPage('[data-testid="note"] [data-wikilink="Backlink rename check"]');
+    await waitForNote('Rating/music/Backlink rename check.md');
+    await $('[aria-label="Rename Backlink rename check"]').click();
+    await $('[data-testid="note-action-name"]').setValue('Glasshouse Weather');
+    await $('[data-testid="note-action-confirm"]').click();
+    await waitForNote(ALBUM);
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+  });
+
+  it('duplicates, renames and trashes a note safely from filename actions', async () => {
+    await openFolders(...foldersOf(ALBUM));
+    await openNote(ALBUM);
+    const before = snapshotVault(vaultCopy());
+    const original = readFileSync(join(vaultCopy(), ALBUM), 'utf8');
+    const context = async (path: string) => {
+      await browser.execute((notePath) => {
+        const row = [...document.querySelectorAll<HTMLElement>('[data-testid="tree-note"]')].find((item) => item.dataset.path === notePath);
+        if (!row) throw new Error('Missing note row');
+        row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 120, clientY: 300 }));
+      }, path);
+      await $('[data-testid="note-menu"]').waitForDisplayed();
+    };
+    await context(ALBUM);
+    await screenshot('116-file-actions');
+    await $('[role="menuitem"]=Duplicate').click();
+    await $('[data-testid="note-action-name"]').setValue('Filename action copy');
+    await $('[data-testid="note-action-confirm"]').click();
+    const duplicate = 'Rating/music/Filename action copy.md';
+    await waitForNote(duplicate);
+    expect(readFileSync(join(vaultCopy(), duplicate), 'utf8')).toBe(original);
+    await $('[data-testid="edit-note"]').click();
+    await $('[data-testid="editor"] .cm-content').waitForDisplayed();
+    const edited = original + '\nFilename action draft survives rename.\n';
+    await browser.execute((text) => {
+      document.querySelector<HTMLElement>('[data-testid="editor"] .cm-content')?.focus();
+      document.execCommand('selectAll');
+      document.execCommand('insertText', false, text);
+    }, edited);
+    await $('[aria-label="Rename Filename action copy"]').click();
+    await $('[data-testid="note-action-name"]').setValue('Glasshouse Weather');
+    await $('[data-testid="note-action-confirm"]').click();
+    await expect($('[role="dialog"] [role="alert"]')).toHaveText(expect.stringContaining('already exists'));
+    expect(readFileSync(join(vaultCopy(), ALBUM), 'utf8')).toBe(original);
+    await $('[data-testid="note-action-name"]').setValue('Filename action renamed');
+    await $('[data-testid="note-action-confirm"]').click();
+    const renamed = 'Rating/music/Filename action renamed.md';
+    await $('[data-testid="note-editor"][data-path="Rating/music/Filename action renamed.md"]').waitForDisplayed();
+    expect(existsSync(join(vaultCopy(), duplicate))).toBe(false);
+    expect(readFileSync(join(vaultCopy(), renamed), 'utf8')).toBe(edited);
+    await expect(frontTab()).toHaveText(expect.stringContaining('Filename action renamed'));
+    await context(renamed);
+    await $('[role="menuitem"]=Delete…').click();
+    await $('[data-testid="note-action-confirm"]').click();
+    await browser.waitUntil(() => !existsSync(join(vaultCopy(), renamed)));
+    const after = snapshotVault(vaultCopy());
+    const added = [...after.keys()].filter((path) => !before.has(path));
+    expect(added).toHaveLength(1);
+    deletedFileActionNote = added[0];
+    expect(deletedFileActionNote).toMatch(/^\.trash\/epizen-[^/]+\/Filename action renamed\.md$/);
+    expect(readFileSync(join(vaultCopy(), deletedFileActionNote!), 'utf8')).toBe(edited);
+    after.delete(deletedFileActionNote!);
+    expect(diffSnapshots(before, after)).toEqual([]);
+  });
+
   it('changed nothing in the vault copy but the new notes, the added album, episode and film and their covers, the album and film entered by hand and the covers found for them, the rating set, the days changed from their pages and drawn on, and the weeks written from theirs', () => {
     expect(diffSnapshots(snapshotVault(DEMO_VAULT), snapshotVault(vaultCopy()))).toEqual(
       [
@@ -1544,6 +1639,7 @@ describe('the demo vault', () => {
         `added: ${DAYS}/31.07.2026.md`,
         `added: ${DAYS}/${TODAY}.md`,
         ...(deletedLibraryNote ? [`added: ${deletedLibraryNote}`] : []),
+        ...(deletedFileActionNote ? [`added: ${deletedFileActionNote}`] : []),
         'added: Inbox idea.md',
         'added: Rating/music/Dog Man Star.md',
         'added: Rating/music/_attachments/dog-man-star.png',
