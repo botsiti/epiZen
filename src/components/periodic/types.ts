@@ -6,6 +6,7 @@ import type { Quest, QuestChange, QuestEntry } from '../../lib/quests';
 import type { WeekHeading } from '../../lib/sections';
 import type { DayEntry } from '../../lib/rollup';
 import type { TaskEdit } from '../../lib/timeblocks';
+import type { MonthlyField } from '../../lib/monthlyReview';
 
 /** What a periodic page reads besides its own note. Built by App from the vault; nothing in the note is code. */
 export interface PeriodicSpec {
@@ -62,4 +63,9 @@ export interface PeriodicActions {
   onAddQuest: (line: string) => Promise<string | undefined>;
   /** The weekly note's Plus, Minus or Next, written in place. */
   onSetSection: (heading: WeekHeading, value: string) => Promise<string | undefined>;
+  /** A monthly section is saved only if the section shown to the user still matches. */
+  onSetMonthlySection: (field: MonthlyField, value: string, expected: string) => Promise<string | undefined>;
+  onRecoverMonthlySection: (field: MonthlyField, value: string, source: string, expected: string, problem: string) => void;
+  /** Stores a user-selected image as a new vault attachment. */
+  onImportExpensePhoto: (bytes: Uint8Array) => Promise<string>;
 }

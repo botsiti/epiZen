@@ -78,6 +78,9 @@ const actions = (): PeriodicActions => ({
   onQuestChange: vi.fn(() => Promise.resolve(undefined)),
   onAddQuest: vi.fn(() => Promise.resolve(undefined)),
   onSetSection: vi.fn(() => Promise.resolve(undefined)),
+  onSetMonthlySection: vi.fn(() => Promise.resolve(undefined)),
+  onRecoverMonthlySection: vi.fn(),
+  onImportExpensePhoto: vi.fn(() => Promise.resolve('image.png')),
 });
 
 describe('the day page', () => {
@@ -456,4 +459,24 @@ it('omits hidden habits from yesterday’s reminders but keeps other missing fie
   const onlyHabits = (value: Date): DayEntry => sameDay(value, yesterday) ? { date: value, path: 'yesterday.md', day: parseDay(text.replace('energy:', 'energy: 5')) } : { date: value };
   view.rerender(<PeriodicPage spec={{ ...hidden, dayOf: onlyHabits }} path="today.md" text="" actions={actions()} />);
   expect(screen.queryByTestId('yesterday-gaps')).not.toBeInTheDocument();
+});
+
+it('shows full-week time, mood, sleep and plain-text reflections in the monthly weeks view', async () => {
+  const user = userEvent.setup();
+  const monday = new Date(2026, 7, 31);
+  const august = parseDay('---\nmood: 2\nsleep: 6\n---\n- [x] #daily/code — End of August [minutes::60]');
+  const september = parseDay('---\nmood: 4\nsleep: 8\n---\n- [x] #daily/code — Start of September [minutes::30]');
+  const monthSpec = { ...spec('month', new Date(2026, 8, 1)),
+    dayOf: (date: Date): DayEntry => sameDay(date, monday) ? { date, day: august } : sameDay(date, new Date(2026, 8, 1)) ? { date, day: september } : { date },
+    weekOf: (date: Date) => sameDay(date, monday) ? { path: 'week.md', text: '#### Plus\nShipped a feature.\n\n#### Minus\nToo little sleep.\n\n#### Next\nTake a break.\n' } : {},
+  };
+  render(<PeriodicPage spec={monthSpec} path="month.md" text="" actions={actions()} />);
+  await user.click(screen.getByRole('tab', { name: 'Weeks' }));
+  const card = screen.getAllByTestId('week-card')[0]!;
+  expect(card).toHaveTextContent('1h 30m');
+  expect(card).toHaveTextContent('mood 3');
+  expect(card).toHaveTextContent('sleep 7h');
+  expect(card).toHaveTextContent('PlusShipped a feature.');
+  expect(card).toHaveTextContent('MinusToo little sleep.');
+  expect(card).toHaveTextContent('NextTake a break.');
 });

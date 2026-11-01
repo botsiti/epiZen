@@ -72,6 +72,7 @@ const props = (overrides: Partial<HomeProps> = {}): HomeProps => ({
   onSeeLibrary: vi.fn(),
   onSeeQuests: vi.fn(),
   onSeeStatistics: vi.fn(),
+  onSeeSummaries: vi.fn(),
   onOpenNote: vi.fn(),
   onOpenPeriod: vi.fn(),
   ...overrides,

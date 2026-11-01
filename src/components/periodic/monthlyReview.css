@@ -1,0 +1,58 @@
+.monthly-review { margin: 0; }
+.monthly-review.is-open { margin: var(--space-5) 0; }
+.periodic .tabs { overflow-x: auto; overflow-y: hidden; }
+.periodic .tabs > .tab { flex: none; white-space: nowrap; }
+.monthly-field, .monthly-areas { padding: var(--space-5); }
+.monthly-field.is-area { padding: 0; }
+.monthly-field h2, .monthly-areas h2 { margin: 0; font: 500 25px var(--display); color: var(--text); }
+.monthly-areas > div:first-child h2 { margin-top: var(--space-2); }
+.monthly-hint { margin: 8px 0 0; color: var(--text-muted); font-size: 13px; line-height: 1.55; }
+.monthly-field-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: var(--space-4); }
+.monthly-field textarea { display: block; width: 100%; min-height: 160px; padding: 14px 16px; resize: vertical; border: 1px solid var(--glass-line); border-radius: 10px; outline: none; background: rgb(0 0 0 / 18%); color: var(--text); font: 14px/1.65 var(--font-ui); }
+.monthly-field textarea:focus { border-color: var(--accent); }
+.monthly-field textarea::placeholder { color: var(--text-faint); }
+.monthly-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: var(--space-3); }
+.monthly-actions > span, .monthly-status { color: var(--text-muted); font-size: 12px; }
+.monthly-status.is-error, .monthly-problem { color: var(--text); }
+.monthly-problem { font-size: 13px; }
+.monthly-area-layout { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr); gap: 32px; margin-top: 24px; }
+.monthly-area-list { display: grid; gap: 4px; align-content: start; }
+.monthly-area { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-muted); text-align: left; transition: background var(--motion-fast) ease-out, color var(--motion-fast) ease-out; }
+.monthly-area:hover, .monthly-area.is-selected { background: rgb(143 188 170 / 10%); color: var(--text); }
+.monthly-area-dot { width: 8px; height: 8px; border-radius: 50%; }
+.monthly-area strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.monthly-area small { color: var(--text-faint); font-weight: 400; }
+.monthly-rating { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: var(--text-muted); font-size: 13px; }
+.monthly-rating select { min-width: 120px; padding: 8px 12px; border: 1px solid var(--glass-line-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.week-card-reflections li strong { display: block; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.week-card-reflections li span { white-space: pre-wrap; }
+@container (max-width: 620px) { .monthly-area-layout { grid-template-columns: 1fr; gap: 24px; } }
+/* A quiet photo journal: the image is optional, the reflection stays the focus. */
+.money-field > .monthly-field-head { margin-bottom: 28px; }
+.money-field .monthly-field-head h2 { margin-top: 6px; font-size: 32px; }
+.money-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: start; gap: 24px; }
+.money-photos { padding: 20px; border: 1px solid var(--glass-line); border-radius: 12px; background: rgb(0 0 0 / 12%); }
+.money-photos-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.money-label { display: block; color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.money-photos-head p { margin: 5px 0 0; color: var(--text-muted); font-size: 13px; }
+.money-photos-head small { display: block; margin-top: 5px; color: var(--text-faint); font-size: 11px; }
+.money-photo-add { position: relative; display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 8px 13px; border: 1px solid var(--glass-line-strong); border-radius: 999px; color: var(--text); cursor: pointer; font-size: 13px; transition: border-color var(--motion-fast) ease-out, background var(--motion-fast) ease-out; }
+.money-photo-add:hover, .money-photo-add:focus-within { border-color: var(--accent); background: var(--accent-soft); }
+.money-photo-add:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.money-photo-add.is-disabled { opacity: .5; cursor: default; }
+.money-photo-add input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.money-photos-empty { margin: 20px 0 0; padding: 20px; border: 1px dashed var(--glass-line-strong); border-radius: 10px; color: var(--text-muted); text-align: center; font-size: 13px; }
+.money-photos-empty span { color: var(--text-faint); }
+.money-photo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+.money-photo { min-width: 0; margin: 0; overflow: hidden; border: 1px solid var(--glass-line); border-radius: 10px; background: rgb(0 0 0 / 20%); }
+.money-photo-image { display: block; width: 100%; height: 180px; object-fit: contain; }
+.money-photo-missing { display: grid; place-items: center; height: 180px; color: var(--text-muted); font-size: 13px; }
+.money-photo figcaption { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; color: var(--text-muted); font-size: 12px; }
+.money-photo figcaption span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.money-photo figcaption button { flex: none; padding: 3px; color: var(--text-muted); transition: color var(--motion-fast) ease-out; }
+.money-photo figcaption button:hover { color: var(--text); }
+.money-writing { display: block; }
+.money-field .money-writing .money-label { margin-bottom: 10px; }
+@container (max-width: 760px) { .money-layout { grid-template-columns: 1fr; } }
+@container (max-width: 620px) { .money-photo-grid { grid-template-columns: 1fr; } }
+.money-photo-hint { margin: 10px 0 0; color: var(--text-faint); font-size: 12px; }

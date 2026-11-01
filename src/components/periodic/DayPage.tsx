@@ -6,7 +6,7 @@ import { formatMinutes, parseDay, type Day, type DayTask } from '../../lib/day';
 import type { ThoughtRecord } from '../../lib/cbt';
 import { missingFromDay } from '../../lib/rollup';
 import { Donut, Ring, Segments } from './charts';
-import { order, spark } from './effects';
+import { order } from './effects';
 import { CountUp } from './motion';
 import { Bar, Hero, NavButton, Section, Tabs, Tile } from './parts';
 import { questsIn } from '../../lib/quests';
@@ -419,7 +419,7 @@ function TaskActions({ open, isToday, categories, actions, onOpen }: { open: Ope
   );
 }
 
-/** A task to tick: the tick writes that one box back to the note, with a small spark. */
+/** A task to tick: the tick writes that one box back to the note. */
 function TaskRow({ task, onToggle, onMenu }: { task: DayTask; onToggle: (task: DayTask) => void; onMenu: (event: MouseEvent) => void }) {
   const color = task.category?.color ?? 'var(--accent)';
   return (
@@ -428,11 +428,7 @@ function TaskRow({ task, onToggle, onMenu }: { task: DayTask; onToggle: (task: D
         <input
           type="checkbox"
           checked={task.done}
-          onChange={(event) => {
-            const box = event.currentTarget.getBoundingClientRect();
-            if (!task.done) spark(box.left + box.width / 2, box.top + box.height / 2, color);
-            onToggle(task);
-          }}
+          onChange={() => onToggle(task)}
           data-testid="dash-task"
           data-line={task.line}
         />
@@ -495,11 +491,7 @@ function TaskCard({
           className="tick"
           checked={task.done}
           aria-label={task.label || 'untitled task'}
-          onChange={(event) => {
-            const box = event.currentTarget.getBoundingClientRect();
-            if (!task.done) spark(box.left + box.width / 2, box.top + box.height / 2, color);
-            onToggle(task);
-          }}
+          onChange={() => onToggle(task)}
           data-testid="task-card-tick"
           data-line={task.line}
         />
@@ -658,10 +650,7 @@ function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actio
             className={habit.done ? 'habit-pill glass rise is-done' : 'habit-pill glass rise'}
             style={{ ...order(i), '--tone': color } as CSSProperties}
             aria-pressed={habit.done}
-            onClick={(event) => {
-              if (!habit.done) spark(event.clientX, event.clientY, color);
-              actions.onToggle(habit);
-            }}
+            onClick={() => actions.onToggle(habit)}
             data-testid="habit-pill"
             data-line={habit.line}
           >

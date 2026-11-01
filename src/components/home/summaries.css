@@ -1,0 +1,28 @@
+.summaries { max-width: 1120px; }
+.summaries-header { margin-bottom: 40px; }
+.summaries-header h1 { margin: 8px 0; font: 48px var(--display); color: var(--text); }
+.summaries-header > p:last-child { color: var(--text-muted); font-size: 13px; }
+.summaries-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.summaries-toolbar h2 { margin: 2px 0 0; font: 28px var(--display); }
+.summaries-eyebrow { color: var(--text-faint); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+.summaries-year { display: flex; flex-wrap: wrap; gap: 6px; }
+.summaries-list { display: grid; gap: 12px; }
+.summaries-month { padding: 20px 24px; }
+.summaries-month-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.summaries-month-head > div { display: flex; align-items: baseline; gap: 12px; }
+.summaries-month-number { color: var(--text-faint); font: 11px var(--font-mono); }
+.summaries-month-head h3 { margin: 0; font: 23px var(--display); }
+.summaries-month-content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, .85fr); gap: 28px; margin-top: 16px; }
+.summaries-words p { margin: 5px 0 0; color: var(--text); font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.summaries-words .summaries-empty { color: var(--text-faint); }
+.summaries-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-content: start; }
+.summaries-metrics span { display: block; color: var(--text-faint); font-size: 11px; }
+.summaries-metrics strong { display: block; margin-top: 2px; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+@container (max-width: 700px) { .summaries-month-content { grid-template-columns: 1fr; gap: 16px; } }
+.summaries-progress { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 40px; }
+.summaries-progress-card { padding: 16px; }
+.summaries-progress-card > strong { display: block; margin: 6px 0 10px; font: 600 22px var(--numbers); font-variant-numeric: tabular-nums; }
+.summaries-progress-card > small { display: block; margin-top: 8px; color: var(--text-muted); font-size: 11px; }
+.summaries-progress-track { height: 4px; overflow: hidden; border-radius: 4px; background: rgb(255 255 255 / 8%); }
+.summaries-progress-track i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+@container (max-width: 700px) { .summaries-progress { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

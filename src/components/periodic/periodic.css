@@ -10,8 +10,8 @@
   --glass-shadow: 0 18px 40px -22px rgb(0 0 0 / 80%), 0 2px 6px -2px rgb(0 0 0 / 35%);
   --display: 'New York', ui-serif, 'Iowan Old Style', Georgia, serif;
   --numbers: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
-  --settle: cubic-bezier(0.2, 0.9, 0.25, 1);
-  --snap: cubic-bezier(0.3, 1.35, 0.5, 1);
+  --settle: var(--motion-ease);
+  --snap: var(--motion-ease);
   --plus: #63bd92;
   --minus: #e0707f;
   --next: #6fa5e6;
@@ -61,7 +61,7 @@
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 320ms ease-out;
+  transition: opacity var(--motion-fast) ease-out;
 }
 
 .glass::before {
@@ -89,18 +89,18 @@
   padding: var(--space-5);
 }
 
-/* Entrances: each card rises into place in its turn. */
+/* Content stays still on arrival; only the page's hero fades in briefly. */
 
-.rise {
-  animation: rise 560ms var(--settle) both;
-  animation-delay: calc(min(var(--i, 0), 16) * 45ms);
+.hero.rise {
+  animation: soft-in var(--motion-fast) ease-out both;
 }
+
+@keyframes soft-in { from { opacity: 0; } }
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.985);
-    filter: blur(4px);
+    transform: translateY(6px);
   }
 }
 
@@ -123,7 +123,6 @@
     radial-gradient(38% 55% at 14% 18%, rgb(143 188 170 / 20%), transparent 70%),
     radial-gradient(32% 50% at 88% 6%, rgb(111 165 230 / 14%), transparent 70%),
     radial-gradient(40% 50% at 62% 115%, rgb(224 112 127 / 10%), transparent 70%);
-  animation: aurora 26s ease-in-out infinite alternate;
 }
 
 /* Fine grain over the light, so the gradients don't band. */
@@ -136,11 +135,6 @@
   mix-blend-mode: overlay;
 }
 
-@keyframes aurora {
-  to {
-    transform: translate3d(4%, 3%, 0) rotate(4deg) scale(1.06);
-  }
-}
 
 .hero-main {
   min-width: 0;
@@ -166,14 +160,8 @@
   background-clip: text;
   color: transparent;
   overflow-wrap: anywhere;
-  animation: shine 2.6s var(--settle) 0.25s both;
 }
 
-@keyframes shine {
-  from {
-    background-position: 100% 0;
-  }
-}
 
 .hero-summary {
   display: block;
@@ -249,7 +237,7 @@
     color 160ms ease-out,
     border-color 160ms ease-out,
     background 160ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .nav-chip:hover {
@@ -328,12 +316,12 @@
   background: var(--accent);
   box-shadow: 0 0 14px rgb(143 188 170 / 70%);
   transition:
-    transform 420ms var(--snap),
-    width 420ms var(--snap);
+    transform var(--motion-state) var(--snap),
+    width var(--motion-state) var(--snap);
 }
 
 .tab-panel {
-  animation: panel 320ms ease-out both;
+  animation: soft-in var(--motion-fast) ease-out both;
 }
 
 @keyframes panel {
@@ -412,7 +400,7 @@
   height: 100%;
   border-radius: inherit;
   transform-origin: left;
-  animation: grow 900ms var(--settle) 200ms both;
+  animation: grow var(--motion-data) var(--settle) both;
 }
 
 @keyframes grow {
@@ -437,7 +425,7 @@
 .split-bar > span {
   background: var(--accent);
   transform-origin: left;
-  animation: grow 900ms var(--settle) 200ms both;
+  animation: grow var(--motion-data) var(--settle) both;
 }
 
 .split-bar > .is-recovery {
@@ -454,13 +442,12 @@
   height: 9px;
   border-radius: 50%;
   background: rgb(255 255 255 / 8%);
+  transition: background var(--motion-fast) ease-out, box-shadow var(--motion-fast) ease-out;
 }
 
 .habit-dot.is-done {
   background: var(--tone);
   box-shadow: 0 0 10px -1px var(--tone);
-  animation: pop 420ms var(--snap) both;
-  animation-delay: calc(var(--i, 0) * 50ms + 250ms);
 }
 
 @keyframes pop {
@@ -524,7 +511,7 @@
   background: rgb(255 255 255 / 7%);
   transition:
     background 200ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 button.segment:hover {
@@ -535,8 +522,6 @@ button.segment:hover {
 .segment.is-lit {
   background: var(--tone);
   box-shadow: 0 0 12px -3px var(--tone);
-  animation: pop 420ms var(--snap) both;
-  animation-delay: calc(var(--i, 0) * 35ms + 200ms);
 }
 
 .number-field {
@@ -613,8 +598,8 @@ button.segment:hover {
 
 .donut-arc {
   fill: none;
-  animation: sweep 1000ms var(--settle) both;
-  animation-delay: calc(var(--i, 0) * 90ms + 150ms);
+  animation: sweep var(--motion-data) var(--settle) both;
+  animation-delay: calc(min(var(--i, 0), 5) * 24ms);
 }
 
 @keyframes sweep {
@@ -807,7 +792,7 @@ button.segment:hover {
   cursor: pointer;
   transition:
     background 200ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .task-row input[type='checkbox']::after,
@@ -819,7 +804,7 @@ button.segment:hover {
   border: solid #0e1012;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg) scale(0);
-  transition: transform 300ms var(--snap);
+  transition: transform var(--motion-state) var(--snap);
 }
 
 .task-row input[type='checkbox']:checked,
@@ -1009,7 +994,7 @@ button.segment:hover {
   transition:
     opacity 160ms ease-out,
     box-shadow 200ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .composer-categories .chip:hover {
@@ -1048,7 +1033,7 @@ button.segment:hover {
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%);
   transition:
     opacity 160ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .primary-button:active {
@@ -1077,7 +1062,7 @@ button.segment:hover {
   text-align: left;
   transition:
     background 240ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .habit-pill:active {
@@ -1099,7 +1084,7 @@ button.segment:hover {
   border-radius: 50%;
   transition:
     background 200ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .habit-pill.is-done .habit-check {
@@ -1146,13 +1131,12 @@ button.segment:hover {
   aspect-ratio: 1;
   border-radius: 6px;
   background: rgb(255 255 255 / 5%);
+  transition: background var(--motion-fast) ease-out, box-shadow var(--motion-fast) ease-out;
 }
 
 .habit-cell.is-done {
   background: var(--tone);
   box-shadow: 0 0 10px -3px var(--tone);
-  animation: pop 380ms var(--snap) both;
-  animation-delay: calc(min(var(--i, 0), 60) * 8ms + 100ms);
 }
 
 .habit-cell.is-none {
@@ -1187,7 +1171,7 @@ button.segment:hover {
   align-items: center;
   padding: 14px 6px 12px;
   border-radius: 16px;
-  transition: transform 380ms var(--snap);
+  transition: transform var(--motion-state) var(--snap);
 }
 
 .day-card:hover {
@@ -1351,7 +1335,7 @@ button.segment:hover {
   object-fit: cover;
   background: var(--surface);
   box-shadow: 0 14px 30px -18px rgb(0 0 0 / 90%);
-  transition: transform 380ms var(--snap);
+  transition: transform var(--motion-state) var(--snap);
 }
 
 .mini-cover-blank {
@@ -1436,7 +1420,7 @@ button.day-row:hover {
 
 .stack > span {
   transform-origin: left;
-  animation: grow 700ms var(--settle) 150ms both;
+  animation: grow var(--motion-data) var(--settle) both;
 }
 
 .heatmap {
@@ -1461,7 +1445,7 @@ button.day-row:hover {
   border-radius: 12px;
   background: rgb(143 188 170 / calc(var(--heat, 0) * 0.5));
   text-align: left;
-  transition: transform 380ms var(--snap);
+  transition: transform var(--motion-state) var(--snap);
 }
 
 button.heatmap-cell:hover {
@@ -1574,8 +1558,8 @@ button.heatmap-cell:hover {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 1;
-  animation: draw 1300ms var(--settle) both;
-  animation-delay: calc(var(--i, 0) * 120ms + 150ms);
+  animation: draw var(--motion-data) var(--settle) both;
+  animation-delay: calc(min(var(--i, 0), 5) * 24ms);
 }
 
 @keyframes draw {
@@ -1587,7 +1571,7 @@ button.heatmap-cell:hover {
 .chart-dot {
   fill: currentColor;
   animation: pop 400ms var(--snap) both;
-  animation-delay: calc(var(--i, 0) * 120ms + 900ms);
+  animation-delay: calc(min(var(--i, 0), 5) * 24ms);
 }
 
 .chart-legend {
@@ -1652,7 +1636,7 @@ button.heatmap-cell:hover {
   height: 100%;
   border-radius: inherit;
   transform-origin: left;
-  animation: grow 900ms var(--settle) 200ms both;
+  animation: grow var(--motion-data) var(--settle) both;
 }
 
 .category-time {
@@ -1667,20 +1651,10 @@ button.heatmap-cell:hover {
   margin: 0 auto;
 }
 
-/* Text that arrives word by word (after react-bits' BlurText). */
+/* Keep summary text immediately readable. */
 
 .blur-word {
   display: inline-block;
-  animation: blur-in 640ms var(--settle) both;
-  animation-delay: calc(var(--i, 0) * 45ms + 300ms);
-}
-
-@keyframes blur-in {
-  from {
-    opacity: 0;
-    filter: blur(8px);
-    transform: translateY(8px);
-  }
 }
 
 /* A tick's spark (after react-bits' ClickSpark). Lives on <body>, outside the page. */
@@ -1786,7 +1760,7 @@ button.heatmap-cell:hover {
   padding: var(--space-6);
   /* A tint, not a blur: WebKit draws a backdrop blur as big as the window black (DESIGN.md). */
   background: rgb(8 10 12 / 80%);
-  animation: panel 240ms ease-out both;
+  animation: panel var(--motion-enter) var(--settle) both;
 }
 
 .wizard {
@@ -1803,7 +1777,7 @@ button.heatmap-cell:hover {
   box-shadow:
     var(--glass-top),
     0 40px 110px rgb(0 0 0 / 60%);
-  animation: rise 520ms var(--settle) both;
+  animation: rise var(--motion-enter) var(--settle) both;
 }
 
 /* The same soft light as the pages' heroes, faint at the top. */
@@ -1839,7 +1813,7 @@ button.heatmap-cell:hover {
   font-size: 16px;
   transition:
     color 160ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .wizard-round:hover {
@@ -1874,7 +1848,7 @@ button.heatmap-cell:hover {
 .wizard-body {
   overflow-y: auto;
   padding: 18px 36px 24px;
-  animation: step-in 320ms var(--settle) both;
+  animation: step-in var(--motion-enter) var(--settle) both;
 }
 
 @keyframes step-in {
@@ -1974,7 +1948,7 @@ button.heatmap-cell:hover {
     0 0 24px -6px rgb(143 188 170 / 55%);
   transition:
     opacity 160ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .wizard-continue:active {
@@ -1997,7 +1971,7 @@ button.heatmap-cell:hover {
   border-radius: 16px;
   background: var(--glass-face), var(--surface);
   box-shadow: 0 20px 50px rgb(0 0 0 / 55%);
-  animation: rise 300ms var(--settle) both;
+  animation: rise var(--motion-enter) var(--settle) both;
 }
 
 .wizard-leave p {
@@ -2065,7 +2039,7 @@ button.heatmap-cell:hover {
     inset 0 1px 0 rgb(255 255 255 / 25%),
     0 6px 16px -4px rgb(0 0 0 / 50%);
   transition:
-    transform 420ms var(--snap),
+    transform var(--motion-state) var(--snap),
     box-shadow 240ms ease-out;
 }
 
@@ -2117,7 +2091,7 @@ button.heatmap-cell:hover {
   transition:
     background 200ms ease-out,
     color 200ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .shade:hover {
@@ -2213,7 +2187,7 @@ button.heatmap-cell:hover {
   border-radius: 50%;
   transition:
     background 200ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .trap-check[aria-checked='true'] {
@@ -2268,7 +2242,7 @@ button.heatmap-cell:hover {
   display: grid;
   gap: 8px;
   margin-top: 12px;
-  animation: step-in 260ms var(--settle) both;
+  animation: step-in var(--motion-enter) var(--settle) both;
 }
 
 .trap-quote {
@@ -2484,7 +2458,7 @@ button.heatmap-cell:hover {
   overflow: hidden;
   border-color: color-mix(in srgb, var(--tier) 22%, transparent);
   transition:
-    transform 380ms var(--snap),
+    transform var(--motion-state) var(--snap),
     opacity 240ms ease-out,
     filter 240ms ease-out;
 }
@@ -2630,7 +2604,7 @@ button.heatmap-cell:hover {
   margin-top: 2px;
   border-radius: 50%;
   background: conic-gradient(var(--tone) calc(var(--share, 0) * 360deg), rgb(255 255 255 / 10%) 0);
-  transition: transform 380ms var(--snap);
+  transition: transform var(--motion-state) var(--snap);
 }
 
 .quest-toggle::after {
@@ -2700,7 +2674,7 @@ button.heatmap-cell:hover {
   font: 12px var(--font-mono);
   transition:
     color 160ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .step-button:hover:not(:disabled) {
@@ -2724,7 +2698,7 @@ button.heatmap-cell:hover {
   text-transform: uppercase;
 }
 
-/* Mythic: a holo foil frame that slowly turns, and a soft glow. */
+/* Mythic: a still holo foil frame and a soft glow. */
 
 .quest-card.is-mythic {
   border: 1px solid transparent;
@@ -2735,22 +2709,9 @@ button.heatmap-cell:hover {
   box-shadow:
     0 0 28px -8px rgb(169 139 255 / 55%),
     var(--glass-shadow);
-  animation:
-    rise 560ms var(--settle) both,
-    foil 9s linear infinite;
+  animation: rise var(--motion-enter) var(--settle) both;
 }
 
-@property --foil {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
-@keyframes foil {
-  to {
-    --foil: 360deg;
-  }
-}
 
 .quest-card.is-mythic .quest-tier {
   background: linear-gradient(90deg, rgb(255 214 107 / 30%), rgb(169 139 255 / 30%));
@@ -2944,7 +2905,7 @@ button.quest-art:focus-visible,
   transition:
     opacity 160ms ease-out,
     box-shadow 200ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .quest-spheres .chip:hover {
@@ -3040,7 +3001,7 @@ button.quest-art:focus-visible,
   transition:
     background 160ms ease-out,
     box-shadow 200ms ease-out,
-    transform 380ms var(--snap);
+    transform var(--motion-state) var(--snap);
 }
 
 .quest-tier-chip.is-on {
@@ -3091,7 +3052,7 @@ button.quest-art:focus-visible,
     var(--glass-top),
     0 0 90px -30px color-mix(in srgb, var(--tone) 45%, transparent),
     0 40px 110px rgb(0 0 0 / 60%);
-  animation: rise 520ms var(--settle) both;
+  animation: rise var(--motion-enter) var(--settle) both;
 }
 
 .quest-dialog.is-mythic {

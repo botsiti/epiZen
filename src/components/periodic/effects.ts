@@ -23,13 +23,25 @@ export function spark(x: number, y: number, color: string) {
   setTimeout(() => burst.remove(), 700);
 }
 
-/** Where the pointer is over a card, for the soft light that follows it (`.glass::before`). */
+let lightFrame: number | undefined;
+let lightTarget: { card: HTMLElement; x: number; y: number } | undefined;
+
+/** Coalesce pointer updates to one measurement and paint per frame. */
 export function followPointer(event: PointerEvent<HTMLElement>) {
+  if (still()) return;
   const card = (event.target as Element).closest<HTMLElement>('.glass');
   if (!card) return;
-  const box = card.getBoundingClientRect();
-  card.style.setProperty('--mx', `${event.clientX - box.left}px`);
-  card.style.setProperty('--my', `${event.clientY - box.top}px`);
+  lightTarget = { card, x: event.clientX, y: event.clientY };
+  if (lightFrame !== undefined) return;
+  lightFrame = requestAnimationFrame(() => {
+    lightFrame = undefined;
+    const target = lightTarget;
+    lightTarget = undefined;
+    if (!target?.card.isConnected || still()) return;
+    const box = target.card.getBoundingClientRect();
+    target.card.style.setProperty('--mx', `${target.x - box.left}px`);
+    target.card.style.setProperty('--my', `${target.y - box.top}px`);
+  });
 }
 
 /** The entrance order of a card, for its staggered rise. */

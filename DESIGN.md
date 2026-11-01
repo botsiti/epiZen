@@ -95,8 +95,19 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   small glass pill in the cover's corner, the maker faint below, and "See all" to the library.
   Quests start with eight cards and lead to a dedicated month-by-month quest page. Statistics has
   a selectable daily focus grid, a category donut for a chosen period, and habit bars filled by
-  completed days out of the calendar days in each month. Nothing on it writes to the vault, except
-  that Today, Week and Month create a missing note with built-in starting text, as the calendar does.
+  completed days out of the calendar days in each month. Only tasks within an explicit `[!habits]`
+  callout count as habits. The focus detail panel stays 240px high, with long days scrolling inside;
+  changing days never moves the grid. When the grid overflows, it starts at the most recent days.
+  Its hovered or selected dot enlarges within a stationary hit
+  area and retains a subtle outline; keyboard focus has the same feedback. Nothing on it writes to
+  the vault, except that Today, Week and Month create a missing note with built-in starting text,
+  as the calendar does.
+- **Summaries**: a Home shortcut opens a year at a glance, with time-in-perspective cards and one
+  readable row for each month. Each row combines its monthly reflection with logged focus time,
+  XP and the averages of the daily metrics actually recorded in that month. Missing notes and
+  metrics are shown as empty rather than zero. A row opens or explicitly creates its monthly note.
+  The older Obsidian Home dashboard's JSON summary table is not read or changed; this view reads
+  the monthly Markdown notes.
 - **Graph**: the whole main pane, no padding. Dots in their folder's colour, sized by how many links
   they have; links as faint hairlines that thin out as they grow in number. Pointing at a note (or
   finding it) lights it and its neighbours up, its links in accent, and dims the rest; their names
@@ -115,7 +126,8 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   in accent, the note's folder faint.
 - **Forms**: a label above each field in the label style. Fields are surface fills with a hairline
   that turns accent on focus.
-- **Settings**: a quiet, readable preferences page with built-in periodic features, note locations and naming, homepage and podcast preferences. Habits and thought records can be hidden without changing notes.
+- **Settings**: a quiet, readable preferences page with built-in periodic features, future note locations and naming, homepage and podcast preferences. Naming patterns apply only to new files. Existing notes are recognized from their dates and known older names; ambiguous numeric dates have an explicit day/month order, and unusual names can be linked to a date without changing Markdown. Duplicate dates require choosing the calendar note. These choices belong to the individual vault. Habits and thought records can be hidden without changing notes.
+- **Vault setup**: a short, skippable questionnaire asks whether daily notes already exist and lets the user choose their folders. A new vault previews its calendar (year, days, weeks, months) and five library shelves before creating ordinary Markdown notes. Attachments are created lazily in `_attachments` beside library notes. No imported note is converted or renamed.
 - **Podcast settings**: one artwork preference for newly added episodes, defaulting to the show's
   thumbnail. Episode artwork can be chosen instead; either falls back to the other when missing.
   An episode entered by hand uses its selected show's thumbnail. The preference lives in app settings.
@@ -132,7 +144,10 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 
 ## Periodic pages
 
-A daily, weekly or monthly note opens as a page computed from the vault: no code in the note.
+A compatible daily, weekly or monthly note opens as a page computed from the vault: no code in the note.
+Older notes with other content stay in the normal Markdown reading view while remaining available
+from the calendar. New notes get the built-in dashboard template and an explicit period and date,
+so changing their future naming pattern does not change their identity.
 The note itself is a file, opened with Edit note; the page doesn't show its raw text. The look is Stravinsky's lit glass with the Obsidian dashboards'
 content, and the moves are written here after react-bits (`src/components/periodic/`).
 
@@ -140,19 +155,19 @@ content, and the moves are written here after react-bits (`src/components/period
 - **Glass**: cards are a faint top-lit gradient over the page, a 1px hairline, an inner top light
   and a soft drop shadow, radius 18px (24px for the hero). A soft light follows the pointer across
   a card and lights its nearest edge in sage.
-- **Hero**: the period's name in the system serif (New York) at 58px with one slow shine as it
-  opens, a kicker above it (weekday, ISO week, year) and the note's file name faint beside it. A
-  slow aurora of sage, blue and rose drifts behind it under fine grain. The day's summary arrives
-  word by word. A ring on the right shows the plan done. Below, chips to the day, week or month
-  before and after and up a level; a chip whose note doesn't exist yet is dashed, and opening it
-  creates the note with built-in starting text, as the calendar does.
+- **Hero**: the period's name in the system serif (New York) at 58px, a kicker above it (weekday,
+  ISO week, year) and the note's file name faint beside it. A static wash of sage, blue and rose
+  sits behind it under fine grain. The day's summary is readable immediately.
+  A ring on the right shows the plan done. Below, chips to the day, week or month before and after
+  and up a level; a chip whose note doesn't exist yet is dashed, and opening it creates the note
+  with built-in starting text, as the calendar does.
 - **Tabs**: plain words with a sage line that slides under the chosen one. The page remembers the
   last tab per kind of period for the session.
-- **Numbers**: SF Pro Display, semibold, tabular. They count up as they appear (about 1.1s,
-  easing out) and glide when they change.
+- **Numbers**: SF Pro Display, semibold, tabular. They show their actual value immediately and glide
+  to updates over 420ms, continuing from the displayed value when interrupted.
 - **Day**: tiles for XP, time logged (productive and recovery), tasks and habits; a check-in card
   where mood, energy, focus and social are set with a tap on a segment, and sleep and plan done are
-  typed; a donut of time by category; the tasks, ticked with a small spark. Further tabs: task
+  typed; a donut of time by category; the tasks with clear tick feedback. Further tabs: task
   cards with a composer, habit pills with their streaks, the quests, and the stream (gratitude,
   important, the stream itself, and thought-record sessions). No timeline: the calendar draws time.
 - **Thought records**: the Obsidian CBT wizard in five steps, opened from the hero's Thought record
@@ -165,7 +180,7 @@ content, and the moves are written here after react-bits (`src/components/period
 - **Quests**: cards in a grid, each with its art (the vault's `Templates/quest-art`) under a dark
   veil, glass chips for the sphere, tier and time left, the scope and XP in mono caps, a round tick
   that fills with a counter's progress, and the title in the serif. Mythic quests sit on top,
-  "pinned above every filter", in a slowly turning holo foil frame; All / Weekly / Monthly chips
+  "pinned above every filter", in a still holo foil frame; All / Weekly / Monthly chips
   filter the rest. A quest past its time shows its penalty and a rose edge. On a week's and a month's
   Quests tab, "+ New quest" opens a glass composer above the cards: what counts as done in the serif,
   the life spheres as chips (the first pick filled, as the main sphere, each further one outlined with
@@ -185,10 +200,15 @@ content, and the moves are written here after react-bits (`src/components/period
   serif, each with its Save, as on the Obsidian weekly dashboard. Further tabs: the days as rows with
   time stacked by category, the quests, the habit grid, and charts (numbers over the days, plan done
   with its spread, time by category). No timeline: the calendar draws time.
-- **Motion**: cards rise into place in turn (560ms, staggered 45ms); arcs sweep, lines draw and
-  bars grow in; ticks spark. Selection and presses use a spring that overshoots slightly. All of it
-  stops under `prefers-reduced-motion`, and the e2e run turns it off (`data-motion="off"`) so
-  screenshots show end states.
+- **Motion**: shared tokens in `src/styles.css` set feedback to 140ms, state transitions to 200ms,
+  entrances to 280ms and data changes to 420ms, with a smooth ease-out and no overshoot. Reading
+  content appears in place; heroes and tab changes use a short fade. Charts draw briefly with
+  capped delays. Pointer-following light is coalesced to one update per frame; routine task and
+  habit ticks use their control's feedback, while a completed quest may give a small spark.
+  Decorative light and foil stay still; the running timer keeps its useful activity pulse.
+  Hover targets never shift layout. System reduced motion and the e2e
+  `data-motion="off"` switch stop animations and transitions, including pseudo-elements, while
+  keeping final selection and focus feedback visible.
 - **Writes**: only what is tapped or typed: on a day's page a tick, one property's value, a new task
   under the Tasks heading, or a thought-record row; on a week's page its Plus, Minus or Next section;
   a new quest's line under a week's or month's Quest XP heading; on a quest, its box, done date,
@@ -196,10 +216,34 @@ content, and the moves are written here after react-bits (`src/components/period
   quest's own note. Each is written as the vault's Obsidian scripts write it, made over the note as it
   is on disk, and written only while the note still holds that.
 
+### Monthly reflection
+
+Each monthly dashboard has Reflection, Expenses and Life areas tabs. Reflection and Expenses
+are free-form Markdown; each life area has a 0–10 rating and its own reflection. The fields live
+in ordinary Markdown sections in that monthly note, leaving existing Dataview blocks and other
+text intact. Existing `Month Summary`, `Expenses` / `Finance`, and `Spheres of Life` sections
+are read and updated in place; expense image embeds are previewed from the vault, and the life-area
+format keeps each reflection on one line. A recognized older monthly note that opens as prose offers
+an explicit Monthly review button and a way back to the note. The month's Weeks tab shows each
+complete seven-day week's logged hours, XP, average mood and sleep, and the weekly note's Plus,
+Minus and Next. Quests shows earned, overdue and net XP using the existing quest rules, with a
+quiet list of overdue quests; the values describe current progress on quests active in the chosen
+month, not an attribution of each XP event to that month.
+
+Edits are conditional on the section still matching what was shown. Drafts remain while switching
+tabs, flush on leaving or closing, and failed or conflicting drafts are available for recovery.
+Ambiguous sections and unfinished Markdown containers remain in the note editor.
+
+The Money page presents a plain reflection and optional photo cards. Choosing a PNG, JPEG, GIF,
+or WebP photo copies it to a new `_attachments` file beside the monthly note; the user never has
+to type an image link. Saving stores an ordinary Obsidian embed in the note, while existing embeds
+stay intact and can be removed from the page without deleting their files. A failed save keeps the
+draft recoverable and leaves any newly copied attachment available in the vault.
+
 ## Calendar and timer
 
 Apple Calendar, on a week or a day, as Calendar and Senioro show it, with Senioro's focus timer. It
-is a periodic page in its look (the same glass, hero, chips, count-up numbers and spring), opened
+is a periodic page in its look (the same glass, hero, chips and restrained motion), opened
 from "Calendar" in the sidebar.
 
 - **Top**: the week's dates (or the day's) in the serif display face, a kicker with the ISO week, the
@@ -262,8 +306,8 @@ main window's; the item and its panel only show it and send it commands.
 ## Library and media pages
 
 Albums, films, books, podcasts and videos: the rated notes in `Rating/music`, `kino`, `books`,
-`podcasts` and `youtube`. They are periodic pages in their look (the frame, glass, aurora, serif
-display face, count-up numbers, staggered rise and spring), opened from "Library" in the sidebar, a
+`podcasts` and `youtube`. They are periodic pages in their look (the frame, glass, soft light, serif
+display face and restrained motion), opened from "Library" in the sidebar, a
 shelf's "See all", or the note itself. Their structure is Bookmory's library and book page and
 Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
 

@@ -10,6 +10,7 @@ mod eventkit;
 #[cfg(target_os = "macos")]
 mod menu;
 mod net;
+mod photos;
 mod settings;
 mod tray;
 mod vault;
@@ -182,6 +183,15 @@ async fn read_all_notes(state: Shared<'_>) -> Result<Vec<NoteText>, String> {
 #[tauri::command]
 async fn read_image(state: Shared<'_>, path: String) -> Result<Response, String> {
     with_vault(state, |vault| vault.read_image(&path)).map(Response::new)
+}
+
+/// Saves only a user-selected local image, into the vault that was open when it was selected.
+#[tauri::command]
+async fn save_expense_photo(state: Shared<'_>, root: String, note_path: String, bytes: Vec<u8>) -> Result<String, String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let vault = guard.vault()?;
+    if vault.root() != root { return Err("The open vault changed. Choose the photo again.".to_owned()); }
+    photos::store_expense_photo(vault, &note_path, &bytes)
 }
 
 #[tauri::command]
@@ -421,6 +431,7 @@ pub fn run() {
             read_note,
             read_all_notes,
             read_image,
+            save_expense_photo,
             create_note,
             trash_note,
             rename_note,

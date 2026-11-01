@@ -1,12 +1,15 @@
+import { hasPeriodicDashboard } from '../lib/periodic';
 import { setMediaLists } from '../lib/mediaProperties';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { readNote, writeNote, type VaultFile } from '../lib/api';
+import { readNote, saveExpensePhoto, writeNote, type VaultFile } from '../lib/api';
 import type { LinkTarget } from '../lib/completion';
 import { parseTasks, toggleTask } from '../lib/dashboard';
 import { addRecord, deleteRecord, updateRecord } from '../lib/cbt';
 import { addTask, setProperty, setSummary, syncPlanDone } from '../lib/edits';
 import { addQuest } from '../lib/quests';
 import { writeSection } from '../lib/sections';
+import { recoveryText, writeMonthlySection } from '../lib/monthlyReview';
+import type { MonthlyField } from '../lib/monthlyReview';
 import { replaceThoughts, splitThoughts } from '../lib/thoughts';
 import { deleteTask, editTask, focusIdOf, newTaskLabel, setMinutes } from '../lib/timeblocks';
 import type { FocusHow } from './calendar/FocusMenu';
@@ -25,6 +28,8 @@ import type { PeriodicActions, PeriodicSpec } from './periodic/types';
 
 interface NoteProps {
   path: string;
+  vaultRoot?: string;
+  onImageAdded?: (path: string) => void;
   files: VaultFile[];
   /** A [[link]] was clicked; `newTab` for a ⌘-click or a middle click. */
   onOpenLink: (target: string, fromPath: string, newTab?: boolean) => void;
@@ -61,7 +66,7 @@ interface ViewProps extends NoteProps {
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, vaultRoot, onImageAdded } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
   // When the app learns a new text for this note (the timer wrote a block into it while it is
   // open), show that one and build the next change on it.
@@ -71,7 +76,9 @@ export function NoteView(props: ViewProps) {
     if (known !== undefined && note.path === path && note.text !== undefined && known !== note.text) setNote({ path, text: known });
   }
   const [changeError, setChangeError] = useState<string>();
+  const [reviewPath, setReviewPath] = useState<string>();
   const changes = useRef(Promise.resolve());
+  const monthlyRecovery = useRef<{ path: string; source: string; drafts: Map<MonthlyField, { value: string; expected: string }> } | undefined>(undefined);
   const latest = useRef<string | undefined>(undefined);
   useEffect(() => {
     latest.current = note.text;
@@ -169,8 +176,22 @@ export function NoteView(props: ViewProps) {
       // A new quest goes into this note: the weekly or monthly note the page is drawn from.
       onAddQuest: (line) => new Promise((settle) => change((text) => addQuest(text, line), "The quest wasn't added", undefined, settle)),
       onSetSection: (heading, value) => new Promise((settle) => change((text) => writeSection(text, heading, value), `${heading} wasn't saved`, undefined, settle)),
+      onSetMonthlySection: (field, value, expected) => new Promise((settle) => change((text) => writeMonthlySection(text, field, value, expected), undefined, undefined, settle)),
+      onRecoverMonthlySection: (field, value, source, expected, problem) => {
+        if (!monthlyRecovery.current || monthlyRecovery.current.path !== path) monthlyRecovery.current = { path, source, drafts: new Map() };
+        monthlyRecovery.current.drafts.set(field, { value, expected });
+        let combined = monthlyRecovery.current.source;
+        for (const [name, draft] of monthlyRecovery.current.drafts) combined = recoveryText(combined, name, draft.value, draft.expected);
+        onUnsaved(path, combined, problem);
+      },
+      onImportExpensePhoto: async (bytes) => {
+        if (!vaultRoot) throw new Error('The open vault is unavailable.');
+        const saved = await saveExpensePhoto(vaultRoot, path, bytes);
+        onImageAdded?.(saved);
+        return saved;
+      },
     }),
-    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, path, periodic, seenLine],
+    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, onUnsaved, path, periodic, seenLine, vaultRoot, onImageAdded],
   );
 
   // Read once the saves under way have landed: the editor this note was last open in (here, or in
@@ -246,22 +267,28 @@ export function NoteView(props: ViewProps) {
       />
     );
   }
-  if (periodic) {
+  const dashboard = periodic && hasPeriodicDashboard(note.text, periodic.period);
+  if (periodic && (dashboard || (periodic.period === 'month' && reviewPath === path))) {
     return (
+      <>
+      {!dashboard && <button type="button" className="quiet-button" onClick={() => setReviewPath(undefined)}>Read note</button>}
       <PeriodicPage
         spec={periodic}
         path={path}
         text={note.text}
         actions={actions}
         warning={changeError}
+        files={files}
       />
+      </>
     );
   }
-  const edit = (
+  const edit = (<>
+    {periodic?.period === 'month' && <button type="button" className="quiet-button" onClick={() => setReviewPath(path)} data-testid="open-month-review">Monthly review</button>}
     <button type="button" className="quiet-button" onClick={() => onEditingChange(true)} data-testid="edit-note">
       Edit
     </button>
-  );
+  </>);
   return <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} onRename={props.onRename} />;
 }
 

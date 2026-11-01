@@ -10,7 +10,7 @@ export interface Task {
   category?: string;
   /** From a `[minutes::N]` field. */
   minutes?: number;
-  /** Inside a callout, like the daily note's habits: kept apart from the day's tasks. */
+  /** Inside an explicit `[!habits]` callout, kept apart from the day's tasks. */
   habit: boolean;
 }
 
@@ -23,11 +23,22 @@ export function parseTasks(text: string): Task[] {
   const tasks: Task[] = [];
   let offset = 0;
   let fence: string | undefined;
+  const callouts: { depth: number; habit: boolean }[] = [];
   text.split('\n').forEach((raw, line) => {
     const content = raw.replace(/\r$/, '');
+    const quote = /^[ \t]*(?:>[ \t]*)*/.exec(content)?.[0] ?? '';
+    const depth = (quote.match(/>/g) ?? []).length;
+    while (callouts.length && callouts.at(-1)!.depth > depth) callouts.pop();
     const opens = FENCE.exec(content)?.[1];
     if (opens && (!fence || opens.startsWith(fence))) fence = fence ? undefined : opens;
     else if (!fence) {
+      const callout = depth ? /^\[!([^\]]+)\]/.exec(content.slice(quote.length)) : undefined;
+      // A quote ending, or a new callout at the same depth, closes the old context.
+      // Nested ordinary quotes inherit it; another callout owns its own task list.
+      if (callout) {
+        if (callouts.at(-1)?.depth === depth) callouts.pop();
+        callouts.push({ depth, habit: callout[1]?.toLowerCase() === 'habits' });
+      }
       const match = TASK.exec(content);
       if (match) {
         const body = match[4] ?? '';
@@ -38,7 +49,7 @@ export function parseTasks(text: string): Task[] {
           text: body,
           category: /#daily\/([\w-]+)/.exec(body)?.[1],
           minutes: Number(/\[minutes::\s*(\d+)\s*\]/.exec(body)?.[1]) || undefined,
-          habit: (match[1] ?? '').includes('>'),
+          habit: callouts.at(-1)?.habit ?? false,
         });
       }
     }
