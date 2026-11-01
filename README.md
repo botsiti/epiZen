@@ -18,8 +18,12 @@ Built with Tauri 2, Rust, React and TypeScript.
   edits, and failed saves preserve your text.
 - **Keep Home focused.** A compact overview of your day, life spheres, eight quests at a time and
   ten recent library entries, with dedicated views for the full collections.
+- **Review your year.** Open Summaries from Home to see each month's reflection and daily averages.
+  Monthly pages include money notes, optional local photos, life-area ratings and weekly reflections.
 - **Review quests and statistics.** Browse quests by month, track progress and XP, inspect daily
   focus by task and category, and see habit completion as proportionally filled monthly bars.
+- **Bring your own notes.** A skippable setup connects existing periodic-note folders, recognizes
+  older names and lets you choose between notes that represent the same date.
 - **Build your library.** Albums, films, books, podcast episodes and videos, with covers, ratings,
   metadata, filters and a calendar view. Mixed shelves identify each kind with a small cover badge.
   Add notes, find covers, suggest existing genres, and keep favorite album tracks and thoughts.

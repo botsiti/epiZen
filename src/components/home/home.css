@@ -177,7 +177,7 @@
   display: inline-block;
   color: var(--text-faint);
   transition:
-    transform 380ms var(--snap),
+    transform var(--motion-state) var(--snap),
     color 160ms ease-out;
 }
 
@@ -196,7 +196,7 @@
   max-width: 640px;
   margin: var(--space-3) auto 0;
   cursor: crosshair;
-  animation: panel 320ms ease-out both;
+  animation: panel var(--motion-enter) var(--settle) both;
 }
 
 .weeks-age {
@@ -317,8 +317,8 @@
   border-radius: 6px;
   background: linear-gradient(180deg, rgb(143 188 170 / 32%), rgb(143 188 170 / 8%));
   transform-origin: bottom;
-  animation: rise-up 800ms var(--settle) both;
-  animation-delay: calc(var(--i, 0) * 45ms + 200ms);
+  animation: rise-up var(--motion-data) var(--settle) both;
+  animation-delay: calc(min(var(--i, 0), 5) * 24ms);
   transition: background 160ms ease-out;
 }
 
@@ -508,8 +508,8 @@
   background: var(--tone);
   opacity: 0.5;
   transform-origin: left;
-  animation: grow 600ms var(--settle) both;
-  animation-delay: calc(var(--i, 0) * 30ms + 250ms);
+  animation: grow var(--motion-data) var(--settle) both;
+  animation-delay: calc(min(var(--i, 0), 5) * 24ms);
 }
 
 .level-segment > .is-reached {
@@ -645,7 +645,7 @@
   position: relative;
   display: block;
   margin-bottom: var(--space-2);
-  transition: transform 380ms var(--snap);
+  transition: transform var(--motion-state) var(--snap);
 }
 
 .cover-card:hover .cover-frame {

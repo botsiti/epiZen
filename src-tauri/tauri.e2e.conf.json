@@ -12,6 +12,7 @@
         "height": 820,
         "minWidth": 720,
         "minHeight": 480,
+        "visibleOnAllWorkspaces": true,
         "theme": "Dark",
         "backgroundColor": "#121416",
         "focus": false

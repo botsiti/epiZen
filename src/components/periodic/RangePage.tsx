@@ -3,7 +3,7 @@ import { habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, addMonths, formatDate, isoWeek, monthGrid, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
 import { formatMinutes } from '../../lib/day';
-import { reflections, rollup, spread, type DayEntry, type Rollup } from '../../lib/rollup';
+import { rollup, spread, type DayEntry, type Rollup } from '../../lib/rollup';
 import { Donut, LineChart, Ring, Sparkline } from './charts';
 import { order } from './effects';
 import { CountUp } from './motion';
@@ -12,10 +12,12 @@ import { questsIn } from '../../lib/quests';
 import { readSection, sectionWords, WEEK_HEADINGS, type WeekHeading } from '../../lib/sections';
 import { QuestComposer } from './QuestComposer';
 import { QuestBoard } from './Quests';
+import { MonthlyReview } from './MonthlyReview';
 import type { PeriodicActions, PeriodicSpec } from './types';
+import type { VaultFile } from '../../lib/api';
 
 const WEEK_TABS = ['Overview', 'Days', 'Quests', 'Habits', 'Stats'] as const;
-const MONTH_TABS = ['Overview', 'Weeks', 'Quests', 'Days', 'Habits', 'Stats'] as const;
+const MONTH_TABS = ['Overview', 'Reflection', 'Expenses', 'Life areas', 'Weeks', 'Quests', 'Days', 'Habits', 'Stats'] as const;
 type WeekTab = (typeof WEEK_TABS)[number];
 type MonthTab = (typeof MONTH_TABS)[number];
 let lastWeekTab: WeekTab = 'Overview';
@@ -28,6 +30,7 @@ interface Props {
   /** The weekly or monthly note's own text. */
   text: string;
   actions: PeriodicActions;
+  files?: VaultFile[];
 }
 
 /** A weekly note as a page: its seven days added up, and the week's own Plus, Minus and Next. */
@@ -108,7 +111,7 @@ export function WeekPage({ spec, path, text, actions }: Props) {
 }
 
 /** A monthly note as a page: its days and weeks added up. */
-export function MonthPage({ spec, path, actions }: Props) {
+export function MonthPage({ spec, path, text, actions, files }: Props) {
   const first = startOfMonth(spec.date);
   const next = addMonths(first, 1);
   const days = useMemo(() => {
@@ -156,6 +159,7 @@ export function MonthPage({ spec, path, actions }: Props) {
         </div>
       </Hero>
       <Tabs tabs={MONTH_TABS.filter((item) => spec.features?.habits !== false || item !== 'Habits')} active={spec.features?.habits === false && tab === 'Habits' ? 'Overview' : tab} onChange={choose} />
+      <MonthlyReview path={path} text={text} tab={tab} files={files} onSave={actions.onSetMonthlySection} onRecover={actions.onRecoverMonthlySection} onImportPhoto={actions.onImportExpensePhoto} />
       <div className="tab-panel" key={tab}>
         {(tab === 'Overview' || (tab === 'Habits' && spec.features?.habits === false)) && (
           <>
@@ -509,11 +513,10 @@ function Weeks({ spec, actions }: { spec: PeriodicSpec; actions: PeriodicActions
     const next = addMonths(first, 1);
     const list = [];
     for (let monday = startOfWeek(first); monday < next; monday = addDays(monday, 7)) {
-      const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
-        .filter((date) => date >= first && date < next)
-        .map((date) => spec.dayOf(date));
+      const days = Array.from({ length: 7 }, (_, i) => spec.dayOf(addDays(monday, i)));
       const note = spec.weekOf(monday);
-      list.push({ monday, sum: rollup(days), note, found: note.text === undefined ? undefined : reflections(note.text) });
+      const found = note.text === undefined ? undefined : Object.fromEntries(WEEK_HEADINGS.map((heading) => [heading, readSection(note.text ?? '', heading)]));
+      list.push({ monday, sum: rollup(days), note, found });
     }
     return list;
   }, [spec]);
@@ -538,25 +541,11 @@ function Weeks({ spec, actions }: { spec: PeriodicSpec; actions: PeriodicActions
               </button>
             </div>
             <p className="week-card-line">
-              {sum.noted} days · {formatMinutes(sum.totals.logged)} · {sum.totals.tasksDone}/{sum.totals.tasks} tasks · mood {sum.average('mood') ?? '—'}
+              {sum.noted} days · {formatMinutes(sum.totals.logged)} · {sum.totals.xp} XP · mood {sum.average('mood') ?? '—'} · sleep {sum.average('sleep') === undefined ? '—' : `${sum.average('sleep')}h`}
             </p>
-            {found && (found.plus.length > 0 || found.minus.length > 0 || found.next.length > 0) && (
+            {found && WEEK_HEADINGS.some((heading) => found[heading]) && (
               <ul className="week-card-reflections">
-                {found.plus.map((item, k) => (
-                  <li key={`p${k}`} className="is-plus">
-                    {item}
-                  </li>
-                ))}
-                {found.minus.map((item, k) => (
-                  <li key={`m${k}`} className="is-minus">
-                    {item}
-                  </li>
-                ))}
-                {found.next.map((item, k) => (
-                  <li key={`n${k}`} className="is-next">
-                    {item}
-                  </li>
-                ))}
+                {WEEK_HEADINGS.map((heading) => found[heading] && <li key={heading} className={`is-${heading.toLowerCase()}`}><strong>{heading}</strong><span>{found[heading]}</span></li>)}
               </ul>
             )}
           </div>

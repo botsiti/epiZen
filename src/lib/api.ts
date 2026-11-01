@@ -23,6 +23,9 @@ export const pickVault = () => invoke<VaultStatus | null>('pick_vault');
 export const listFiles = () => invoke<VaultFile[]>('list_files');
 export const readNote = (path: string) => invoke<string>('read_note', { path });
 export const readImage = (path: string) => invoke<ArrayBuffer>('read_image', { path });
+/** Saves a selected image beside this note without replacing any existing file. */
+export const saveExpensePhoto = (root: string, notePath: string, bytes: Uint8Array) =>
+  invoke<string>('save_expense_photo', { root, notePath, bytes: Array.from(bytes) });
 
 /** Mirrors `NoteText` in src-tauri/src/vault.rs. */
 export interface NoteText {

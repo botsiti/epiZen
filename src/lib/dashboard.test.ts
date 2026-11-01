@@ -26,6 +26,43 @@ mood: 9
 `;
 
 describe('parseTasks', () => {
+  it('only classifies explicit habit callouts as habits, without leaking to neighbouring quotes', () => {
+    const text = `> [!habits]- Habits
+> - [x] Exercise
+> > - [ ] Nested habit
+> > [!todo] Nested task list
+> > - [ ] Send invoice
+> - [x] Read
+> [!todo] Tasks
+> - [x] #daily/code — Ship release [minutes::45]
+
+> - [ ] Quoted checklist
+
+  > [!HABITS]+ Habits again
+  > 1. [x] Meditate
+
+- [ ] Ordinary task
+`;
+    const tasks = parseTasks(text);
+    expect(tasks.map(({ text: body, habit }) => [body, habit])).toEqual([
+      ['Exercise', true], ['Nested habit', true], ['Send invoice', false], ['Read', true],
+      ['#daily/code — Ship release [minutes::45]', false], ['Quoted checklist', false],
+      ['Meditate', true], ['Ordinary task', false],
+    ]);
+    for (const task of tasks) {
+      const changed = toggleTask(text, task);
+      expect([...changed].filter((char, i) => char !== text[i])).toHaveLength(1);
+      expect(toggleTask(changed, parseTasks(changed).find(({ line }) => line === task.line)!)).toBe(text);
+    }
+  });
+
+  it('ignores habit markers inside fenced code and closes a callout before an unquoted fence', () => {
+    const text = '> [!habits]\n> - [x] Read\n```md\n> [!habits]\n> - [x] Example\n```\n> - [ ] A quote after code\n> [!todo]\n> ~~~\n> [!habits]\n> - [ ] Another example\n> ~~~\n> - [ ] Real task';
+    expect(parseTasks(text).map(({ text: body, habit }) => [body, habit])).toEqual([
+      ['Read', true], ['A quote after code', false], ['Real task', false],
+    ]);
+  });
+
   it('finds tasks in callouts and lists, with category and minutes, and skips code', () => {
     const tasks = parseTasks(DAY);
     expect(tasks.map((task) => [task.done, task.category, task.minutes, task.habit])).toEqual([

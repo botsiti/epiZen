@@ -1,0 +1,16 @@
+.vault-setup { width: min(100%, 840px); margin: 0 auto; padding: 64px; overflow-y: auto; min-height: 0; }
+.vault-setup h1 { font-size: 30px; font-weight: 600; margin: 16px 0; }
+.vault-setup > .muted { line-height: 1.7; }
+.vault-setup-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.vault-setup-choices { display: flex; flex-wrap: wrap; gap: 24px; padding-top: 16px; }
+.vault-setup-choices label { display: flex; align-items: center; gap: 8px; }
+.vault-setup-choices input { accent-color: var(--accent); }
+.vault-setup-preview { margin: 32px 0; padding: 24px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.vault-setup-preview h2 { margin: 0 0 24px; font-size: 20px; }
+.vault-setup-preview h3 { font-size: 16px; margin: 24px 0 8px; }
+.vault-setup-preview p { color: var(--text-muted); line-height: 1.6; }
+.vault-setup-preview small { color: var(--text-muted); }
+.periodic-recognition summary { cursor: pointer; padding: 16px 0; }
+.periodic-linked-note { display: flex; align-items: center; justify-content: space-between; gap: 16px; overflow-wrap: anywhere; }
+.periodic-linked-note span { min-width: 0; }
+@media (max-width: 600px) { .vault-setup { padding: 32px 24px; } }

@@ -1,7 +1,9 @@
 import { useId, useState, type FormEvent } from 'react';
-import { formatDate, parseDate, today } from '../lib/dates';
+import { today } from '../lib/dates';
 import { parseBirthDate } from '../lib/home';
-import { PERIODS, startOfPeriod, type Period, type PeriodicSettings, type PeriodicFeatures } from '../lib/periodic';
+import { DEFAULT_RECOGNITION, periodicNamingError, type PeriodicRecognition, type PeriodicSettings, type PeriodicFeatures } from '../lib/periodic';
+import type { VaultFile } from '../lib/api';
+import { PeriodicFolders, PeriodicRecognitionFields } from './periodic/PeriodicPreferences';
 import { podcastSettings, type PodcastSettings } from '../lib/podcasts';
 
 interface Props {
@@ -11,47 +13,38 @@ interface Props {
   podcasts: PodcastSettings;
   folders: string[];
   features: PeriodicFeatures;
-  onSave: (settings: { periodic: PeriodicSettings; birthDate: string; podcasts: PodcastSettings; features: PeriodicFeatures }) => Promise<void>;
+  recognition?: PeriodicRecognition;
+  files?: VaultFile[];
+  texts?: ReadonlyMap<string, string>;
+  onSetup?: () => void;
+  onSave: (settings: { recognition?: PeriodicRecognition; periodic: PeriodicSettings; birthDate: string; podcasts: PodcastSettings; features: PeriodicFeatures }) => Promise<void>;
 }
-
-const TITLES: Record<Period, string> = { day: 'Daily notes', week: 'Weekly notes', month: 'Monthly notes' };
 
 /**
  * Built-in periodic features, note locations, and personal preferences.
  */
-export function SettingsScreen({ periodic, birthDate, podcasts, features, folders, onSave }: Props) {
+export function SettingsScreen({ periodic, birthDate, podcasts, features, folders, recognition, files = [], texts = new Map(), onSetup, onSave }: Props) {
   const artworkId = useId();
   const [draft, setDraft] = useState(periodic);
+  const [recognitionDraft, setRecognitionDraft] = useState(recognition ?? DEFAULT_RECOGNITION);
+  const [saving, setSaving] = useState(false);
   const [birth, setBirth] = useState(birthDate);
   const [featureDraft, setFeatureDraft] = useState(features);
   const [podcastDraft, setPodcastDraft] = useState(podcasts);
   const [state, setState] = useState<{ saved?: boolean; error?: string }>({});
-  const set = (period: Period, key: 'folder' | 'format', value: string) => {
-    setDraft((prev) => ({ ...prev, [period]: { ...prev[period], [key]: value } }));
-    setState({});
-  };
-  // A format only works if a name made with it reads back as the same day.
-  const example = (period: Period) => {
-    const date = startOfPeriod(period, today());
-    const name = formatDate(date, draft[period].format);
-    return parseDate(name, draft[period].format)?.getTime() === date.getTime() ? name : undefined;
-  };
-
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const broken = PERIODS.find((period) => !draft[period].format.trim() || !example(period));
-    if (broken) {
-      setState({ error: `Epizen can't read a ${TITLES[broken].toLowerCase().replace(/s$/, '')}'s name back into a date with that format.` });
-      return;
-    }
+    const broken = periodicNamingError(draft);
+    if (broken) { setState({ error: broken }); return; }
     const born = parseBirthDate(birth);
     if (birth.trim() && (!born || born > today())) {
       setState({ error: 'A birth date is a day that has been, written YYYY-MM-DD, like 1990-04-21.' });
       return;
     }
-    onSave({ periodic: draft, birthDate: birth.trim(), podcasts: podcastDraft, features: featureDraft }).then(
-      () => setState({ saved: true }),
-      (err: unknown) => setState({ error: String(err) }),
+    setSaving(true);
+    onSave({ ...(recognition ? { recognition: recognitionDraft } : {}), periodic: draft, birthDate: birth.trim(), podcasts: podcastDraft, features: featureDraft }).then(
+      () => { setState({ saved: true }); setSaving(false); },
+      (err: unknown) => { setState({ error: String(err) }); setSaving(false); },
     );
   };
 
@@ -63,7 +56,7 @@ export function SettingsScreen({ periodic, birthDate, podcasts, features, folder
       <form className="form" onSubmit={submit}>
         <div className="settings-intro">
           <h2>Periodic notes</h2>
-          <p>Daily, weekly and monthly pages are built in. Choose where their Markdown notes live and which features appear.</p>
+          <p>Choose where future notes go. Existing notes can use different names and keep their own content. New notes start with Epizen’s dashboard template.</p>
         </div>
         <fieldset className="settings-group settings-features" data-testid="settings-features">
           <legend className="eyebrow">Features</legend>
@@ -78,20 +71,9 @@ export function SettingsScreen({ periodic, birthDate, podcasts, features, folder
           ))}
           <small className="field-hint">Turning a feature off hides it; your notes stay intact.</small>
         </fieldset>
-        {PERIODS.map((period) => (
-          <fieldset className="settings-group" key={period} data-testid={`settings-${period}`}>
-            <legend className="eyebrow">{TITLES[period]}</legend>
-            <label className="field">
-              <span>Folder</span>
-              <input value={draft[period].folder} onChange={(e) => set(period, 'folder', e.target.value)} list="vault-folders" placeholder="Top of the vault" />
-            </label>
-            <label className="field">
-              <span>Name format</span>
-              <input value={draft[period].format} onChange={(e) => set(period, 'format', e.target.value)} data-testid={`settings-${period}-format`} />
-              <small className="field-hint">{example(period) ? `This ${period}: ${example(period)}` : 'This format doesn’t give a name Epizen can read back.'}</small>
-            </label>
-          </fieldset>
-        ))}
+        <PeriodicFolders value={draft} folders={folders} onChange={(next) => { setDraft(next); setState({}); }} />
+        {recognition && <PeriodicRecognitionFields periodic={draft} value={recognitionDraft} files={files} texts={texts} onChange={(next) => { setRecognitionDraft(next); setState({}); }} />}
+        {onSetup && <button type="button" className="quiet-button" onClick={onSetup}>Review vault setup</button>}
         <fieldset className="settings-group" data-testid="settings-home">
           <legend className="eyebrow">Homepage</legend>
           <label className="field">
@@ -131,14 +113,9 @@ export function SettingsScreen({ periodic, birthDate, podcasts, features, folder
             </small>
           </label>
         </fieldset>
-        <datalist id="vault-folders">
-          {folders.map((folder) => (
-            <option key={folder} value={folder} />
-          ))}
-        </datalist>
         {state.error && <p className="form-error">{state.error}</p>}
         <div className="form-actions">
-          <button type="submit" className="quiet-button" data-testid="settings-save">
+          <button type="submit" disabled={saving} className="quiet-button" data-testid="settings-save">
             Save
           </button>
           {state.saved && <span className="save-state">Saved</span>}

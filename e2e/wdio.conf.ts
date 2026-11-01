@@ -1,11 +1,12 @@
 import { browser } from '@wdio/globals';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TauriCapabilities } from '@wdio/tauri-service';
 import { makeBigVault } from './big-vault';
 import { failureScreenshotName } from './failure-screenshot';
 import { APP, COPY_PREFIX, DEMO_VAULT, EVIDENCE, PERIODIC, vaultCopy } from './paths';
+import { DEFAULT_PERIODIC } from '../src/lib/periodic';
 
 // Tests only ever touch a copy of the demo vault. The launcher makes the copy once;
 // the test workers it starts inherit the path through the environment.
@@ -24,9 +25,13 @@ function copyDemoVault() {
   // The demo vault's periodic notes, set up the way a user would in Settings.
   const config = join(dirname(copy), 'config');
   mkdirSync(config);
-  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC }));
+  // Vault::open canonicalizes paths (on macOS, /var resolves to /private/var).
+  // Settings must use the same roots or the test vaults appear to need first-run setup.
+  const canonicalParent = realpathSync(dirname(copy));
+  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC, legacyPeriodicVault: join(canonicalParent, 'demo-vault'), vaults: { [join(canonicalParent, 'big-vault')]: { complete: true, periodic: DEFAULT_PERIODIC } } }));
   // A generated vault for the graph's 2,000-note check, beside the copy so it goes with it.
   makeBigVault(join(dirname(copy), 'big-vault'));
+  mkdirSync(join(dirname(copy), 'starter-vault'));
   return copy;
 }
 
@@ -50,6 +55,7 @@ export const config: WebdriverIO.Config = {
     launch(4446, './specs/vault-error.e2e.ts', ['--vault', join(tmpdir(), 'epizen-no-such-vault')]),
     launch(4447, './specs/vault.e2e.ts', ['--vault', vaultCopy()]),
     launch(4448, './specs/graph-2000.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'big-vault')]),
+    launch(4449, './specs/setup.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'starter-vault')]),
   ],
   services: [['@wdio/tauri-service', { driverProvider: 'embedded' }]],
   framework: 'mocha',
@@ -61,6 +67,24 @@ export const config: WebdriverIO.Config = {
   onPrepare() {
     rmSync(EVIDENCE, { recursive: true, force: true });
     mkdirSync(EVIDENCE, { recursive: true });
+  },
+  // The service launches all test apps up front. Reorder the current test window at its
+  // floating level without activating it, so earlier windows or another Space cannot occlude
+  // its WebKit renderer and suspend animation frames.
+  async beforeTest() {
+    await browser.execute(async () => {
+      const tauri = (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { setAlwaysOnTop: (value: boolean) => Promise<void> } } } }).__TAURI__;
+      const current = tauri.window.getCurrentWindow();
+      await current.setAlwaysOnTop(false);
+      await current.setAlwaysOnTop(true);
+    });
+  },
+  // The next worker gets the floating slot; leave the keyboard focus with the user.
+  async after() {
+    await browser.execute(async () => {
+      const tauri = (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { setAlwaysOnTop: (value: boolean) => Promise<void> } } } }).__TAURI__;
+      await tauri.window.getCurrentWindow().setAlwaysOnTop(false);
+    });
   },
   async afterTest(test, _context, { passed }) {
     if (!passed) await browser.saveScreenshot(join(EVIDENCE, failureScreenshotName(test.parent, test.title)));

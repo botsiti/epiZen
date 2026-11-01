@@ -13,10 +13,13 @@ import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
 import { Home } from './components/home/Home';
 import { QuestPage, StatisticsPage } from './components/insights/Insights';
+import { Summaries } from './components/home/Summaries';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LibraryView } from './components/library/LibraryView';
 import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
+import { VaultSetup } from './components/workspace/VaultSetup';
+import { createStarterVault, starterNotes, vaultPreferences, vaultPreferencesPatch } from './lib/vaultSetup';
 import { SettingsScreen } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
 import { NoteActionDialog, NoteMenu, type NoteAction } from './components/workspace/NoteActions';
@@ -64,12 +67,14 @@ import { podcastSettings, type PodcastSettings } from './lib/podcasts';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
   builtInPeriodicText,
+  assertPeriodicNote,
   periodicFeatures,
-  periodicIndex,
-  periodicPath,
+  periodicCatalog,
   periodicSettings,
+  rememberPeriodic,
+  type PeriodicRecognition,
+  periodicPath,
   periodKey,
-  periodOf,
   periodOfName,
   type Period,
   type PeriodicSettings,
@@ -115,6 +120,7 @@ function dayFrom(path: string, text: string): Day {
 }
 
 export function App() {
+  const [setup, setSetup] = useState<'existing' | 'create'>();
   const [status, setStatus] = useState<VaultStatus>();
   const [files, setFiles] = useState<VaultFile[]>([]);
   // The open tabs, each with its own history (src/lib/tabs.ts); the main pane shows the one in front.
@@ -137,7 +143,10 @@ export function App() {
       const next = await vaultStatus();
       const found = next.state === 'open' ? await listFiles() : [];
       const read = next.state === 'open' ? await readAllNotes() : [];
-      const stored = await getSettings();
+      let stored = await getSettings();
+      if (next.state === 'open' && stored.periodic && !stored.legacyPeriodicVault && periodicCatalog(found, periodicSettings(stored)).byPath.size > 0) {
+        stored = await updateSettings({ legacyPeriodicVault: next.root });
+      }
       if (cancelled) return;
       setFiles(found);
       setTexts(new Map(read.map((note) => [note.path, note.text])));
@@ -145,6 +154,7 @@ export function App() {
       // The tabs and the right sidebar as they were left in this vault, never a note that is gone.
       if (next.state === 'open') restore(stored.workspace, { vault: next.root, notes: new Set(found.filter((file) => file.kind === 'note').map((file) => file.path)) });
       setRight(parseRightSidebar(stored.rightSidebar));
+      setSetup((previous) => previous === 'create' ? 'create' : next.state === 'open' && !vaultPreferences(stored, next.root).complete ? previous ?? 'existing' : undefined);
       setStatus(next);
     };
     load().catch((err: unknown) => {
@@ -185,10 +195,13 @@ export function App() {
     [files],
   );
   const notes = useMemo(() => files.filter((file) => file.kind === 'note').map((file) => file.path.replace(/\.md$/i, '')), [files]);
-  const periodic = useMemo(() => periodicSettings(settings), [settings]);
+  const preferences = useMemo(() => vaultPreferences(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
+  const periodic = preferences.periodic;
+  const recognition = preferences.recognition;
   const features = useMemo(() => periodicFeatures(settings.periodicFeatures), [settings.periodicFeatures]);
   const podcasts = useMemo(() => podcastSettings(settings.podcasts), [settings.podcasts]);
-  const periodicNotes = useMemo(() => periodicIndex(files, periodic), [files, periodic]);
+  const catalog = useMemo(() => periodicCatalog(files, periodic, texts, recognition), [files, periodic, texts, recognition]);
+  const periodicNotes = catalog.index;
   // Opens a screen in the tab in front, or in a new tab (⌘-click, or when the tab in front is pinned).
   const go = useCallback((next: View, newTab?: boolean) => update((prev) => open(prev, next, { newTab })), [update]);
   const links = useMemo(() => buildLinkIndex([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
@@ -263,6 +276,11 @@ export function App() {
     [periodicNotes, texts],
   );
   const exists = useCallback((period: Period, date: Date) => periodicNotes.has(periodKey(period, date)), [periodicNotes]);
+  const monthOf = useCallback((date: Date) => {
+    const key = periodKey('month', date);
+    const path = periodicNotes.get(key);
+    return { path, text: path ? texts.get(path) : undefined, ambiguous: !path && catalog.matches.has(key) };
+  }, [periodicNotes, texts, catalog]);
   // Weekly quests from weekly notes, monthly ones from monthly notes, mythic ones from Custom Quests.md.
   const quests = useMemo(() => {
     const list: QuestEntry[] = [];
@@ -283,11 +301,11 @@ export function App() {
   const images = useMemo(() => new Set(files.filter((file) => file.kind === 'image').map((file) => file.path)), [files]);
   const art = useCallback((quest: Quest) => artPaths(quest).find((path) => images.has(path)), [images]);
   const periodicPage = useMemo((): PeriodicSpec | undefined => {
-    const found = view.kind === 'note' ? periodOf(view.path, periodic) : undefined;
+    const found = view.kind === 'note' ? catalog.byPath.get(view.path) : undefined;
     if (!found) return undefined;
     const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
     return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, categories, quests, art, features };
-  }, [view, periodic, dayOf, weekOf, exists, dailyFacts, mediaByTitle, quests, art, features]);
+  }, [view, catalog, dayOf, weekOf, exists, dailyFacts, mediaByTitle, quests, art, features]);
   const linkTargets = useMemo(() => {
     const titles = new Map<string, number>();
     for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
@@ -411,10 +429,13 @@ export function App() {
     ),
   );
 
-  const chooseFolder = useCallback(async () => {
+  const chooseFolder = useCallback(async (create = false) => {
     setFolderError(undefined);
     try {
+      if ((await flushAll()).length) throw new Error('Save or recover your unsaved notes before switching vaults.');
       if (!(await pickVault())) return;
+      setSetup(create ? 'create' : undefined);
+      setStatus(undefined);
       reset();
       setLoads((n) => n + 1);
     } catch (err) {
@@ -448,22 +469,27 @@ export function App() {
     async (period: Period, date: Date): Promise<string> => {
       const existing = periodicNotes.get(periodKey(period, date));
       if (existing) return existing;
+      if (catalog.matches.has(periodKey(period, date))) throw new Error('More than one note has this date. Choose its calendar note in Settings → Existing notes.');
       const path = periodicPath(period, date, periodic);
       try {
         await createNote(path, builtInPeriodicText(period, date));
       } catch (err) {
-        // Created a moment ago, or named by a file the index doesn't know as this period's note.
+        // A concurrent creation is safe to reuse only if it is this period's note.
         if (!String(err).includes('already exists')) throw err;
+        assertPeriodicNote(path, await readNote(path), period, date, periodic, recognition);
       }
       await refresh();
       return path;
     },
-    [periodic, periodicNotes, refresh],
+    [periodic, periodicNotes, catalog, recognition, refresh],
   );
   // A day, week or month opens its note, creating it first if it has none.
   const openPeriodic = useCallback(
-    async (period: Period, date: Date, newTab?: boolean) => go({ kind: 'note', path: await ensurePeriodic(period, date) }, newTab),
-    [ensurePeriodic, go],
+    async (period: Period, date: Date, newTab?: boolean) => {
+      if (!periodicNotes.has(periodKey(period, date)) && catalog.matches.has(periodKey(period, date))) { go({ kind: 'settings' }, newTab); return; }
+      go({ kind: 'note', path: await ensurePeriodic(period, date) }, newTab);
+    },
+    [ensurePeriodic, go, periodicNotes, catalog],
   );
   const openPeriodicOrSay = useCallback(
     (period: Period, date: Date, newTab?: boolean) =>
@@ -486,10 +512,19 @@ export function App() {
   );
   // An empty birth date removes the setting rather than keeping an empty one.
   const saveSettings = useCallback(
-    async (next: { periodic: PeriodicSettings; birthDate: string; podcasts: PodcastSettings; features: PeriodicFeatures }) =>
-      setSettings(await updateSettings({ periodic: next.periodic, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features })),
-    [],
+    async (next: { periodic: PeriodicSettings; recognition?: PeriodicRecognition; birthDate: string; podcasts: PodcastSettings; features: PeriodicFeatures }) => {
+      if (status?.state !== 'open') throw new Error('No vault is open.');
+      setSettings(await updateSettings({ ...vaultPreferencesPatch(settings, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition), birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
+    },
+    [settings, status, periodic, recognition],
   );
+  const finishSetup = useCallback(async (next: PeriodicSettings, reading: PeriodicRecognition, create = false) => {
+    if (status?.state !== 'open') throw new Error('No vault is open.');
+    if (create) await createStarterVault(starterNotes(now), await readAllNotes(), createNote);
+    setSettings(await updateSettings(vaultPreferencesPatch(settings, status.root, preferences.complete ? rememberPeriodic(periodic, next) : next, reading)));
+    await refresh();
+    setSetup(undefined);
+  }, [status, settings, periodic, preferences.complete, now, refresh]);
 
   // The calendar's and the timer's writes: one at a time, over the text the app last read.
   const changeNote = useNoteWriter(texts, noteSaved);
@@ -504,21 +539,25 @@ export function App() {
     async (date: Date, edit: (text: string) => string | undefined): Promise<{ path: string; text: string }> => {
       const existing = periodicNotes.get(periodKey('day', date));
       if (existing) return { path: existing, text: await changeNote(existing, edit) };
+      if (catalog.matches.has(periodKey('day', date))) throw new Error('Choose the calendar note for this day in Settings → Existing notes before adding tasks.');
       const path = periodicPath('day', date, periodic);
       const template = builtInPeriodicText('day', date);
       const text = edit(template) ?? template;
       try {
         await createNote(path, text);
       } catch (err) {
-        // Created a moment ago: change the note as it is.
+        // Validate the text inside the conditional write, including explicit calendar exclusions.
         if (!String(err).includes('already exists')) throw err;
         await refresh();
-        return { path, text: await changeNote(path, edit) };
+        return { path, text: await changeNote(path, (current) => {
+          assertPeriodicNote(path, current, 'day', date, periodic, recognition);
+          return edit(current);
+        }) };
       }
       await refresh();
       return { path, text };
     },
-    [changeNote, periodic, periodicNotes, refresh],
+    [changeNote, periodic, periodicNotes, catalog, recognition, refresh],
   );
   const writeDay = useCallback(
     async (date: Date, edit: (text: string) => string, failed: string) => {
@@ -576,7 +615,7 @@ export function App() {
     const unsaved = await flushAll();
     if (unsaved.length) throw new Error('Save or recover the unsaved notes before changing files.');
     await edits.current;
-    const isDaily = periodOf(path, periodic)?.period === 'day';
+    const isDaily = catalog.byPath.get(path)?.period === 'day';
     const timerOwnsNote = timer.state.session?.task.path === path || timer.state.pending.some((block) => block.task.path === path);
     if (action !== 'duplicate' && (timerOwnsNote || (isDaily && (timer.state.session || timer.state.pending.length)))) {
       throw new Error('Finish the focus timer and save its pending time before changing this note.');
@@ -625,7 +664,7 @@ export function App() {
     });
     // Editors were flushed above. Reload their rewritten links before accepting new edits.
     setNoteVersion((version) => version + 1);
-  }, [timer.state.session, timer.state.pending, periodic, update, go, refresh]);
+  }, [timer.state.session, timer.state.pending, catalog, update, go, refresh]);
   const vaultName = status?.state === 'open' ? status.name : undefined;
   // A task edited or deleted from a menu: the timer follows it, and so do its plans in Calendar.
   const taskChanged = useCallback(
@@ -716,10 +755,15 @@ export function App() {
       <NoVault
         message={status.state === 'error' ? status.message : undefined}
         onOpenFolder={() => void chooseFolder()}
+        onCreateVault={() => void chooseFolder(true)}
         folderError={folderError}
       />
     );
   }
+
+  if (setup) return <ErrorBoundary label="Vault setup" key={status.root}>
+    <VaultSetup key={status.root} name={status.name} create={setup === 'create'} periodic={periodic} recognition={recognition} files={files} texts={texts} folders={folders} onSave={finishSetup} onSkip={() => finishSetup(periodic, recognition)} />
+  </ErrorBoundary>;
 
   return (
     <div className={right.open ? 'app has-right' : 'app'}>
@@ -744,8 +788,8 @@ export function App() {
           <Calendar
             month={month}
             onMonthChange={setMonth}
-            has={(period, date) => periodicNotes.has(periodKey(period, date))}
-            selected={view.kind === 'note' ? periodOf(view.path, periodic) : undefined}
+            has={(period, date) => catalog.matches.has(periodKey(period, date))}
+            selected={view.kind === 'note' ? catalog.byPath.get(view.path) : undefined}
             onOpen={openPeriodicOrSay}
             onOpenCalendar={(newTab) => go({ kind: 'calendar' }, newTab)}
           />
@@ -792,10 +836,12 @@ export function App() {
                 onSeeLibrary={() => openLibrary('all')}
                 onSeeQuests={() => go({ kind: 'quests' })}
                 onSeeStatistics={() => go({ kind: 'statistics' })}
+                onSeeSummaries={() => go({ kind: 'summaries' })}
               />
             )}
             {view.kind === 'quests' && <ErrorBoundary label="Quests"><QuestPage quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} /></ErrorBoundary>}
             {view.kind === 'statistics' && <ErrorBoundary label="Statistics"><StatisticsPage days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} /></ErrorBoundary>}
+            {view.kind === 'summaries' && <ErrorBoundary label="Summaries"><Summaries today={todayNote.date} days={dailyNotes} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} /></ErrorBoundary>}
             {fileActionError && <p className="note-warning" role="alert">{fileActionError}</p>}
             {editError && (
               <p className="note-warning" data-testid="edit-warning">
@@ -806,6 +852,8 @@ export function App() {
               <NoteView
                 key={`${view.path}:${noteVersion}`}
                 path={view.path}
+                vaultRoot={status.root}
+                onImageAdded={(path) => setFiles((previous) => previous.some((file) => file.path === path) ? previous : [...previous, { path, kind: 'image' }])}
                 files={files}
                 onOpenLink={openLink}
                 editing={Boolean(view.editing)}
@@ -865,7 +913,7 @@ export function App() {
             {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
             {view.kind === 'new' && <NewNote key={tab.index} folders={folders} folder={view.folder} onCreate={create} />}
             {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
-            {view.kind === 'settings' && <SettingsScreen periodic={periodic} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
+            {view.kind === 'settings' && <SettingsScreen periodic={periodic} recognition={recognition} files={files} texts={texts} onSetup={() => setSetup('existing')} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
             {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
           </Fragment>
         </main>

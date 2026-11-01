@@ -9,16 +9,17 @@ import { still } from './effects';
 /** Ease-out with a long, soft landing, like a spring that doesn't overshoot. */
 const drift = (t: number) => 1 - Math.pow(1 - t, 4);
 
-/** A number that counts up to its value when it first shows, and glides to each new value. */
-export function CountUp({ value, format = (n) => String(Math.round(n)), ms = 1100 }: { value: number; format?: (n: number) => string; ms?: number }) {
-  const [shown, setShown] = useState(0);
-  const from = useRef(0);
+/** Show the real value on entry; glide from the displayed number when it changes. */
+export function CountUp({ value, format = (n) => String(Math.round(n)), ms = 420 }: { value: number; format?: (n: number) => string; ms?: number }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
   useEffect(() => {
     if (still()) {
       from.current = value;
       return;
     }
     const start = from.current;
+    if (start === value) return;
     const began = performance.now();
     let frame = requestAnimationFrame(function step(now) {
       const t = Math.min(1, (now - began) / ms);
@@ -32,7 +33,7 @@ export function CountUp({ value, format = (n) => String(Math.round(n)), ms = 110
   return <span className="count">{format(still() ? value : shown)}</span>;
 }
 
-/** A sentence that arrives word by word: each fades in, sharpens and rises. */
+/** A sentence kept accessible as one label while its words stay individually styleable. */
 export function BlurText({ text, className }: { text: string; className?: string }) {
   const words = text.split(/(\s+)/);
   let index = 0;

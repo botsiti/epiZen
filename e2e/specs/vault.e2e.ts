@@ -1,5 +1,5 @@
 import { $, $$, browser, expect } from '@wdio/globals';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { DEMO_VAULT, FIXTURES, vaultCopy } from '../paths';
@@ -134,10 +134,39 @@ describe('the demo vault', () => {
     await expect($('[data-testid="quests-page"]')).toBeDisplayed();
     await $('[aria-label="Previous month"]').click();
     await screenshot('100-quests');
+    await browser.setWindowSize(1024, 820);
     await $('[data-testid="open-statistics"]').click();
     await expect($('[data-testid="statistics-page"]')).toBeDisplayed();
     await $('[data-testid="activity-detail"]').waitForDisplayed();
+    const gridPosition = await browser.execute(() => {
+      const grid = document.querySelector<HTMLElement>('.activity-grid')!;
+      return { left: grid.scrollLeft, max: grid.scrollWidth - grid.clientWidth };
+    });
+    expect(gridPosition.max).toBeGreaterThan(0);
+    expect(gridPosition.left).toBeCloseTo(gridPosition.max, 0);
+    const geometry = () => browser.execute(() => {
+      const detail = document.querySelector('.activity-detail')!.getBoundingClientRect();
+      const grid = document.querySelector('.activity-grid')!.getBoundingClientRect();
+      return { height: detail.height, gridTop: grid.top };
+    });
+    const before = await geometry();
+    // Populated and empty days keep the pointer's next target in the same place. The demo's
+    // dated notes eventually leave the 52-week window, so fall back to its first day then.
+    const populated = '.activity-dot:not([data-level="0"])';
+    const firstDay = (await $(populated).isExisting()) ? populated : '.activity-dot:first-child';
+    for (const selector of [firstDay, '.activity-dot[data-level="0"]']) {
+      await browser.execute((css) => document.querySelector<HTMLElement>(css)?.focus({ preventScroll: true }), selector);
+      await expect($(selector)).toHaveAttribute('aria-pressed', 'true');
+      expect(await geometry()).toEqual(before);
+      const widths = await browser.execute((css) => {
+        const button = document.querySelector(css)!;
+        return { dot: button.firstElementChild!.getBoundingClientRect().width, target: button.getBoundingClientRect().width };
+      }, selector);
+      expect(widths.dot).toBeGreaterThan(11);
+      expect(widths.dot).toBeLessThan(widths.target);
+    }
     await screenshot('101-statistics');
+    await browser.setWindowSize(1280, 820);
   });
 
   it('opens a daily note from the sidebar as its page', async () => {
@@ -985,7 +1014,7 @@ describe('the demo vault', () => {
     await $('[data-testid="calendar-day"][data-date="2026-07-30"]').click();
     await expect(title()).toHaveText('30.07.2026');
     const text = readFileSync(join(vaultCopy(), `${DAYS}/30.07.2026.md`), 'utf8');
-    expect(text).toMatch(/^---\ndate: 2026-07-30\n/);
+    expect(text).toMatch(/^---\nperiod: day\ndate: 2026-07-30\n/);
     expect(text).toContain('### Tasks');
     expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`added: ${DAYS}/30.07.2026.md`]);
     await screenshot('15-new-day');
@@ -1659,5 +1688,169 @@ describe('the demo vault', () => {
         'changed: Calendar/2026/weeks/2026-W40 - 28.09.26.md',
       ].sort(),
     );
+  });
+
+  it('saves monthly reflections, finances and life areas, and preserves a conflicting draft', async () => {
+    const path = 'Calendar/2026/months 2026/09.26 RPG.md';
+    const full = join(vaultCopy(), path);
+    await openFolders(...foldersOf(path));
+    await openNote(path);
+    const before = snapshotVault(vaultCopy());
+    const read = () => readFileSync(full, 'utf8');
+    const original = read();
+    await showTab('Reflection');
+    await $('[data-field="summary"] textarea').setValue('A month of useful work.');
+    await $('[data-field="summary"] [data-testid="monthly-save"]').click();
+    await browser.waitUntil(() => read().includes('A month of useful work.'));
+    await showTab('Expenses');
+    await $('[data-field="expenses"] textarea').setValue('Rent and travel.');
+    await $('[data-field="expenses"] [data-testid="monthly-save"]').click();
+    await browser.waitUntil(() => read().includes('Rent and travel.'));
+    await showTab('Life areas');
+    await $('[data-sphere="Health/Fitness"]').click();
+    // The embedded driver doesn't dispatch a change event when it selects an option.
+    await browser.execute(() => {
+      const select = document.querySelector<HTMLSelectElement>('[data-field="sphere:Health/Fitness"] select');
+      if (!select) throw new Error('Missing life-area rating');
+      select.value = '7';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect($('[data-field="sphere:Health/Fitness"] select')).toHaveValue('7');
+    await $('[data-field="sphere:Health/Fitness"] textarea').setValue('I made time to recover.');
+    await $('[data-field="sphere:Health/Fitness"] [data-testid="monthly-save"]').click();
+    await browser.waitUntil(() => read().includes('I made time to recover.'));
+    expect(read()).toContain('- Health/Fitness: 7 — I made time to recover.');
+    expect(read().startsWith(original)).toBe(true);
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`changed: ${path}`]);
+    await screenshot('120-month-life-areas');
+    await browser.setWindowSize(900, 820);
+    await expect($('[data-field="sphere:Health/Fitness"] textarea')).toBeDisplayed();
+    await screenshot('122-month-narrow');
+    await browser.setWindowSize(1280, 820);
+    await showTab('Weeks');
+    await expect($('[data-testid="week-card"]')).toHaveText(expect.stringContaining('sleep'));
+    await screenshot('123-month-weeks');
+
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="open-summaries"]').click();
+    await $('[data-testid="summaries-page"]').waitForDisplayed();
+    const currentYear = new Date().getFullYear();
+    for (let year = currentYear; year !== 2026; year += year > 2026 ? -1 : 1) await $(`[aria-label="${year > 2026 ? 'Previous' : 'Next'} summary year"]`).click();
+    await expect($('[data-month="2026-09"]')).toHaveText(expect.stringContaining('A month of useful work.'));
+    await screenshot('124-summaries-overview');
+    await scrollIntoView('[data-month="2026-09"]');
+    await screenshot('121-summaries');
+    await $('[data-testid="open-quests"]').click();
+    await $('[data-testid="quest-xp-summary"]').waitForDisplayed();
+    await screenshot('125-quest-xp');
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="open-summaries"]').click();
+    for (let year = currentYear; year !== 2026; year += year > 2026 ? -1 : 1) await $(`[aria-label="${year > 2026 ? 'Previous' : 'Next'} summary year"]`).click();
+    await $('[data-month="2026-09"] button').click();
+    await showTab('Reflection');
+    await $('[data-field="summary"] textarea').setValue('A draft to recover.');
+    writeFileSync(full, read().replace('A month of useful work.', 'An outside change.'));
+    await $('[data-field="summary"] [data-testid="monthly-save"]').click();
+    await expect($('[data-field="summary"] [role="status"]')).toHaveText(expect.stringContaining('changed outside Epizen'));
+    expect(await $('[data-field="summary"] textarea').getValue()).toBe('A draft to recover.');
+    expect(read()).toContain('An outside change.');
+    await $('[data-testid="sidebar-vault"]').click();
+    await expect($('[data-testid="unsaved"]')).toHaveText(expect.stringContaining('A draft to recover.'));
+    expect(read()).toContain('An outside change.');
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`changed: ${path}`]);
+  });
+
+  it('updates existing Obsidian monthly sections without changing other files', async () => {
+    const path = 'Calendar/2026/months 2026/08.26 RPG.md';
+    const full = join(vaultCopy(), path);
+    const original = readFileSync(full, 'utf8');
+    const prepared = original.replace(/## Month Summary\n```dataview[\s\S]*?```\n?/, '### Month Summary\nAn older reflection.\n') + '\n### Expenses\n![[glasshouse-weather.svg]]\nOriginal expenses.\n\n### Spheres of Life\n- Career/Work: 8 — Work\n- Health/Fitness: 5 — Original reflection\n';
+    writeFileSync(full, prepared);
+    const before = snapshotVault(vaultCopy());
+    const read = () => readFileSync(full, 'utf8');
+    await openFolders(...foldersOf(path));
+    await openNote(path);
+    await showTab('Reflection');
+    await expect($('[data-field="summary"] textarea')).toHaveValue('An older reflection.');
+    await $('[data-field="summary"] textarea').setValue('Revised reflection.');
+    await $('[data-field="summary"] [data-testid="monthly-save"]').click();
+    await browser.waitUntil(() => read().includes('Revised reflection.'));
+    await showTab('Expenses');
+    await expect($('[data-field="expenses"] textarea')).toHaveValue('Original expenses.');
+    await $('[data-field="expenses"] [data-testid="vault-image"]').waitForDisplayed();
+    await screenshot('126-month-expenses');
+    await $('[data-field="expenses"] textarea').setValue('Revised expenses.');
+    await $('[data-field="expenses"] [data-testid="monthly-save"]').click();
+    await browser.waitUntil(() => read().includes('Revised expenses.'));
+    await showTab('Life areas');
+    await $('[data-sphere="Health/Fitness"]').click();
+    await expect($('[data-field="sphere:Health/Fitness"] select')).toHaveValue('5');
+    await expect($('[data-field="sphere:Health/Fitness"] textarea')).toHaveValue('Original reflection');
+    await browser.execute(() => {
+      const select = document.querySelector<HTMLSelectElement>('[data-field="sphere:Health/Fitness"] select');
+      if (!select) throw new Error('Missing life-area rating');
+      select.value = '7';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await $('[data-field="sphere:Health/Fitness"] textarea').setValue('Better recovery');
+    await $('[data-field="sphere:Health/Fitness"] [data-testid="monthly-save"]').click();
+    await browser.waitUntil(() => read().includes('- Health/Fitness: 7 — Better recovery'));
+    const expected = prepared.replace('An older reflection.', 'Revised reflection.').replace('Original expenses.', 'Revised expenses.').replace('- Health/Fitness: 5 — Original reflection', '- Health/Fitness: 7 — Better recovery');
+    expect(read()).toBe(expected);
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`changed: ${path}`]);
+  });
+
+  it('adds a selected expense photo without exposing Markdown and removes only the link', async () => {
+    const path = 'Calendar/2026/months 2026/09.26 RPG.md';
+    const image = 'Calendar/2026/months 2026/_attachments/expense-1.png';
+    const full = join(vaultCopy(), path);
+    await openFolders(...foldersOf(path));
+    await openNote(path);
+    await showTab('Expenses');
+    const before = snapshotVault(vaultCopy());
+    const originalText = await $('[data-field="expenses"] textarea').getValue();
+    const bytes = [...readFileSync(join(FIXTURES, 'cover-1.png'))];
+    const wrongVault = await browser.execute(async (notePath, data) => {
+      const tauri = (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
+      try { await tauri.core.invoke('save_expense_photo', { root: '/not-the-open-vault', notePath, bytes: data }); return ''; }
+      catch (error) { return String(error); }
+    }, path, bytes);
+    expect(wrongVault).toContain('open vault changed');
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+    await browser.execute(() => {
+      const input = document.querySelector<HTMLInputElement>('[data-field="expenses"] input[type="file"]');
+      if (!input) throw new Error('Missing photo picker');
+      const selection = new DataTransfer();
+      selection.items.add(new File([new Uint8Array([1, 2, 3])], 'invalid.png', { type: 'image/png' }));
+      input.files = selection.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect($('[data-field="expenses"] [role="status"]')).toHaveText(expect.stringContaining('Choose a PNG'));
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+    // The embedded WebDriver cannot operate the native chooser. Deliver the same File object
+    // its selection produces, then exercise the real Tauri command and vault writes.
+    await browser.execute((data) => {
+      const input = document.querySelector<HTMLInputElement>('[data-field="expenses"] input[type="file"]');
+      if (!input) throw new Error('Missing photo picker');
+      const selection = new DataTransfer();
+      selection.items.add(new File([new Uint8Array(data)], 'receipt.png', { type: 'image/png' }));
+      input.files = selection.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, bytes);
+    await browser.waitUntil(() => existsSync(join(vaultCopy(), image)), { timeoutMsg: 'selected photo was not saved' });
+    await $('[data-field="expenses"] [data-testid="vault-image"]').waitForDisplayed();
+    expect(await $('[data-field="expenses"] textarea').getValue()).toBe(originalText);
+    await scrollIntoView('[data-field="expenses"]');
+    await screenshot('127-money-photo');
+    await $('[data-field="expenses"] [data-testid="monthly-save"]').click();
+    await browser.waitUntil(() => readFileSync(full, 'utf8').includes(`![[${image}]]`));
+    expect(readFileSync(join(vaultCopy(), image))).toEqual(Buffer.from(bytes));
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`added: ${image}`, `changed: ${path}`].sort());
+    await $('[data-field="expenses"] [aria-label="Remove photo 1"]').click();
+    await $('[data-field="expenses"] [data-testid="monthly-save"]').click();
+    await browser.waitUntil(() => !readFileSync(full, 'utf8').includes(`![[${image}]]`));
+    expect(existsSync(join(vaultCopy(), image))).toBe(true);
+    expect(await $('[data-field="expenses"] textarea').getValue()).toBe(originalText);
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`added: ${image}`]);
   });
 });

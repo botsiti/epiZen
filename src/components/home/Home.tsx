@@ -47,6 +47,7 @@ export interface HomeProps {
   onSeeLibrary: () => void;
   onSeeQuests: () => void;
   onSeeStatistics: () => void;
+  onSeeSummaries: () => void;
 }
 
 const thousands = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -68,7 +69,7 @@ export function Home(props: HomeProps) {
     <div className="periodic-frame home-frame" data-testid="home" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
       <Hero {...props} xp={xp} streak={run} todayEntry={todayEntry} />
       <Memento today={today} birth={props.birthDate} i={1} />
-      <div className="home-shortcuts"><button className="shelf-all" onClick={props.onSeeStatistics}>Statistics →</button></div>
+      <div className="home-shortcuts"><button className="shelf-all" onClick={props.onSeeSummaries} data-testid="open-summaries">Summaries →</button><button className="shelf-all" onClick={props.onSeeStatistics}>Statistics →</button></div>
       <div className="home-row">
         <Averages dayOf={dayOf} today={today} scales={props.scales} i={2} />
         <Focus dayOf={dayOf} today={today} onOpenNote={props.onOpenNote} i={3} />
