@@ -1,3 +1,4 @@
+import { metricStatus } from '../../lib/metricStatus';
 import { useMemo, useState, type CSSProperties } from 'react';
 import { formatDate, isoWeek, startOfMonth, startOfWeek } from '../../lib/dates';
 import { formatMinutes } from '../../lib/day';
@@ -20,7 +21,7 @@ export function Averages({ dayOf, today, scales, i }: { dayOf: (date: Date) => D
       </div>
       <ul className="home-averages">
         {rows.map((row) => (
-          <li key={row.key} title={`${row.label}: ${row.count} of 7 days logged, out of ${row.scale}${row.unit}`}>
+          <li key={row.key} data-metric={row.key} data-status={metricStatus(row.key, row.value, scales[row.key] ?? 5)} title={`${row.label}: ${row.count} of 7 days logged, out of ${row.scale}${row.unit}`}>
             <span className="home-average-label">{row.label}</span>
             <span className="home-average-value" style={{ color: row.value === undefined ? undefined : row.color }}>
               {row.value === undefined ? '—' : <CountUp value={row.value} format={(n) => `${n.toFixed(1)}${row.unit}`} />}
@@ -133,7 +134,7 @@ export function Today({ entry, today, todayNote, exists, onOpenPeriod, i }: Toda
           ))}
         </ul>
       ) : (
-        <p className="today-empty">{entry.day ? 'No tasks logged today.' : `No daily note for today yet. ${todayNote.name} will be created when you open it.`}</p>
+        <p className="today-empty">{entry.day && !entry.scheduledOnly ? 'No tasks logged today.' : `No daily note for today yet. ${todayNote.name} will be created when you open it.`}</p>
       )}
       {tasks.length > 9 && <p className="faint today-more">and {tasks.length - 9} more</p>}
       <nav className="today-nav">

@@ -139,7 +139,7 @@ export function parseDay(text: string): Day {
   const all = parseTasks(text).map(
     (task): DayTask => ({
       ...task,
-      label: task.habit ? task.text.trim() : taskLabel(task.text),
+      label: taskLabel(task.text),
       category: task.category === undefined ? undefined : category(task.category),
       blocks: blocksUnder(lines, task.line),
     }),

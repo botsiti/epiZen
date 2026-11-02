@@ -1,3 +1,4 @@
+import { metricColor, metricMean, metricStatus } from '../../lib/metricStatus';
 import { useMemo, useState } from 'react';
 import { day, formatDate, startOfMonth, addMonths } from '../../lib/dates';
 import { formatMinutes } from '../../lib/day';
@@ -12,11 +13,12 @@ export interface SummariesProps {
   days: DayEntry[];
   birthDate?: Date;
   monthOf: (date: Date) => { path?: string; text?: string; ambiguous?: boolean };
+  scales?: Record<string, number>;
   onOpenPeriod: (period: Period, date: Date) => void;
 }
 
 /** Each month has its own note and a rollup of its daily notes; nothing here writes to the vault. */
-export function Summaries({ today, days, birthDate, monthOf, onOpenPeriod }: SummariesProps) {
+export function Summaries({ today, days, birthDate, monthOf, onOpenPeriod, scales = {} }: SummariesProps) {
   const [year, setYear] = useState(today.getFullYear());
   const rows = useMemo(() => Array.from({ length: 12 }, (_, index) => {
     const month = day(year, index, 1);
@@ -56,7 +58,7 @@ export function Summaries({ today, days, birthDate, monthOf, onOpenPeriod }: Sum
           <div><span>Focus time</span><strong>{total.noted ? formatMinutes(total.totals.logged) : '—'}</strong></div>
           <div className="summaries-spending"><span>Expenses</span><strong>{spending?.problem ? 'Check month note' : spendingLabel(spending?.value ?? '')}</strong></div>
           <div><span>XP</span><strong>{total.noted ? total.totals.xp.toLocaleString('en-US') : '—'}</strong></div>
-          {metrics.map(([label, key]) => { const value = total.average(key); return <div key={key}><span>{label}</span><strong>{value === undefined ? '—' : `${value}${key === 'sleep' ? 'h' : ''}`}</strong></div>; })}
+          {metrics.map(([label, key]) => { const value = metricMean(total.days, key); return <div key={key} data-metric={key} data-status={metricStatus(key, value, scales[key] ?? 5)}><span>{label}</span><strong style={{ color: metricColor(key, value, scales[key] ?? 5) }}>{value === undefined ? '—' : `${Number(value.toFixed(2))}${key === 'sleep' ? 'h' : ''}`}</strong></div>; })}
         </div></div>
       </article>;
     })}</div>

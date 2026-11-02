@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { metricColor, metricMean } from '../../lib/metricStatus';
 import { habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, addMonths, formatDate, isoWeek, monthGrid, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
@@ -89,7 +90,7 @@ export function WeekPage({ spec, path, text, actions }: Props) {
             <Media days={days} spec={spec} actions={actions} title="Listened and watched this week" />
           </>
         )}
-        {tab === 'Days' && <DayRows days={days} actions={actions} />}
+        {tab === 'Days' && <DayRows days={days} actions={actions} scales={spec.scales} />}
         {tab === 'Quests' && (
           <>
             <QuestComposer scope="weekly" onAdd={actions.onAddQuest} />
@@ -185,7 +186,7 @@ export function MonthPage({ spec, path, text, actions, files }: Props) {
             />
           </>
         )}
-        {tab === 'Days' && <DayRows days={days} actions={actions} />}
+        {tab === 'Days' && <DayRows days={days} actions={actions} scales={spec.scales} />}
         {tab === 'Habits' && spec.features?.habits !== false && <Habits sum={sum} labels={days.map((entry) => String(entry.date.getDate()))} />}
         {tab === 'Stats' && <Stats sum={sum} spec={spec} labels={days.map((entry) => String(entry.date.getDate()))} />}
       </div>
@@ -235,10 +236,11 @@ function Totals({ sum, spec, span }: { sum: Rollup; spec: PeriodicSpec; span: nu
         </Tile>
       </div>
       <div className="tiles is-metrics" data-testid="averages">
-        {metrics.map(({ key, label, color, max, unit }, i) => {
+        {metrics.map(({ key, label, max, unit }, i) => {
           const value = sum.average(key);
+          const tone = metricColor(key, metricMean(sum.days, key), max);
           return (
-            <Tile key={key} label={label} i={6 + i} tone={color} className="metric-tile" meta={<Sparkline values={sum.series(key)} max={max} color={color} />}>
+            <Tile key={key} label={label} i={6 + i} tone={tone} className="metric-tile" meta={<Sparkline values={sum.series(key)} max={max} color={tone} />}>
               {value === undefined ? <span className="faint">—</span> : <CountUp value={value} format={(n) => `${n.toFixed(1)}${unit}`} />}
               <span className="of"> avg</span>
             </Tile>
@@ -270,8 +272,8 @@ function DayCard({ entry, i, spec, actions }: { entry: DayEntry; i: number; spec
       <span className="day-card-time">{day ? formatMinutes(day.totals.logged) : 'no note'}</span>
       {day && (
         <span className="day-card-metrics">
-          {METRICS.map(({ key, label, color }) => (
-            <span key={key} title={`${label} ${day.numbers[key] ?? '—'} of ${spec.scales[key] ?? 5}`} style={{ '--tone': color } as CSSProperties} className={day.numbers[key] ? 'metric-chip' : 'metric-chip is-empty'}>
+          {METRICS.map(({ key, label }) => (
+            <span key={key} title={`${label} ${day.numbers[key] ?? '—'} of ${spec.scales[key] ?? 5}`} style={{ '--tone': metricColor(key, day.numbers[key], spec.scales[key] ?? 5) } as CSSProperties} className={day.numbers[key] ? 'metric-chip' : 'metric-chip is-empty'}>
               {label[0]}
               {day.numbers[key] ?? ''}
             </span>
@@ -362,7 +364,7 @@ function Media({ days, spec, actions, title }: { days: DayEntry[]; spec: Periodi
 }
 
 /** Every day as a row: time by category as one bar, and its numbers. */
-function DayRows({ days, actions }: { days: DayEntry[]; actions: PeriodicActions }) {
+function DayRows({ days, actions, scales }: { days: DayEntry[]; actions: PeriodicActions; scales: Record<string, number> }) {
   const most = Math.max(1, ...days.map((entry) => entry.day?.totals.logged ?? 0));
   return (
     <div className="day-rows" data-testid="day-rows">
@@ -386,12 +388,12 @@ function DayRows({ days, actions }: { days: DayEntry[]; actions: PeriodicActions
               ))}
             </span>
             <span>{day?.numbers.done === undefined ? '—' : `${day.numbers.done}%`}</span>
-            {METRICS.map(({ key, color }) => (
-              <span key={key} style={{ color: day?.numbers[key] ? color : undefined }}>
+            {METRICS.map(({ key }) => (
+              <span key={key} style={{ color: metricColor(key, day?.numbers[key], scales[key] ?? 5) }}>
                 {day?.numbers[key] || '—'}
               </span>
             ))}
-            <span>{day?.numbers.sleep ?? '—'}</span>
+            <span style={{ color: metricColor('sleep', day?.numbers.sleep) }}>{day?.numbers.sleep ?? '—'}</span>
           </button>
         );
       })}

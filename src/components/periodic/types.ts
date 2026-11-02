@@ -1,3 +1,4 @@
+import type { Habit } from '../../lib/habits';
 import type { RecordInput, ThoughtRecord } from '../../lib/cbt';
 import type { FocusHow } from '../calendar/FocusMenu';
 import type { MediaItem } from '../../lib/media';
@@ -12,6 +13,8 @@ import type { MonthlyField } from '../../lib/monthlyReview';
 export interface PeriodicSpec {
   period: Period;
   features?: PeriodicFeatures;
+  habits?: Habit[];
+  habitStats?: Record<string, { current: number; best: number }>;
   /** The day, the week's Monday or the month's first day. */
   date: Date;
   /** The day behind a date: its note, if it has one, and what the note holds. */
@@ -37,7 +40,8 @@ export interface PeriodicActions {
   onOpenNote: (path: string) => void;
   onEdit: () => void;
   /** Ticks or unticks the task or habit on that line, if it is still as it was shown. */
-  onToggle: (task: { line: number; done: boolean }) => void;
+  onToggle: (task: { line: number; done: boolean; habitId?: string }) => void;
+  onManageHabits?: () => void;
   onSetProperty: (key: string, value: string) => void;
   onAddTask: (category: string, words: string, minutes?: number) => void;
   /** The minutes spent on a task already on the day's list. */

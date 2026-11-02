@@ -1,3 +1,4 @@
+import { metricColor } from './metricStatus';
 import { category, METRICS, SPHERES, type Category, type Sphere } from './categories';
 import { addDays, day, parseDate, startOfMonth, startOfWeek } from './dates';
 import type { MediaItem } from './media';
@@ -129,9 +130,9 @@ export function averages(days: DayEntry[], scales: Record<string, number>): Aver
     })),
   ];
   return rows.map((row) => {
-    const values = days.map((entry) => entry.day?.numbers[row.key]).filter((value): value is number => value !== undefined && value > 0);
+    const values = days.map((entry) => entry.day?.numbers[row.key]).filter((value): value is number => value !== undefined && (row.key === 'sleep' || value > 0));
     const value = values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : undefined;
-    return { ...row, value, count: values.length, share: value === undefined ? 0 : clamp(value / row.scale) };
+    return { ...row, color: metricColor(row.key, value, scales[row.key] ?? 5), value, count: values.length, share: value === undefined ? 0 : clamp(value / row.scale) };
   });
 }
 

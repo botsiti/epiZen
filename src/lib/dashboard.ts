@@ -12,6 +12,8 @@ export interface Task {
   minutes?: number;
   /** Inside an explicit `[!habits]` callout, kept apart from the day's tasks. */
   habit: boolean;
+  /** Stable identity for a managed habit, kept in ordinary inline fields. */
+  habitId?: string;
 }
 
 // A task line: optional quote marks (a task inside a callout), a list marker, a box.
@@ -50,6 +52,7 @@ export function parseTasks(text: string): Task[] {
           category: /#daily\/([\w-]+)/.exec(body)?.[1],
           minutes: Number(/\[minutes::\s*(\d+)\s*\]/.exec(body)?.[1]) || undefined,
           habit: callouts.at(-1)?.habit ?? false,
+          ...(callouts.at(-1)?.habit && /\[habit::([a-zA-Z0-9-]{8,80})\]/.exec(body)?.[1] ? { habitId: /\[habit::([a-zA-Z0-9-]{8,80})\]/.exec(body)![1] } : {}),
         });
       }
     }
