@@ -101,3 +101,12 @@ it('does not insert into code samples, open comments or unfinished frontmatter',
   expect(() => setHabitCompletion('<!-- never closed\n', h, false, true)).toThrow('comment');
   expect(() => setHabitCompletion('---\nmood: 3\n', h, false, true)).toThrow('frontmatter');
 });
+
+
+it('keeps a task moved outside the habits callout an ordinary task, even with an old ID', () => {
+  const h = make();
+  const parsed = parseDay(`### Tasks\n- [ ] Ordinary task [habit::${h.id}]\n`);
+  expect(parsed.habits).toEqual([]);
+  expect(parsed.tasks[0]).toMatchObject({ label: 'Ordinary task', habit: false });
+  expect(parsed.tasks[0]?.habitId).toBeUndefined();
+});
