@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { day, formatDate, startOfMonth, addMonths } from '../../lib/dates';
 import { formatMinutes } from '../../lib/day';
-import { readMonthlySection } from '../../lib/monthlyReview';
+import { readMonthlySection, spendingLabel } from '../../lib/monthlyReview';
 import { memento } from '../../lib/home';
 import { rollup, type DayEntry } from '../../lib/rollup';
 import type { Period } from '../../lib/periodic';
@@ -24,7 +24,9 @@ export function Summaries({ today, days, birthDate, monthOf, onOpenPeriod }: Sum
     const total = rollup(days.filter(({ date }) => date >= month && date < end));
     const note = monthOf(month);
     const summary = note.text === undefined ? undefined : readMonthlySection(note.text, 'summary');
-    return { month, total, note, summary };
+    const decisions = note.text === undefined ? undefined : readMonthlySection(note.text, 'decisions');
+    const spending = note.text === undefined ? undefined : readMonthlySection(note.text, 'spending');
+    return { month, total, note, summary, decisions, spending };
   }), [year, days, monthOf]);
   const spans = memento(today, birthDate).spans;
   const lifeEnd = birthDate && day(birthDate.getFullYear() + 80, birthDate.getMonth(), birthDate.getDate());
@@ -42,7 +44,7 @@ export function Summaries({ today, days, birthDate, monthOf, onOpenPeriod }: Sum
       <button type="button" className="shelf-all" onClick={() => setYear(today.getFullYear())}>This year</button>
       <button type="button" className="shelf-all" aria-label="Next summary year" onClick={() => setYear((value) => value + 1)}>→</button>
     </div></div>
-    <div className="summaries-list">{rows.map(({ month, total, note, summary }) => {
+    <div className="summaries-list">{rows.map(({ month, total, note, summary, decisions, spending }) => {
       const metrics = [['Mood', 'mood'], ['Energy', 'energy'], ['Focus', 'focus'], ['Social', 'soc'], ['Sleep', 'sleep']] as const;
       return <article className="summaries-month glass" key={month.getTime()} data-testid="summary-month" data-month={formatDate(month, 'YYYY-MM')}>
         <div className="summaries-month-head"><div><span className="summaries-month-number">{formatDate(month, 'MM')}</span><h3>{formatDate(month, 'MMMM')}</h3></div>
@@ -50,8 +52,9 @@ export function Summaries({ today, days, birthDate, monthOf, onOpenPeriod }: Sum
         <div className="summaries-month-content"><div className="summaries-words">
           <span className="summaries-eyebrow">Reflection</span>
           {summary?.problem ? <p className="summaries-empty">{summary.problem}</p> : summary?.value ? <p>{summary.value}</p> : <p className="summaries-empty">{note.path ? 'No reflection written yet.' : note.ambiguous ? 'Choose which note represents this month in Settings.' : 'No monthly note yet.'}</p>}
-        </div><div className="summaries-metrics" aria-label={`${formatDate(month, 'MMMM')} statistics`}>
+        </div><div className="summaries-words summaries-decisions"><span className="summaries-eyebrow">Decisions</span><p className={!decisions?.value ? 'summaries-empty' : undefined}>{decisions?.problem ?? (decisions?.value || 'No decisions recorded yet.')}</p></div><div className="summaries-metrics" aria-label={`${formatDate(month, 'MMMM')} statistics`}>
           <div><span>Focus time</span><strong>{total.noted ? formatMinutes(total.totals.logged) : '—'}</strong></div>
+          <div className="summaries-spending"><span>Expenses</span><strong>{spending?.problem ? 'Check month note' : spendingLabel(spending?.value ?? '')}</strong></div>
           <div><span>XP</span><strong>{total.noted ? total.totals.xp.toLocaleString('en-US') : '—'}</strong></div>
           {metrics.map(([label, key]) => { const value = total.average(key); return <div key={key}><span>{label}</span><strong>{value === undefined ? '—' : `${value}${key === 'sleep' ? 'h' : ''}`}</strong></div>; })}
         </div></div>

@@ -118,3 +118,22 @@ describe('monthly review sections', () => {
     expect(result).toBe(text.replace('   5  -', '   7  -'));
   });
 });
+
+it('stores decisions independently and normalizes manually entered spending', async () => {
+  const { spendingValue, readSpending, spendingLabel } = await import('./monthlyReview');
+  const amount = spendingValue('150,000.50', 'rub');
+  expect(readSpending(amount)).toEqual({ amount: '150000.5', currency: 'RUB' });
+  expect(spendingLabel(amount)).toBe('150,000.5 RUB');
+  expect(spendingLabel(spendingValue('0', ''))).toBe('0');
+  expect(spendingLabel('')).toBe('—');
+  for (const invalid of ['-10', '150,00', '1e5', 'NaN']) expect(() => spendingValue(invalid, '')).toThrow();
+  expect(() => spendingValue('100', 'money')).toThrow('currency');
+  let text = writeMonthlySection(original, 'decisions', 'Choose a quieter place.\n\nRevisit in December.', '');
+  text = writeMonthlySection(text, 'spending', amount, '');
+  expect(text.startsWith(original)).toBe(true);
+  expect(readMonthlySection(text, 'summary').value).toBe('');
+  expect(readMonthlySection(text, 'decisions').value).toContain('Revisit in December.');
+  const section = readMonthlySection(text, 'spending');
+  expect(writeMonthlySection(text, 'spending', amount, section.snapshot)).toBe(text);
+  expect(() => writeMonthlySection(text.replace('150000.5', '200000'), 'spending', spendingValue('500', ''), section.snapshot)).toThrow('changed outside');
+});

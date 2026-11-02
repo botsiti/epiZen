@@ -17,7 +17,7 @@ import type { PeriodicActions, PeriodicSpec } from './types';
 import type { VaultFile } from '../../lib/api';
 
 const WEEK_TABS = ['Overview', 'Days', 'Quests', 'Habits', 'Stats'] as const;
-const MONTH_TABS = ['Overview', 'Reflection', 'Expenses', 'Life areas', 'Weeks', 'Quests', 'Days', 'Habits', 'Stats'] as const;
+const MONTH_TABS = ['Overview', 'Reflection', 'Decisions', 'Expenses', 'Wheel of Life', 'Weeks', 'Quests', 'Days', 'Habits', 'Stats'] as const;
 type WeekTab = (typeof WEEK_TABS)[number];
 type MonthTab = (typeof MONTH_TABS)[number];
 let lastWeekTab: WeekTab = 'Overview';

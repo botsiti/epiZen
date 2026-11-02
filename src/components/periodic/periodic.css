@@ -3416,3 +3416,20 @@ button.quest-log-words {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.quest-manage { display: flex; gap: 8px; margin: 16px 0; }
+.quest-manage-confirm, .quest-edit-form { margin: 20px 0; padding: 24px; border: 1px solid var(--glass-line-strong); border-radius: 12px; background: var(--surface); }
+.quest-manage-confirm h3 { margin: 0; font: 24px var(--display); }
+.quest-manage-confirm p { color: var(--text-muted); font-size: 13px; }
+.quest-manage-confirm button + button { margin-left: 12px; }
+.quest-edit-form { display: grid; gap: 16px; }
+.quest-edit-form label { display: grid; gap: 8px; color: var(--text-muted); font-size: 12px; }
+.quest-edit-form input, .quest-edit-form textarea, .quest-edit-form select { min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--glass-line-strong); border-radius: 8px; color: var(--text); background: var(--bg); font: 14px var(--font-ui); }
+.quest-edit-form textarea { min-height: 80px; resize: vertical; }
+.quest-edit-numbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.quest-manage[hidden] { display: none; }
+.quest-dialog.is-editing .quest-dialog-art { height: 56px; min-height: 56px; background: var(--surface); }
+.quest-dialog.is-editing .quest-dialog-art > :not(.quest-dialog-close) { display: none; }
+.quest-dialog.is-editing .quest-dialog-close { top: 12px; }
+.quest-dialog.is-editing .quest-edit-form { padding: 0; border: 0; background: none; }
+.quest-dialog.is-editing .quest-dialog-title { font-size: 32px; }
+.quest-dialog .quest-art-blank { background: radial-gradient(ellipse at 20% 20%, color-mix(in oklch, var(--tone) 18%, transparent), transparent 75%), var(--surface); }

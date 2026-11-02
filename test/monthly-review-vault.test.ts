@@ -25,6 +25,8 @@ it('changes only the selected monthly note on a demo-vault copy', () => {
     const original = readFileSync(full, 'utf8');
     let text = writeMonthlySection(original, 'summary', 'A calm month.', '');
     text = writeMonthlySection(text, 'expenses', 'Rent and travel.', '');
+    text = writeMonthlySection(text, 'decisions', 'Choose a quieter place.', '');
+    text = writeMonthlySection(text, 'spending', '**Amount:** 150000\n**Currency:** RUB', '');
     text = writeMonthlySection(text, 'sphere:Health/Fitness', sphereValue('7', 'Rested well.'), '');
     writeFileSync(full, text);
     expect(diffSnapshots(before, snapshotVault(vault))).toEqual([`changed: ${path}`]);

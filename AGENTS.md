@@ -12,6 +12,11 @@ here; keep workflow rules here so the two cannot drift.
 - Epizen is a calm, macOS-first desktop app: Tauri 2, Rust, React, TypeScript and Vite.
   Read [DESIGN.md](DESIGN.md) for UI work and [REVIEW.md](REVIEW.md) for change risks.
   Mobile, Windows and Linux builds remain out of scope.
+- When opening, previewing or testing Epizen on this Mac, use the MacBook Pro's built-in
+  Retina display, not the main Xiaomi / Mi Monitor. Verify the target display before showing
+  app or test windows; keep the external display available for the user's work. Preserve the
+  display arrangement and main-display setting. If the built-in display is unavailable, report
+  that constraint rather than silently using the Xiaomi display.
 - Notes remain ordinary Obsidian-compatible Markdown: frontmatter, wikilinks, embeds,
   callouts, tasks and inline fields. No database, sidecars, proprietary syntax or execution
   of Obsidian plugins. Preserve text outside the requested edit, including formatting.

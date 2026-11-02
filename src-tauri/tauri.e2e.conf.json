@@ -15,7 +15,8 @@
         "visibleOnAllWorkspaces": true,
         "theme": "Dark",
         "backgroundColor": "#121416",
-        "focus": false
+        "focus": false,
+        "visible": false
       }
     ],
     "security": {
@@ -32,7 +33,9 @@
             "core:default",
             "wdio:default",
             "wdio-webdriver:default",
-            "core:window:allow-set-always-on-top"
+            "core:window:allow-set-always-on-top",
+            "core:window:allow-set-position",
+            "core:window:allow-show"
           ]
         }
       ]

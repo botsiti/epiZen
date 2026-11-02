@@ -2,12 +2,14 @@ import { SPHERES, type Sphere } from './categories';
 import { lineEnding } from './text';
 
 /** These sections are ordinary Markdown, independent of Obsidian plugins. */
-export type MonthlyField = 'summary' | 'expenses' | `sphere:${Sphere}`;
-export const monthlyFields: MonthlyField[] = ['summary', 'expenses', ...SPHERES.map(({ name }): MonthlyField => `sphere:${name}`)];
+export type MonthlyField = 'summary' | 'decisions' | 'spending' | 'expenses' | `sphere:${Sphere}`;
+export const monthlyFields: MonthlyField[] = ['summary', 'decisions', 'spending', 'expenses', ...SPHERES.map(({ name }): MonthlyField => `sphere:${name}`)];
 
 export function monthlyHeading(field: MonthlyField): string {
   if (field === 'summary') return 'Monthly reflection';
   if (field === 'expenses') return 'Expenses and finances';
+  if (field === 'decisions') return 'Decisions';
+  if (field === 'spending') return 'Monthly spending';
   return `Life area: ${field.slice('sphere:'.length)}`;
 }
 
@@ -134,7 +136,7 @@ export function readMonthlySection(text: string, field: MonthlyField): MonthlySe
     if (sphere) return sphere;
     // The Obsidian dashboard stores prose and expenses in ordinary level-three sections.
     // A Dataview block is not a reflection and must never be replaced by this editor.
-    const legacy = field === 'summary' ? legacySections(lines, 'Month Summary') : field === 'expenses' ? (legacySections(lines, 'Expenses').length ? legacySections(lines, 'Expenses') : legacySections(lines, 'Finance')) : [];
+    const legacy = field === 'summary' ? legacySections(lines, 'Month Summary') : field === 'expenses' ? (legacySections(lines, 'Expenses').length ? legacySections(lines, 'Expenses') : legacySections(lines, 'Finance')) : field === 'decisions' ? [...legacySections(lines, 'Decisions'), ...legacySections(lines, 'Decisions & Important')] : [];
     if (legacy.length > 1) return { value: '', snapshot: '', problem: 'This note has duplicate sections. Edit it in the note editor.' };
     if (legacy.length === 1) {
       const old = legacy[0]!;
@@ -145,7 +147,7 @@ export function readMonthlySection(text: string, field: MonthlyField): MonthlySe
   }
   // A separately managed legacy subsection inside one of these sections must never be swallowed
   // by a whole-section edit. Leave that unusual layout to the note editor.
-  const nested = ['Month Summary', 'Expenses', 'Finance', 'Spheres of Life'].some((title) =>
+  const nested = ['Month Summary', 'Expenses', 'Finance', 'Decisions', 'Decisions & Important', 'Spheres of Life'].some((title) =>
     sections(lines, title, 3, 6).some((item) => item.heading > span.heading && item.heading < span.end),
   );
   if (nested) return { value: '', snapshot: '', problem: `This ${monthlyHeading(field)} section contains another monthly section. Edit it in the note editor.` };
@@ -160,6 +162,7 @@ export function writeMonthlySection(text: string, field: MonthlyField, value: st
   if (!eol) throw new Error('This note has mixed line endings.');
   if (/\r(?!\n)/.test(value)) throw new Error('The text contains an unsupported line ending.');
   const normalized = value.replace(/\r\n/g, '\n');
+  if (field === 'spending') readSpending(normalized);
   // A top-level heading would end this section and could turn the rest into unrelated content.
   const contentLines = normalized.split('\n');
   const contentProblem = structureProblem(contentLines);
@@ -197,7 +200,7 @@ export function writeMonthlySection(text: string, field: MonthlyField, value: st
     return lines.join(eol);
   }
   if (expected.startsWith('legacy:')) {
-    const legacy = field === 'summary' ? legacySections(lines, 'Month Summary') : (legacySections(lines, 'Expenses').length ? legacySections(lines, 'Expenses') : legacySections(lines, 'Finance'));
+    const legacy = field === 'summary' ? legacySections(lines, 'Month Summary') : field === 'decisions' ? [...legacySections(lines, 'Decisions'), ...legacySections(lines, 'Decisions & Important')] : (legacySections(lines, 'Expenses').length ? legacySections(lines, 'Expenses') : legacySections(lines, 'Finance'));
     const target = legacy[0];
     if (!target) throw new Error('This section changed outside Epizen.');
     lines.splice(target.heading + 1, target.bodyEnd - target.heading - 1, ...(normalized ? normalized.split('\n') : []));
@@ -230,6 +233,35 @@ export function readSphere(value: string): { rating: string; notes: string } {
 export function sphereValue(rating: string, notes: string): string {
   if (rating && !/^(?:[0-9]|10)$/.test(rating)) throw new Error('Choose a rating from 0 to 10.');
   return [rating ? `**Rating:** ${rating} / 10` : '', notes].filter(Boolean).join('\n\n');
+}
+
+/** Plain Markdown, with an optional currency; never infer a currency from the computer. */
+export function spendingValue(amount: string, currency: string): string {
+  const clean = amount.trim();
+  if (!clean && !currency.trim()) return '';
+  if (!/^(?:\d+|\d{1,3}(?:[, \u00a0]\d{3})+)(?:\.\d{1,2})?$/.test(clean)) throw new Error('Enter an amount such as 150,000 or 150000.50.');
+  const number = Number(clean.replace(/[, \u00a0]/g, ''));
+  if (!Number.isFinite(number) || number > Number.MAX_SAFE_INTEGER / 100) throw new Error('That amount is too large.');
+  const unit = currency.trim().toUpperCase();
+  if (unit && !/^[A-Z]{3}$/.test(unit)) throw new Error('Use a three-letter currency, such as RUB, USD or EUR.');
+  return `**Amount:** ${number}${unit ? `\n**Currency:** ${unit}` : ''}`;
+}
+
+export function readSpending(value: string): { amount: string; currency: string } {
+  if (!value.trim()) return { amount: '', currency: '' };
+  const match = /^\*\*Amount:\*\* (\d+(?:\.\d{1,2})?)(?:\n\*\*Currency:\*\* ([A-Z]{3}))?\s*$/.exec(value);
+  if (!match) throw new Error('This spending total has an unfamiliar format. Edit it in the note editor.');
+  const amount = match[1]!;
+  const currency = match[2] ?? '';
+  spendingValue(amount, currency);
+  return { amount, currency };
+}
+
+export function spendingLabel(value: string): string {
+  try {
+    const { amount, currency } = readSpending(value);
+    return amount === '' ? '—' : `${Number(amount).toLocaleString('en-US', { maximumFractionDigits: 2 })}${currency ? ` ${currency}` : ''}`;
+  } catch { return 'Check month note'; }
 }
 
 /** Prepare recovery text without ever touching the note on disk. */

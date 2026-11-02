@@ -68,6 +68,25 @@ export const config: WebdriverIO.Config = {
     rmSync(EVIDENCE, { recursive: true, force: true });
     mkdirSync(EVIDENCE, { recursive: true });
   },
+  // Start hidden, choose the built-in panel on the user's Mac, then show without focus.
+  // Hosted runners may only have a virtual monitor; the explicit local flag requires Retina.
+  async before() {
+    await browser.execute(async (displayName) => {
+      const tauri = (window as unknown as { __TAURI__: {
+        dpi: { PhysicalPosition: new (x: number, y: number) => unknown };
+        window: {
+          availableMonitors: () => Promise<{ name: string | null; position: { x: number; y: number }; scaleFactor: number }[]>;
+          getCurrentWindow: () => { setPosition: (position: unknown) => Promise<void>; show: () => Promise<void> };
+        };
+      } }).__TAURI__;
+      const monitors = await tauri.window.availableMonitors();
+      const builtIn = monitors.find((monitor) => displayName && displayName !== 'builtin' ? monitor.name === displayName : /built.?in|color lcd|retina/i.test(monitor.name ?? ''));
+      if (displayName && !builtIn) throw new Error(`The MacBook display is unavailable: ${monitors.map((monitor) => monitor.name).join(', ')}`);
+      const current = tauri.window.getCurrentWindow();
+      if (builtIn) await current.setPosition(new tauri.dpi.PhysicalPosition(builtIn.position.x + Math.round(32 * builtIn.scaleFactor), builtIn.position.y + Math.round(48 * builtIn.scaleFactor)));
+      await current.show();
+    }, process.env.EPIZEN_TEST_DISPLAY ?? '');
+  },
   // The service launches all test apps up front. Reorder the current test window at its
   // floating level without activating it, so earlier windows or another Space cannot occlude
   // its WebKit renderer and suspend animation frames.

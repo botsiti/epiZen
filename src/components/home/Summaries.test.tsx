@@ -12,9 +12,11 @@ it('shows monthly averages and reflections, handles missing data, and opens a ch
     { date: day(2026, 8, 1), day: parseDay('---\nmood: 3\nsleep: 6\nenergy: 4\n---\n- [x] #daily/code — Work [minutes::60]') },
     { date: day(2026, 8, 2), day: parseDay('---\nmood: 5\nsleep: 8\nenergy: 0\n---\n- [x] #daily/code — Work [minutes::30]') },
   ];
-  render(<Summaries today={day(2026, 8, 30)} days={days} monthOf={(date) => sameDay(date, day(2026, 8, 1)) ? { path: 'September.md', text: '## Monthly reflection\nA good month.\n' } : {}} onOpenPeriod={onOpenPeriod} />);
+  render(<Summaries today={day(2026, 8, 30)} days={days} monthOf={(date) => sameDay(date, day(2026, 8, 1)) ? { path: 'September.md', text: '## Monthly reflection\nA good month.\n\n## Decisions\nMove to a quieter place.\n\n## Monthly spending\n**Amount:** 150000\n**Currency:** RUB\n' } : {}} onOpenPeriod={onOpenPeriod} />);
   const september = document.querySelector<HTMLElement>('[data-month="2026-09"]')!;
   expect(september).toHaveTextContent('A good month.');
+  expect(september).toHaveTextContent('Move to a quieter place.');
+  expect(september).toHaveTextContent('150,000 RUB');
   expect(september).toHaveTextContent('1h 30m');
   expect(september).toHaveTextContent('Mood4');
   expect(september).toHaveTextContent('Sleep7h');

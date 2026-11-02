@@ -3,6 +3,11 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.4.0 — 2026-11-02
+
+An interactive Wheel of Life, a dedicated Decisions journal, monthly spending in Home summaries,
+and quest editing and deletion. [Full release notes](releases/0.4.0.md).
+
 ## 0.3.0 — 2026-11-01
 
 Monthly reflections, money and life-area reviews, a year of summaries, clearer quest XP,

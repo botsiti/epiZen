@@ -44,9 +44,9 @@ it('preserves drafts across tabs and saves each area without replacing other sec
   expect(screen.getByLabelText('The month in your own words')).toHaveValue('A month of progress.');
   await act(async () => { expect(await flushAll()).toEqual([]); });
   expect(store.read()).toContain('A month of progress.');
-  view.rerender(<Page store={store} tab="Life areas" />);
-  await user.click(screen.getByRole('button', { name: /Health\/Fitness/ }));
-  await user.selectOptions(screen.getByLabelText('Health/Fitness rating'), '7');
+  view.rerender(<Page store={store} tab="Wheel of Life" />);
+  await user.click(screen.getByRole('button', { name: /^Health\/Fitness/ }));
+  await user.click(screen.getByRole('button', { name: 'Rate Health/Fitness 7 out of 10' }));
   await user.type(screen.getByLabelText('Health/Fitness reflection'), 'A steady month.');
   await user.click(within(document.querySelector<HTMLElement>('[data-field="sphere:Health/Fitness"]')!).getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(store.read()).toContain('- Health/Fitness: 7 — A steady month.'));
@@ -223,4 +223,24 @@ it('retains an imported photo in the recovery draft when the note changes outsid
   await waitFor(() => expect(recover).toHaveBeenCalled());
   const [section, value, source, expected] = recover.mock.calls[0]!;
   expect(recoveryText(source, section, value, expected)).toContain('![[Calendar/_attachments/expense-1.png]]');
+});
+
+it('saves spending and decisions separately and previews direct wheel ratings', async () => {
+  const user = userEvent.setup();
+  const store = fixture();
+  const view = render(<Page store={store} tab="Expenses" />);
+  await user.type(screen.getByLabelText('Amount spent'), '150,000');
+  await user.type(screen.getByLabelText('Spending currency'), 'RUB');
+  await user.click(within(document.querySelector<HTMLElement>('[data-field="spending"]')!).getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(store.read()).toContain('**Amount:** 150000\n**Currency:** RUB'));
+  view.rerender(<Page store={store} tab="Decisions" />);
+  await user.type(screen.getByLabelText('Decisions'), 'Choose a quieter place.');
+  await user.click(within(document.querySelector<HTMLElement>('[data-field="decisions"]')!).getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(store.read()).toContain('## Decisions\nChoose a quieter place.'));
+  view.rerender(<Page store={store} tab="Wheel of Life" />);
+  await user.click(screen.getByRole('button', { name: 'Rate Career/Work 8 out of 10' }));
+  expect(screen.getByRole('button', { name: 'Select Career/Work, 8 out of 10' })).toHaveAttribute('aria-pressed', 'true');
+  await user.click(screen.getByRole('button', { name: 'Select Finance, not rated' }));
+  await user.click(screen.getByRole('button', { name: 'Rate Finance 0 out of 10' }));
+  expect(screen.getByRole('button', { name: 'Select Finance, 0 out of 10' })).toHaveAttribute('aria-pressed', 'true');
 });

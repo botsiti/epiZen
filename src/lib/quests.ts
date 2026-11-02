@@ -385,6 +385,8 @@ export function addQuest(text: string, line: string): string {
 //       - 29.09.2026 :: Two hours before the phone.
 
 export type QuestChange =
+  | { kind: 'edit'; title: string; description: string; xp: number; tier: Tier; target?: number }
+  | { kind: 'delete' }
   | { kind: 'add-chapter'; words: string }
   | { kind: 'edit-chapter'; entry: LogEntry; words: string }
   | { kind: 'delete-chapter'; entry: LogEntry }
@@ -467,6 +469,10 @@ export function setDeadline(text: string, quest: Quest, date?: string): string {
 /** One change from a quest's detail, made over its note as it is now. */
 export function changeQuest(text: string, quest: Quest, change: QuestChange, today: Date): string {
   switch (change.kind) {
+    case 'edit':
+      return editQuest(text, quest, change);
+    case 'delete':
+      return deleteQuest(text, quest);
     case 'add-chapter':
       return addChapter(text, quest, change.words, today);
     case 'edit-chapter':
@@ -476,6 +482,55 @@ export function changeQuest(text: string, quest: Quest, change: QuestChange, tod
     case 'deadline':
       return setDeadline(text, quest, change.date);
   }
+}
+
+/** Change only requested properties; preserve progress, dates, unknown fields and the log. */
+export function editQuest(text: string, quest: Quest, change: Extract<QuestChange, { kind: 'edit' }>): string {
+  const { eol, lines } = open(text, quest);
+  const title = change.title.trim();
+  const description = change.description.trim();
+  if (!title || /[\r\n[\]#<>]/.test(title)) throw new Error('Use a title without line breaks, tags or brackets.');
+  if (/[\r\n[\]<>]/.test(description)) throw new Error('Keep the description on one line, without brackets.');
+  if (!Number.isSafeInteger(change.xp) || change.xp < 0 || !Object.hasOwn(TIERS, change.tier)) throw new Error('Choose a tier and a whole XP amount of zero or more.');
+  if (change.target !== undefined && (!Number.isSafeInteger(change.target) || change.target < 1 || change.target < (quest.current ?? 0))) throw new Error('The target must be a whole number at least as large as current progress.');
+  if (quest.current && change.target === undefined && quest.target !== undefined) throw new Error('Keep a target while this quest has progress.');
+  let line = quest.raw;
+  if (title !== quest.title) {
+    const at = line.indexOf(quest.title);
+    if (at < 0) throw new Error('This title uses formatting. Edit it in the note editor.');
+    line = line.slice(0, at) + title + line.slice(at + quest.title.length);
+    if (parseQuests(quest.path, line)[0]?.title !== title) throw new Error('This title uses formatting. Edit it in the note editor.');
+  }
+  const property = (key: string, value?: string) => {
+    const pattern = new RegExp(`\\[(${key}::)[^\\]]*\\]`, 'gi');
+    const matches = [...line.matchAll(pattern)];
+    if (matches.length > 1) throw new Error(`This quest has duplicate ${key} fields. Edit it in the note editor.`);
+    line = matches.length ? line.replace(pattern, (_all, prefix: string) => value === undefined ? '' : `[${prefix}${value}]`) : setField(line, key, value);
+  };
+  if (description !== (quest.desc ?? '')) property('desc', description || undefined);
+  if (change.xp !== quest.xp) property('xp', String(change.xp));
+  if (change.tier !== quest.tier || change.xp !== quest.xp) property('tier', change.tier);
+  if (change.target !== quest.target) property('target', change.target === undefined ? undefined : String(change.target));
+  lines[quest.line] = line;
+  return lines.join(eol);
+}
+
+/** Remove only this quest and its unchanged, recognized log; unfamiliar nested content stays safe. */
+export function deleteQuest(text: string, quest: Quest): string {
+  const { eol, lines } = open(text, quest);
+  const now = parseQuests(quest.path, text).find((item) => item.line === quest.line)!;
+  if (JSON.stringify(now.log) !== JSON.stringify(quest.log)) throw new Error('The quest log changed. Reopen the quest before deleting it.');
+  const depth = /^\s*/.exec(quest.raw)![0].length;
+  let end = quest.line + 1;
+  for (let i = end; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (!line.trim()) continue;
+    if (/^\s*/.exec(line)![0].length <= depth) break;
+    if (!quest.log.some((item) => item.line === i)) throw new Error('This quest contains other nested content. Edit it in the note editor.');
+    end = i + 1;
+  }
+  lines.splice(quest.line, end - quest.line);
+  return lines.join(eol);
 }
 
 /** Sets a counter quest's progress, clamped to its target; reaching the target ticks it, falling below unticks it. */
