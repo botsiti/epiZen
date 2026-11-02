@@ -462,6 +462,24 @@ Obsidian's workspace in Epizen's own chrome: the sidebar's dark, hairlines, no g
   it). When the tab in front isn't a note, each panel says so in one faint line.
 - Hover, a tab coming forward and a panel folding take 120ms; nothing else moves.
 
+### Keyboard shortcuts
+
+⌘7 toggles the left sidebar and ⌘9 the right; both have visible switches in the tab bar.
+⌃3 collapses every folder in the file explorer, including nested folders and the selected
+note's ancestors, without closing the note. Folder expansion survives hiding the sidebar.
+⌘N opens New note, ⌘, opens Settings, and ⇧⌘H, ⇧⌘L and ⇧⌘D open Home, Library and today's
+daily note. Today creates its note if needed, just as the calendar does. Existing tab and
+history shortcuts remain; ⌥⌘1–8 select a tab and ⌥⌘9 selects the last. Workspace commands
+pause in modal dialogs. Settings includes a searchable shortcut reference with macOS key symbols.
+
+### Sleep entry
+
+The daily check-in edits sleep as two labelled fields, hours and minutes. The pair saves together
+on Enter or when focus leaves both fields. Minutes are whole numbers from 0 to 59; the total
+cannot exceed 24 hours. Empty fields clear the value, while zero remains a recorded duration.
+Invalid or failed saves retain the draft for correction or retry. The note keeps its existing
+decimal-hour `sleep` property, so older notes and averages remain compatible.
+
 ## Checking a UI change
 
 The e2e run saves every screen to `evidence/`. Hold them against this page: one accent,

@@ -1,7 +1,6 @@
-//! The macOS menu bar. It is Tauri's default menu with one change: ⌘W closes the tab in front, as
-//! in Obsidian, and the window closes with ⇧⌘W. The tab items only tell the page (`MENU_EVENT`);
-//! the page keeps the tabs. Most of the time the page sees ⌘T and ⌘W as keys first and the menu
-//! never does; the menu is there for when it does, and so the shortcuts can be found.
+//! The macOS menu bar. Workspace items tell the page (`MENU_EVENT`); the page owns their state.
+//! The page normally handles shortcut keys first. Menu accelerators also expose the commands
+//! outside the webview. ⌘W closes a tab; ⇧⌘W closes the window through the save guard.
 
 use tauri::menu::{
     AboutMetadata, HELP_SUBMENU_ID, Menu, MenuItem, PredefinedMenuItem, Submenu, WINDOW_SUBMENU_ID,
@@ -14,6 +13,13 @@ pub const MENU_EVENT: &str = "epizen://menu";
 const NEW_TAB: &str = "new-tab";
 const CLOSE_TAB: &str = "close-tab";
 const RIGHT_SIDEBAR: &str = "right-sidebar";
+const LEFT_SIDEBAR: &str = "left-sidebar";
+const COLLAPSE_FOLDERS: &str = "collapse-folders";
+const NEW_NOTE: &str = "new-note";
+const SETTINGS: &str = "settings";
+const HOME: &str = "home";
+const LIBRARY: &str = "library";
+const TODAY: &str = "today";
 const CLOSE_WINDOW: &str = "close-window";
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -40,6 +46,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                 true,
                 &[
                     &PredefinedMenuItem::about(app, None, Some(about))?,
+                    &MenuItem::with_id(app, SETTINGS, "Settings…", true, Some("CmdOrCtrl+,"))?,
                     &separator()?,
                     &PredefinedMenuItem::services(app, None)?,
                     &separator()?,
@@ -54,6 +61,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                 "File",
                 true,
                 &[
+                    &MenuItem::with_id(app, NEW_NOTE, "New Note", true, Some("CmdOrCtrl+N"))?,
                     &MenuItem::with_id(app, NEW_TAB, "New Tab", true, Some("CmdOrCtrl+T"))?,
                     &separator()?,
                     &MenuItem::with_id(app, CLOSE_TAB, "Close Tab", true, Some("CmdOrCtrl+W"))?,
@@ -87,10 +95,34 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                 &[
                     &MenuItem::with_id(
                         app,
+                        LEFT_SIDEBAR,
+                        "Toggle Left Sidebar",
+                        true,
+                        Some("CmdOrCtrl+7"),
+                    )?,
+                    &MenuItem::with_id(
+                        app,
                         RIGHT_SIDEBAR,
                         "Toggle Right Sidebar",
                         true,
-                        Some("CmdOrCtrl+Alt+B"),
+                        Some("CmdOrCtrl+9"),
+                    )?,
+                    &MenuItem::with_id(
+                        app,
+                        COLLAPSE_FOLDERS,
+                        "Collapse All Folders",
+                        true,
+                        Some("Ctrl+3"),
+                    )?,
+                    &separator()?,
+                    &MenuItem::with_id(app, HOME, "Home", true, Some("CmdOrCtrl+Shift+H"))?,
+                    &MenuItem::with_id(app, LIBRARY, "Library", true, Some("CmdOrCtrl+Shift+L"))?,
+                    &MenuItem::with_id(
+                        app,
+                        TODAY,
+                        "Today's Daily Note",
+                        true,
+                        Some("CmdOrCtrl+Shift+D"),
                     )?,
                     &separator()?,
                     &PredefinedMenuItem::fullscreen(app, None)?,
@@ -123,8 +155,14 @@ pub fn handle<R: Runtime>(app: &AppHandle<R>, id: &str) {
         return;
     }
     match id {
-        NEW_TAB | CLOSE_TAB | RIGHT_SIDEBAR => {
-            let _ = app.emit(MENU_EVENT, id);
+        NEW_TAB | CLOSE_TAB | LEFT_SIDEBAR | RIGHT_SIDEBAR | COLLAPSE_FOLDERS | NEW_NOTE
+        | SETTINGS | HOME | LIBRARY | TODAY => {
+            // A shortcut in the timer panel must not navigate the workspace behind it.
+            if let Some(window) = app.get_webview_window("main")
+                && window.is_focused().unwrap_or(false)
+            {
+                let _ = window.emit(MENU_EVENT, id);
+            }
         }
         // Closing goes through the close guard, which waits for the editor's last save.
         CLOSE_WINDOW => {

@@ -32,6 +32,7 @@ import { TabBar } from './components/workspace/TabBar';
 import { useLocalGraph } from './components/workspace/useLocalGraph';
 import { useScrollMemory } from './components/workspace/useScrollMemory';
 import { useShortcuts } from './components/workspace/useShortcuts';
+import { useExplorer } from './components/workspace/useExplorer';
 import { useWorkspace } from './components/workspace/useWorkspace';
 import {
   closeNow,
@@ -129,6 +130,7 @@ export function App() {
   // The open tabs, each with its own history (src/lib/tabs.ts); the main pane shows the one in front.
   const { ws, update, restore, reset } = useWorkspace();
   const [right, setRight] = useState<RightSidebarState>({ open: false, closed: [] });
+  const [leftOpen, setLeftOpen] = useState(true);
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
   const [settings, setSettings] = useState<Settings>({});
@@ -157,6 +159,7 @@ export function App() {
       // The tabs and the right sidebar as they were left in this vault, never a note that is gone.
       if (next.state === 'open') restore(stored.workspace, { vault: next.root, notes: new Set(found.filter((file) => file.kind === 'note').map((file) => file.path)) });
       setRight(parseRightSidebar(stored.rightSidebar));
+      setLeftOpen(stored.leftSidebarOpen !== false);
       setSetup((previous) => previous === 'create' ? 'create' : next.state === 'open' && !vaultPreferences(stored, next.root).complete ? previous ?? 'existing' : undefined);
       setStatus(next);
     };
@@ -422,24 +425,13 @@ export function App() {
     [right],
   );
   const newTab = useCallback(() => update((prev) => openTab(prev, HOME)), [update]);
-  useShortcuts(
-    useMemo(
-      () => ({
-        newTab,
-        closeTab: () => update(closeActive),
-        toggleRightSidebar: toggleRight,
-        back: () => update((prev) => goBack(prev)),
-        forward: () => update((prev) => goForward(prev)),
-        cycle: (step: 1 | -1) => update((prev) => cycle(prev, step)),
-        showTab: (at: number) =>
-          update((prev) => {
-            const target = prev.tabs[Math.min(at, prev.tabs.length - 1)];
-            return target ? activate(prev, target.id) : prev;
-          }),
-      }),
-      [newTab, toggleRight, update],
-    ),
-  );
+  const explorer = useExplorer(tree, view.kind === 'note' ? view.path : undefined);
+  const resetExplorer = explorer.reset;
+  const toggleLeft = () => {
+    setLeftOpen(!leftOpen);
+    void updateSettings({ leftSidebarOpen: !leftOpen }).catch(() => undefined);
+  };
+  const newNote = () => go({ kind: 'new', folder: view.kind === 'note' ? noteFolder(view.path) : '' });
 
   const chooseFolder = useCallback(async (create = false) => {
     setFolderError(undefined);
@@ -449,12 +441,13 @@ export function App() {
       setSetup(create ? 'create' : undefined);
       setStatus(undefined);
       reset();
+      resetExplorer();
       setLoads((n) => n + 1);
     } catch (err) {
       // The vault that was open stays open.
       setFolderError(String(err));
     }
-  }, [reset]);
+  }, [reset, resetExplorer]);
 
   // Add in the library created a note (and maybe its cover): read the vault again, then open it.
   const mediaCreated = useCallback(
@@ -510,6 +503,25 @@ export function App() {
       ),
     [go, openPeriodic],
   );
+  useShortcuts({
+    newTab,
+    closeTab: () => update(closeActive),
+    toggleLeftSidebar: toggleLeft,
+    toggleRightSidebar: toggleRight,
+    collapseFolders: explorer.collapseAll,
+    newNote,
+    settings: () => { if (view.kind !== 'settings') go({ kind: 'settings' }); },
+    home: () => go(HOME),
+    library: () => openLibrary('all'),
+    today: () => openPeriodicOrSay('day', today()),
+    back: () => update((prev) => goBack(prev)),
+    forward: () => update((prev) => goForward(prev)),
+    cycle: (step) => update((prev) => cycle(prev, step)),
+    showTab: (at) => update((prev) => {
+      const target = prev.tabs[Math.min(at, prev.tabs.length - 1)];
+      return target ? activate(prev, target.id) : prev;
+    }),
+  }, status?.state === 'open' && !setup);
   // A link to a missing day, week or month creates that note, like the calendar; any other
   // missing note is only explained, never created.
   const openLink = useCallback(
@@ -779,14 +791,17 @@ export function App() {
   </ErrorBoundary>;
 
   return (
-    <div className={right.open ? 'app has-right' : 'app'}>
-      <Sidebar
+    <div className={['app', right.open && 'has-right', !leftOpen && 'without-left'].filter(Boolean).join(' ')}>
+      {leftOpen && <Sidebar
         vaultName={status.name}
         tree={tree}
         selected={view.kind === 'note' ? view.path : undefined}
+        isFolderOpen={explorer.isOpen}
+        onToggleFolder={explorer.toggle}
+        onCollapseFolders={explorer.collapseAll}
         onOpenNote={openNote}
         onHome={(newTab) => go(HOME, newTab)}
-        onNewNote={() => go({ kind: 'new', folder: view.kind === 'note' ? noteFolder(view.path) : '' })}
+        onNewNote={newNote}
         onOpenFolder={() => void chooseFolder()}
         onSettings={(newTab) => go({ kind: 'settings' }, newTab)}
         onGraph={(newTab) => go({ kind: 'graph' }, newTab)}
@@ -808,7 +823,7 @@ export function App() {
             onOpenCalendar={(newTab) => go({ kind: 'calendar' }, newTab)}
           />
         }
-      />
+      />}
       <div className="workspace">
         <TabBar
           ws={ws}
@@ -818,6 +833,8 @@ export function App() {
           onNewTab={newTab}
           onBack={() => update((prev) => goBack(prev))}
           onForward={() => update((prev) => goForward(prev))}
+          leftOpen={leftOpen}
+          onToggleLeft={toggleLeft}
           rightOpen={right.open}
           onToggleRight={toggleRight}
         />

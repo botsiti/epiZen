@@ -178,6 +178,36 @@ describe('the demo vault', () => {
     await screenshot('04-daily-note');
   });
 
+  it('sleep duration: saves hours and minutes together without changing any other note content', async () => {
+    await openFolders(...foldersOf(DAY));
+    await openNote(DAY);
+    await showTab('Overview');
+    const original = readFileSync(join(vaultCopy(), DAY), 'utf8');
+    const before = snapshotVault(vaultCopy());
+    const hours = $('[data-testid="sleep-hours"]'); const minutes = $('[data-testid="sleep-minutes"]');
+    await hours.setValue('7');
+    await minutes.setValue('30');
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+    await browser.keys('Enter');
+    await browser.waitUntil(() => readFileSync(join(vaultCopy(), DAY), 'utf8') === original.replace(/^sleep:.*$/m, 'sleep: 7.5'));
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`changed: ${DAY}`]);
+    await expect(hours).toHaveValue('7'); await expect(minutes).toHaveValue('30');
+    await scrollIntoView('[data-testid="check-in"]');
+    await screenshot('150-sleep-hours-minutes');
+    await browser.setWindowSize(900, 820);
+    await scrollIntoView('[data-testid="check-in"]');
+    await screenshot('151-sleep-hours-minutes-narrow');
+    await minutes.setValue('60'); await browser.keys('Enter');
+    await expect($('[aria-label="Sleep duration"] [role="alert"]')).toHaveText(expect.stringContaining('0 to 59'));
+    expect(readFileSync(join(vaultCopy(), DAY), 'utf8')).toBe(original.replace(/^sleep:.*$/m, 'sleep: 7.5'));
+    const previous = Math.round(Number(original.match(/^sleep:\s*(\S+)/m)![1]) * 60);
+    await hours.setValue(String(Math.floor(previous / 60))); await minutes.setValue(String(previous % 60));
+    await browser.keys('Enter');
+    await browser.waitUntil(() => readFileSync(join(vaultCopy(), DAY), 'utf8') === original);
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+    await browser.setWindowSize(1280, 820);
+  });
+
   it('goes up from the day to its week, and from the week to its month', async () => {
     await $('[data-testid="nav-week"]').click();
     await expect(title()).toHaveText('2026-W33 - 10.08.26');
@@ -804,6 +834,53 @@ describe('the demo vault', () => {
     await pressCommand('b', { alt: true });
     await expect(sidebar).not.toBeExisting();
   });
+
+  it('workspace shortcuts: collapses folders, toggles sidebars and opens useful destinations', async () => {
+    const before = snapshotVault(vaultCopy());
+    await startWithTabs([ALBUM, FILM]);
+    await setRightSidebar(false);
+    await pressCommand('3', { control: true });
+    expect(await $$('[data-testid="tree-folder"][data-open="true"]').length).toBe(0);
+    await waitForNote(ALBUM);
+    await openFolders(...foldersOf(ALBUM));
+    await pressCommand('7');
+    await expect($('.sidebar')).not.toBeExisting();
+    await expect($('[data-testid="left-sidebar-toggle"]')).toHaveAttribute('aria-pressed', 'false');
+    await pressCommand('9');
+    await expect($('[data-testid="right-sidebar"]')).toHaveAttribute('data-note', ALBUM);
+    await waitForNote(ALBUM);
+    await screenshot('76-shortcuts-sidebars');
+    await pressCommand('3', { control: true });
+    await pressCommand('7');
+    await expect($('.sidebar')).toBeDisplayed();
+    expect(await $$('[data-testid="tree-folder"][data-open="true"]').length).toBe(0);
+    await openFolders('Rating');
+    await expect($('[data-testid="tree-folder"][data-path="Rating/music"]')).toHaveAttribute('data-open', 'false');
+    await pressCommand('9');
+    await pressCommand('9', { alt: true });
+    await waitForNote(FILM);
+    await pressCommand('1', { alt: true });
+    await waitForNote(ALBUM);
+    await pressCommand('n');
+    await expect($('h1')).toHaveText('Name the note');
+    // Opening the form alone does not create a note.
+    await pressCommand('h', { shift: true });
+    await $('[data-testid="home"]').waitForDisplayed();
+    await pressCommand('l', { shift: true });
+    await $('[data-testid="library"]').waitForDisplayed();
+    await pressCommand(',');
+    await $('[data-testid="settings"]').waitForDisplayed();
+    await scrollIntoView('[data-testid="keyboard-shortcuts"]');
+    const filter = $('[data-testid="keyboard-shortcuts"] input');
+    await filter.setValue('sidebar');
+    await expect($('[data-testid="keyboard-shortcuts"]')).toHaveText(expect.stringContaining('⌘7'));
+    await expect($('[data-testid="keyboard-shortcuts"]')).toHaveText(expect.stringContaining('⌘9'));
+    await screenshot('77-shortcuts-reference');
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+    await pressCommand('h', { shift: true });
+    await closeOtherTabs();
+  });
+
 
   it('opens a note in a new tab with ⌘-click or a middle click, each tab with its own history', async () => {
     await startWithTabs([ALBUM]);
@@ -1450,6 +1527,21 @@ describe('the demo vault', () => {
     await expect($('[data-testid="today-open"]')).toHaveAttribute('title', `Open ${TODAY}`);
   });
 
+  it('workspace shortcuts: opens today with only its intended creation and leaves existing notes unchanged', async () => {
+    const before = snapshotVault(vaultCopy());
+    await pressCommand('d', { shift: true });
+    await expect(title()).toHaveText(TODAY);
+    const path = await $('[data-testid="periodic"]').getAttribute('data-path');
+    expect(path).toBeTruthy();
+    const after = snapshotVault(vaultCopy());
+    expect(diffSnapshots(before, after)).toEqual(before.has(path!) ? [] : [`added: ${path}`]);
+    await pressCommand('h', { shift: true });
+    await pressCommand('d', { shift: true });
+    await expect(title()).toHaveText(TODAY);
+    expect(diffSnapshots(after, snapshotVault(vaultCopy()))).toEqual([]);
+    await pressCommand('h', { shift: true });
+  });
+
   it("times a new task of today's with the stopwatch, shown on the timer's card and in the sidebar", async () => {
     await $('[data-testid="open-calendar"]').click();
     const back = $('[data-testid="cal-today"]');
@@ -1969,7 +2061,8 @@ describe('the demo vault', () => {
       await $(`[data-metric="${key}"] button[aria-label="${label} ${score}"]`).click();
       await expect($(`[data-metric="${key}"]`)).toHaveAttribute('data-status', status);
     }
-    await $('[aria-label="Sleep"]').setValue('6');
+    await $('[aria-label="Sleep hours"]').setValue('6');
+    await $('[aria-label="Sleep minutes"]').setValue('0');
     await browser.keys('Enter');
     await expect($('[data-metric="sleep"]')).toHaveAttribute('data-status', 'yellow');
     await screenshot('142-metric-bands');

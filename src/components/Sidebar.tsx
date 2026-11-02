@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { TreeNode } from '../lib/tree';
 import { openClicks } from './workspace/clicks';
 
@@ -9,6 +9,9 @@ interface Props {
   vaultName: string;
   tree: TreeNode[];
   selected?: string;
+  isFolderOpen: (path: string) => boolean;
+  onToggleFolder: (path: string) => void;
+  onCollapseFolders: () => void;
   onOpenNote: (path: string, newTab: boolean) => void;
   onHome: Open;
   onNewNote: () => void;
@@ -30,11 +33,7 @@ interface Props {
 }
 
 export function Sidebar(props: Props) {
-  const { vaultName, tree, selected, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, onCalendar, onLibrary, onQuests, onStatistics, onHabits, onNoteMenu, timer, folderError, calendar } = props;
-  // Folders the user opened or closed by hand. Untouched folders open when they hold the selected note.
-  const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
-  const isOpen = (path: string) => toggled.get(path) ?? Boolean(selected?.startsWith(`${path}/`));
-  const toggle = (path: string) => setToggled((prev) => new Map(prev).set(path, !isOpen(path)));
+  const { vaultName, tree, selected, isFolderOpen, onToggleFolder, onCollapseFolders, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, onCalendar, onLibrary, onQuests, onStatistics, onHabits, onNoteMenu, timer, folderError, calendar } = props;
 
   return (
     <nav className="sidebar" aria-label="Notes">
@@ -43,14 +42,17 @@ export function Sidebar(props: Props) {
           <img className="app-mark" src="/brand/epizen.png" alt="" />
           {vaultName}
         </button>
-        <button type="button" className="icon-button" onClick={onNewNote} title="New note" aria-label="New note" data-testid="new-note-button">
+        <button type="button" className="icon-button" onClick={onCollapseFolders} title="Collapse all folders (⌃3)" aria-label="Collapse all folders" aria-keyshortcuts="Control+3" data-testid="collapse-folders">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4-3 4 3M4 10l4 3 4-3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <button type="button" className="icon-button" onClick={onNewNote} title="New note (⌘N)" aria-label="New note" aria-keyshortcuts="Meta+N" data-testid="new-note-button">
           +
         </button>
       </div>
       {timer}
       {calendar}
       <ul className="tree" role="tree">
-        <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isOpen} toggle={toggle} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} />
+        <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isFolderOpen} toggle={onToggleFolder} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} />
       </ul>
       <div className="sidebar-foot">
         <button type="button" className="sidebar-action" {...openClicks(onCalendar)} data-testid="open-calendar">

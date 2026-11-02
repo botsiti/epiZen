@@ -560,6 +560,13 @@ button.segment:hover {
   border-color: var(--glass-line-strong);
 }
 
+.sleep-field { grid-column: 2 / -1; min-width: 0; }
+.sleep-inputs { flex-wrap: wrap; gap: var(--space-3); }
+.sleep-inputs label { display: flex; gap: var(--space-1); align-items: baseline; }
+.sleep-inputs input { width: 56px; color: inherit; }
+.sleep-hint { display: block; margin-top: var(--space-1); color: var(--text-faint); font-size: 11px; }
+.sleep-problem { display: block; margin-top: var(--space-2); color: var(--text-muted); font-size: 12px; }
+
 .field-problem {
   position: absolute;
   top: 100%;

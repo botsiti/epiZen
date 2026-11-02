@@ -11,6 +11,8 @@ interface Props {
   onNewTab: () => void;
   onBack: () => void;
   onForward: () => void;
+  leftOpen: boolean;
+  onToggleLeft: () => void;
   rightOpen: boolean;
   onToggleRight: () => void;
 }
@@ -20,7 +22,7 @@ interface Props {
  * the tabs (pinned ones first, with a pin where the × would be), + for a new one, and at the right
  * the right sidebar's switch. A right-click on a tab pins or unpins it, or closes it.
  */
-export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onForward, rightOpen, onToggleRight }: Props) {
+export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onForward, leftOpen, onToggleLeft, rightOpen, onToggleRight }: Props) {
   const [menu, setMenu] = useState<{ id: number; x: number; y: number }>();
   const front = ws.tabs.find((tab) => tab.id === ws.active);
   const menuTab = menu && ws.tabs.find((tab) => tab.id === menu.id);
@@ -32,6 +34,13 @@ export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onFor
 
   return (
     <div className="tabbar" data-testid="tabbar">
+      <button type="button" className={`tabbar-button tabbar-sidebar${leftOpen ? ' is-on' : ''}`} onClick={onToggleLeft} aria-pressed={leftOpen} aria-label="Left sidebar" aria-keyshortcuts="Meta+7" title={`${leftOpen ? 'Hide' : 'Show'} the left sidebar (⌘7)`} data-testid="left-sidebar-toggle">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+          <rect x="2" y="2.5" width="12" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M6 2.5v11" stroke="currentColor" strokeWidth="1.3" />
+          {leftOpen && <rect x="2.7" y="3.2" width="2.7" height="9.6" rx="1" fill="currentColor" opacity="0.45" />}
+        </svg>
+      </button>
       <div className="tabbar-nav">
         <button type="button" className="tabbar-button" onClick={onBack} disabled={!front || !canGoBack(front)} aria-label="Back" title="Back (⌘[)" data-testid="tab-back">
           <Chevron direction="left" />
@@ -67,7 +76,8 @@ export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onFor
         onClick={onToggleRight}
         aria-pressed={rightOpen}
         aria-label="Right sidebar"
-        title={`${rightOpen ? 'Hide' : 'Show'} the right sidebar: backlinks and the local graph (⌥⌘B)`}
+        aria-keyshortcuts="Meta+9 Alt+Meta+B"
+        title={`${rightOpen ? 'Hide' : 'Show'} the right sidebar: backlinks and the local graph (⌘9)`}
         data-testid="right-sidebar-toggle"
       >
         <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">

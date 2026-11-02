@@ -144,7 +144,7 @@ export function NoteView(props: ViewProps) {
           return target && syncPlanDone(toggleTask(text, target));
         }, 'Nothing was ticked');
       },
-      onSetProperty: (key, value) => change((text) => setProperty(text, key, value), `${key} wasn't set`),
+      onSetProperty: (key, value) => new Promise((settled) => change((text) => setProperty(text, key, value), `${key} wasn't set`, undefined, settled)),
       onAddTask: (category, words, minutes) => change((text) => syncPlanDone(addTask(text, category, words, minutes)), 'The task wasn\'t added'),
       onSetSummary: (summary) => change((text) => setSummary(text, summary), "The summary wasn't saved"),
       // A task is found again by its line as the page showed it.
@@ -254,7 +254,7 @@ export function NoteView(props: ViewProps) {
         files={files}
         onOpenLink={onOpenLink}
         onSaveLists={(edits) => new Promise<void>((resolve, reject) => change((text) => setMediaLists(text, edits), undefined, undefined, (problem) => problem ? reject(new Error(problem)) : resolve()))}
-        onSetProperty={actions.onSetProperty}
+        onSetProperty={(key, value) => { void actions.onSetProperty(key, value); }}
         onSaveThoughts={(before, after) =>
           new Promise<void>((resolve, reject) =>
             // The card says what went wrong, beside the text it still holds.

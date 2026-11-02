@@ -146,15 +146,15 @@ export async function clickInPage(selector: string) {
   }, selector);
 }
 
-/** Presses ⌘ and a key (⌥ too with `alt`), as the page sees it. */
-export async function pressCommand(key: string, options: { alt?: boolean } = {}) {
+/** Presses a workspace key, with Command by default or Control when requested. */
+export async function pressCommand(key: string, options: { alt?: boolean; shift?: boolean; control?: boolean } = {}) {
   await browser.execute(
-    (letter, alt) => {
-      const code = `Key${letter.toUpperCase()}`;
-      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: alt ? '∫' : letter, code, metaKey: true, altKey: alt, bubbles: true, cancelable: true }));
+    (letter, modifiers) => {
+      const code = /^\d$/.test(letter) ? `Digit${letter}` : letter === ',' ? 'Comma' : `Key${letter.toUpperCase()}`;
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: modifiers.alt ? '∫' : letter, code, metaKey: !modifiers.control, ctrlKey: Boolean(modifiers.control), altKey: Boolean(modifiers.alt), shiftKey: Boolean(modifiers.shift), bubbles: true, cancelable: true }));
     },
     key,
-    Boolean(options.alt),
+    options,
   );
 }
 
