@@ -42,7 +42,8 @@ export interface PeriodicActions {
   /** Ticks or unticks the task or habit on that line, if it is still as it was shown. */
   onToggle: (task: { line: number; done: boolean; habitId?: string }) => void;
   onManageHabits?: () => void;
-  onSetProperty: (key: string, value: string) => void;
+  /** Settles with a problem on failure, so a field can retain its unsaved draft. */
+  onSetProperty: (key: string, value: string) => void | Promise<string | undefined>;
   onAddTask: (category: string, words: string, minutes?: number) => void;
   /** The minutes spent on a task already on the day's list. */
   onSetMinutes: (task: { line: number }, minutes: number) => void;

@@ -1,9 +1,23 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PERIODIC, DEFAULT_PERIODIC_FEATURES } from '../lib/periodic';
 import { podcastSettings } from '../lib/podcasts';
 import { SettingsScreen } from './SettingsScreen';
+
+it('filters the keyboard reference without submitting or changing preferences', async () => {
+  const user = userEvent.setup();
+  const onSave = vi.fn();
+  render(<SettingsScreen periodic={DEFAULT_PERIODIC} birthDate="" podcasts={podcastSettings(undefined)} folders={[]} features={DEFAULT_PERIODIC_FEATURES} onSave={onSave} />);
+  const reference = within(screen.getByRole('region', { name: 'Keyboard shortcuts' }));
+  await user.type(reference.getByRole('searchbox'), 'collapse');
+  expect(reference.getByText('⌃3')).toBeVisible();
+  expect(reference.queryByText('⌘7')).not.toBeInTheDocument();
+  await user.clear(reference.getByRole('searchbox'));
+  await user.type(reference.getByRole('searchbox'), 'does not exist{Enter}');
+  expect(reference.getByRole('status')).toHaveTextContent('No shortcuts match');
+  expect(onSave).not.toHaveBeenCalled();
+});
 
 describe('podcast settings', () => {
   it('starts with show thumbnails, saves the preference alongside other settings, and reads it back', async () => {

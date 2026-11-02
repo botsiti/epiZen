@@ -7,6 +7,7 @@ import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { addTask, setProperty } from '../src/lib/edits';
+import { sleepParts, sleepValue } from '../src/lib/sleep';
 
 const original = fileURLToPath(new URL('../demo-vault', import.meta.url));
 const DAYS = 'Calendar/2026/days 2026';
@@ -43,6 +44,16 @@ function run(path: string, change: (text: string) => string) {
 const days = () => readdirSync(join(original, DAYS)).filter((name) => name.endsWith('.md'));
 
 describe('periodic page writes on a copy of the demo vault', () => {
+  it('writes hours and minutes into only the existing sleep property', () => {
+    const path = `${DAYS}/14.08.2026.md`;
+    const value = sleepValue('11', '1');
+    const { differ, old, now } = run(path, (text) => setProperty(text, 'sleep', value));
+    expect(differ).toEqual([path]);
+    expect(now).toHaveLength(old.length);
+    expect(now.flatMap((line, i) => line === old[i] ? [] : [line])).toEqual([`sleep: ${value}`]);
+    expect(sleepParts(Number(value))).toEqual({ hours: '11', minutes: '1' });
+  });
+
   it('setting mood rewrites that one line of that one note', () => {
     for (const name of days()) {
       const path = `${DAYS}/${name}`;

@@ -95,7 +95,7 @@ export const hideTray = () => invoke<void>('tray_hide');
 export const quitApp = () => invoke<void>('tray_quit');
 
 /** An item of the menu bar the page acts on (src-tauri/src/menu.rs). */
-export type MenuItemId = 'new-tab' | 'close-tab' | 'right-sidebar';
+export type MenuItemId = 'new-tab' | 'close-tab' | 'left-sidebar' | 'right-sidebar' | 'collapse-folders' | 'new-note' | 'settings' | 'home' | 'library' | 'today';
 
 /** Calls `handler` when one of those items is chosen. Returns a function that stops listening. */
 export async function onMenu(handler: (item: MenuItemId) => void): Promise<() => void> {

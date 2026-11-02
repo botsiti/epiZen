@@ -106,6 +106,9 @@ code {
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--sidebar-width);
 }
 
+.app.without-left { grid-template-columns: minmax(0, 1fr); }
+.app.without-left.has-right { grid-template-columns: minmax(0, 1fr) var(--sidebar-width); }
+
 .main {
   overflow-y: auto;
   padding: var(--space-9) var(--space-8) var(--space-9);

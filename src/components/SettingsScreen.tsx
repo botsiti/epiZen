@@ -5,6 +5,7 @@ import { DEFAULT_RECOGNITION, periodicNamingError, type PeriodicRecognition, typ
 import type { VaultFile } from '../lib/api';
 import { PeriodicFolders, PeriodicRecognitionFields } from './periodic/PeriodicPreferences';
 import { podcastSettings, type PodcastSettings } from '../lib/podcasts';
+import { ShortcutReference } from './workspace/ShortcutReference';
 
 interface Props {
   periodic: PeriodicSettings;
@@ -121,6 +122,7 @@ export function SettingsScreen({ periodic, birthDate, podcasts, features, folder
           {state.saved && <span className="save-state">Saved</span>}
         </div>
       </form>
+      <ShortcutReference />
     </section>
   );
 }

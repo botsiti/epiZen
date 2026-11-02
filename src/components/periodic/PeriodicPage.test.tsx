@@ -104,15 +104,20 @@ describe('the day page', () => {
     await user.click(within(checkIn).getByRole('radio', { name: 'Mood 3' }));
     expect(act.onSetProperty).toHaveBeenCalledWith('mood', '3');
 
-    const sleep = within(checkIn).getByLabelText('Sleep');
+    const sleep = within(checkIn).getByLabelText('Sleep hours');
+    const minutes = within(checkIn).getByLabelText('Sleep minutes');
+    expect(sleep).toHaveValue('6');
+    expect(minutes).toHaveValue('6');
     await user.clear(sleep);
-    await user.type(sleep, '7,5{Enter}');
+    await user.type(sleep, '7');
+    await user.clear(minutes);
+    await user.type(minutes, '30{Enter}');
     expect(act.onSetProperty).toHaveBeenLastCalledWith('sleep', '7.5');
 
     await user.clear(sleep);
     await user.type(sleep, '30{Enter}');
     expect(act.onSetProperty).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole('alert')).toHaveTextContent('Sleep is a number from 0 to 24.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Sleep hours must be a whole number from 0 to 24.');
     expect(within(checkIn).queryByLabelText('Plan done')).not.toBeInTheDocument();
   });
 

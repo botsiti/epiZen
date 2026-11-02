@@ -17,6 +17,7 @@ import { FocusMenu } from '../calendar/FocusMenu';
 import { DeleteTask, EditTask } from '../calendar/TaskDialogs';
 import { Tags, ThoughtWizard } from './ThoughtWizard';
 import type { PeriodicActions, PeriodicSpec } from './types';
+import { SleepField } from './SleepField';
 
 const TABS = ['Overview', 'Tasks', 'Habits', 'Quests', 'Stream'] as const;
 type Tab = (typeof TABS)[number];
@@ -251,7 +252,7 @@ function HabitDots({ habits }: { habits: DayTask[] }) {
 }
 
 /** The day's numbers, each set from here: a tap on a segment, or a number typed in. */
-function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: (key: string, value: string) => void }) {
+function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: PeriodicActions['onSetProperty'] }) {
   return (
     <div className="card glass rise" style={order(4)} data-testid="check-in">
       <p className="tile-label">Check-in</p>
@@ -264,9 +265,9 @@ function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: (k
             <li key={key} className={day.keys.includes(key) ? undefined : 'is-untracked'} data-metric={key} data-status={metricStatus(key, value, max)}>
               <span className="check-label">{label}</span>
               {max <= 10 ? (
-                <Segments value={value} max={max} color={color} label={label} onPick={(picked) => onSet(key, String(picked))} />
+                <Segments value={value} max={max} color={color} label={label} onPick={(picked) => { void onSet(key, String(picked)); }} />
               ) : (
-                <NumberField value={value} min={0} max={max} step={1} onCommit={(next) => onSet(key, next)} label={label} />
+                <NumberField value={value} min={0} max={max} step={1} onCommit={(next) => { void onSet(key, next); }} label={label} />
               )}
               <span className="check-value" style={{ color: value === undefined ? undefined : color }}>
                 {value ?? '—'}
@@ -277,8 +278,7 @@ function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: (k
         })}
         <li data-metric="sleep" data-status={metricStatus('sleep', day.numbers.sleep)}>
           <span className="check-label">Sleep</span>
-          <NumberField value={day.numbers.sleep} min={0} max={24} step={0.1} onCommit={(next) => onSet('sleep', next)} label="Sleep" suffix="h" />
-          <span className="check-value" style={{ color: metricColor('sleep', day.numbers.sleep) }}>{day.numbers.sleep === undefined ? '—' : `${day.numbers.sleep}h`}</span>
+          <SleepField value={day.numbers.sleep} onCommit={(next) => onSet('sleep', next)} />
         </li>
       </ul>
     </div>
