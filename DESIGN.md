@@ -466,3 +466,24 @@ Obsidian's workspace in Epizen's own chrome: the sidebar's dark, hairlines, no g
 
 The e2e run saves every screen to `evidence/`. Hold them against this page: one accent,
 nothing cramped, nothing cut off without "…", chevrons that match their folder.
+
+### Monthly decisions, spending and Wheel of Life
+
+Monthly reviews have a dedicated **Decisions** tab, distinct from the reflection: choices, reasons
+and next steps. **Expenses** includes a manually entered total and optional three-letter currency,
+kept separately from photos and finance prose. Home Summaries shows Decisions in its own column
+and Expenses beside the month's metrics; unrecorded totals remain empty, including on months with
+no daily notes. These values live in ordinary `## Decisions` and `## Monthly spending` sections.
+
+**Wheel of Life** replaces Life areas in the interface. Eight coloured axes, a quiet polygon and
+labelled scores show the month; zero is different from unrated. Clicking or keyboard-activating an
+area selects its reflection. The rating is a row of direct 0–10 buttons with a clear selected state,
+not a dropdown. Draft scores update the wheel immediately; changing areas retains drafts. The wheel
+and editor sit alongside each other on wide panes and stack in narrow panes. Existing sphere
+Markdown remains compatible.
+
+Quest details offer **Edit quest** for title, description, XP, tier and target, with the existing
+deadline control retained. Existing progress and log entries stay intact. **Delete quest** requires
+a confirmation explaining that its log is also removed. Edits and deletion retain conditional-save
+checks; a changed log or unrecognized nested content prevents deletion. Failed edits retain the
+form and its draft, and closing with a draft asks before discarding it.

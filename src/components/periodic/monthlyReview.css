@@ -56,3 +56,39 @@
 @container (max-width: 760px) { .money-layout { grid-template-columns: 1fr; } }
 @container (max-width: 620px) { .money-photo-grid { grid-template-columns: 1fr; } }
 .money-photo-hint { margin: 10px 0 0; color: var(--text-faint); font-size: 12px; }
+/* The wheel is the overview; the adjacent editor is one deliberate check-in. */
+.monthly-area-layout { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; gap: 32px; }
+.monthly-area-detail { padding-top: 32px; }
+.life-wheel svg { display: block; width: 100%; max-width: 520px; margin: auto; overflow: visible; }
+.life-wheel-grid, .life-wheel-axis { fill: none; stroke: var(--glass-line-strong); stroke-width: 1; }
+.life-wheel-axis { opacity: .6; }
+.life-wheel-shape { fill: rgb(143 188 170 / 15%); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.life-wheel-label { font: 12px var(--font-ui); }
+.life-wheel-score { fill: var(--text-muted); font: 11px var(--numbers); }
+.life-wheel-scale { fill: var(--text-faint); font-size: 8px; pointer-events: none; }
+.life-wheel-label-bg { fill: transparent; stroke: transparent; transition: fill var(--motion-fast) ease-out, stroke var(--motion-fast) ease-out; }
+.life-wheel-sector { cursor: pointer; outline: none; }
+.life-wheel-sector:hover .life-wheel-label-bg, .life-wheel-sector.is-selected .life-wheel-label-bg { fill: var(--accent-soft); }
+.life-wheel-sector:focus-visible .life-wheel-label-bg { stroke: var(--accent); }
+.life-wheel-point { stroke: var(--surface); stroke-width: 2; transition: r var(--motion-fast) ease-out; }
+.life-wheel-caption { margin: 0 0 20px; text-align: center; color: var(--text-muted); font-size: 12px; }
+.life-wheel-caption span { color: var(--text-faint); }
+.monthly-area-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.monthly-area { font-size: 12px; padding: 8px; }
+.wheel-rating { margin: 24px 0; }
+.wheel-rating-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; color: var(--text-muted); font-size: 12px; }
+.wheel-rating-heading strong { font: 500 32px var(--display); color: var(--text); }
+.wheel-rating-heading small { font: 12px var(--font-ui); color: var(--text-faint); }
+.wheel-rating-steps { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 3px; }
+.wheel-rating-steps button { min-height: 40px; border-radius: 6px; border: 1px solid var(--glass-line); background: rgb(255 255 255 / 3%); color: var(--text-muted); font: 12px var(--numbers); transition: background var(--motion-fast) ease-out, color var(--motion-fast) ease-out; }
+.wheel-rating-steps button:hover { border-color: var(--accent); color: var(--text); }
+.wheel-rating-steps button[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.wheel-rating-captions { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; color: var(--text-faint); font-size: 10px; }
+.wheel-rating-captions button { color: var(--text-muted); font-size: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.money-total-inputs { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 24px; max-width: 600px; }
+.money-total-inputs input { width: 100%; margin-top: 8px; padding: 12px 0; border: 0; border-bottom: 1px solid var(--glass-line-strong); background: transparent; color: var(--text); font: 32px var(--numbers); outline: none; }
+.money-total-inputs input:focus { border-color: var(--accent); }
+.money-total-inputs label:last-child input { font-size: 24px; }
+.monthly-review [data-field="spending"] { margin-bottom: 16px; }
+@container (max-width: 760px) { .monthly-area-layout { grid-template-columns: 1fr; } .monthly-area-detail { padding-top: 0; } }
+@container (max-width: 420px) { .money-total-inputs { grid-template-columns: minmax(0, 1fr) 90px; gap: 16px; } .monthly-area-list { grid-template-columns: 1fr; } }

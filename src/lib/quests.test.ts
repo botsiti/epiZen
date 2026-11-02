@@ -457,3 +457,29 @@ describe('setDeadline', () => {
     expect(() => setDeadline(W40, mornings, 'Friday')).toThrow('a date');
   });
 });
+
+it.each(['\n', '\r\n'])('edits a quest without altering progress, logs or neighboring text (%s)', (eol) => {
+  const text = ['# Month', '- [ ] #quest/monthly - Read books [xp::500] [tier::rare] [target::5] [current::2] [extra::keep]', '    - 01.09.2026 :: First chapter.', '', '## Keep', 'Unrelated words.', ''].join(eol);
+  const q = parseQuests('month.md', text)[0]!;
+  const change = { kind: 'edit' as const, title: 'Read good books', description: 'Make time each evening.', xp: 600, tier: 'rare' as const, target: 6 };
+  const edited = changeQuest(text, q, change, new Date());
+  expect(edited).toContain('[current::2] [extra::keep]');
+  expect(edited.split(eol).slice(2)).toEqual(text.split(eol).slice(2));
+  expect(parseQuests('month.md', edited)[0]).toMatchObject({ title: change.title, desc: change.description, xp: 600, target: 6, current: 2 });
+  expect(() => changeQuest(text.replace('Read books', 'Outside edit'), q, change, new Date())).toThrow('changed');
+  expect(() => changeQuest(text, q, { ...change, target: 1 }, new Date())).toThrow('current progress');
+  expect(() => changeQuest(text, q, { ...change, title: 'Bad\n- [ ] other' }, new Date())).toThrow('title');
+  const removed = changeQuest(text, q, { kind: 'delete' }, new Date());
+  expect(removed).toBe(['# Month', '', '## Keep', 'Unrelated words.', ''].join(eol));
+  expect(() => changeQuest(text.replace('First chapter.', 'New outside chapter.'), q, { kind: 'delete' }, new Date())).toThrow('log changed');
+  expect(() => changeQuest(text.replace('## Keep', `    Extra private note${eol}## Keep`), q, { kind: 'delete' }, new Date())).toThrow('nested content');
+});
+
+it('preserves literal description text, field casing and the selected tier on reward edits', () => {
+  const text = '- [ ] #quest/monthly - Read books [XP::500] [DESC::before]';
+  const quest = parseQuests('month.md', text)[0]!;
+  const edited = changeQuest(text, quest, { kind: 'edit', title: quest.title, description: 'Budget $& and $1', xp: 2000, tier: 'rare' }, new Date());
+  expect(edited).toContain('[XP::2000]');
+  expect(edited).toContain('[DESC::Budget $& and $1]');
+  expect(parseQuests('month.md', edited)[0]?.tier).toBe('rare');
+});

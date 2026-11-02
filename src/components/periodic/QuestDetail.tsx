@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { formatDate, parseDate } from '../../lib/dates';
 import { dueDate, earned, MYTHIC, penalty, progress, sphereColor, sphereXp, TIERS, type LogEntry, type Quest, type QuestChange, type QuestEntry } from '../../lib/quests';
@@ -51,6 +51,12 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
   const [editing, setEditing] = useState<{ entry: LogEntry; words: string }>();
   const [asking, setAsking] = useState<LogEntry>();
   const [deadline, setDeadline] = useState<string>();
+  const [edit, setEdit] = useState<Extract<QuestChange, { kind: 'edit' }>>();
+  const [deleting, setDeleting] = useState(false);
+  const editBase = useRef<Quest>(quest);
+  const deleteBase = useRef<Quest>(quest);
+  const [discarding, setDiscarding] = useState(false);
+  const requestClose = () => { if (busy) return; if (edit || draft.trim() || editing) setDiscarding(true); else onClose(); };
 
   // A delete asks once; left alone, it stops asking.
   useEffect(() => {
@@ -64,17 +70,19 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
     const key = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      if (editing) setEditing(undefined);
+      if (busy) return;
+      if (deleting) setDeleting(false);
+      else if (edit || editing || draft.trim()) setDiscarding(true);
       else if (deadline !== undefined) setDeadline(undefined);
       else onClose();
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [editing, deadline, onClose]);
+  }, [editing, deadline, onClose, busy, deleting, edit, draft]);
 
-  const send = (change: QuestChange, after?: () => void) => {
+  const send = (change: QuestChange, after?: () => void, expected = quest) => {
     setBusy(true);
-    void onChange(quest, change).then((why) => {
+    void onChange(expected, change).catch((err: unknown) => err instanceof Error ? err.message : String(err)).then((why) => {
       setBusy(false);
       setProblem(why);
       if (!why) after?.();
@@ -93,8 +101,8 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
   const chapters = quest.log.filter((item) => item.xp === undefined).length;
 
   return createPortal(
-    <div className="periodic-layer quest-dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()} data-testid="quest-detail">
-      <div className={`quest-dialog${mythic ? ' is-mythic' : ''}`} role="dialog" aria-modal="true" aria-label={quest.title} style={{ '--tone': tone, '--tier': mythic ? MYTHIC.color : tier.color } as CSSProperties}>
+    <div className="periodic-layer quest-dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && requestClose()} data-testid="quest-detail">
+      <div className={`quest-dialog${mythic ? ' is-mythic' : ''}${edit ? ' is-editing' : ''}`} role="dialog" aria-modal="true" aria-label={quest.title} style={{ '--tone': tone, '--tier': mythic ? MYTHIC.color : tier.color } as CSSProperties}>
         <div className="quest-dialog-art">
           {art ? <VaultImage path={art} alt="" className="quest-art-image" /> : <span className="quest-art-blank" aria-hidden="true" />}
           <span className="quest-veil" aria-hidden="true" />
@@ -105,7 +113,7 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
             </span>
           )}
           <span className="quest-dialog-chip is-tier">{mythic ? `${MYTHIC.glyph} Mythic` : `${tier.glyph} ${quest.tier}`}</span>
-          <button type="button" className="wizard-round is-small quest-dialog-close" onClick={onClose} aria-label="Close" title="Close (Esc)" data-testid="quest-detail-close">
+          <button type="button" className="wizard-round is-small quest-dialog-close" onClick={requestClose} aria-label="Close" title="Close (Esc)" data-testid="quest-detail-close">
             ×
           </button>
           <span className="quest-dialog-scope">{SCOPES[quest.scope]}</span>
@@ -113,8 +121,18 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
 
         <div className="quest-dialog-body">
           <h2 className="quest-dialog-title" data-testid="quest-detail-title">
-            {quest.title}
+            {edit ? 'Edit quest' : quest.title}
           </h2>
+          <div className="quest-manage" hidden={Boolean(edit)}><button type="button" className="quiet-chip" disabled={busy || Boolean(edit)} onClick={() => { setDeleting(false); editBase.current = quest; setEdit({ kind: 'edit', title: quest.title, description: quest.desc ?? '', xp: quest.xp, tier: quest.tier, target: quest.target }); }}>Edit quest</button><button type="button" className="quiet-chip" disabled={busy} onClick={() => { deleteBase.current = quest; setDeleting(true); }}>Delete quest</button></div>
+          {discarding && <div className="quest-manage-confirm" role="alert"><p>Discard the unsaved changes?</p><button type="button" className="quiet-chip" onClick={() => setDiscarding(false)}>Keep editing</button><button type="button" className="primary-button" onClick={onClose}>Discard and close</button></div>}
+          {deleting && <div className="quest-manage-confirm" role="alert"><h3>Delete this quest?</h3><p>Its adventure log will also be removed. The rest of the note stays as it is.</p><button type="button" className="quiet-chip" disabled={busy} onClick={() => setDeleting(false)}>Keep quest</button><button type="button" className="primary-button" disabled={busy} onClick={() => send({ kind: 'delete' }, onClose, deleteBase.current)}>Confirm deletion</button></div>}
+          {edit && <form id="quest-edit-form" className="quest-edit-form" onSubmit={(event) => { event.preventDefault(); send(edit, () => { setEdit(undefined); onClose(); }, editBase.current); }}>
+            <label>Title<input autoFocus aria-label="Quest title" value={edit.title} onChange={(event) => setEdit({ ...edit, title: event.target.value })} /></label>
+            <label>Description<textarea aria-label="Quest description" value={edit.description} onChange={(event) => setEdit({ ...edit, description: event.target.value })} /></label>
+            <div className="quest-edit-numbers"><label>XP reward<input aria-label="XP reward" type="number" min="0" step="1" value={edit.xp} onChange={(event) => setEdit({ ...edit, xp: event.target.valueAsNumber })} /></label><label>Tier<select aria-label="Quest tier" value={edit.tier} onChange={(event) => setEdit({ ...edit, tier: event.target.value as typeof edit.tier })}>{Object.keys(TIERS).map((name) => <option key={name} value={name}>{name}</option>)}</select></label><label>Target · optional<input aria-label="Quest target" type="number" min={Math.max(1, quest.current ?? 0)} step="1" value={edit.target ?? ''} onChange={(event) => setEdit({ ...edit, target: event.target.value === '' ? undefined : event.target.valueAsNumber })} /></label></div>
+            <p className="faint">Progress and log entries are kept. Changing the reward or target updates the XP totals.</p>
+          </form>}
+          <div hidden={Boolean(edit)}>
           {quest.spheres.length > 1 && (
             <p className="quest-dialog-bonus">
               {quest.spheres.slice(1).map(({ name, weight }) => (
@@ -295,6 +313,7 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
               </span>
             </div>
           </section>
+          </div>
           {problem && (
             <p className="quest-dialog-problem" role="alert" data-testid="quest-detail-problem">
               {problem}
@@ -303,6 +322,7 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
         </div>
 
         <footer className="wizard-foot">
+          {edit ? <><button type="button" className="quiet-chip" disabled={busy} onClick={() => setEdit(undefined)}>Cancel edit</button><button type="submit" form="quest-edit-form" className="wizard-continue" disabled={busy || !edit.title.trim()}>{busy ? 'Saving…' : 'Save quest'}</button></> : <>
           <span className="wizard-step">{quest.done ? (quest.doneOn ? `Done ${formatDate(parseDate(quest.doneOn, 'YYYY-MM-DD') ?? today, 'D MMM')}` : 'Done') : when ? `Open · ${when}` : 'Open'}</span>
           <button
             type="button"
@@ -318,6 +338,7 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
           >
             {quest.done ? 'Reopen' : 'Mark complete'}
           </button>
+          </>}
         </footer>
       </div>
     </div>,
