@@ -45,3 +45,17 @@ Older habit records without IDs are matched by their names and aliases. Do not c
 habit for a return to an old routine: reactivate the existing definition to keep one history.
 Conflicting IDs, names, malformed schedules and duplicate daily records are reported, rather
 than silently edited. If you rename a definition by hand, keep the former name in `aliases`.
+
+## The daily flow
+
+The Today strip shows how much of the routine is complete. Each active habit has its own direct
+check-in button; selecting the habit opens its history without changing its completion. Overview
+shows the current and best streaks and twelve weeks of check-ins. Calendar opens the detailed
+monthly view, where a date leads to its daily note. Creation and schedule edits open in a compact
+dialog so the current place in the routine stays put.
+
+The visual references studied through Appllama were Productive's dark Today dashboard
+(`983826477/oth_zd2m0`), HabitKit's dashboard and detail (`6443918070/oth_48ehi`,
+`6443918070/oth_pcexw`), and (Not Boring) Habits' statistics and monthly summary
+(`1593891243/oth_8fgk9`, `1593891243/oth_osxyx`). The adopted patterns are direct daily actions,
+compact history grids and clear numerical hierarchy, expressed in Epizen's own palette and type.

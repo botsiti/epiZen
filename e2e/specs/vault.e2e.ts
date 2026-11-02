@@ -1920,6 +1920,7 @@ describe('the demo vault', () => {
     const before = snapshotVault(vaultCopy());
     await $('button*=New habit').click();
     await $('[aria-label="Habit name"]').setValue('No sweets journey');
+    await screenshot('148-habit-create-dialog');
     await $('button=Save habit').click();
     await $('[data-testid="habit-detail"]').waitForDisplayed();
     const names = [...snapshotVault(vaultCopy()).keys()].filter((path) => path.startsWith('Habits/') && !before.has(path));
@@ -1932,6 +1933,8 @@ describe('the demo vault', () => {
     const fullDay = join(vaultCopy(), todayPath);
     expect(readFileSync(fullDay, 'utf8')).toContain(`[habit::${id}]`);
     const completed = readFileSync(fullDay, 'utf8');
+    await browser.execute(() => document.querySelector('main')?.scrollTo({ top: 0 }));
+    await screenshot('147-habits-top');
     await scrollIntoView('.habits-layout');
     await screenshot('140-habits-active');
     await browser.setWindowSize(900, 900);
@@ -1982,6 +1985,11 @@ describe('the demo vault', () => {
     await screenshot('144-summary-bands');
     const changes = diffSnapshots(before, snapshotVault(vaultCopy()));
     expect(changes.filter((change) => !change.endsWith(definition) && !change.endsWith(todayPath))).toEqual([]);
+    await $('[data-testid="open-habits"]').click();
+    await $('button*=History').click();
+    await $('button*=no sweet').click();
+    await scrollIntoView('[data-testid="habit-detail"]');
+    await screenshot('146-habits-history-design');
   });
 
 });

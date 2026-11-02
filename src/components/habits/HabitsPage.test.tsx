@@ -40,6 +40,7 @@ it('archives, views history and reactivates the same habit with an explicit stre
   expect(lifecycle).toHaveBeenLastCalledWith('habit-sweets-001', { kind: 'archive', date: '2026-11-02' });
   expect(screen.getByRole('button', { name: 'Archived1' })).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByTestId('habit-detail')).toHaveTextContent('Best streak1 day');
+  await user.click(screen.getByRole('button', { name: 'Calendar' }));
   expect(screen.getByRole('button', { name: '1 Nov 2026: Completed' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Reactivate' }));
   await user.click(screen.getByRole('radio', { name: /Start fresh/ }));
@@ -69,4 +70,25 @@ it('prevents duplicate clicks during a completion write and surfaces the rejecti
   act(() => finish?.());
   expect(await screen.findByRole('alert')).toHaveTextContent('changed outside');
   expect(button).toBeEnabled();
+});
+
+it('checks in directly from a habit card without opening its history first', async () => {
+  const user = userEvent.setup();const p = props();render(<HabitsPage {...p} />);
+  await user.click(screen.getByRole('button', { name: 'Complete today for No sweets' }));
+  expect(p.onComplete).toHaveBeenCalledWith(TODAY, expect.objectContaining({ id: 'habit-sweets-001' }), false, true);
+});
+
+it('contains the creation dialog focus and cancels without creating a note', async () => {
+  const user = userEvent.setup();const p = props();render(<HabitsPage {...p} />);
+  const add = screen.getByRole('button', { name: /New habit/ });
+  await user.click(add);
+  const dialog = screen.getByRole('dialog', { name: 'New habit' });
+  expect(within(dialog).getByLabelText('Habit name')).toHaveFocus();
+  await user.type(within(dialog).getByLabelText('Habit name'), 'Read a chapter');
+  within(dialog).getByRole('button', { name: 'Save habit' }).focus();
+  await user.tab();
+  expect(within(dialog).getByLabelText('Habit name')).toHaveFocus();
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(add).toHaveFocus();expect(p.onCreate).not.toHaveBeenCalled();
 });
