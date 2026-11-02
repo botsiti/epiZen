@@ -13,6 +13,10 @@
   --accent-soft: rgb(143 188 170 / 12%);
   /* The timer's rest, so a break never reads as focus. */
   --rest: #86d8ac;
+  --metric-red: #df7c83;
+  --metric-yellow: #d8b85c;
+  --metric-green: #80bd97;
+  --metric-empty: var(--text-faint);
 
   /* The graph's folder colours: the accent's lightness and softness at other hues. */
   --graph-1: #8fbcab;

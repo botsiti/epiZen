@@ -13,6 +13,7 @@ export type View =
   | { kind: 'calendar' }
   | { kind: 'quests' }
   | { kind: 'statistics' }
+  | { kind: 'habits' }
   | { kind: 'summaries' }
   | { kind: 'library'; tab: LibraryTab }
   | { kind: 'problem'; title: string; message: string };
@@ -69,6 +70,7 @@ export function sameView(a: View, b: View): boolean {
     case 'graph':
     case 'calendar':
     case 'quests':
+    case 'habits':
     case 'statistics':
     case 'summaries':
       return a.kind === b.kind;
@@ -210,6 +212,8 @@ export function tabTitle(view: View): string {
       return 'Library';
     case 'quests':
       return 'Quests';
+    case 'habits':
+      return 'Habits';
     case 'statistics':
       return 'Statistics';
     case 'summaries':
@@ -253,6 +257,7 @@ function storable(view: View): View | undefined {
     case 'graph':
     case 'calendar':
     case 'quests':
+    case 'habits':
     case 'statistics':
     case 'summaries':
       return { kind: view.kind };
@@ -282,6 +287,7 @@ export function parseView(value: unknown, notes: ReadonlySet<string>): View | un
     case 'graph':
     case 'calendar':
     case 'quests':
+    case 'habits':
     case 'statistics':
     case 'summaries':
       return { kind: value.kind };

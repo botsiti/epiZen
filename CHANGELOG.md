@@ -3,6 +3,11 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.5.0 — 2026-11-02
+
+Persistent habits with archive/reactivation and history, plus consistent status colours for
+check-ins and averages. [Full release notes](releases/0.5.0.md).
+
 ## 0.4.0 — 2026-11-02
 
 An interactive Wheel of Life, a dedicated Decisions journal, monthly spending in Home summaries,

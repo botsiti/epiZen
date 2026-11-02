@@ -1,3 +1,6 @@
+import { collectHabits, withHabits, habitActive, habitHistory, habitStats } from './lib/habits';
+import { HabitsPage } from './components/habits/HabitsPage';
+import { useHabitActions } from './components/habits/useHabitActions';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { CalendarView } from './components/calendar/CalendarView';
@@ -234,14 +237,17 @@ export function App() {
     () => ({ date: now, path: periodicNotes.get(periodKey('day', now)), name: noteTitle(periodicPath('day', now, periodic)) }),
     [now, periodic, periodicNotes],
   );
+  const habitCatalog = useMemo(() => collectHabits(texts), [texts]);
   // Everything a daily, weekly or monthly note's page reads from the rest of the vault.
   const dayOf = useCallback(
     (date: Date): DayEntry => {
       const path = periodicNotes.get(periodKey('day', date));
       const text = path === undefined ? undefined : texts.get(path);
-      return { date, path, day: path === undefined || text === undefined ? undefined : dayFrom(path, text) };
+      const recorded = path === undefined || text === undefined ? undefined : dayFrom(path, text);
+      const scheduled = date <= now && habitCatalog.habits.some((h) => habitActive(h, date));
+      return { date, path, scheduledOnly: !recorded && scheduled, day: recorded || scheduled ? withHabits(recorded ?? parseDay(''), habitCatalog.habits, date, now) : undefined };
     },
-    [periodicNotes, texts],
+    [periodicNotes, texts, habitCatalog.habits, now],
   );
   // Every daily note, for the homepage's life XP, streak and spheres.
   const dailyNotes = useMemo(
@@ -252,6 +258,12 @@ export function App() {
       }),
     [periodicNotes, dayOf],
   );
+  const recordedHabitDays = useMemo(() => [...periodicNotes].flatMap(([key, path]) => {
+    const date = key.startsWith('day:') ? parseDate(key.slice(4), 'YYYY-MM-DD') : undefined;
+    const text = texts.get(path);
+    return date && text !== undefined ? [{ date, path, day: dayFrom(path, text) }] : [];
+  }), [periodicNotes, texts]);
+  const habitSummaries = useMemo(() => Object.fromEntries(habitCatalog.habits.map((h) => [h.id, habitStats(habitHistory(h, recordedHabitDays, now), now)])), [habitCatalog.habits, recordedHabitDays, now]);
   const birthDate = useMemo(() => parseBirthDate(settings.birthDate), [settings]);
   const dailyFacts = useMemo(() => {
     const values = new Map<string, number[]>();
@@ -304,8 +316,8 @@ export function App() {
     const found = view.kind === 'note' ? catalog.byPath.get(view.path) : undefined;
     if (!found) return undefined;
     const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
-    return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, categories, quests, art, features };
-  }, [view, catalog, dayOf, weekOf, exists, dailyFacts, mediaByTitle, quests, art, features]);
+    return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, categories, quests, art, features, habits: habitCatalog.habits, habitStats: habitSummaries };
+  }, [view, catalog, dayOf, weekOf, exists, dailyFacts, mediaByTitle, quests, art, features, habitCatalog.habits, habitSummaries]);
   const linkTargets = useMemo(() => {
     const titles = new Map<string, number>();
     for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
@@ -721,6 +733,7 @@ export function App() {
     },
     [changeDay, timer, vault],
   );
+  const habitActions = useHabitActions({ root: vault, habits: habitCatalog.habits, onSaved: noteSaved, refresh, changeDay });
   // The menu bar item and its panel: the timer and today's tasks, published as they change; the
   // panel's buttons start, pause and stop this same timer.
   const todayEntry = useMemo(() => dayOf(now), [dayOf, now]);
@@ -780,6 +793,7 @@ export function App() {
         onCalendar={(newTab) => go({ kind: 'calendar' }, newTab)}
         onLibrary={(newTab) => openLibrary('all', newTab)}
         onQuests={(newTab) => go({ kind: 'quests' }, newTab)}
+        onHabits={(newTab) => go({ kind: 'habits' }, newTab)}
         onStatistics={(newTab) => go({ kind: 'statistics' }, newTab)}
         onNoteMenu={(path, x, y) => setNoteMenu({ path, x, y })}
         timer={<TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
@@ -840,8 +854,9 @@ export function App() {
               />
             )}
             {view.kind === 'quests' && <ErrorBoundary label="Quests"><QuestPage quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} /></ErrorBoundary>}
+            {view.kind === 'habits' && <ErrorBoundary label="Habits"><HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedHabitDays} today={todayNote.date} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} /></ErrorBoundary>}
             {view.kind === 'statistics' && <ErrorBoundary label="Statistics"><StatisticsPage days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} /></ErrorBoundary>}
-            {view.kind === 'summaries' && <ErrorBoundary label="Summaries"><Summaries today={todayNote.date} days={dailyNotes} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} /></ErrorBoundary>}
+            {view.kind === 'summaries' && <ErrorBoundary label="Summaries"><Summaries scales={dailyFacts.scales} today={todayNote.date} days={dailyNotes} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} /></ErrorBoundary>}
             {fileActionError && <p className="note-warning" role="alert">{fileActionError}</p>}
             {editError && (
               <p className="note-warning" data-testid="edit-warning">
@@ -865,6 +880,12 @@ export function App() {
                 periodic={periodicPage}
                 media={mediaPage}
                 genreSuggestions={mediaPage ? genreCounts(library.get(mediaPage.spec.kind) ?? []).map(([name]) => name) : []}
+                onManageHabits={() => go({ kind: 'habits' })}
+                onHabitToggle={async (date, id, expected) => {
+                  const habit = habitCatalog.habits.find((h) => h.id === id);
+                  if (!habit) throw new Error('This habit is no longer available. Reopen Habits.');
+                  await habitActions.onComplete(date, habit, expected, !expected);
+                }}
                 onQuestToggle={onQuestToggle}
                 onQuestProgress={onQuestProgress}
                 onQuestChange={onQuestChange}

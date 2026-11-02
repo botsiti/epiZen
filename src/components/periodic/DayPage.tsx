@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
+import { withHabits } from '../../lib/habits';
+import { metricColor, metricStatus } from '../../lib/metricStatus';
 import { category, habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, formatDate, isoWeek, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
@@ -32,7 +34,7 @@ interface Props {
 
 /** A daily note as a page: how the day went, from the note's own text. */
 export function DayPage({ spec, path, text, actions }: Props) {
-  const day = useMemo(() => parseDay(text), [text]);
+  const day = useMemo(() => withHabits(parseDay(text), spec.habits ?? [], spec.date, today()), [text, spec.habits, spec.date]);
   const [tab, setTab] = useState<Tab>(lastTab);
   // The thought-record wizard: open on a record to edit it, or on nothing for a new one.
   const [wizard, setWizard] = useState<{ record?: ThoughtRecord }>();
@@ -203,6 +205,7 @@ function Overview({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpe
         <CheckIn day={day} spec={spec} onSet={actions.onSetProperty} />
         <TimeCard day={day} />
       </div>
+      {spec.features?.habits !== false && <Section title="Daily habits" i={6}><HabitsTab day={day} spec={spec} actions={actions} /></Section>}
       {(day.tasks.length > 0 || day.gratitude) && (
         <Section title="Tasks" note={`${totals.tasksDone} of ${totals.tasks} done`} i={6}>
           <ul className="task-list">
@@ -241,7 +244,7 @@ function HabitDots({ habits }: { habits: DayTask[] }) {
   return (
     <span className="habit-dots" aria-hidden="true">
       {habits.map((habit, i) => (
-        <span key={habit.line} className={habit.done ? 'habit-dot is-done' : 'habit-dot'} style={{ '--tone': habitColor(i), '--i': i } as CSSProperties} />
+        <span key={habit.habitId ?? habit.line} className={habit.done ? 'habit-dot is-done' : 'habit-dot'} style={{ '--tone': habitColor(i), '--i': i } as CSSProperties} />
       ))}
     </span>
   );
@@ -253,11 +256,12 @@ function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: (k
     <div className="card glass rise" style={order(4)} data-testid="check-in">
       <p className="tile-label">Check-in</p>
       <ul className="check-in">
-        {METRICS.map(({ key, label, color }) => {
+        {METRICS.map(({ key, label }) => {
           const value = day.numbers[key] || undefined;
           const max = spec.scales[key] ?? 5;
+          const color = metricColor(key, value, max);
           return (
-            <li key={key} className={day.keys.includes(key) ? undefined : 'is-untracked'} data-metric={key}>
+            <li key={key} className={day.keys.includes(key) ? undefined : 'is-untracked'} data-metric={key} data-status={metricStatus(key, value, max)}>
               <span className="check-label">{label}</span>
               {max <= 10 ? (
                 <Segments value={value} max={max} color={color} label={label} onPick={(picked) => onSet(key, String(picked))} />
@@ -271,10 +275,10 @@ function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: (k
             </li>
           );
         })}
-        <li data-metric="sleep">
+        <li data-metric="sleep" data-status={metricStatus('sleep', day.numbers.sleep)}>
           <span className="check-label">Sleep</span>
           <NumberField value={day.numbers.sleep} min={0} max={24} step={0.1} onCommit={(next) => onSet('sleep', next)} label="Sleep" suffix="h" />
-          <span className="check-value">{day.numbers.sleep === undefined ? '—' : `${day.numbers.sleep}h`}</span>
+          <span className="check-value" style={{ color: metricColor('sleep', day.numbers.sleep) }}>{day.numbers.sleep === undefined ? '—' : `${day.numbers.sleep}h`}</span>
         </li>
       </ul>
     </div>
@@ -637,30 +641,32 @@ function streak(spec: PeriodicSpec, name: string, doneToday: boolean): number {
 }
 
 function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions }) {
-  if (!day.habits.length) return <p className="empty-line">This note has no habits. A task list inside a [!habits] callout shows here.</p>;
+  if (!day.habits.length) return <div className="daily-habit-header"><p>No habits scheduled for this day. Older check-ins stay in history.</p>{actions.onManageHabits && <button type="button" className="quiet-chip" onClick={actions.onManageHabits}>Manage habits</button>}</div>;
   return (
-    <div className="habit-pills">
+    <><div className="daily-habit-header"><p>{day.habits.filter((h) => h.done).length} of {day.habits.length} completed</p>{actions.onManageHabits && <button type="button" className="quiet-chip" onClick={actions.onManageHabits}>Manage habits</button>}</div><div className="habit-pills">
       {day.habits.map((habit, i) => {
         const color = habitColor(i);
-        const days = streak(spec, habit.label, habit.done);
+        const stats = habit.habitId ? spec.habitStats?.[habit.habitId] : undefined;
+        const days = stats?.current ?? streak(spec, habit.label, habit.done);
         return (
           <button
-            key={habit.line}
+            key={habit.habitId ?? habit.line}
             type="button"
             className={habit.done ? 'habit-pill glass rise is-done' : 'habit-pill glass rise'}
             style={{ ...order(i), '--tone': color } as CSSProperties}
             aria-pressed={habit.done}
             onClick={() => actions.onToggle(habit)}
             data-testid="habit-pill"
+            data-habit-id={habit.habitId}
             data-line={habit.line}
           >
             <span className="habit-check" aria-hidden="true" />
             <span className="habit-label">{habit.label}</span>
-            <span className="habit-streak">{days ? `${days} day${days === 1 ? '' : 's'}` : 'no streak'}</span>
+            <span className="habit-streak">{days ? `${days} day${days === 1 ? '' : 's'}` : 'no streak'}{stats ? ` · best ${stats.best}` : ''}</span>
           </button>
         );
       })}
-    </div>
+    </div></>
   );
 }
 

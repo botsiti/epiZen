@@ -5,6 +5,8 @@ import type { Day, DayTotals } from './day';
 export interface DayEntry {
   date: Date;
   path?: string;
+  /** Scheduled habit rows on a date without a daily note. */
+  scheduledOnly?: boolean;
   day?: Day;
 }
 
@@ -53,7 +55,7 @@ export function rollup(days: DayEntry[]): Rollup {
   };
   return {
     days,
-    noted: days.filter((entry) => entry.day).length,
+    noted: days.filter((entry) => entry.day && !entry.scheduledOnly).length,
     totals,
     byCategory: [...minutes.values()].sort((a, b) => b[1] - a[1] || a[0].name.localeCompare(b[0].name)),
     average,

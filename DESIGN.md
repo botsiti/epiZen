@@ -487,3 +487,32 @@ deadline control retained. Existing progress and log entries stay intact. **Dele
 a confirmation explaining that its log is also removed. Edits and deletion retain conditional-save
 checks; a changed log or unrecognized nested content prevents deletion. Failed edits retain the
 form and its draft, and closing with a draft asks before discarding it.
+
+### Check-in status colours and habit history
+
+Mood, energy, focus and social scores use a shared semantic scale: 1–2 red, 3 yellow and 4–5
+green. The colour is selected from the unrounded value, with boundaries at 2.5 and 3.5; older
+10/100 scales are normalized to five. Sleep below 6 or above 9 hours is red, 6 to below 7 is
+yellow, and 7 through 9 is green. Missing values stay faint. `--metric-red`, `--metric-yellow`,
+`--metric-green` and `--metric-empty` in `src/styles.css` apply to the daily check-in, Home
+averages, period averages, daily rows and monthly summaries. Category and life-sphere colours
+still identify their respective data; status colours describe the recorded check-in value.
+
+The sidebar's **Habits** screen owns a daily routine across changing months. Active, Archived
+and History collections lead to a selected habit's calendar, current streak, best streak, total
+completions and consistency. Cards carry small recent-day marks; the selected card has a sage
+edge. Empty states offer creating a habit or continuing the most recent set found in daily notes.
+
+Definitions are ordinary Markdown notes under `Habits/`, with `type: habit`, a stable `habit_id`,
+a name, aliases and dated tracking periods. Completions stay as normal daily checkboxes inside
+`[!habits]` callouts, with `[habit::id]` inline fields for new records. Historical names connect
+older records without rewriting their notes. Opening a day does not write a habit list; its
+scheduled checkboxes are projected from the definitions, and an explicit check-in persists only
+that record. The period rollups include scheduled habits even when a daily note is missing,
+without treating that date as a written note.
+
+Archiving ends a tracking period on the selected date and keeps past records. Reactivation
+continues the same identity; the user can resume the paused streak or start a new current streak
+while preserving the previous best. Paused days are not misses. Today is a grace day until checked
+in, and a missed scheduled day breaks the streak. The manager provides a navigable calendar for
+all past months. Archive, resume and create forms retain failed drafts and report conflicts.

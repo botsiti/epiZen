@@ -55,6 +55,8 @@ interface ViewProps extends NoteProps {
   onOpenPeriod: PeriodicActions['onOpenPeriod'];
   /** The note's text as the app knows it, which the timer, the calendar or a quest may have just written. */
   known?: string;
+  onManageHabits?: () => void;
+  onHabitToggle?: (date: Date, id: string, expectedDone: boolean) => Promise<void>;
   onQuestToggle: PeriodicActions['onQuestToggle'];
   onQuestProgress: PeriodicActions['onQuestProgress'];
   onQuestChange: PeriodicActions['onQuestChange'];
@@ -66,7 +68,7 @@ interface ViewProps extends NoteProps {
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, vaultRoot, onImageAdded } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, vaultRoot, onImageAdded, onManageHabits, onHabitToggle } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
   // When the app learns a new text for this note (the timer wrote a block into it while it is
   // open), show that one and build the next change on it.
@@ -130,12 +132,18 @@ export function NoteView(props: ViewProps) {
       onOpenNote,
       onEdit: () => onEditingChange(true),
       // The task is found again in the text as it is now: the same line, still ticked or not as it was shown.
-      onToggle: (task) =>
+      onManageHabits,
+      onToggle: (task) => {
+        if (task.habitId && onHabitToggle && periodic) {
+          void trackSave(onHabitToggle(periodic.date, task.habitId, task.done).then(() => { setChangeError(undefined); return undefined; }).catch((err: unknown) => { setChangeError(`Habit wasn't changed: ${String(err)}`); return path; }));
+          return;
+        }
         change((text) => {
           const target = parseTasks(text).find((t) => t.line === task.line && t.done === task.done);
           // Plan done follows the ticks: the same write updates the day's `done`.
           return target && syncPlanDone(toggleTask(text, target));
-        }, 'Nothing was ticked'),
+        }, 'Nothing was ticked');
+      },
       onSetProperty: (key, value) => change((text) => setProperty(text, key, value), `${key} wasn't set`),
       onAddTask: (category, words, minutes) => change((text) => syncPlanDone(addTask(text, category, words, minutes)), 'The task wasn\'t added'),
       onSetSummary: (summary) => change((text) => setSummary(text, summary), "The summary wasn't saved"),
@@ -191,7 +199,7 @@ export function NoteView(props: ViewProps) {
         return saved;
       },
     }),
-    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, onUnsaved, path, periodic, seenLine, vaultRoot, onImageAdded],
+    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, onUnsaved, path, periodic, seenLine, vaultRoot, onImageAdded, onManageHabits, onHabitToggle],
   );
 
   // Read once the saves under way have landed: the editor this note was last open in (here, or in
