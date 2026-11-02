@@ -881,20 +881,6 @@ describe('the demo vault', () => {
     await closeOtherTabs();
   });
 
-  it('workspace shortcuts: opens today with only its intended creation and leaves existing notes unchanged', async () => {
-    const before = snapshotVault(vaultCopy());
-    await pressCommand('d', { shift: true });
-    await expect(title()).toHaveText(TODAY);
-    const path = await $('[data-testid="periodic"]').getAttribute('data-path');
-    expect(path).toBeTruthy();
-    const after = snapshotVault(vaultCopy());
-    expect(diffSnapshots(before, after)).toEqual(before.has(path!) ? [] : [`added: ${path}`]);
-    await pressCommand('h', { shift: true });
-    await pressCommand('d', { shift: true });
-    await expect(title()).toHaveText(TODAY);
-    expect(diffSnapshots(after, snapshotVault(vaultCopy()))).toEqual([]);
-    await pressCommand('h', { shift: true });
-  });
 
   it('opens a note in a new tab with ⌘-click or a middle click, each tab with its own history', async () => {
     await startWithTabs([ALBUM]);
@@ -1539,6 +1525,21 @@ describe('the demo vault', () => {
     await expect($('[data-testid="periodic"][data-period="day"]')).toBeDisplayed();
     await $('[data-testid="sidebar-vault"]').click();
     await expect($('[data-testid="today-open"]')).toHaveAttribute('title', `Open ${TODAY}`);
+  });
+
+  it('workspace shortcuts: opens today with only its intended creation and leaves existing notes unchanged', async () => {
+    const before = snapshotVault(vaultCopy());
+    await pressCommand('d', { shift: true });
+    await expect(title()).toHaveText(TODAY);
+    const path = await $('[data-testid="periodic"]').getAttribute('data-path');
+    expect(path).toBeTruthy();
+    const after = snapshotVault(vaultCopy());
+    expect(diffSnapshots(before, after)).toEqual(before.has(path!) ? [] : [`added: ${path}`]);
+    await pressCommand('h', { shift: true });
+    await pressCommand('d', { shift: true });
+    await expect(title()).toHaveText(TODAY);
+    expect(diffSnapshots(after, snapshotVault(vaultCopy()))).toEqual([]);
+    await pressCommand('h', { shift: true });
   });
 
   it("times a new task of today's with the stopwatch, shown on the timer's card and in the sidebar", async () => {
