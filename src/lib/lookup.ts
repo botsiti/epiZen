@@ -1,4 +1,4 @@
-import { genreName, type KindSpec } from './library';
+import { genreName } from './library';
 import type { PodcastArtwork } from './podcasts';
 
 // Where "Add" finds an album, film, book or podcast episode: public services that need no account,
@@ -8,7 +8,8 @@ import type { PodcastArtwork } from './podcasts';
 // from test/fixtures/lookup/.
 
 /** Where a kind is looked up: albums on MusicBrainz, films on Wikipedia, books on Wikipedia and Open Library, podcasts on iTunes. */
-export type Source = NonNullable<KindSpec['source']> | 'wikipedia-album';
+export type { Source } from './librarySources';
+import type { Source } from './librarySources';
 /** One service a search asks. */
 export type Service = 'musicbrainz' | 'wikipedia' | 'openlibrary' | 'itunes';
 
@@ -87,6 +88,9 @@ export const SERVICE_NAMES: Record<Service, string> = {
 export const SOURCE_SERVICES: Record<Source, Service[]> = {
   musicbrainz: ['musicbrainz'],
   'wikipedia-album': ['wikipedia'],
+  'wikipedia-book': ['wikipedia'],
+  'wikipedia-podcast': ['wikipedia'],
+  openlibrary: ['openlibrary'],
   'wikipedia-film': ['wikipedia'],
   'wikipedia-openlibrary': ['wikipedia', 'openlibrary'],
   'itunes-podcast': ['itunes'],
@@ -96,6 +100,9 @@ export const SOURCE_SERVICES: Record<Source, Service[]> = {
 export const SOURCE_NAMES: Record<Source, string> = {
   musicbrainz: 'MusicBrainz',
   'wikipedia-album': 'Wikipedia',
+  'wikipedia-book': 'Wikipedia',
+  'wikipedia-podcast': 'Wikipedia',
+  openlibrary: 'Open Library',
   'wikipedia-film': 'Wikipedia',
   'wikipedia-openlibrary': 'Wikipedia and Open Library',
   'itunes-podcast': 'iTunes',
@@ -108,6 +115,9 @@ export const SOURCE_NAMES: Record<Source, string> = {
 export const SEARCH_PAUSE: Record<Source, number> = {
   musicbrainz: 400,
   'wikipedia-album': 220,
+  'wikipedia-book': 220,
+  'wikipedia-podcast': 220,
+  openlibrary: 220,
   'wikipedia-film': 220,
   'wikipedia-openlibrary': 220,
   'itunes-podcast': 220,
@@ -132,6 +142,12 @@ export function searchRequests(source: Source, query: string): { service: Servic
       return [{ service: 'wikipedia', url: wikipediaSearch(`${words} album`) }];
     case 'wikipedia-film':
       return [{ service: 'wikipedia', url: wikipediaSearch(`${words} film`) }];
+    case 'wikipedia-book':
+      return [{ service: 'wikipedia', url: wikipediaSearch(`${words} book`) }];
+    case 'wikipedia-podcast':
+      return [{ service: 'wikipedia', url: wikipediaSearch(`${words} podcast`) }];
+    case 'openlibrary':
+      return [{ service: 'openlibrary', url: `https://openlibrary.org/search.json?q=${term}&fields=key,title,author_name,first_publish_year,subject,cover_i&limit=10` }];
     case 'wikipedia-openlibrary':
       return [
         { service: 'wikipedia', url: wikipediaSearch(`${words} book`) },
@@ -163,6 +179,12 @@ export function parseSearch(source: Source, answers: Partial<Record<Service, unk
       return has('wikipedia') ? wikipedia(answers.wikipedia, 'album') : [];
     case 'wikipedia-film':
       return has('wikipedia') ? wikipedia(answers.wikipedia, 'film') : [];
+    case 'wikipedia-book':
+      return has('wikipedia') ? wikipedia(answers.wikipedia, 'book') : [];
+    case 'wikipedia-podcast':
+      return has('wikipedia') ? wikipedia(answers.wikipedia, 'podcast') : [];
+    case 'openlibrary':
+      return has('openlibrary') ? openLibrary(answers.openlibrary) : [];
     case 'wikipedia-openlibrary': {
       const wiki = has('wikipedia') ? wikipedia(answers.wikipedia, 'book') : [];
       const open = has('openlibrary') ? openLibrary(answers.openlibrary) : [];
@@ -381,8 +403,9 @@ const FILM_WORDS = new Set(['film', 'movie', 'television series', 'tv series', '
 const BOOK_WORDS = new Set(['graphic novel', 'novella', 'novel', 'book', 'memoir', 'autobiography', 'biography', 'essay collection', 'short story collection', 'poetry collection', 'manga', 'play']);
 const NEITHER = /\b(genre|score|soundtrack|franchise|festival|studio|award|character|company|publisher|identifier)\b/i;
 
-function isKind(description: string, title: string, kind: 'film' | 'book' | 'album'): boolean {
+function isKind(description: string, title: string, kind: 'film' | 'book' | 'album' | 'podcast'): boolean {
   if (/^list of\b/i.test(title) || (kind !== 'album' && NEITHER.test(description))) return false;
+  if (kind === 'podcast') return /\bpodcast\b/i.test(description) && !/\b(network|company|award)\b/i.test(description);
   const head = KIND_WORD.exec(description)?.[1]?.toLowerCase() ?? '';
   if (kind === 'film') return FILM_WORDS.has(head);
   if (kind === 'album') return ['album', 'ep'].includes(head);
@@ -391,7 +414,7 @@ function isKind(description: string, title: string, kind: 'film' | 'book' | 'alb
 
 /** A page's title as the thing is called: without Wikipedia's "(film)", "(2023 film)", "(novel)" or "(Epstein book)". */
 export function plainTitle(title: string): string {
-  return title.replace(/\s+\((?:[^()]*\s)?(?:film|movie|novel|novella|book|memoir|album|TV series|miniseries)\)$/i, '').trim() || title;
+  return title.replace(/\s+\((?:[^()]*\s)?(?:film|movie|novel|novella|book|memoir|album|podcast|TV series|miniseries)\)$/i, '').trim() || title;
 }
 
 /** Who the description says made it: "2017 book by Max Tegmark on artificial intelligence" is Max Tegmark's. */
@@ -400,7 +423,7 @@ const firstYear = (description: string) => /\b(1[5-9]\d\d|20\d\d)\b/.exec(descri
 /** A Wikimedia image's URL without the tracking Wikipedia adds to it. */
 const imageUrl = (url: string | undefined) => url?.replace(/\?utm_[^#]*$/, '');
 
-function wikipedia(answer: unknown, kind: 'film' | 'book' | 'album'): LookupResult[] {
+function wikipedia(answer: unknown, kind: 'film' | 'book' | 'album' | 'podcast'): LookupResult[] {
   const pages = array(object(object(answer).query).pages)
     .map(object)
     .sort((a, b) => (Number(a.index) || 0) - (Number(b.index) || 0));
@@ -422,7 +445,7 @@ function wikipedia(answer: unknown, kind: 'film' | 'book' | 'album'): LookupResu
         cover: image,
         about: description || undefined,
         from: 'wikipedia',
-        wikidata: item && /^Q\d+$/.test(item) ? { item, maker: kind === 'film' ? 'P57' : kind === 'album' ? 'P175' : 'P50' } : undefined,
+        wikidata: kind !== 'podcast' && item && /^Q\d+$/.test(item) ? { item, maker: kind === 'film' ? 'P57' : kind === 'album' ? 'P175' : 'P50' } : undefined,
       },
     ];
   });

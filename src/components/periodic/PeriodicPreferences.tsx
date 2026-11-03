@@ -2,33 +2,32 @@ import { useId, useMemo, useState } from 'react';
 import type { VaultFile } from '../../lib/api';
 import { formatDate, parseDate, today } from '../../lib/dates';
 import { PERIODS, periodicCatalog, periodicPath, startOfPeriod, type Period, type PeriodicRecognition, type PeriodicSettings } from '../../lib/periodic';
+import { SettingRow } from '../settings/SettingRow';
 import { DateField } from '../DateField';
 
 const PERIOD_TITLES: Record<Period, string> = { day: 'Daily notes', week: 'Weekly notes', month: 'Monthly notes' };
 
-export function PeriodicFolders({ value, folders, onChange }: { value: PeriodicSettings; folders: string[]; onChange: (next: PeriodicSettings) => void }) {
+export function PeriodicFolders({ value, folders, onChange, periods = PERIODS }: { value: PeriodicSettings; folders: string[]; onChange: (next: PeriodicSettings) => void; periods?: Period[] }) {
   const id = useId();
-  return <>
-    {PERIODS.map((period) => <fieldset className="settings-group" key={period} data-testid={`settings-${period}`}>
-      <legend className="eyebrow">{PERIOD_TITLES[period]}</legend>
-      <label className="field"><span>Folder</span><input aria-label={`${PERIOD_TITLES[period]} folder`} value={value[period].folder} onChange={(event) => onChange({ ...value, [period]: { ...value[period], folder: event.target.value } })} list={`${id}-folders`} placeholder="Top of the vault" /></label>
-      <label className="field"><span>Future note names</span><input value={value[period].format} onChange={(event) => onChange({ ...value, [period]: { ...value[period], format: event.target.value } })} data-testid={`settings-${period}-format`} list={`${id}-${period}`} />
-        <small className="field-hint">This {period}: {periodicPath(period, today(), value)}<br />Only new notes use this pattern. Earlier names and locations remain readable.</small>
-      </label>
-      <datalist id={`${id}-${period}`}>{(period === 'day' ? ['YYYY-MM-DD', 'DD.MM.YYYY', 'MMMM D, YYYY', 'YYYY/[days]/YYYY-MM-DD'] : period === 'week' ? ['GGGG-[W]WW', 'GGGG-[W]WW - DD.MM.YY', 'GGGG/[weeks]/GGGG-[W]WW'] : ['YYYY-MM', 'MMMM YYYY', 'MM.YY [RPG]', 'YYYY/[months]/YYYY-MM']).map((format) => <option key={format} value={format} />)}</datalist>
-    </fieldset>)}
-    <datalist id={`${id}-folders`}>{folders.map((folder) => <option key={folder} value={folder} />)}</datalist>
-  </>;
+  return <>{periods.map((period) => <fieldset className="settings-group periodic-location" key={period} data-testid={`settings-${period}`}>
+    <legend className="eyebrow">New {period === 'day' ? 'daily' : period === 'week' ? 'weekly' : 'monthly'} notes</legend>
+    <div className="preferences-card">
+      <SettingRow title="New note location" description="Choose a folder in this vault."><input aria-label={`${PERIOD_TITLES[period]} folder`} value={value[period].folder} onChange={(event) => onChange({ ...value, [period]: { ...value[period], folder: event.target.value } })} list={`${id}-folders`} placeholder="Top of the vault" /></SettingRow>
+      <SettingRow title="Date format" description="Use YYYY for year, MM for month and DD for day."><input aria-label={`${PERIOD_TITLES[period]} date format`} value={value[period].format} onChange={(event) => onChange({ ...value, [period]: { ...value[period], format: event.target.value } })} data-testid={`settings-${period}-format`} list={`${id}-${period}`} /></SettingRow>
+    </div>
+    <small className="field-hint">This {period}: {periodicPath(period, today(), value)}<br />Applies to new notes. Existing notes keep their names and content.</small>
+    <datalist id={`${id}-${period}`}>{(period === 'day' ? ['YYYY-MM-DD', 'DD.MM.YYYY', 'MMMM D, YYYY', 'YYYY/[days]/YYYY-MM-DD'] : period === 'week' ? ['GGGG-[W]WW', 'GGGG-[W]WW - DD.MM.YY', 'GGGG/[weeks]/GGGG-[W]WW'] : ['YYYY-MM', 'MMMM YYYY', 'MM.YY [RPG]', 'YYYY/[months]/YYYY-MM']).map((format) => <option key={format} value={format} />)}</datalist>
+  </fieldset>)}<datalist id={`${id}-folders`}>{folders.map((folder) => <option key={folder} value={folder} />)}</datalist></>;
 }
 
-export function PeriodicRecognitionFields({ periodic, value, files, texts, onChange }: { periodic: PeriodicSettings; value: PeriodicRecognition; files: VaultFile[]; texts: ReadonlyMap<string, string>; onChange: (next: PeriodicRecognition) => void }) {
+export function PeriodicRecognitionFields({ periodic, value, files, texts, onChange, periodFilter }: { periodFilter?: Period; periodic: PeriodicSettings; value: PeriodicRecognition; files: VaultFile[]; texts: ReadonlyMap<string, string>; onChange: (next: PeriodicRecognition) => void }) {
   const id = useId();
   const [path, setPath] = useState('');
-  const [period, setPeriod] = useState<Period | 'none'>('day');
+  const [period, setPeriod] = useState<Period | 'none'>(periodFilter ?? 'day');
   const [date, setDate] = useState('');
   const [error, setError] = useState('');
   const catalog = useMemo(() => periodicCatalog(files, periodic, texts, value), [files, periodic, texts, value]);
-  const conflicts = [...catalog.matches].filter(([, paths]) => paths.length > 1);
+  const conflicts = [...catalog.matches].filter(([key, paths]) => paths.length > 1 && (!periodFilter || key.startsWith(`${periodFilter}:`)));
   const link = () => {
     const parsed = parseDate(date, 'YYYY-MM-DD');
     if (!files.some((file) => file.kind === 'note' && file.path === path) || (period !== 'none' && !parsed)) { setError('Choose an existing note and a valid date.'); return; }
@@ -38,11 +37,11 @@ export function PeriodicRecognitionFields({ periodic, value, files, texts, onCha
   };
   return <fieldset className="settings-group periodic-recognition" data-testid="periodic-recognition">
     <legend className="eyebrow">Existing notes</legend>
-    <p className="muted">{catalog.byPath.size} notes recognized. Names can vary from one note to the next. Your Markdown stays as it is.</p>
-    <label className="field"><span>Ambiguous dates</span><select value={value.dateOrder} onChange={(event) => onChange({ ...value, dateOrder: event.target.value === 'mdy' ? 'mdy' : 'dmy' })}>
+    <p className="muted">{[...catalog.byPath.values()].filter((note) => !periodFilter || note.period === periodFilter).length} notes recognized. Names can vary from one note to the next. Your Markdown stays as it is.</p>
+    <label className="field"><span>Date order in older filenames</span><select value={value.dateOrder} onChange={(event) => onChange({ ...value, dateOrder: event.target.value === 'mdy' ? 'mdy' : 'dmy' })}>
       <option value="dmy">Day first · 03-04 is 3 April</option><option value="mdy">Month first · 03-04 is March 4</option>
-    </select><small className="field-hint">Used for older numeric names. A note’s explicit date takes priority.</small></label>
-    {conflicts.map(([key, paths]) => <label className="field" key={key}><span>Choose the calendar note · {key}</span><select aria-label={`Calendar note for ${key}`} value={catalog.index.get(key) ?? ''} onChange={(event) => onChange({ ...value, preferred: { ...value.preferred, [key]: event.target.value } })}>
+    </select><small className="field-hint">For filenames such as 03-04-2026. A date written inside the note takes priority.</small></label>
+    {conflicts.map(([key, paths]) => <label className="field" key={key}><span>{key.slice(key.indexOf(':') + 1)} · {paths.length} notes</span><select aria-label={`Calendar note for ${key}`} value={catalog.index.get(key) ?? ''} onChange={(event) => onChange({ ...value, preferred: { ...value.preferred, [key]: event.target.value } })}>
       <option value="">Choose a note…</option>{paths.map((path) => <option key={path}>{path}</option>)}
     </select><small className="field-hint">Both files stay intact. The calendar and statistics use your choice.</small></label>)}
     <details><summary>Link an older note or correct its date</summary>

@@ -1172,3 +1172,5 @@ button.dash-row:hover {
 
 .vault-name { display: flex; align-items: center; gap: 8px; }
 .app-mark { width: 24px; height: 24px; border-radius: 6px; flex: none; }
+
+.main.is-preferences { padding: 0; container-type: inline-size; }

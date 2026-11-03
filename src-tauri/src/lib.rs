@@ -200,6 +200,16 @@ async fn create_note(state: Shared<'_>, path: String, text: String) -> Result<()
 }
 
 #[tauri::command]
+async fn create_folder(state: Shared<'_>, path: String) -> Result<(), String> {
+    with_vault(state, |vault| vault.create_folder(&path))
+}
+
+#[tauri::command]
+async fn list_folders(state: Shared<'_>) -> Result<Vec<String>, String> {
+    with_vault(state, Vault::list_folders)
+}
+
+#[tauri::command]
 async fn trash_note(state: Shared<'_>, path: String, expected: String) -> Result<String, String> {
     with_vault(state, |vault| vault.trash_note(&path, &expected))
 }
@@ -433,6 +443,8 @@ pub fn run() {
             read_image,
             save_expense_photo,
             create_note,
+            create_folder,
+            list_folders,
             trash_note,
             rename_note,
             reveal_note,

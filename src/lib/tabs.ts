@@ -6,7 +6,7 @@ export type View =
   | { kind: 'home' }
   | { kind: 'note'; path: string; editing?: boolean }
   | { kind: 'missing'; target: string }
-  | { kind: 'new'; folder: string }
+  | { kind: 'new'; folder: string; item?: 'folder' }
   | { kind: 'unsaved'; path: string; text: string; message: string }
   | { kind: 'settings' }
   | { kind: 'graph' }
@@ -199,7 +199,7 @@ export function tabTitle(view: View): string {
     case 'missing':
       return view.target;
     case 'new':
-      return 'New note';
+      return view.item === 'folder' ? 'New folder' : 'New note';
     case 'unsaved':
       return 'Not saved';
     case 'settings':

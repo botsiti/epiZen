@@ -155,6 +155,47 @@ impl Vault {
         self.create(path, FileKind::Note, text.as_bytes())
     }
 
+    /// Create one visible folder. Reuse the guarded creation boundary, without touching notes.
+    /// The parent must already exist; create_dir refuses any existing destination.
+    pub fn create_folder(&self, path: &str) -> Result<(), VaultError> {
+        let invalid = || VaultError::InvalidPath(path.to_owned());
+        if path.is_empty() || path.split('/').any(|part| part.is_empty() || part.starts_with('.') || part.contains(['\\', ':', '\0'])) {
+            return Err(invalid());
+        }
+        let relative = Path::new(path);
+        if relative.components().any(|part| !matches!(part, Component::Normal(_))) { return Err(invalid()); }
+        let parent = relative.parent().ok_or_else(invalid)?;
+        let mut checked = self.root.clone();
+        for part in parent.components() {
+            checked.push(part);
+            let metadata = fs::symlink_metadata(&checked)?;
+            if !metadata.is_dir() || metadata.file_type().is_symlink() { return Err(invalid()); }
+        }
+        let target = self.new_path(path, None)?;
+        match fs::create_dir(target) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => Err(VaultError::Exists(path.to_owned())),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Visible directories, including empty ones. Never follow aliases or hidden directories.
+    pub fn list_folders(&self) -> Result<Vec<String>, VaultError> {
+        fn walk(vault: &Vault, dir: &Path, folders: &mut Vec<String>) -> Result<(), VaultError> {
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                if entry.file_name().to_string_lossy().starts_with('.') || !entry.file_type()?.is_dir() { continue; }
+                if let Some(path) = vault.relative(&entry.path()) { folders.push(path); }
+                let _ = walk(vault, &entry.path(), folders);
+            }
+            Ok(())
+        }
+        let mut folders = Vec::new();
+        walk(self, &self.root, &mut folders)?;
+        folders.sort();
+        Ok(folders)
+    }
+
     /// Removes a note from the library by moving it into a unique folder in the vault's
     /// hidden `.trash`. No image or other note is removed, and no trash entry is replaced.
     pub fn trash_note(&self, path: &str, expected: &str) -> Result<String, VaultError> {
@@ -262,7 +303,7 @@ impl Vault {
         if fs::read(&source)? != expected.as_bytes() {
             return Err(VaultError::Changed(path.to_owned()));
         }
-        let target = self.new_path(destination, FileKind::Note)?;
+        let target = self.new_path(destination, Some(FileKind::Note))?;
         before_move();
         rename_exclusive(&source, &target).map_err(|err| match err.kind() {
             io::ErrorKind::AlreadyExists => VaultError::Exists(destination.to_owned()),
@@ -290,7 +331,7 @@ impl Vault {
         if path == destination || plain_path(path, FileKind::Note)?.parent() != plain_path(destination, FileKind::Note)?.parent() {
             return Err(VaultError::InvalidPath(destination.to_owned()));
         }
-        let target = self.new_path(destination, FileKind::Note)?;
+        let target = self.new_path(destination, Some(FileKind::Note))?;
         if let Ok(meta) = fs::symlink_metadata(&target)
             && (meta.file_type().is_symlink() || target.canonicalize()? != source)
         {
@@ -349,7 +390,7 @@ impl Vault {
     }
 
     fn create(&self, path: &str, kind: FileKind, bytes: &[u8]) -> Result<(), VaultError> {
-        let target = self.new_path(path, kind)?;
+        let target = self.new_path(path, Some(kind))?;
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -499,8 +540,9 @@ impl Vault {
 
     /// Where a new note or image goes: a plain path whose existing folders all lie inside the
     /// vault (a symlinked folder can't carry it out), with the missing folders created.
-    fn new_path(&self, path: &str, kind: FileKind) -> Result<PathBuf, VaultError> {
-        let relative = plain_path(path, kind)?;
+    /// `None` validates a directory name without requiring a file extension.
+    fn new_path(&self, path: &str, kind: Option<FileKind>) -> Result<PathBuf, VaultError> {
+        let relative = match kind { Some(kind) => plain_path(path, kind)?, None => plain_relative(path)? };
         let invalid = || VaultError::InvalidPath(path.to_owned());
         let name = relative.file_name().ok_or_else(invalid)?;
         let folder = self.root.join(relative.parent().ok_or_else(invalid)?);
@@ -624,8 +666,8 @@ enum Step {
     SwapBack,
 }
 
-/// A vault-relative path made only of plain names, none hidden, for a file of the given kind.
-fn plain_path(path: &str, expected: FileKind) -> Result<&Path, VaultError> {
+/// A vault-relative path made only of plain names, none hidden.
+fn plain_relative(path: &str) -> Result<&Path, VaultError> {
     let relative = Path::new(path);
     let plain = !path.is_empty()
         && relative.components().all(|part| match part {
@@ -635,6 +677,11 @@ fn plain_path(path: &str, expected: FileKind) -> Result<&Path, VaultError> {
     if !plain {
         return Err(VaultError::InvalidPath(path.to_owned()));
     }
+    Ok(relative)
+}
+
+fn plain_path(path: &str, expected: FileKind) -> Result<&Path, VaultError> {
+    let relative = plain_relative(path)?;
     if kind_of(relative) != Some(expected) {
         return Err(VaultError::WrongKind(path.to_owned()));
     }
@@ -1269,6 +1316,45 @@ mod tests {
             }
         }
         files
+    }
+
+    #[test]
+    fn creating_folders_preserves_every_file_in_a_demo_copy() {
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../demo-vault");
+        let copy = tempfile::tempdir().unwrap();
+        for (path, bytes) in snapshot(&demo) {
+            let target = copy.path().join(path);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(target, bytes).unwrap();
+        }
+        let before = snapshot(copy.path());
+        let vault = Vault::open(copy.path()).unwrap();
+        vault.create_folder("New ideas").unwrap();
+        vault.create_folder("New ideas/Мысли").unwrap();
+        assert!(vault.list_folders().unwrap().contains(&"New ideas/Мысли".to_owned()));
+        assert!(matches!(vault.create_folder("New ideas"), Err(VaultError::Exists(_))));
+        assert!(vault.create_folder("Missing/Child").is_err());
+        assert!(!copy.path().join("Missing").exists());
+        for path in ["", "/outside", "../outside", ".hidden", "New ideas/../outside", "New ideas//Child"] {
+            assert!(vault.create_folder(path).is_err(), "accepted {path}");
+        }
+        assert_eq!(snapshot(copy.path()), before);
+        let reloaded = Vault::open(copy.path()).unwrap();
+        assert!(reloaded.list_folders().unwrap().contains(&"New ideas/Мысли".to_owned()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn folder_creation_and_listing_do_not_follow_symlinks() {
+        use std::os::unix::fs::symlink;
+        let (dir, vault) = vault_with(&[("kept.md", "untouched"), (".hidden/n.md", "private")]);
+        let outside = tempfile::tempdir().unwrap();
+        symlink(outside.path(), dir.path().join("Alias")).unwrap();
+        assert!(vault.create_folder("Alias/New").is_err());
+        assert!(vault.create_folder("kept.md").is_err());
+        assert!(vault.list_folders().unwrap().is_empty());
+        assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+        assert_eq!(vault.read_note("kept.md").unwrap(), "untouched");
     }
 
     #[test]

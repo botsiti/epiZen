@@ -534,3 +534,22 @@ continues the same identity; the user can resume the paused streak or start a ne
 while preserving the previous best. Paused days are not misses. Today is a grace day until checked
 in, and a missed scheduled day breaks the streak. The manager provides a navigable calendar for
 all past months. Archive, resume and create forms retain failed drafts and report conflicts.
+
+### Focused preferences and file creation
+
+Settings has its own navigation for Daily notes, Weekly notes, Monthly notes, Files & folders,
+Homepage and Hotkeys. Compact grouped rows use workspace surfaces, hairlines and sage selection;
+controls sit beside their descriptions and stack in narrow panes. Homepage owns the birth date,
+media lookup sources for Add, and podcast artwork. Changing a catalogue preserves the same result
+cards, edit form and library page. Wikipedia podcast results describe shows; the episode title is
+entered manually, while iTunes offers episode listings.
+
+Daily notes offers a folder-scoped preview of existing notes before connecting their calendar dates.
+The date-order choice uses an actual example. Duplicate-date choices and individual date corrections
+sit behind Review existing notes. Connecting saves only app preferences; it never moves or edits notes.
+
+The explorer has distinct New note, New folder and Collapse actions. Creation previews the full
+vault-relative destination, retains failed drafts and refuses existing destinations. Empty folders
+remain visible after reopening. Files & folders stores per-vault defaults for notes and folder
+parents: the current note's folder, the vault root or a specified folder. Periodic notes retain their
+own locations.

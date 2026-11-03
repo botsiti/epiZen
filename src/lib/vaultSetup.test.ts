@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { DEFAULT_FILE_PREFERENCES } from './filePreferences';
 import { day } from './dates';
 import { DEFAULT_PERIODIC, DEFAULT_RECOGNITION, periodOf, periodicPath } from './periodic';
 import { STARTER_PERIODIC, starterNotes, vaultPreferences, vaultPreferencesPatch } from './vaultSetup';
@@ -9,7 +10,7 @@ it('isolates vault preferences and binds legacy global preferences to one vault'
   expect(vaultPreferences(legacy, '/one').recognition.dateOrder).toBe('mdy');
   const stored = { ...legacy, ...vaultPreferencesPatch(legacy, '/one', STARTER_PERIODIC, DEFAULT_RECOGNITION) };
   expect(vaultPreferences(stored, '/one').complete).toBe(true);
-  expect(vaultPreferences(stored, '/two')).toEqual({ complete: false, periodic: DEFAULT_PERIODIC, recognition: DEFAULT_RECOGNITION });
+  expect(vaultPreferences(stored, '/two')).toEqual({ complete: false, periodic: DEFAULT_PERIODIC, recognition: DEFAULT_RECOGNITION, fileDefaults: DEFAULT_FILE_PREFERENCES });
   const both = { ...stored, ...vaultPreferencesPatch(stored, '/two', DEFAULT_PERIODIC, { ...DEFAULT_RECOGNITION, dateOrder: 'mdy' }) };
   expect(vaultPreferences(both, '/one').periodic).toEqual(STARTER_PERIODIC);
   expect(vaultPreferences(both, '/two').recognition.dateOrder).toBe('mdy');

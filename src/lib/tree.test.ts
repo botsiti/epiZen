@@ -16,3 +16,9 @@ describe('buildTree', () => {
     expect(countFolders(tree)).toBe(2);
   });
 });
+
+it('shows empty folders across refreshes while continuing to hide image-only folders', () => {
+  const tree = buildTree([{ kind: 'image', path: 'Covers/a.png' }], ['Covers', 'Projects', 'Projects/Writing']);
+  expect(tree.map((node) => node.name)).toEqual(['Projects']);
+  expect(tree[0]?.kind === 'folder' && tree[0].children.map((node) => node.name)).toEqual(['Writing']);
+});

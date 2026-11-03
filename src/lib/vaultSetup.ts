@@ -1,3 +1,4 @@
+import { filePreferences, type FilePreferences } from './filePreferences';
 import type { NoteText, Settings } from './api';
 import { PERIODS, builtInPeriodicText, periodicPath, periodicSettings, recognitionSettings, type PeriodicRecognition, type PeriodicSettings } from './periodic';
 
@@ -16,14 +17,15 @@ export function vaultPreferences(settings: Settings, root: string) {
   return {
     complete: stored.complete === true || Boolean(legacy),
     periodic: periodicSettings(legacy ? settings : stored),
+    fileDefaults: filePreferences(stored.fileDefaults),
     recognition: recognitionSettings(stored.recognition ?? { dateOrder: legacy && /^M/.test(periodicSettings(settings).day.format) ? 'mdy' : 'dmy' }),
   };
 }
 
-export function vaultPreferencesPatch(settings: Settings, root: string, periodic: PeriodicSettings, recognition: PeriodicRecognition): Settings {
+export function vaultPreferencesPatch(settings: Settings, root: string, periodic: PeriodicSettings, recognition: PeriodicRecognition, fileDefaults?: FilePreferences): Settings {
   return {
     ...(settings.periodic && !settings.legacyPeriodicVault ? { legacyPeriodicVault: root } : {}),
-    vaults: { ...object(settings.vaults), [root]: { complete: true, periodic, recognition } },
+    vaults: { ...object(settings.vaults), [root]: { ...object(object(settings.vaults)[root]), complete: true, periodic, recognition, ...(fileDefaults ? { fileDefaults } : {}) } },
   };
 }
 

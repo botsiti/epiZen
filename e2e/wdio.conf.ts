@@ -22,13 +22,14 @@ process.env.EPIZEN_CONFIG_DIR = join(dirname(vaultCopy()), 'config');
 function copyDemoVault() {
   const copy = join(mkdtempSync(join(tmpdir(), COPY_PREFIX)), 'demo-vault');
   cpSync(DEMO_VAULT, copy, { recursive: true });
+  cpSync(DEMO_VAULT, join(dirname(copy), 'preferences-vault'), { recursive: true });
   // The demo vault's periodic notes, set up the way a user would in Settings.
   const config = join(dirname(copy), 'config');
   mkdirSync(config);
   // Vault::open canonicalizes paths (on macOS, /var resolves to /private/var).
   // Settings must use the same roots or the test vaults appear to need first-run setup.
   const canonicalParent = realpathSync(dirname(copy));
-  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC, legacyPeriodicVault: join(canonicalParent, 'demo-vault'), vaults: { [join(canonicalParent, 'big-vault')]: { complete: true, periodic: DEFAULT_PERIODIC } } }));
+  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC, legacyPeriodicVault: join(canonicalParent, 'demo-vault'), vaults: { [join(canonicalParent, 'preferences-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'big-vault')]: { complete: true, periodic: DEFAULT_PERIODIC } } }));
   // A generated vault for the graph's 2,000-note check, beside the copy so it goes with it.
   makeBigVault(join(dirname(copy), 'big-vault'));
   mkdirSync(join(dirname(copy), 'starter-vault'));
@@ -55,6 +56,7 @@ export const config: WebdriverIO.Config = {
     launch(4446, './specs/vault-error.e2e.ts', ['--vault', join(tmpdir(), 'epizen-no-such-vault')]),
     launch(4447, './specs/vault.e2e.ts', ['--vault', vaultCopy()]),
     launch(4448, './specs/graph-2000.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'big-vault')]),
+    launch(4450, './specs/preferences.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'preferences-vault')]),
     launch(4449, './specs/setup.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'starter-vault')]),
   ],
   services: [['@wdio/tauri-service', { driverProvider: 'embedded' }]],

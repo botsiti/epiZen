@@ -1,0 +1,14 @@
+.creation-screen { max-width: 560px; }
+.creation-mark { width: 48px; height: 48px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--accent); margin-bottom: 32px; }
+.creation-mark svg { width: 24px; height: 24px; }
+.creation-screen h1 { margin-bottom: 12px; }
+.creation-screen > .muted { line-height: 1.6; font-size: 14px; }
+.creation-form { margin-top: 32px; }
+.creation-form fieldset { display: grid; gap: 24px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.creation-form .field > span { text-transform: none; letter-spacing: 0; color: var(--text-muted); font-size: 13px; }
+.creation-preview { display: flex; align-items: flex-start; gap: 8px; padding: 12px; background: var(--surface); border-radius: 6px; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.creation-preview svg { flex: none; }
+.creation-submit { justify-self: start; padding: 10px 20px; align-self: flex-start; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg)); }
+.explorer-tools { display: flex; align-items: center; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--border); margin-top: 8px; }
+.explorer-tools > span { flex: 1; font-size: 11px; color: var(--text-muted); }
+.explorer-tools .icon-button { display: grid; place-items: center; width: 28px; height: 28px; }

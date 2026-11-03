@@ -21,6 +21,8 @@ export const vaultStatus = () => invoke<VaultStatus>('vault_status');
 /** Shows the system's folder picker and opens the folder picked. `null` when the user cancels. */
 export const pickVault = () => invoke<VaultStatus | null>('pick_vault');
 export const listFiles = () => invoke<VaultFile[]>('list_files');
+export const listFolders = () => invoke<string[]>('list_folders');
+export const createFolder = (path: string) => invoke<void>('create_folder', { path });
 export const readNote = (path: string) => invoke<string>('read_note', { path });
 export const readImage = (path: string) => invoke<ArrayBuffer>('read_image', { path });
 /** Saves a selected image beside this note without replacing any existing file. */
