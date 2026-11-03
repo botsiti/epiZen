@@ -8,6 +8,24 @@ import { EVIDENCE } from './paths';
  * `data-motion="off"` tells the periodic pages to show every move's end state at once.
  */
 export async function prepareWindow() {
+  // Start hidden, choose the requested panel, then show without focus. This runs in a
+  // Mocha hook so an unavailable local display fails the suite before any test runs.
+  // Hosted runners may only have a virtual monitor; an explicit local flag requires Retina.
+  await browser.execute(async (displayName) => {
+    const tauri = (window as unknown as { __TAURI__: {
+      dpi: { PhysicalPosition: new (x: number, y: number) => unknown };
+      window: {
+        availableMonitors: () => Promise<{ name: string | null; position: { x: number; y: number }; scaleFactor: number }[]>;
+        getCurrentWindow: () => { setPosition: (position: unknown) => Promise<void>; show: () => Promise<void> };
+      };
+    } }).__TAURI__;
+    const monitors = await tauri.window.availableMonitors();
+    const builtIn = monitors.find((monitor) => displayName && displayName !== 'builtin' ? monitor.name === displayName : /built.?in|color lcd|retina/i.test(monitor.name ?? ''));
+    if (displayName && !builtIn) throw new Error(`The MacBook display is unavailable: ${monitors.map((monitor) => monitor.name).join(', ')}`);
+    const current = tauri.window.getCurrentWindow();
+    if (builtIn) await current.setPosition(new tauri.dpi.PhysicalPosition(builtIn.position.x + Math.round(32 * builtIn.scaleFactor), builtIn.position.y + Math.round(48 * builtIn.scaleFactor)));
+    await current.show();
+  }, process.env.EPIZEN_TEST_DISPLAY ?? '');
   await browser.setWindowSize(1280, 820);
   // Keep WebKit painting without taking keyboard focus. Fully occluded macOS windows suspend
   // requestAnimationFrame, including graph layout and the driver's own animation waits.

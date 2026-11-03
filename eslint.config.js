@@ -7,6 +7,9 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig([
   globalIgnores(['dist', 'evidence', 'demo-vault', 'src-tauri/target', 'src-tauri/gen']),
+  // Nested checkouts have their own source, dependencies and generated bundles.
+  // Lint this checkout only; scanning those copies can exhaust the Node heap.
+  globalIgnores(['.worktrees', '.claude/worktrees']),
   // A Workflow script is the body of an async function with a top-level return, not a module.
   globalIgnores(['.claude/skills/*/*.workflow.js']),
   {
