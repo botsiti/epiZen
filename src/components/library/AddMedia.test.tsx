@@ -272,3 +272,28 @@ it('offers library genre matches in the add form and saves the selection', async
   await user.click(screen.getByTestId('add-save'));
   await waitFor(() => expect(createNote).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('  - psychedelic\n')));
 });
+
+it('uses a selected Wikipedia podcast source with the same episode form, preserving the show as author', async () => {
+  const user = userEvent.setup();
+  vi.mocked(lookupJson).mockResolvedValue({ query: { pages: [{ pageid: 42, title: 'Quiet conversations (podcast)', description: 'Interview podcast' }] } });
+  render(<AddMedia spec={{ ...podcast, source: 'wikipedia-podcast' }} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn()} />);
+  await user.type(screen.getByTestId('add-search'), 'quiet');
+  await user.click(await screen.findByTestId('add-result'));
+  expect(screen.getByTestId('add-title')).toHaveValue('');
+  expect(screen.getByTestId('add-maker')).toHaveValue('Quiet conversations');
+  expect(vi.mocked(lookupJson).mock.calls.every(([url]) => new URL(url).hostname === 'en.wikipedia.org')).toBe(true);
+});
+
+it('keeps manual entry available when the selected catalogue fails and can recover on a new search', async () => {
+  const user = userEvent.setup();
+  vi.mocked(lookupJson).mockRejectedValue(new Error('Offline'));
+  render(<AddMedia spec={{ ...book, source: 'wikipedia-book' }} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn()} />);
+  await user.type(screen.getByTestId('add-search'), 'life');
+  await waitFor(() => expect(screen.getByTestId('add-hint')).toHaveTextContent("Wikipedia didn't answer"));
+  await user.click(screen.getByTestId('add-manual'));
+  expect(screen.getByTestId('add-form')).toBeVisible();
+  await user.click(screen.getByTestId('add-back'));
+  vi.mocked(lookupJson).mockResolvedValue(recorded('wikipedia-book.json'));
+  await user.type(screen.getByTestId('add-search'), ' 3.0');
+  expect(await screen.findByTestId('add-result')).toHaveTextContent('Life 3.0');
+});

@@ -16,6 +16,9 @@ Built with Tauri 2, Rust, React and TypeScript.
 - **Manage files safely.** Rename from the title with automatic incoming-link updates, duplicate,
   reveal in Finder, or move a note to recoverable trash from the sidebar. Saves check for external
   edits, and failed saves preserve your text.
+- **Make the workspace your own.** Dedicated settings pages for periodic notes, Homepage,
+  files and Hotkeys. Preview existing daily notes before connecting them, choose library lookup
+  sources, and set default locations for new notes and folders.
 - **Keep Home focused.** A compact overview of your day, life spheres, eight quests at a time and
   ten recent library entries, with dedicated views for the full collections.
 - **Review your year.** Open Summaries from Home to see each month's reflection and daily averages.

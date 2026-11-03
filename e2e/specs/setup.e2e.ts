@@ -15,6 +15,8 @@ describe('vault setup and notes from other apps', () => {
   it('creates the reviewed starter vault with the real guarded filesystem commands', async () => {
     await expect($('[data-testid="vault-setup"]')).toBeDisplayed();
     await screenshot('110-connect-vault');
+    await $('label*=Yes, connect my notes').click();
+    await screenshot('172-existing-vault-preferences');
     await $('button=Create a starter vault here').click();
     await screenshot('111-starter-preview');
     await $('[data-testid="setup-save"]').click();
@@ -76,6 +78,7 @@ describe('vault setup and notes from other apps', () => {
     await showMonth('May 2025');
     await $('[data-testid="calendar-day"][data-date="2025-05-22"]').click();
     await $('[data-testid="settings"]').waitForDisplayed();
+    await $('summary*=Review existing notes').click();
     await scrollIntoView('[data-testid="periodic-recognition"]');
     await screenshot('116-duplicate-date-choice');
     // Native option clicks do not reach an unfocused macOS test window (as in the podcast journey).

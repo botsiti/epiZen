@@ -862,7 +862,7 @@ describe('the demo vault', () => {
     await pressCommand('1', { alt: true });
     await waitForNote(ALBUM);
     await pressCommand('n');
-    await expect($('h1')).toHaveText('Name the note');
+    await expect($('h1')).toHaveText('A new thought');
     // Opening the form alone does not create a note.
     await pressCommand('h', { shift: true });
     await $('[data-testid="home"]').waitForDisplayed();
@@ -870,6 +870,7 @@ describe('the demo vault', () => {
     await $('[data-testid="library"]').waitForDisplayed();
     await pressCommand(',');
     await $('[data-testid="settings"]').waitForDisplayed();
+    await $('[data-testid="settings-nav-hotkeys"]').click();
     await scrollIntoView('[data-testid="keyboard-shortcuts"]');
     const filter = $('[data-testid="keyboard-shortcuts"] input');
     await filter.setValue('sidebar');
@@ -1472,6 +1473,7 @@ describe('the demo vault', () => {
     const before = snapshotVault(vaultCopy());
     const settings = join(dirname(vaultCopy()), 'config', 'settings.json');
     const kept = () => (JSON.parse(readFileSync(settings, 'utf8')) as { podcasts?: { artwork?: string } }).podcasts?.artwork;
+    await $('[data-testid="settings-nav-home"]').click();
     const artwork = () => $('[data-testid="settings-podcast-artwork"]');
     // The WebDriver's native option click does nothing in a non-focused macOS window.
     // Dispatch the select's normal events; the assertions below still verify the UI and persisted setting.
@@ -1492,6 +1494,7 @@ describe('the demo vault', () => {
     await browser.waitUntil(() => kept() === 'episode', { timeoutMsg: 'the podcast preference was not saved' });
     await $('[data-testid="sidebar-vault"]').click();
     await $('[data-testid="open-settings"]').click();
+    await $('[data-testid="settings-nav-home"]').click();
     await expect(artwork()).toHaveValue('episode');
     await selectArtwork('show');
     await $('[data-testid="settings-save"]').click();

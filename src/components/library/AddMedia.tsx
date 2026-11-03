@@ -127,7 +127,7 @@ export function AddMedia({ spec, files, today, genreSuggestions = [], podcastArt
   const failed = current ? (Object.keys(current.failed) as Service[]) : [];
   const source = SOURCE_NAMES[spec.source];
   const hint = !requests.length
-    ? `Searches ${source} as you type${spec.kind === 'podcast' ? ', then lists the show’s episodes' : ''}. Nothing is sent until you do.`
+    ? `Searches ${source} as you type${spec.source === 'itunes-podcast' ? ', then lists the show’s episodes' : spec.source === 'wikipedia-podcast' ? '; enter the episode title after choosing a show' : ''}. Nothing is sent until you do.`
     : pending.length && !answered.length
       ? `Asking ${source}…`
       : pending.length
@@ -206,7 +206,7 @@ export function AddMedia({ spec, files, today, genreSuggestions = [], podcastArt
             <ul className="add-results">
               {results.map((result, i) => (
                 <li key={result.id} className="rise" style={order(Math.min(i, 10))}>
-                  <ResultCard spec={spec} result={result} mixed={mixed} onPick={(found) => (found.episodes ? setShow(found) : setPicked(found))} />
+                  <ResultCard spec={spec} result={result} mixed={mixed} onPick={(found) => (found.episodes ? setShow(found) : spec.kind === 'podcast' ? setPicked({ ...found, title: '', maker: found.title, year: undefined }) : setPicked(found))} />
                 </li>
               ))}
               <li>

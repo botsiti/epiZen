@@ -1,3 +1,5 @@
+import { PreferenceIcon } from './settings/icons';
+import './workspace/creation.css';
 import type { ReactNode } from 'react';
 import type { TreeNode } from '../lib/tree';
 import { openClicks } from './workspace/clicks';
@@ -15,6 +17,7 @@ interface Props {
   onOpenNote: (path: string, newTab: boolean) => void;
   onHome: Open;
   onNewNote: () => void;
+  onNewFolder?: () => void;
   onOpenFolder: () => void;
   onSettings: Open;
   onGraph: Open;
@@ -42,15 +45,16 @@ export function Sidebar(props: Props) {
           <img className="app-mark" src="/brand/epizen.png" alt="" />
           {vaultName}
         </button>
-        <button type="button" className="icon-button" onClick={onCollapseFolders} title="Collapse all folders (⌃3)" aria-label="Collapse all folders" aria-keyshortcuts="Control+3" data-testid="collapse-folders">
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4-3 4 3M4 10l4 3 4-3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
-        <button type="button" className="icon-button" onClick={onNewNote} title="New note (⌘N)" aria-label="New note" aria-keyshortcuts="Meta+N" data-testid="new-note-button">
-          +
-        </button>
       </div>
       {timer}
       {calendar}
+      <div className="explorer-tools" role="toolbar" aria-label="File actions"><span>Files</span>        <button type="button" className="icon-button" onClick={onCollapseFolders} title="Collapse all folders (⌃3)" aria-label="Collapse all folders" aria-keyshortcuts="Control+3" data-testid="collapse-folders">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4-3 4 3M4 10l4 3 4-3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <button type="button" className="icon-button" onClick={onNewNote} title="New note (⌘N)" aria-label="New note" aria-keyshortcuts="Meta+N" data-testid="new-note-button">
+          <PreferenceIcon name="note" />
+        </button>
+{props.onNewFolder && <button type="button" className="icon-button" onClick={props.onNewFolder} title="New folder" aria-label="New folder" data-testid="new-folder-button"><PreferenceIcon name="folder" /></button>}</div>
       <ul className="tree" role="tree">
         <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isFolderOpen} toggle={onToggleFolder} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} />
       </ul>

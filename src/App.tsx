@@ -23,7 +23,9 @@ import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { VaultSetup } from './components/workspace/VaultSetup';
 import { createStarterVault, starterNotes, vaultPreferences, vaultPreferencesPatch } from './lib/vaultSetup';
-import { SettingsScreen } from './components/SettingsScreen';
+import { librarySources } from './lib/librarySources';
+import { creationFolder } from './lib/filePreferences';
+import { SettingsScreen, type SettingsDraft } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
 import { NoteActionDialog, NoteMenu, type NoteAction } from './components/workspace/NoteActions';
 import { useTrayBridge } from './components/tray/useTrayBridge';
@@ -37,6 +39,8 @@ import { useWorkspace } from './components/workspace/useWorkspace';
 import {
   closeNow,
   createNote,
+  createFolder,
+  listFolders,
   trashNote,
   renameNote,
   revealNote,
@@ -67,7 +71,7 @@ import { buildLinkIndex } from './lib/linkIndex';
 import { renameLinkEdits } from './lib/rename';
 import { collectLibrary, genreCounts, hiddenColumns, isLibraryLayout, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
 import { collectMedia } from './lib/media';
-import { podcastSettings, type PodcastSettings } from './lib/podcasts';
+import { podcastSettings } from './lib/podcasts';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
 import {
   builtInPeriodicText,
@@ -82,7 +86,6 @@ import {
   periodOfName,
   type Period,
   type PeriodicSettings,
-  type PeriodicFeatures,
 } from './lib/periodic';
 import { artPaths, changeQuest, parseQuests, setQuestProgress, toggleQuest, type Quest, type QuestChange, type QuestEntry } from './lib/quests';
 import { metricScale, type DayEntry } from './lib/rollup';
@@ -127,6 +130,7 @@ export function App() {
   const [setup, setSetup] = useState<'existing' | 'create'>();
   const [status, setStatus] = useState<VaultStatus>();
   const [files, setFiles] = useState<VaultFile[]>([]);
+  const [folders, setFolders] = useState<string[]>([]);
   // The open tabs, each with its own history (src/lib/tabs.ts); the main pane shows the one in front.
   const { ws, update, restore, reset } = useWorkspace();
   const [right, setRight] = useState<RightSidebarState>({ open: false, closed: [] });
@@ -147,6 +151,7 @@ export function App() {
     const load = async () => {
       const next = await vaultStatus();
       const found = next.state === 'open' ? await listFiles() : [];
+      const directories = next.state === 'open' ? await listFolders() : [];
       const read = next.state === 'open' ? await readAllNotes() : [];
       let stored = await getSettings();
       if (next.state === 'open' && stored.periodic && !stored.legacyPeriodicVault && periodicCatalog(found, periodicSettings(stored)).byPath.size > 0) {
@@ -154,6 +159,7 @@ export function App() {
       }
       if (cancelled) return;
       setFiles(found);
+      setFolders(directories);
       setTexts(new Map(read.map((note) => [note.path, note.text])));
       setSettings(stored);
       // The tabs and the right sidebar as they were left in this vault, never a note that is gone.
@@ -195,16 +201,13 @@ export function App() {
     return () => void stop.then((unlisten) => unlisten());
   }, []);
 
-  const tree = useMemo(() => buildTree(files), [files]);
-  const folders = useMemo(
-    () => [...new Set(files.filter((file) => file.kind === 'note').map((file) => noteFolder(file.path)))].filter(Boolean).sort(),
-    [files],
-  );
+  const tree = useMemo(() => buildTree(files, folders), [files, folders]);
   const notes = useMemo(() => files.filter((file) => file.kind === 'note').map((file) => file.path.replace(/\.md$/i, '')), [files]);
   const preferences = useMemo(() => vaultPreferences(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
   const periodic = preferences.periodic;
   const recognition = preferences.recognition;
   const features = useMemo(() => periodicFeatures(settings.periodicFeatures), [settings.periodicFeatures]);
+  const sources = useMemo(() => librarySources(settings.librarySources), [settings.librarySources]);
   const podcasts = useMemo(() => podcastSettings(settings.podcasts), [settings.podcasts]);
   const catalog = useMemo(() => periodicCatalog(files, periodic, texts, recognition), [files, periodic, texts, recognition]);
   const periodicNotes = catalog.index;
@@ -339,7 +342,8 @@ export function App() {
   }, [notes, periodic, now]);
   // Reads the vault's files and texts again after the app created a note.
   const refresh = useCallback(async () => {
-    const [found, read] = await Promise.all([listFiles(), readAllNotes()]);
+    const [found, read, directories] = await Promise.all([listFiles(), readAllNotes(), listFolders()]);
+    setFolders(directories);
     setFiles(found);
     setTexts(new Map(read.map((note) => [note.path, note.text])));
   }, []);
@@ -431,7 +435,8 @@ export function App() {
     setLeftOpen(!leftOpen);
     void updateSettings({ leftSidebarOpen: !leftOpen }).catch(() => undefined);
   };
-  const newNote = () => go({ kind: 'new', folder: view.kind === 'note' ? noteFolder(view.path) : '' });
+  const newNote = () => go({ kind: 'new', folder: creationFolder(preferences.fileDefaults, 'note', view.kind === 'note' ? view.path : undefined) });
+  const newFolder = () => go({ kind: 'new', item: 'folder', folder: creationFolder(preferences.fileDefaults, 'folder', view.kind === 'note' ? view.path : undefined) });
 
   const chooseFolder = useCallback(async (create = false) => {
     setFolderError(undefined);
@@ -536,9 +541,9 @@ export function App() {
   );
   // An empty birth date removes the setting rather than keeping an empty one.
   const saveSettings = useCallback(
-    async (next: { periodic: PeriodicSettings; recognition?: PeriodicRecognition; birthDate: string; podcasts: PodcastSettings; features: PeriodicFeatures }) => {
+    async (next: SettingsDraft) => {
       if (status?.state !== 'open') throw new Error('No vault is open.');
-      setSettings(await updateSettings({ ...vaultPreferencesPatch(settings, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition), birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
+      setSettings(await updateSettings({ ...vaultPreferencesPatch(settings, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition, next.fileDefaults), librarySources: next.sources, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
     },
     [settings, status, periodic, recognition],
   );
@@ -802,6 +807,7 @@ export function App() {
         onOpenNote={openNote}
         onHome={(newTab) => go(HOME, newTab)}
         onNewNote={newNote}
+        onNewFolder={newFolder}
         onOpenFolder={() => void chooseFolder()}
         onSettings={(newTab) => go({ kind: 'settings' }, newTab)}
         onGraph={(newTab) => go({ kind: 'graph' }, newTab)}
@@ -838,7 +844,7 @@ export function App() {
           rightOpen={right.open}
           onToggleRight={toggleRight}
         />
-        <main className={view.kind === 'graph' ? 'main is-graph' : 'main'} ref={main} onScroll={onScroll}>
+        <main className={view.kind === 'graph' ? 'main is-graph' : view.kind === 'settings' ? 'main is-preferences' : 'main'} ref={main} onScroll={onScroll}>
           {/* Only the tab in front is drawn, afresh for each tab: an editor leaving saves as it goes. */}
           <Fragment key={tab.id}>
             {view.kind === 'home' && (
@@ -944,14 +950,15 @@ export function App() {
                 onCreated={mediaCreated}
                 onDelete={deleteLibraryNote}
                 podcastArtwork={podcasts.artwork}
+                sources={sources}
                 onChanged={refresh}
               />
             )}
             {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
             {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
-            {view.kind === 'new' && <NewNote key={tab.index} folders={folders} folder={view.folder} onCreate={create} />}
+            {view.kind === 'new' && <NewNote key={`${tab.index}-${view.item ?? 'note'}`} kind={view.item ?? 'note'} folders={folders} folder={view.folder} onNewNote={(folder) => go({ kind: 'new', folder })} onCreate={view.item === 'folder' ? async (path) => { await createFolder(path); setFolders((previous) => [...new Set([...previous, path])]); } : create} />}
             {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
-            {view.kind === 'settings' && <SettingsScreen periodic={periodic} recognition={recognition} files={files} texts={texts} onSetup={() => setSetup('existing')} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
+            {view.kind === 'settings' && <SettingsScreen sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
             {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
           </Fragment>
         </main>

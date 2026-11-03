@@ -1,4 +1,5 @@
 import { parse } from 'yaml';
+import type { Source } from './librarySources';
 import type { NoteText, VaultFile } from './api';
 import { parseNote, type Properties } from './frontmatter';
 import { findWikilinks, linkResolver, noteTitle, type WikilinkMatch } from './links';
@@ -48,7 +49,7 @@ export interface KindSpec {
   /** The shape of its covers, width over height. */
   aspect: number;
   /** Where "Add" looks things up (src/lib/lookup.ts); videos are only read. */
-  source?: 'musicbrainz' | 'wikipedia-film' | 'wikipedia-openlibrary' | 'itunes-podcast';
+  source?: Source;
 }
 
 /** The one place a folder under Rating/ becomes a kind of thing. */

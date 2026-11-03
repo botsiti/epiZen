@@ -24,6 +24,7 @@ import {
   type MediaKind,
   type SortOrder,
 } from '../../lib/library';
+import { DEFAULT_SOURCES, type LibrarySources } from '../../lib/librarySources';
 import { SOURCE_NAMES } from '../../lib/lookup';
 import { followPointer, order } from '../periodic/effects';
 import { BlurText, CountUp } from '../periodic/motion';
@@ -55,6 +56,7 @@ interface Props {
   onHidden: (hidden: ListColumn[]) => void;
   today: Date;
   podcastArtwork?: PodcastArtwork;
+  sources?: LibrarySources;
   onOpenNote: (path: string, newTab?: boolean) => void;
   /** A new note was created by Add: read the vault again and open it. */
   onCreated: (path: string) => Promise<void>;
@@ -115,9 +117,9 @@ const results = (n: number) => `${n} ${n === 1 ? 'result' : 'results'}`;
  * search and pick the columns of. Both filter by genre, and on All by kind. The hero has an Add
  * for every kind on every tab.
  */
-export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidden, onHidden, today, podcastArtwork, onOpenNote, onCreated, onChanged, onDelete }: Props) {
+export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidden, onHidden, today, podcastArtwork, sources = DEFAULT_SOURCES, onOpenNote, onCreated, onChanged, onDelete }: Props) {
   // Videos are read as pages, not shelved here: the library is what is rated and added.
-  const kinds = SHELVED_KINDS.map(kindSpec);
+  const kinds = SHELVED_KINDS.map((kind) => ({ ...kindSpec(kind), source: kind === 'video' ? undefined : sources[kind] }));
   const spec = tab === 'all' ? undefined : kinds.find((candidate) => candidate.kind === tab);
   const shownTab: LibraryTab = spec?.kind ?? 'all';
   const [choice, setChoice] = useState<Choice>(() => chosen.get(shownTab) ?? { sort: 'recent' });
@@ -300,7 +302,7 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
       {adder?.source &&
         createPortal(
           <ErrorBoundary label={`Adding ${a(adder.one)}`} frame={(message) => <div className="add-backdrop" onMouseDown={() => setAdding(undefined)}>{message}</div>}>
-            <AddMedia key={adder.kind} spec={{ ...adder, source: adder.source }} genreSuggestions={genreCounts(library.get(adder.kind) ?? []).map(([name]) => name)} files={files} today={today} podcastArtwork={podcastArtwork} onClose={() => setAdding(undefined)} onCreated={onCreated} />
+            <AddMedia key={adder.kind} spec={{ ...adder, source: adder.kind === 'video' ? adder.source : sources[adder.kind] }} genreSuggestions={genreCounts(library.get(adder.kind) ?? []).map(([name]) => name)} files={files} today={today} podcastArtwork={podcastArtwork} onClose={() => setAdding(undefined)} onCreated={onCreated} />
           </ErrorBoundary>,
           document.body,
         )}
