@@ -3,6 +3,11 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.6.1 — 2026-11-03
+
+Reliable desktop display setup and lint isolation for nested worktrees.
+[Full release notes](releases/0.6.1.md).
+
 ## 0.6.0 — 2026-11-03
 
 Workspace shortcuts, sidebar toggles and a searchable keyboard reference, plus sleep entry in
