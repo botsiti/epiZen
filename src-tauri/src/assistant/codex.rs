@@ -84,6 +84,15 @@ fn response(bytes: &[u8], request: &AgentRequest, id: &str) -> Result<Value, Str
     }
     Ok(json!({"output":output}))
 }
+fn request_command(binary: &Path, request: &AgentRequest, schema_path: &Path, scratch: &Path) -> Command {
+    let mut cmd = command(binary);
+    // The web tool uses this execution host even when Code Mode itself is disabled.
+    // Keep local writes sandboxed and non-interactive; approved writes belong to Epizen.
+    cmd.current_dir(scratch).args(["exec","--ignore-user-config","--ignore-rules","--ephemeral","--skip-git-repo-check","--sandbox","read-only","--json","--color","never","--output-schema"]).arg(schema_path).args(["--model",&request.model,"-c","approval_policy=\"never\"","-c","project_doc_max_bytes=0","-c","skills.include_instructions=false","-c","web_search=\"live\"","-c","model_reasoning_effort=\"low\"","--enable","code_mode_host"]);
+    for feature in ["shell_tool","view_image","hooks","plugins","apps","multi_agent","multi_agent_v2","computer_use","browser_use","in_app_browser","skill_search","remote_plugin","image_generation","goals","code_mode"] { cmd.args(["--disable",feature]); }
+    cmd.arg("-");
+    cmd
+}
 pub async fn respond(request: &AgentRequest, id: &str, cancel: &Notify, runtime: &Path) -> Result<Value, String> {
     let binary = executable()?;
     if !authenticated(&binary, cancel).await? { return Err("Sign in to Codex with ChatGPT using codex login. Spike won’t use a stored API key for a subscription connection.".to_owned()); }
@@ -91,10 +100,7 @@ pub async fn respond(request: &AgentRequest, id: &str, cancel: &Notify, runtime:
     let scratch = tempfile::Builder::new().prefix("codex-").tempdir_in(runtime).map_err(|_| "Couldn’t prepare the Codex request.".to_owned())?;
     let schema_path = scratch.path().join("reply.json");
     std::fs::write(&schema_path, schema(request).to_string()).map_err(|_| "Couldn’t prepare the Codex response format.".to_owned())?;
-    let mut cmd = command(&binary);
-    cmd.current_dir(scratch.path()).args(["exec","--ignore-user-config","--ignore-rules","--ephemeral","--skip-git-repo-check","--sandbox","read-only","--json","--color","never","--output-schema"]).arg(&schema_path).args(["--model",&request.model,"-c","project_doc_max_bytes=0","-c","skills.include_instructions=false","-c","web_search=\"live\"","-c","model_reasoning_effort=\"low\""]);
-    for feature in ["shell_tool","view_image","hooks","plugins","apps","multi_agent","computer_use","browser_use","in_app_browser","skill_search","remote_plugin","code_mode_host","code_mode"] { cmd.args(["--disable",feature]); }
-    cmd.arg("-");
+    let cmd = request_command(&binary, request, &schema_path, scratch.path());
     let (success, out, _) = run(cmd, &prompt(request)?, cancel, Duration::from_secs(180)).await?;
     if !success { return Err("Codex couldn’t complete the request. Run codex login and check your subscription limits or CLI version.".to_owned()); }
     response(&out, request, id)
@@ -105,6 +111,17 @@ mod tests {
     use super::*;
     fn request() -> AgentRequest { AgentRequest { model:"test".into(), instructions:"Help".into(), input:vec![json!({"role":"user","content":"Create a note"})], tools:vec![json!({"type":"function","name":"create_note","parameters":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}})], provider:super::super::Provider::Codex } }
     fn output(reply: Value) -> Vec<u8> { format!("{}\n{}\n",json!({"type":"item.completed","item":{"type":"agent_message","text":reply.to_string()}}),json!({"type":"turn.completed"})).into_bytes() }
+    #[test] fn web_transport_retains_read_only_noninteractive_permissions() {
+        let cmd = request_command(Path::new("/test/codex"), &request(), Path::new("/scratch/reply.json"), Path::new("/scratch"));
+        let args: Vec<_> = cmd.as_std().get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        let has = |flag: &str, value: &str| args.windows(2).any(|pair| pair[0] == flag && pair[1] == value);
+        assert!(has("--enable", "code_mode_host"));
+        assert!(has("-c", "web_search=\"live\""));
+        assert!(has("--sandbox", "read-only"));
+        assert!(has("-c", "approval_policy=\"never\""));
+        for feature in ["shell_tool", "multi_agent", "multi_agent_v2", "plugins", "apps", "computer_use", "image_generation", "goals"] { assert!(has("--disable", feature), "{feature} must remain disabled"); }
+        assert_eq!(cmd.as_std().get_current_dir(), Some(Path::new("/scratch")));
+    }
     #[test] fn turns_proposed_actions_into_the_existing_review_contract() {
         let value=response(&output(json!({"text":"Prepared","calls":[{"name":"create_note","arguments":{"text":"Keep [[links]]"}}],"sources":[]})),&request(),"request").unwrap();
         assert_eq!(value["output"][1]["call_id"],"request-0");

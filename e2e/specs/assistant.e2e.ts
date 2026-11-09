@@ -200,12 +200,17 @@ describe('Spike conversations and second-brain actions', () => {
     await $('button=← Conversation').click();
     await browser.switchToWindow('spike');
     await $('[data-testid="desktop-pet"]').waitForDisplayed();
-    const frames = await browser.execute(() => new Promise<number>((resolve) => {
+    const animation = await browser.execute(() => new Promise<{ frames: number; reducedMotion: boolean }>((resolve) => {
+      // A parked pointer selects a still look pose; measure the idle animation instead.
+      document.dispatchEvent(new PointerEvent('pointerleave'));
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const positions = new Set<string>(), start = performance.now();
-      const read = () => { positions.add(getComputedStyle(document.querySelector('.spike-sprite')!).backgroundPosition); if (performance.now() - start >= 1300) resolve(positions.size); else requestAnimationFrame(read); };
+      const read = () => { positions.add(getComputedStyle(document.querySelector('.spike-sprite')!).backgroundPosition); if (performance.now() - start >= 1300) resolve({ frames: positions.size, reducedMotion }); else requestAnimationFrame(read); };
       read();
     }));
-    expect(frames).toBeGreaterThan(1);
+    // Hosted macOS runners enable Reduce Motion. The system preference must win.
+    if (animation.reducedMotion) expect(animation.frames).toBe(1);
+    else expect(animation.frames).toBeGreaterThan(1);
     await screenshot('220-desktop-spike');
     await $('[aria-label="Pause animation"]').click();
     await $('[aria-label="Resume animation"]').waitForDisplayed();
@@ -229,6 +234,8 @@ describe('Spike conversations and second-brain actions', () => {
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
   });
   it('exports an unsent draft without rewriting notes or replacing the same export file', async () => {
+    await browser.switchToWindow('main');
+    await $('[aria-label="Message Spike"]').setValue('Keep this unsent thought while Spike stays on my desktop.');
     const before = snapshotVault(root);
     await $('[aria-label="Conversation history"]').click();
     await $('button=Export conversation…').click();
