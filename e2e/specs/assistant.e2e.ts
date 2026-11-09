@@ -40,10 +40,10 @@ describe('Spike conversations and second-brain actions', () => {
     const before = snapshotVault(root);
     await $('[data-testid="open-assistant"]').click();
     await screenshot('210-spike-welcome');
-    await $('button=Connect Spike').click();
-    await selectOption('[aria-label="Spike connection"]', 'openai');
-    await $('[aria-label="OpenAI API key"]').setValue('sk-test-not-a-real-credential');
-    await $('.assistant-preferences button[type="submit"]').click();
+    await $('.assistant-sidebar').$('button=Connect Spike').click();
+    await selectOption('.assistant-sidebar [aria-label="Spike connection"]', 'openai');
+    await $('.assistant-sidebar [aria-label="OpenAI API key"]').setValue('sk-test-not-a-real-credential');
+    await $('.assistant-sidebar .assistant-preferences button[type="submit"]').click();
     await $('[aria-label="Message Spike"]').waitForEnabled();
     await send('Yesterday I watched Quiet Harbour. Add it to my library.');
     await expect($('.assistant-action')).toHaveText(expect.stringContaining('Quiet Harbour'));
@@ -57,14 +57,14 @@ describe('Spike conversations and second-brain actions', () => {
   });
   it('connects the subscription adapter without an API key and keeps the same reviewed actions', async () => {
     await $('[aria-label="Assistant settings"]').click();
-    await selectOption('[aria-label="Spike connection"]', 'codex');
-    await expect($('[aria-label="OpenAI API key"]')).not.toBeExisting();
+    await selectOption('.assistant-sidebar [aria-label="Spike connection"]', 'codex');
+    await expect($('.assistant-sidebar [aria-label="OpenAI API key"]')).not.toBeExisting();
     await browser.execute(async () => {
       const api = (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core;
       await api.invoke('assistant_set_key', { key: null });
     });
     await screenshot('224-spike-subscription');
-    await $('.assistant-preferences button[type="submit"]').click();
+    await $('.assistant-sidebar .assistant-preferences button[type="submit"]').click();
     await $('.assistant-context').$('button=New chat').click();
     const before = snapshotVault(root);
     await send('Remember that I prefer to use my subscription.');
@@ -164,12 +164,12 @@ describe('Spike conversations and second-brain actions', () => {
   });
   it('configures an independent OpenRouter voice model with an isolated test key', async () => {
     await $('[aria-label="Assistant settings"]').click();
-    await selectOption('[aria-label="Voice provider"]', 'openrouter');
-    await $('[aria-label="Transcription model"]').setValue('microsoft/mai-transcribe-2');
-    await $('[aria-label="Voice API key"]').setValue('router-test-only-credential');
-    await $('button=Save voice settings').click();
-    await expect($('.assistant-voice-preferences [role="status"]')).toHaveText('Voice settings saved.');
-    await scrollIntoView('.assistant-voice-preferences');
+    await selectOption('.assistant-sidebar [aria-label="Voice provider"]', 'openrouter');
+    await $('.assistant-sidebar [aria-label="Transcription model"]').setValue('microsoft/mai-transcribe-2');
+    await $('.assistant-sidebar [aria-label="Voice API key"]').setValue('router-test-only-credential');
+    await $('.assistant-sidebar').$('button=Save voice settings').click();
+    await expect($('.assistant-sidebar .assistant-voice-preferences [role="status"]')).toHaveText('Voice settings saved.');
+    await scrollIntoView('.assistant-sidebar .assistant-voice-preferences');
     await screenshot('225-spike-voice-settings');
     await $('button=← Conversation').click();
   });
@@ -259,7 +259,7 @@ describe('Spike conversations and second-brain actions', () => {
   it('shows animated desktop Spike, pauses motion, and returns to an unsent draft after closing the main window', async () => {
     const before = snapshotVault(root);
     await $('[aria-label="Assistant settings"]').click();
-    await $('button=Show Spike on desktop').click();
+    await $('.assistant-sidebar').$('button=Show Spike on desktop').click();
     await browser.waitUntil(async () => (await browser.getWindowHandles()).includes('spike'));
     await $('button=← Conversation').click();
     await browser.switchToWindow('spike');
