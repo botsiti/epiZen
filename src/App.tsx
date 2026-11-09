@@ -14,6 +14,14 @@ import { useTimer, type TimerDeps } from './components/calendar/useTimer';
 import { GraphView } from './components/GraphView';
 import { NewNote } from './components/NewNote';
 import { NoteView } from './components/NoteView';
+import { BaseDocument } from './components/bases/BaseDocument';
+import { AttachmentView } from './components/bases/AttachmentView';
+import { NewBase } from './components/bases/NewBase';
+import { BasesProvider } from './components/bases/context';
+import { savedPluginDisplays } from './lib/pluginDisplay';
+import { PluginDisplayProvider, PluginSurface } from './components/workspace/PluginDisplay';
+import { PLUGINS, pluginSettings, effectivePlugins, pluginPreferencesPatch, savedHomeSections, requiredPlugin, savedCheckIns } from './lib/plugins';
+import { MarkdownHome, PluginUnavailable } from './components/workspace/MarkdownHome';
 import { Home } from './components/home/Home';
 import { QuestPage, StatisticsPage } from './components/insights/Insights';
 import { Summaries } from './components/home/Summaries';
@@ -30,6 +38,8 @@ import { Sidebar } from './components/Sidebar';
 import { NoteActionDialog, NoteMenu, type NoteAction } from './components/workspace/NoteActions';
 import { useTrayBridge } from './components/tray/useTrayBridge';
 import { RightSidebar } from './components/workspace/RightSidebar';
+import { AssistantWorkspace } from './components/assistant/AssistantWorkspace';
+import { vaultAssistantSettings, assistantPreferencesPatch } from './lib/assistant/types';
 import { TabBar } from './components/workspace/TabBar';
 import { useLocalGraph } from './components/workspace/useLocalGraph';
 import { useScrollMemory } from './components/workspace/useScrollMemory';
@@ -134,10 +144,13 @@ export function App() {
   // The open tabs, each with its own history (src/lib/tabs.ts); the main pane shows the one in front.
   const { ws, update, restore, reset } = useWorkspace();
   const [right, setRight] = useState<RightSidebarState>({ open: false, closed: [] });
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantCbt, setAssistantCbt] = useState<{ path: string; token: number }>();
   const [leftOpen, setLeftOpen] = useState(true);
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
   const [settings, setSettings] = useState<Settings>({});
+  const timerBusy = useRef(false);
   // Every note's text, for links, backlinks and the graph. Saves and new notes keep it current.
   const [texts, setTexts] = useState<ReadonlyMap<string, string>>(new Map());
   const [month, setMonth] = useState(() => startOfMonth(today()));
@@ -163,10 +176,10 @@ export function App() {
       setTexts(new Map(read.map((note) => [note.path, note.text])));
       setSettings(stored);
       // The tabs and the right sidebar as they were left in this vault, never a note that is gone.
-      if (next.state === 'open') restore(stored.workspace, { vault: next.root, notes: new Set(found.filter((file) => file.kind === 'note').map((file) => file.path)) });
+      if (next.state === 'open') restore(stored.workspace, { vault: next.root, notes: new Set(found.filter((file) => file.kind === 'note' || file.kind === 'base').map((file) => file.path)) });
       setRight(parseRightSidebar(stored.rightSidebar));
       setLeftOpen(stored.leftSidebarOpen !== false);
-      setSetup((previous) => previous === 'create' ? 'create' : next.state === 'open' && !vaultPreferences(stored, next.root).complete ? previous ?? 'existing' : undefined);
+      setSetup((previous) => previous === 'create' ? 'create' : undefined);
       setStatus(next);
     };
     load().catch((err: unknown) => {
@@ -206,21 +219,26 @@ export function App() {
   const preferences = useMemo(() => vaultPreferences(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
   const periodic = preferences.periodic;
   const recognition = preferences.recognition;
-  const features = useMemo(() => periodicFeatures(settings.periodicFeatures), [settings.periodicFeatures]);
+  const pluginDisplay = useMemo(() => savedPluginDisplays(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
+  const configuredPlugins = useMemo(() => pluginSettings(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
+  const plugins = useMemo(() => effectivePlugins(configuredPlugins), [configuredPlugins]);
+  const homeSections = useMemo(() => savedHomeSections(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
+  const features = useMemo(() => ({ ...periodicFeatures(settings.periodicFeatures), habits: plugins.habits, thoughtRecords: plugins.cbt, quests: plugins.quests, timer: plugins.timer, statistics: plugins.statistics, checkIns: { ...savedCheckIns(settings, status?.state === 'open' ? status.root : ''), enabled: plugins.checkins } }), [settings, status, plugins]);
   const sources = useMemo(() => librarySources(settings.librarySources), [settings.librarySources]);
   const podcasts = useMemo(() => podcastSettings(settings.podcasts), [settings.podcasts]);
-  const catalog = useMemo(() => periodicCatalog(files, periodic, texts, recognition), [files, periodic, texts, recognition]);
+  const catalog = useMemo(() => periodicCatalog(plugins.periodic ? files : [], periodic, plugins.periodic ? texts : new Map(), recognition), [files, periodic, texts, recognition, plugins.periodic]);
+  const assistantCatalog = useMemo(() => plugins.periodic ? catalog : periodicCatalog(files, periodic, texts, recognition), [plugins.periodic, catalog, files, periodic, texts, recognition]);
   const periodicNotes = catalog.index;
   // Opens a screen in the tab in front, or in a new tab (⌘-click, or when the tab in front is pinned).
   const go = useCallback((next: View, newTab?: boolean) => update((prev) => open(prev, next, { newTab })), [update]);
   const links = useMemo(() => buildLinkIndex([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
   const graph = useMemo(
-    () => buildGraph(files.filter((file) => file.kind === 'note').map((file) => file.path), links.outgoing),
-    [files, links],
+    () => buildGraph(plugins.graph ? files.filter((file) => file.kind === 'note').map((file) => file.path) : [], links.outgoing),
+    [files, links, plugins.graph],
   );
   const openNote = useCallback((path: string, newTab?: boolean) => go({ kind: 'note', path }, newTab), [go]);
-  const shelves = useMemo(() => collectMedia([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
-  const library = useMemo(() => collectLibrary([...texts].map(([path, text]) => ({ path, text })), files), [texts, files]);
+  const shelves = useMemo(() => collectMedia(plugins.library ? [...texts].map(([path, text]) => ({ path, text })) : [], files), [texts, files, plugins.library]);
+  const library = useMemo(() => collectLibrary(plugins.library ? [...texts].map(([path, text]) => ({ path, text })) : [], files), [texts, files, plugins.library]);
   const openLibrary = useCallback((tab: LibraryTab, newTab?: boolean) => go({ kind: 'library', tab }, newTab), [go]);
   // The library remembers its tab in its place in its tab's history, so coming back finds it again.
   const setLibraryTab = useCallback(
@@ -243,7 +261,7 @@ export function App() {
     () => ({ date: now, path: periodicNotes.get(periodKey('day', now)), name: noteTitle(periodicPath('day', now, periodic)) }),
     [now, periodic, periodicNotes],
   );
-  const habitCatalog = useMemo(() => collectHabits(texts), [texts]);
+  const habitCatalog = useMemo(() => collectHabits(plugins.habits ? texts : new Map()), [texts, plugins.habits]);
   // Everything a daily, weekly or monthly note's page reads from the rest of the vault.
   const dayOf = useCallback(
     (date: Date): DayEntry => {
@@ -302,6 +320,7 @@ export function App() {
   // Weekly quests from weekly notes, monthly ones from monthly notes, mythic ones from Custom Quests.md.
   const quests = useMemo(() => {
     const list: QuestEntry[] = [];
+    if (!plugins.quests) return list;
     for (const [key, path] of periodicNotes) {
       const [period, iso = ''] = key.split(':');
       const text = period === 'day' ? undefined : texts.get(path);
@@ -315,7 +334,7 @@ export function App() {
       for (const quest of parseQuests(file.path, texts.get(file.path) ?? '')) list.push({ quest });
     }
     return list;
-  }, [periodicNotes, texts, files]);
+  }, [periodicNotes, texts, files, plugins.quests]);
   const images = useMemo(() => new Set(files.filter((file) => file.kind === 'image').map((file) => file.path)), [files]);
   const art = useCallback((quest: Quest) => artPaths(quest).find((path) => images.has(path)), [images]);
   const periodicPage = useMemo((): PeriodicSpec | undefined => {
@@ -342,11 +361,14 @@ export function App() {
   }, [notes, periodic, now]);
   // Reads the vault's files and texts again after the app created a note.
   const refresh = useCallback(async () => {
+    if (status?.state !== 'open') return;
     const [found, read, directories] = await Promise.all([listFiles(), readAllNotes(), listFolders()]);
+    const current = await vaultStatus();
+    if (current.state !== 'open' || current.root !== status.root) return;
     setFolders(directories);
     setFiles(found);
     setTexts(new Map(read.map((note) => [note.path, note.text])));
-  }, []);
+  }, [status]);
   const deleteLibraryNote = useCallback(async (path: string) => {
     if (!kindOfPath(path)) throw new Error('Only library notes can be deleted here.');
     const unsaved = await flushAll();
@@ -360,10 +382,13 @@ export function App() {
   }, [update]);
   // A library note opens as its media page; finding it a cover reads the vault again, for the note and its new image.
   const mediaPage = useMemo(() => {
-    const spec = view.kind === 'note' ? kindOfPath(view.path) : undefined;
+    const spec = plugins.library && view.kind === 'note' ? kindOfPath(view.path) : undefined;
     return spec && { spec, onOpenLibrary: () => openLibrary(spec.kind), onCoverSaved: refresh };
-  }, [view, openLibrary, refresh]);
-  const noteSaved = useCallback((path: string, text: string) => setTexts((prev) => new Map(prev).set(path, text)), []);
+  }, [view, openLibrary, refresh, plugins.library]);
+  const noteSaved = useCallback((path: string, text: string) => {
+    setTexts((prev) => new Map(prev).set(path, text));
+    setFiles((prev) => prev.map((file) => file.path === path ? { ...file, modified: Date.now(), size: new TextEncoder().encode(text).length } : file));
+  }, []);
   // Changes to a note other than the open one (a quest in its weekly note or Custom Quests.md): one
   // at a time, each over the note as it is on disk now, and written only while it still holds that.
   const edits = useRef(Promise.resolve());
@@ -415,6 +440,7 @@ export function App() {
     [update],
   );
   const toggleRight = useCallback(() => {
+    setAssistantOpen(false);
     const next = { ...right, open: !right.open };
     setRight(next);
     void updateSettings({ rightSidebar: next }).catch(() => undefined);
@@ -477,6 +503,7 @@ export function App() {
   // The calendar and the timer use this too, without opening the note.
   const ensurePeriodic = useCallback(
     async (period: Period, date: Date): Promise<string> => {
+      if (!plugins.periodic) throw new Error('Enable Periodic notes in Settings → Plugins first.');
       const existing = periodicNotes.get(periodKey(period, date));
       if (existing) return existing;
       if (catalog.matches.has(periodKey(period, date))) throw new Error('More than one note has this date. Choose its calendar note in Settings → Existing notes.');
@@ -491,12 +518,12 @@ export function App() {
       await refresh();
       return path;
     },
-    [periodic, periodicNotes, catalog, recognition, refresh],
+    [periodic, periodicNotes, catalog, recognition, refresh, plugins.periodic],
   );
   // A day, week or month opens its note, creating it first if it has none.
   const openPeriodic = useCallback(
     async (period: Period, date: Date, newTab?: boolean) => {
-      if (!periodicNotes.has(periodKey(period, date)) && catalog.matches.has(periodKey(period, date))) { go({ kind: 'settings' }, newTab); return; }
+      if (!periodicNotes.has(periodKey(period, date)) && catalog.matches.has(periodKey(period, date))) { go({ kind: 'settings', section: 'periodic' }, newTab); return; }
       go({ kind: 'note', path: await ensurePeriodic(period, date) }, newTab);
     },
     [ensurePeriodic, go, periodicNotes, catalog],
@@ -531,29 +558,34 @@ export function App() {
   // missing note is only explained, never created.
   const openLink = useCallback(
     (target: string, fromPath: string, newTab?: boolean) => {
-      const file = resolveLink(target, files, fromPath);
-      const named = file ? undefined : periodOfName(target, periodic);
+      const [destination, baseView] = target.split('#');
+      const file = resolveLink(destination ?? target, files, fromPath);
+      const named = file || !plugins.periodic ? undefined : periodOfName(target, periodic);
       if (named) openPeriodicOrSay(named.period, named.date, newTab);
       else if (!file) go({ kind: 'missing', target }, newTab);
-      else if (file.kind === 'note') go({ kind: 'note', path: file.path }, newTab);
+      else go({ kind: 'note', path: file.path, ...(file.kind === 'base' && baseView ? { baseView } : {}) }, newTab);
     },
-    [files, go, periodic, openPeriodicOrSay],
+    [files, go, periodic, openPeriodicOrSay, plugins.periodic],
   );
   // An empty birth date removes the setting rather than keeping an empty one.
   const saveSettings = useCallback(
     async (next: SettingsDraft) => {
       if (status?.state !== 'open') throw new Error('No vault is open.');
-      setSettings(await updateSettings({ ...vaultPreferencesPatch(settings, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition, next.fileDefaults), librarySources: next.sources, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
+      if (next.plugins && plugins.timer && !effectivePlugins(next.plugins).timer && timerBusy.current) throw new Error('Stop the focus timer and resolve its pending saves before disabling this plugin.');
+      const patch = vaultPreferencesPatch(settings, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition, next.fileDefaults);
+      const pluginPatch = next.plugins ? pluginPreferencesPatch({ ...settings, ...patch }, status.root, next.plugins, next.homeSections ?? homeSections, next.features.checkIns, next.pluginDisplay) : {};
+      setSettings(await updateSettings({ ...patch, ...pluginPatch, librarySources: next.sources, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
     },
-    [settings, status, periodic, recognition],
+    [settings, status, periodic, recognition, homeSections, plugins.timer],
   );
   const finishSetup = useCallback(async (next: PeriodicSettings, reading: PeriodicRecognition, create = false) => {
     if (status?.state !== 'open') throw new Error('No vault is open.');
     if (create) await createStarterVault(starterNotes(now), await readAllNotes(), createNote);
-    setSettings(await updateSettings(vaultPreferencesPatch(settings, status.root, preferences.complete ? rememberPeriodic(periodic, next) : next, reading)));
+    const patch = vaultPreferencesPatch(settings, status.root, preferences.complete ? rememberPeriodic(periodic, next) : next, reading);
+    setSettings(await updateSettings({ ...patch, ...pluginPreferencesPatch({ ...settings, ...patch }, status.root, configuredPlugins, homeSections, features.checkIns) }));
     await refresh();
     setSetup(undefined);
-  }, [status, settings, periodic, preferences.complete, now, refresh]);
+  }, [status, settings, periodic, preferences.complete, now, refresh, configuredPlugins, homeSections, features.checkIns]);
 
   // The calendar's and the timer's writes: one at a time, over the text the app last read.
   const changeNote = useNoteWriter(texts, noteSaved);
@@ -629,7 +661,8 @@ export function App() {
     [changeDay, changeNote, periodic, periodicNotes, vault],
   );
   const timerDeps = useMemo((): TimerDeps => ({ save: (state) => updateSettings({ timer: state }), write: writeBlock, chime }), [writeBlock]);
-  const timer = useTimer(timerDeps, settings.timer, status?.state === 'open');
+  const timer = useTimer(timerDeps, settings.timer, status?.state === 'open', plugins.timer);
+  useEffect(() => { timerBusy.current = Boolean(timer.state.session || timer.state.rest || timer.state.pending.length || timer.saveError); }, [timer.state, timer.saveError]);
   const [noteMenu, setNoteMenu] = useState<{ path: string; x: number; y: number }>();
   const [noteAction, setNoteAction] = useState<{ path: string; action: Exclude<NoteAction, 'reveal'> }>();
   const [fileActionError, setFileActionError] = useState<string>();
@@ -730,7 +763,7 @@ export function App() {
   // as the timer card is set, or as a right-click asked (a stopwatch, or a pomodoro round).
   const startTimer = useCallback(
     async (choice: TaskChoice, how?: FocusHow) => {
-      if (!vault) return;
+      if (!vault || !plugins.timer) return;
       const date = today();
       try {
         const want =
@@ -748,7 +781,7 @@ export function App() {
         setStartProblem(`The timer didn’t start: ${reason(err)}.`);
       }
     },
-    [changeDay, timer, vault],
+    [changeDay, timer, vault, plugins.timer],
   );
   const habitActions = useHabitActions({ root: vault, habits: habitCatalog.habits, onSaved: noteSaved, refresh, changeDay });
   // The menu bar item and its panel: the timer and today's tasks, published as they change; the
@@ -772,11 +805,11 @@ export function App() {
   const startFromTray = useCallback((choice: TaskChoice, how: FocusHow) => void startTimer(choice, how), [startTimer]);
   // Opening the panel had it show today's list again; the start was on the day before's.
   const staleFromTray = useCallback(() => setStartProblem('The timer didn’t start: that list was another day’s. Today’s tasks are shown now.'), []);
-  useTrayBridge(timer, trayView, startFromTray, staleFromTray);
+  useTrayBridge(timer, trayView, startFromTray, staleFromTray, plugins.timer);
   const textOf = useCallback((path: string) => texts.get(path), [texts]);
   const frontNote = notePath(view);
   // Laid out only while it can be seen.
-  const local = useLocalGraph(graph, frontNote, right.open && !right.closed.includes('graph'));
+  const local = useLocalGraph(graph, frontNote, plugins.graph && right.open && !right.closed.includes('graph'));
   const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
 
   if (!status) return null;
@@ -796,8 +829,9 @@ export function App() {
   </ErrorBoundary>;
 
   return (
-    <div className={['app', right.open && 'has-right', !leftOpen && 'without-left'].filter(Boolean).join(' ')}>
+    <PluginDisplayProvider value={pluginDisplay}><div className={['app', right.open && !assistantOpen && 'has-right', assistantOpen && 'has-assistant', !leftOpen && 'without-left'].filter(Boolean).join(' ')}>
       {leftOpen && <Sidebar
+        plugins={plugins}
         vaultName={status.name}
         tree={tree}
         selected={view.kind === 'note' ? view.path : undefined}
@@ -808,6 +842,7 @@ export function App() {
         onHome={(newTab) => go(HOME, newTab)}
         onNewNote={newNote}
         onNewFolder={newFolder}
+        onNewBase={plugins.bases ? () => go({ kind: 'new', item: 'base', folder: creationFolder(preferences.fileDefaults, 'note', view.kind === 'note' ? view.path : undefined) }) : undefined}
         onOpenFolder={() => void chooseFolder()}
         onSettings={(newTab) => go({ kind: 'settings' }, newTab)}
         onGraph={(newTab) => go({ kind: 'graph' }, newTab)}
@@ -816,11 +851,12 @@ export function App() {
         onQuests={(newTab) => go({ kind: 'quests' }, newTab)}
         onHabits={(newTab) => go({ kind: 'habits' }, newTab)}
         onStatistics={(newTab) => go({ kind: 'statistics' }, newTab)}
-        onNoteMenu={(path, x, y) => setNoteMenu({ path, x, y })}
-        timer={<TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
+        onNoteMenu={(path, x, y) => { if (!/\.base$/i.test(path)) setNoteMenu({ path, x, y }); }}
+        timer={plugins.timer && <TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
         folderError={folderError}
         calendar={
-          <Calendar
+          plugins.periodic && <Calendar
+            calendarEnabled={plugins.calendar}
             month={month}
             onMonthChange={setMonth}
             has={(period, date) => catalog.matches.has(periodKey(period, date))}
@@ -843,12 +879,18 @@ export function App() {
           onToggleLeft={toggleLeft}
           rightOpen={right.open}
           onToggleRight={toggleRight}
+          onAssistant={() => setAssistantOpen((open) => !open)}
+          assistantOpen={assistantOpen}
         />
         <main className={view.kind === 'graph' ? 'main is-graph' : view.kind === 'settings' ? 'main is-preferences' : 'main'} ref={main} onScroll={onScroll}>
           {/* Only the tab in front is drawn, afresh for each tab: an editor leaving saves as it goes. */}
           <Fragment key={tab.id}>
-            {view.kind === 'home' && (
-              <Home
+            {view.kind === 'home' && !plugins.home && <MarkdownHome name={status.name} files={files} onOpen={openNote} onNew={newNote} onPlugins={() => go({ kind: 'settings' })} />}
+            {view.kind !== 'home' && requiredPlugin(view.kind) && !plugins[requiredPlugin(view.kind)!] && <PluginUnavailable name={PLUGINS.find((item) => item.id === requiredPlugin(view.kind))!.name} onSettings={() => go({ kind: 'settings' })} />}
+            {view.kind === 'home' && plugins.home && (
+              <PluginSurface id="home"><Home
+                sections={{ ...homeSections, profile: homeSections.profile && plugins.periodic, averages: homeSections.averages && plugins.periodic, focus: homeSections.focus && plugins.periodic, today: homeSections.today && plugins.periodic, spheres: homeSections.spheres && plugins.periodic, quests: homeSections.quests && plugins.quests, library: homeSections.library && plugins.library }}
+                statisticsEnabled={plugins.statistics}
                 vaultName={status.name}
                 stats={{
                   notes: files.filter((file) => file.kind === 'note').length,
@@ -874,12 +916,12 @@ export function App() {
                 onSeeQuests={() => go({ kind: 'quests' })}
                 onSeeStatistics={() => go({ kind: 'statistics' })}
                 onSeeSummaries={() => go({ kind: 'summaries' })}
-              />
+              /></PluginSurface>
             )}
-            {view.kind === 'quests' && <ErrorBoundary label="Quests"><QuestPage quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} /></ErrorBoundary>}
-            {view.kind === 'habits' && <ErrorBoundary label="Habits"><HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedHabitDays} today={todayNote.date} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} /></ErrorBoundary>}
-            {view.kind === 'statistics' && <ErrorBoundary label="Statistics"><StatisticsPage days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} /></ErrorBoundary>}
-            {view.kind === 'summaries' && <ErrorBoundary label="Summaries"><Summaries scales={dailyFacts.scales} today={todayNote.date} days={dailyNotes} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} /></ErrorBoundary>}
+            {view.kind === 'quests' && plugins.quests && <PluginSurface id="quests"><QuestPage quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} /></PluginSurface>}
+            {view.kind === 'habits' && plugins.habits && <PluginSurface id="habits"><HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedHabitDays} today={todayNote.date} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} /></PluginSurface>}
+            {view.kind === 'statistics' && plugins.statistics && <PluginSurface id="statistics"><StatisticsPage days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} /></PluginSurface>}
+            {view.kind === 'summaries' && plugins.statistics && <PluginSurface id="statistics"><Summaries scales={dailyFacts.scales} today={todayNote.date} days={dailyNotes} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} /></PluginSurface>}
             {fileActionError && <p className="note-warning" role="alert">{fileActionError}</p>}
             {editError && (
               <p className="note-warning" data-testid="edit-warning">
@@ -887,10 +929,12 @@ export function App() {
               </p>
             )}
             {view.kind === 'note' && (
-              <NoteView
+              <BasesProvider key={status.root} onOpenSettings={() => go({ kind: 'settings', section: 'plugins' })} enabled={plugins.bases} root={status.root} files={files} texts={texts} onRefresh={refresh} onNoteSaved={noteSaved} onNewNote={(folder) => go({ kind: 'new', folder })} onRecover={(path, draft, problem) => showUnsaved(tab.id, path, draft, problem)}>
+              {files.some((file) => file.path === view.path && (file.kind === 'image' || file.kind === 'attachment')) ? <AttachmentView file={files.find((file) => file.path === view.path)!} root={status.root} /> : /\.base$/i.test(view.path) ? <BaseDocument path={view.path} defaultView={view.baseView} onOpenLink={openLink} /> : <NoteView
                 key={`${view.path}:${noteVersion}`}
                 path={view.path}
                 vaultRoot={status.root}
+                basesEnabled={plugins.bases}
                 onImageAdded={(path) => setFiles((previous) => previous.some((file) => file.path === path) ? previous : [...previous, { path, kind: 'image' }])}
                 files={files}
                 onOpenLink={openLink}
@@ -900,7 +944,7 @@ export function App() {
                 onSaved={noteSaved}
                 onUnsaved={(path, text, message) => showUnsaved(tab.id, path, text, message)}
                 linkTargets={linkTargets}
-                periodic={periodicPage}
+                periodic={periodicPage ? { ...periodicPage, focusThoughtRecord: assistantCbt?.path === view.path ? assistantCbt.token : undefined } : undefined}
                 media={mediaPage}
                 genreSuggestions={mediaPage ? genreCounts(library.get(mediaPage.spec.kind) ?? []).map(([name]) => name) : []}
                 onManageHabits={() => go({ kind: 'habits' })}
@@ -917,10 +961,12 @@ export function App() {
                 onStartTimer={(choice, how) => void startTimer(choice, how)}
                 onTaskChanged={taskChanged}
                 known={texts.get(view.path)}
-              />
+              />}
+              </BasesProvider>
             )}
-            {view.kind === 'calendar' && (
-              <CalendarView
+            {view.kind === 'calendar' && plugins.calendar && (
+              <PluginSurface id="calendar"><CalendarView
+                timerEnabled={plugins.timer}
                 dayOf={dayOf}
                 textOf={textOf}
                 categories={categories}
@@ -933,10 +979,10 @@ export function App() {
                 planCalendars={planCalendars}
                 onChooseCalendar={chooseCalendar}
                 warning={calendarWarning}
-              />
+              /></PluginSurface>
             )}
-            {view.kind === 'library' && (
-              <LibraryView
+            {view.kind === 'library' && plugins.library && (
+              <PluginSurface id="library"><LibraryView
                 library={library}
                 files={files}
                 tab={view.tab}
@@ -952,21 +998,23 @@ export function App() {
                 podcastArtwork={podcasts.artwork}
                 sources={sources}
                 onChanged={refresh}
-              />
+              /></PluginSurface>
             )}
             {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
             {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
-            {view.kind === 'new' && <NewNote key={`${tab.index}-${view.item ?? 'note'}`} kind={view.item ?? 'note'} folders={folders} folder={view.folder} onNewNote={(folder) => go({ kind: 'new', folder })} onCreate={view.item === 'folder' ? async (path) => { await createFolder(path); setFolders((previous) => [...new Set([...previous, path])]); } : create} />}
-            {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
-            {view.kind === 'settings' && <SettingsScreen sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
+            {view.kind === 'new' && view.item === 'base' && <NewBase root={status.root} folder={view.folder} folders={folders} onCreated={async (path) => { await refresh(); openNote(path); }} />}
+            {view.kind === 'new' && view.item !== 'base' && <NewNote key={`${tab.index}-${view.item ?? 'note'}`} kind={view.item ?? 'note'} folders={folders} folder={view.folder} onNewNote={(folder) => go({ kind: 'new', folder })} onCreate={view.item === 'folder' ? async (path) => { await createFolder(path); setFolders((previous) => [...new Set([...previous, path])]); } : create} />}
+            {view.kind === 'graph' && plugins.graph && <PluginSurface id="graph"><GraphView graph={graph} onOpen={openNote} /></PluginSurface>}
+            {view.kind === 'settings' && <SettingsScreen pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
             {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
           </Fragment>
         </main>
       </div>
       {noteMenu && <NoteMenu {...noteMenu} onClose={() => setNoteMenu(undefined)} onPick={(action) => chooseNoteAction(noteMenu.path, action)} />}
       {noteAction && <NoteActionDialog key={`${noteAction.action}:${noteAction.path}`} {...noteAction} onClose={() => setNoteAction(undefined)} onRun={runNoteAction} />}
-      {right.open && (
+      {right.open && !assistantOpen && (
         <RightSidebar
+          graphEnabled={plugins.graph}
           note={frontNote}
           backlinks={frontNote === undefined ? [] : (links.backlinks.get(frontNote) ?? [])}
           graph={local}
@@ -975,6 +1023,7 @@ export function App() {
           onOpen={openNote}
         />
       )}
-    </div>
+      <AssistantWorkspace key={status.root} context={{ root: status.root, now, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, settings: vaultAssistantSettings(settings, status.root) }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenNote={(path, cbt) => { if (cbt) setAssistantCbt({ path, token: Date.now() }); openNote(path); }} onSaveSettings={async (assistant) => { setSettings(await updateSettings(assistantPreferencesPatch(await getSettings(), status.root, assistant))); }} />
+    </div></PluginDisplayProvider>
   );
 }

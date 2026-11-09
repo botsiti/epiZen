@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { publishTray } from '../../lib/api';
+import { enableTray, onTrayCommand, onTimerDue, onTrayShown, publishTray } from '../../lib/api';
 import { today } from '../../lib/dates';
 import { dayKey, initialTimer, start, type TimerState } from '../../lib/timer';
 import { panelView, type TrayCommand } from '../../lib/tray';
@@ -13,6 +13,7 @@ const bus = vi.hoisted(() => ({
   shown: undefined as (() => void) | undefined,
 }));
 vi.mock('../../lib/api', () => ({
+  enableTray: vi.fn(() => Promise.resolve()),
   publishTray: vi.fn(() => Promise.resolve()),
   onTrayCommand: vi.fn((handler: (value: unknown) => void) => {
     bus.command = handler;
@@ -27,6 +28,21 @@ vi.mock('../../lib/api', () => ({
     return Promise.resolve(() => undefined);
   }),
 }));
+
+it('does not publish or subscribe when the timer plugin is disabled', () => {
+  vi.clearAllMocks();
+  const api = timer(), view = panelView({ vault: 'Demo', today: DAY, timer: api.state, unwritten: 0 });
+  const { rerender } = renderHook(({ enabled }) => useTrayBridge(api, view, vi.fn(), vi.fn(), enabled), { initialProps: { enabled: false } });
+  expect(enableTray).toHaveBeenCalledWith(false);
+  expect(publishTray).not.toHaveBeenCalled();
+  expect(onTrayCommand).not.toHaveBeenCalled();
+  expect(onTimerDue).not.toHaveBeenCalled();
+  expect(onTrayShown).not.toHaveBeenCalled();
+  rerender({ enabled: true });
+  expect(enableTray).toHaveBeenLastCalledWith(true);
+  expect(publishTray).toHaveBeenCalled();
+  expect(onTrayCommand).toHaveBeenCalledTimes(1);
+});
 
 const timer = (state: TimerState = initialTimer()): TimerApi => ({
   state,

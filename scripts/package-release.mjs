@@ -5,6 +5,8 @@ import { basename, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+const tauri = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+const entitlementFile = resolve('src-tauri', tauri.bundle.macOS.entitlements);
 const app = resolve(process.argv[2] ?? 'src-tauri/target/release/bundle/macos/Epizen.app');
 if (process.platform !== 'darwin' || basename(app) !== 'Epizen.app') throw new Error('Package the production Epizen.app on macOS.');
 const plist = `${app}/Contents/Info.plist`;
@@ -12,12 +14,17 @@ const field = (key) => execFileSync('plutil', ['-extract', key, 'raw', '-o', '-'
 if (field('CFBundleIdentifier') !== 'dev.epizen.desktop' || field('CFBundleShortVersionString') !== version) throw new Error('The built app does not match this version.');
 const architecture = execFileSync('lipo', ['-archs', `${app}/Contents/MacOS/epizen`], { encoding: 'utf8' }).trim();
 if (architecture !== 'arm64') throw new Error(`Expected the Apple Silicon build, got ${architecture}.`);
-const output = resolve('release-artifacts');
+const outputFlag = process.argv.indexOf('--output');
+if (outputFlag >= 0 && !process.argv[outputFlag + 1]) throw new Error('Give --output a destination folder.');
+const output = resolve(outputFlag >= 0 ? process.argv[outputFlag + 1] : 'release-artifacts');
 const name = `Epizen_${version}_macOS_arm64.zip`;
 mkdirSync(output, { recursive: true });
 if (existsSync(`${output}/${name}`)) throw new Error(`Refusing to replace ${name}; deliver a new version instead.`);
-execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--identifier', 'dev.epizen.desktop', app], { stdio: 'inherit' });
+execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--identifier', 'dev.epizen.desktop', '--options', 'runtime', '--entitlements', entitlementFile, app], { stdio: 'inherit' });
 execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
+const signed = execFileSync('codesign', ['--display', '--entitlements', '-', '--xml', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const entitlements = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', '-'], { input: signed, encoding: 'utf8' }));
+if (entitlements['com.apple.security.device.audio-input'] !== true || entitlements['com.apple.security.personal-information.calendars'] !== true || !field('NSMicrophoneUsageDescription') || !field('NSSpeechRecognitionUsageDescription')) throw new Error('The signed app is missing its speech, microphone or calendar permission declarations.');
 execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, `${output}/${name}`]);
 const digest = createHash('sha256').update(readFileSync(`${output}/${name}`)).digest('hex');
 writeFileSync(`${output}/SHA256SUMS`, `${digest}  ${name}\n`);

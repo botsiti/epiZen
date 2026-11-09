@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pet",
+  "description": "Spike listens for status from the main conversation owner. Native companion commands verify their source window.",
+  "windows": ["spike"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

@@ -1,9 +1,11 @@
 //! Epizen's backend. The frontend reaches the vault only through the commands below.
 //! `create_note`, `write_note` and `trash_note` use `vault.rs`; `fetch_image_into_vault`,
 //! which saves a cover through `Vault::create_file`. The lookups (`lookup_json`, `lookup_image`
-//! and that one) are the only network access, in `net.rs`. The `calendar_*` commands reach
+//! and assistant requests use the network boundary in `net.rs`. The `calendar_*` commands reach
 //! Apple Calendar, through `calendar.rs`, and never the vault.
 
+mod assistant;
+mod assistant_writes;
 mod calendar;
 #[cfg(target_os = "macos")]
 mod eventkit;
@@ -11,6 +13,7 @@ mod eventkit;
 mod menu;
 mod net;
 mod photos;
+mod pet;
 mod settings;
 mod tray;
 mod vault;
@@ -176,6 +179,38 @@ async fn read_note(state: Shared<'_>, path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn read_base(state: Shared<'_>, root: String, path: String) -> Result<String, String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let vault = guard.vault()?;
+    if vault.root() != root { return Err("The open vault changed. Reopen this base.".to_owned()); }
+    vault.read_base(&path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn create_base(state: Shared<'_>, root: String, path: String, text: String) -> Result<(), String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let vault = guard.vault()?;
+    if vault.root() != root { return Err("The open vault changed. Create the base in the current vault.".to_owned()); }
+    vault.create_base(&path, &text).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn write_base(state: Shared<'_>, root: String, path: String, text: String, expected: String) -> Result<(), String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let vault = guard.vault()?;
+    if vault.root() != root { return Err("The open vault changed. Your base draft has not been saved.".to_owned()); }
+    vault.write_base(&path, &text, &expected).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn write_note_scoped(state: Shared<'_>, root: String, path: String, text: String, expected: String) -> Result<(), String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let vault = guard.vault()?;
+    if vault.root() != root { return Err("The open vault changed. Your property was not saved.".to_owned()); }
+    vault.write_note(&path, &text, &expected).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn read_all_notes(state: Shared<'_>) -> Result<Vec<NoteText>, String> {
     with_vault(state, Vault::read_all_notes)
 }
@@ -183,6 +218,16 @@ async fn read_all_notes(state: Shared<'_>) -> Result<Vec<NoteText>, String> {
 #[tauri::command]
 async fn read_image(state: Shared<'_>, path: String) -> Result<Response, String> {
     with_vault(state, |vault| vault.read_image(&path)).map(Response::new)
+}
+
+#[tauri::command]
+async fn reveal_file(state: Shared<'_>, root: String, path: String) -> Result<(), String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let vault = guard.vault()?;
+    if vault.root() != root { return Err("The open vault changed.".to_owned()); }
+    let real = vault.file_path(&path).map_err(|error| error.to_string())?;
+    let status = std::process::Command::new("open").arg("-R").arg(real).status().map_err(|error| error.to_string())?;
+    if status.success() { Ok(()) } else { Err("Finder could not reveal this file.".to_owned()) }
 }
 
 /// Saves only a user-selected local image, into the vault that was open when it was selected.
@@ -364,6 +409,7 @@ struct Closing {
     /// Listeners the page has open; StrictMode and hot reload open and close them out of order.
     guarded: AtomicUsize,
     done: AtomicBool,
+    quit_requested: AtomicBool,
 }
 
 const CLOSE_REQUESTED: &str = "epizen://close-requested";
@@ -388,6 +434,12 @@ fn guard_close(closing: State<'_, Closing>, on: bool) {
 
 #[tauri::command]
 fn close_now(app: tauri::AppHandle, closing: State<'_, Closing>) {
+    if app.state::<pet::Pet>().enabled() && !closing.quit_requested.load(Ordering::SeqCst) {
+        if let Some(main) = app.get_webview_window(tray::MAIN) { let _ = main.hide(); }
+        let _ = app.emit_to(tray::MAIN, "epizen://main-hidden", ());
+        return;
+    }
+    pet::remember_position(&app);
     closing.done.store(true, Ordering::SeqCst);
     app.exit(0);
 }
@@ -396,6 +448,8 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Closing::default())
+        .manage(assistant::Assistant::default())
+        .manage(pet::Pet::default())
         .manage(calendars())
         .manage(Net::new().expect("couldn't set up the lookups' HTTP client"))
         .manage(tray::Tray::default())
@@ -404,6 +458,7 @@ pub fn run() {
                 if window.label() == tray::MAIN && window.state::<Closing>().hold() =>
             {
                 api.prevent_close();
+                window.state::<Closing>().quit_requested.store(false, Ordering::SeqCst);
                 let _ = window.emit(CLOSE_REQUESTED, ());
             }
             // The menu bar's panel goes when it loses focus, as a menu does.
@@ -411,7 +466,10 @@ pub fn run() {
                 tray::hide(window.app_handle());
             }
             // The panel's window goes with the main one, so closing the main window still quits.
-            WindowEvent::Destroyed if window.label() == tray::MAIN => tray::close(window.app_handle()),
+            WindowEvent::CloseRequested { api, .. } if window.label() == tray::MAIN && window.state::<pet::Pet>().enabled() => {
+                api.prevent_close(); let _ = window.hide(); let _ = window.emit("epizen://main-hidden", ());
+            }
+            WindowEvent::Destroyed if window.label() == tray::MAIN => { pet::close(window.app_handle()); tray::close(window.app_handle()); },
             _ => {}
         })
         .setup(|app| {
@@ -435,12 +493,35 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            pet::pet_enable, pet::pet_publish, pet::pet_state, pet::pet_position, pet::pet_move,
+            pet::pet_open_main, pet::pet_hide, pet::pet_motion,
+            assistant::assistant_connection,
+            assistant::assistant_cancel,
+            assistant::assistant_open_url,
+            assistant::assistant_read_note,
+            assistant::assistant_apply_note,
+            assistant::assistant_abandon_action,
+            assistant::assistant_apply_calendar,
+            assistant::assistant_list_chats,
+            assistant::assistant_search_chats,
+            assistant::assistant_export_chat,
+            assistant::assistant_load_chat,
+            assistant::assistant_save_chat,
+            assistant::assistant_set_key,
+            assistant::assistant_respond,
+            assistant::assistant_transcribe,
+            assistant::assistant_speak,
             vault_status,
             pick_vault,
             list_files,
             read_note,
+            read_base,
+            create_base,
+            write_base,
+            write_note_scoped,
             read_all_notes,
             read_image,
+            reveal_file,
             save_expense_photo,
             create_note,
             create_folder,
@@ -465,6 +546,7 @@ pub fn run() {
             calendar_delete,
             calendar_open_settings,
             tray::tray_publish,
+            tray::tray_enable,
             tray::tray_state,
             tray::tray_command,
             tray::tray_open_main,
@@ -488,12 +570,17 @@ pub fn run() {
         .expect("error while building Epizen")
         .run(|app, event| {
             // Cmd+Q and the app menu's Quit come here, not through the window.
-            if let RunEvent::ExitRequested { api, .. } = event
+            if let RunEvent::ExitRequested { ref api, .. } = event
                 && app.state::<Closing>().hold()
             {
+                app.state::<Closing>().quit_requested.store(true, Ordering::SeqCst);
                 api.prevent_exit();
                 let _ = app.emit(CLOSE_REQUESTED, ());
             }
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Reopen { .. } = event
+                && let Some(main) = app.get_webview_window(tray::MAIN)
+            { let _ = main.unminimize(); let _ = main.show(); let _ = main.set_focus(); }
         });
 }
 

@@ -1,3 +1,4 @@
+import { PluginAppearance, usePluginDisplay } from '../workspace/PluginDisplay';
 import { useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
 import { withHabits } from '../../lib/habits';
 import { metricColor, metricStatus } from '../../lib/metricStatus';
@@ -18,8 +19,9 @@ import { DeleteTask, EditTask } from '../calendar/TaskDialogs';
 import { Tags, ThoughtWizard } from './ThoughtWizard';
 import type { PeriodicActions, PeriodicSpec } from './types';
 import { SleepField } from './SleepField';
+import { checkInSettings, CHECK_INS } from '../../lib/plugins';
 
-const TABS = ['Overview', 'Tasks', 'Habits', 'Quests', 'Stream'] as const;
+const TABS = ['Overview', 'Tasks', 'Habits', 'Quests', 'CBT'] as const;
 type Tab = (typeof TABS)[number];
 // The tab last shown, so the next day opens on it too. Kept for the session only.
 let lastTab: Tab = 'Overview';
@@ -36,7 +38,13 @@ interface Props {
 /** A daily note as a page: how the day went, from the note's own text. */
 export function DayPage({ spec, path, text, actions }: Props) {
   const day = useMemo(() => withHabits(parseDay(text), spec.habits ?? [], spec.date, today()), [text, spec.habits, spec.date]);
-  const [tab, setTab] = useState<Tab>(lastTab);
+  const display = usePluginDisplay('periodic');
+  const [tab, setTab] = useState<Tab>(display.defaultView === 'Remember last tab' ? lastTab : display.defaultView as Tab);
+  const [seenThoughtRecord, setSeenThoughtRecord] = useState<number>();
+  if (spec.focusThoughtRecord !== undefined && spec.focusThoughtRecord !== seenThoughtRecord) {
+    setSeenThoughtRecord(spec.focusThoughtRecord);
+    if (spec.features?.thoughtRecords !== false) setTab('CBT');
+  }
   // The thought-record wizard: open on a record to edit it, or on nothing for a new one.
   const [wizard, setWizard] = useState<{ record?: ThoughtRecord }>();
   const choose = (next: Tab) => {
@@ -45,7 +53,8 @@ export function DayPage({ spec, path, text, actions }: Props) {
   };
   const habits = spec.features?.habits !== false;
   const thoughtRecords = spec.features?.thoughtRecords !== false;
-  const activeTab = !habits && tab === 'Habits' ? 'Overview' : tab;
+  const tabs = TABS.filter((item) => (habits || item !== 'Habits') && (thoughtRecords || item !== 'CBT') && (spec.features?.quests !== false || item !== 'Quests'));
+  const activeTab = tabs.includes(tab) ? tab : 'Overview';
   const { date } = spec;
   const done = day.numbers.done;
   const monday = startOfWeek(date);
@@ -91,7 +100,7 @@ export function DayPage({ spec, path, text, actions }: Props) {
 
       {isToday && <YesterdayGaps spec={spec} onOpen={() => actions.onOpenPeriod('day', addDays(date, -1))} />}
 
-      <Tabs tabs={TABS.filter((item) => habits || item !== 'Habits')} active={activeTab} onChange={choose} />
+      <Tabs tabs={tabs} active={activeTab} onChange={choose} />
       <div className="tab-panel" key={activeTab}>
         {activeTab === 'Overview' && <Overview day={day} spec={spec} actions={actions} isToday={isToday} />}
         {activeTab === 'Tasks' && <TasksTab day={day} spec={spec} actions={actions} isToday={isToday} />}
@@ -99,7 +108,7 @@ export function DayPage({ spec, path, text, actions }: Props) {
         {activeTab === 'Quests' && (
           <QuestBoard quests={questsIn(spec.quests, date, addDays(date, 1))} art={spec.art} today={today()} onToggle={actions.onQuestToggle} onProgress={actions.onQuestProgress} onChange={actions.onQuestChange} />
         )}
-        {activeTab === 'Stream' && <StreamTab day={day} actions={actions} thoughtRecords={thoughtRecords} onOpen={(record) => setWizard({ record })} />}
+        {activeTab === 'CBT' && thoughtRecords && <StreamTab day={day} actions={actions} thoughtRecords={thoughtRecords} onOpen={(record) => setWizard({ record })} />}
       </div>
       {thoughtRecords && wizard && (
         <ThoughtWizard
@@ -156,7 +165,9 @@ function Summary({ text, onSave }: { text?: string; onSave: (summary: string) =>
 /** On today's note: what yesterday's note never got, with a way back to it. */
 function YesterdayGaps({ spec, onOpen }: { spec: PeriodicSpec; onOpen: () => void }) {
   const yesterday = spec.dayOf(addDays(spec.date, -1));
-  const missing = yesterday.day ? missingFromDay(yesterday.day).filter((item) => spec.features?.habits !== false || item !== 'habits') : [];
+  const checks = checkInSettings(spec.features?.checkIns);
+  const labels = new Set(CHECK_INS.filter(({ key }) => checks.enabled && checks.metrics.includes(key)).map(({ label }) => label.toLowerCase()));
+  const missing = yesterday.day ? missingFromDay(yesterday.day).filter((item) => item === 'habits' ? spec.features?.habits !== false : labels.has(item)) : [];
   if (!missing.length) return null;
   return (
     <div className="notice glass rise" data-testid="yesterday-gaps">
@@ -172,6 +183,7 @@ function YesterdayGaps({ spec, onOpen }: { spec: PeriodicSpec; onOpen: () => voi
 
 function Overview({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions; isToday: boolean }) {
   const { totals } = day;
+  const checks = checkInSettings(spec.features?.checkIns);
   const [open, setOpen] = useState<Open>();
   return (
     <>
@@ -202,7 +214,7 @@ function Overview({ day, spec, actions, isToday }: { day: Day; spec: PeriodicSpe
           <span className="of"> / {totals.habits}</span>
         </Tile>}
       </div>
-      <div className="split">
+      <div className={checks.enabled && checks.metrics.length ? 'split' : 'split without-checkins'}>
         <CheckIn day={day} spec={spec} onSet={actions.onSetProperty} />
         <TimeCard day={day} />
       </div>
@@ -253,11 +265,13 @@ function HabitDots({ habits }: { habits: DayTask[] }) {
 
 /** The day's numbers, each set from here: a tap on a segment, or a number typed in. */
 function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: PeriodicActions['onSetProperty'] }) {
+  const checks = checkInSettings(spec.features?.checkIns);
+  if (!checks.enabled || !checks.metrics.length) return null;
   return (
-    <div className="card glass rise" style={order(4)} data-testid="check-in">
+    <PluginAppearance id="checkins"><div className="card glass rise" style={order(4)} data-testid="check-in">
       <p className="tile-label">Check-in</p>
       <ul className="check-in">
-        {METRICS.map(({ key, label }) => {
+        {METRICS.filter(({ key }) => checks.metrics.some((metric) => metric === key)).map(({ key, label }) => {
           const value = day.numbers[key] || undefined;
           const max = spec.scales[key] ?? 5;
           const color = metricColor(key, value, max);
@@ -276,12 +290,12 @@ function CheckIn({ day, spec, onSet }: { day: Day; spec: PeriodicSpec; onSet: Pe
             </li>
           );
         })}
-        <li data-metric="sleep" data-status={metricStatus('sleep', day.numbers.sleep)}>
+        {checks.metrics.includes('sleep') && <li data-metric="sleep" data-status={metricStatus('sleep', day.numbers.sleep)}>
           <span className="check-label">Sleep</span>
           <SleepField value={day.numbers.sleep} onCommit={(next) => onSet('sleep', next)} />
-        </li>
+        </li>}
       </ul>
-    </div>
+    </div></PluginAppearance>
   );
 }
 
@@ -412,6 +426,7 @@ function TaskActions({ open, isToday, categories, actions, onOpen }: { open: Ope
   }
   return (
     <FocusMenu
+      focusEnabled={actions.focusEnabled}
       at={open}
       label={task.label}
       noFocus={isToday ? undefined : 'Focus runs on today’s tasks: the timer logs into today’s note.'}
@@ -671,9 +686,10 @@ function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actio
 }
 
 function StreamTab({ day, actions, onOpen, thoughtRecords }: { day: Day; actions: PeriodicActions; onOpen: (record?: ThoughtRecord) => void; thoughtRecords: boolean }) {
+  const display = usePluginDisplay('cbt');
   const [deleting, setDeleting] = useState<number>();
   return (
-    <>
+    <PluginAppearance id="cbt">
       {(day.gratitude || day.important) && (
         <div className="split">
           {day.gratitude && (
@@ -718,11 +734,11 @@ function StreamTab({ day, actions, onOpen, thoughtRecords }: { day: Day; actions
                     {record.time && <span className="time-chip">{record.time}</span>}
                     <span className="record-situation">{record.situation || <span className="faint">Untitled moment</span>}</span>
                   </span>
-                  <span className="record-feelings">
+                  {display.sections.emotions && <span className="record-feelings">
                     <Tags names={record.before} />
                     <span className="done-arrow">→</span>
                     <Tags names={record.after} />
-                  </span>
+                  </span>}
                   {record.distortions.length > 0 && (
                     <span className="record-traps">
                       {record.distortions.map((name) => (
@@ -757,6 +773,6 @@ function StreamTab({ day, actions, onOpen, thoughtRecords }: { day: Day; actions
           <p className="empty-line">No sessions yet today. Start one when a thought keeps pulling at you.</p>
         )}
       </Section>}
-    </>
+    </PluginAppearance>
   );
 }

@@ -2,8 +2,6 @@ import { $, browser, expect } from '@wdio/globals';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { snapshotVault, diffSnapshots } from '../../scripts/vault-snapshot.mjs';
-import { starterNotes } from '../../src/lib/vaultSetup';
-import { today } from '../../src/lib/dates';
 import { vaultCopy } from '../paths';
 import { openFolders, openNote, prepareWindow, screenshot, scrollIntoView, showMonth } from '../support';
 
@@ -12,17 +10,20 @@ const root = join(dirname(vaultCopy()), 'starter-vault');
 describe('vault setup and notes from other apps', () => {
   before(prepareWindow);
 
-  it('creates the reviewed starter vault with the real guarded filesystem commands', async () => {
-    await expect($('[data-testid="vault-setup"]')).toBeDisplayed();
-    await screenshot('110-connect-vault');
-    await $('label*=Yes, connect my notes').click();
-    await screenshot('172-existing-vault-preferences');
-    await $('button=Create a starter vault here').click();
-    await screenshot('111-starter-preview');
-    await $('[data-testid="setup-save"]').click();
+  it('opens an empty vault as Markdown and enables workflows explicitly without creating files', async () => {
+    const before = snapshotVault(root);
+    await expect($('[data-testid="markdown-home"]')).toBeDisplayed();
+    await expect($('[data-testid="vault-setup"]')).not.toBeExisting();
+    await screenshot('110-empty-markdown-vault');
+    await $('[data-testid="open-settings"]').click();
+    for (const name of ['Homepage', 'Periodic notes', 'Library', 'Check-ins']) await $(`[aria-label="Enable ${name}"]`).click();
+    await scrollIntoView('[data-testid="settings-save"]');
+    await $('[data-testid="settings-save"]').click();
+    await $('[data-testid="settings"] .save-state').waitForDisplayed();
+    await $('[data-testid="sidebar-vault"]').click();
     await $('[data-testid="home"]').waitForDisplayed();
-    for (const note of starterNotes(today())) expect(readFileSync(join(root, note.path), 'utf8')).toBe(note.text);
-    await screenshot('112-starter-home');
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
+    await screenshot('112-optional-homepage');
   });
 
   it('reuses mixed old names, preserves prose and uses the new pattern only for new notes', async () => {
@@ -38,7 +39,9 @@ describe('vault setup and notes from other apps', () => {
     await browser.refresh();
     await prepareWindow();
     await $('[data-testid="open-settings"]').click();
-    await $('[data-testid="settings-day-format"]').setValue('YYYY/[days]/[Day ]DD.MM.YYYY');
+    await $('[data-testid="settings-nav-periodic"]').click();
+    await $('[aria-label="Daily notes folder"]').setValue(folder);
+    await $('[data-testid="settings-day-format"]').setValue('[Day ]DD.MM.YYYY');
     await scrollIntoView('[data-testid="settings-day"]');
     await screenshot('115-future-name-preferences');
     await scrollIntoView('[data-testid="settings-save"]');

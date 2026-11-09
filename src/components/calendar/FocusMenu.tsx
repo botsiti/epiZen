@@ -11,6 +11,7 @@ export interface FocusHow {
 }
 
 interface Props {
+  focusEnabled?: boolean;
   /** Where the right-click was, in the window. */
   at: { x: number; y: number };
   /** The task's words, at the top of the menu. */
@@ -36,7 +37,7 @@ interface Props {
 }
 
 /** The menu a right-click on a task or a block opens: focus on it, open its day, edit or delete it. */
-export function FocusMenu({ at, label, noFocus, running, onFocus, onOpenDay, onEdit, onDelete, deleteLabel = 'Delete block…', onDeleteTask, onClose }: Props) {
+export function FocusMenu({ at, label, noFocus, focusEnabled = true, running, onFocus, onOpenDay, onEdit, onDelete, deleteLabel = 'Delete block…', onDeleteTask, onClose }: Props) {
   useEscape(onClose);
   const menu = useRef<HTMLDivElement>(null);
   // Kept inside the window, like a system menu.
@@ -71,7 +72,7 @@ export function FocusMenu({ at, label, noFocus, running, onFocus, onOpenDay, onE
           <p className="focus-menu-label" title={label}>
             {label || 'untitled'}
           </p>
-          {noFocus ? (
+          {focusEnabled && (noFocus ? (
             <p className="focus-menu-note">{noFocus}</p>
           ) : (
             <>
@@ -85,8 +86,8 @@ export function FocusMenu({ at, label, noFocus, running, onFocus, onOpenDay, onE
                 </button>
               ))}
             </>
-          )}
-          {(onOpenDay ?? onEdit ?? onDelete ?? onDeleteTask) && <hr />}
+          ))}
+          {focusEnabled && (onOpenDay ?? onEdit ?? onDelete ?? onDeleteTask) && <hr />}
           {onOpenDay && (
             <button type="button" role="menuitem" onClick={pick(onOpenDay)}>
               Open the day

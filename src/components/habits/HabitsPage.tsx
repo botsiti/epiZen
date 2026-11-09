@@ -1,3 +1,4 @@
+import { usePluginDisplay } from '../workspace/PluginDisplay';
 import { useMemo, useState } from 'react';
 import { HabitDialog } from './HabitDialog';
 import { addDays, addMonths, formatDate, monthGrid, parseDate, startOfWeek, startOfMonth } from '../../lib/dates';
@@ -24,8 +25,9 @@ const dateKey = (date: Date) => formatDate(date, 'YYYY-MM-DD');
 const live = (habit: Habit, date: Date) => habit.periods.some((p) => !p.until || p.until > dateKey(date));
 
 export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycle, onComplete, onOpenDay, onOpenNote, enabled = true, onOpenSettings }: HabitsPageProps) {
+  const display = usePluginDisplay('habits');
   const history = useMemo(() => discoveredHabits(days, habits), [days, habits]);
-  const [filter, setFilter] = useState<Filter>('Active');
+  const [filter, setFilter] = useState<Filter>(display.defaultView as Filter);
   const [selected, setSelected] = useState<string>();
   const [form, setForm] = useState<{ kind: 'new' | 'archive' | 'resume' | 'continue'; habit?: Habit; name: string; date: string; restart: boolean }>();
   const [busy, setBusy] = useState(false);
@@ -69,7 +71,7 @@ export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycl
 
   return <div className="periodic-frame habits-page" data-testid="habits-page">
     <header className="habits-head"><div><p className="kicker">Small actions, over time</p><h1>Habits</h1><p>Your routines can change. Your history stays with you.</p></div><button type="button" className="primary-button" disabled={busy} onClick={() => startForm('new')}>＋ New habit</button></header>
-    <section className="habits-today" aria-label="Today's habit progress"><div><span className="kicker">{formatDate(today, 'dddd, D MMMM')}</span><p>{due.length ? doneToday === due.length ? 'Your routine is complete for today.' : `${due.length - doneToday} small ${due.length - doneToday === 1 ? 'step' : 'steps'} still ahead.` : 'A little intention, every day.'}</p></div><div className="habits-today-score"><strong>{doneToday}<small> / {due.length}</small></strong><span>completed today</span></div><div className="habits-today-track" aria-hidden="true"><i style={{ width: `${due.length ? doneToday * 100 / due.length : 0}%` }} /></div></section>
+    {display.sections.today && <section className="habits-today" aria-label="Today's habit progress"><div><span className="kicker">{formatDate(today, 'dddd, D MMMM')}</span><p>{due.length ? doneToday === due.length ? 'Your routine is complete for today.' : `${due.length - doneToday} small ${due.length - doneToday === 1 ? 'step' : 'steps'} still ahead.` : 'A little intention, every day.'}</p></div><div className="habits-today-score"><strong>{doneToday}<small> / {due.length}</small></strong><span>completed today</span></div><div className="habits-today-track" aria-hidden="true"><i style={{ width: `${due.length ? doneToday * 100 / due.length : 0}%` }} /></div></section>}
     {!enabled && <p className="habits-warning">Habits are hidden on daily and monthly pages. <button type="button" onClick={onOpenSettings}>Enable them in Settings</button></p>}
     {problems.length > 0 && <div className="habits-warning" role="alert"><strong>Some habit notes need attention</strong>{problems.map((p) => <p key={`${p.path}:${p.message}`}>{p.message} <button type="button" onClick={() => onOpenNote(p.path)}>Open note</button></p>)}</div>}
     {problem && <p className="habits-warning" role="alert">{problem}</p>}{notice && <p className="habits-notice" role="status">{notice}</p>}

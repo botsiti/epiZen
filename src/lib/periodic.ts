@@ -1,4 +1,5 @@
 import type { Settings, VaultFile } from './api';
+import { checkInSettings } from './plugins';
 import { addDays, addMonths, day, formatDate, parseDate, startOfMonth, startOfWeek } from './dates';
 import { noteFolder, noteTitle } from './links';
 import { parseNote } from './frontmatter';
@@ -252,13 +253,14 @@ mood:
   return metadata + (period === 'week' ? '#### Plus\n\n#### Minus\n\n#### Next\n' : '## Month Summary\n');
 }
 
-export interface PeriodicFeatures { habits: boolean; thoughtRecords: boolean }
+export interface PeriodicFeatures { habits: boolean; thoughtRecords: boolean; quests?: boolean; timer?: boolean; statistics?: boolean; checkIns?: import('./plugins').CheckInSettings }
 export const DEFAULT_PERIODIC_FEATURES: PeriodicFeatures = { habits: true, thoughtRecords: true };
 export function periodicFeatures(value: unknown): PeriodicFeatures {
   const stored = record(value);
   return {
     habits: typeof stored.habits === 'boolean' ? stored.habits : true,
     thoughtRecords: typeof stored.thoughtRecords === 'boolean' ? stored.thoughtRecords : true,
+    ...(stored.checkIns !== undefined ? { checkIns: checkInSettings(stored.checkIns) } : {}),
   };
 }
 

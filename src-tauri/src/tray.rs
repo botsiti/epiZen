@@ -236,6 +236,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
+    icon.set_visible(false)?;
     #[cfg(target_os = "macos")]
     mac::steady_digits(&icon);
     let tray = app.state::<Tray>();
@@ -356,6 +357,20 @@ pub struct Publish {
 }
 
 /// The main window's timer, for the item's title and the panel.
+#[tauri::command]
+pub fn tray_enable(app: AppHandle, tray: State<'_, Tray>, enabled: bool) -> Result<(), String> {
+    if let Some(icon) = tray.icon.get() { icon.set_visible(enabled).map_err(|error| error.to_string())?; }
+    if !enabled {
+        hide(&app);
+        let (lock, changed) = &*tray.published;
+        let mut published = lock.lock().unwrap_or_else(PoisonError::into_inner);
+        published.clock = Clock::default();
+        published.version += 1;
+        changed.notify_all();
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn tray_publish(app: AppHandle, tray: State<'_, Tray>, status: Publish) {
     let (lock, publish) = &*tray.published;

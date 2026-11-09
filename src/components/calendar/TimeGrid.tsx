@@ -32,6 +32,7 @@ export interface Column {
 }
 
 interface Props {
+  focusEnabled?: boolean;
   columns: Column[];
   hours: Hours;
   early: boolean;
@@ -350,6 +351,7 @@ export function TimeGrid(props: Props) {
         )}
         {popover?.kind === 'plan-menu' && (
           <PlanMenu
+            focusEnabled={props.focusEnabled}
             at={popover}
             plan={popover.plan}
             today={columns[popover.col]?.key === todayKey}
@@ -503,6 +505,7 @@ function NewPlan({
 
 /** A plan's right-click menu: its task's focus and edit when the task is this day's, and deleting the event. */
 function PlanMenu({
+  focusEnabled,
   at,
   plan,
   today,
@@ -513,6 +516,7 @@ function PlanMenu({
   onDelete,
   onClose,
 }: {
+  focusEnabled?: boolean;
   at: { x: number; y: number };
   plan: GridPlan;
   today: boolean;
@@ -527,6 +531,7 @@ function PlanMenu({
   const noFocus = !plan.task ? 'An event from Calendar, not one of your tasks.' : !item ? 'Its task is in another day’s note.' : today ? undefined : NO_FOCUS;
   return (
     <FocusMenu
+      focusEnabled={focusEnabled}
       at={at}
       label={plan.event.notes?.split('\n')[0] ?? plan.event.title}
       noFocus={noFocus}

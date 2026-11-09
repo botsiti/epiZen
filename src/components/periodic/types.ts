@@ -11,6 +11,8 @@ import type { MonthlyField } from '../../lib/monthlyReview';
 
 /** What a periodic page reads besides its own note. Built by App from the vault; nothing in the note is code. */
 export interface PeriodicSpec {
+  /** A new assistant save can reveal the CBT tab without owning its local navigation state. */
+  focusThoughtRecord?: number;
   period: Period;
   features?: PeriodicFeatures;
   habits?: Habit[];
@@ -35,6 +37,7 @@ export interface PeriodicSpec {
 }
 
 export interface PeriodicActions {
+  focusEnabled?: boolean;
   /** Opens the note of that day, week or month, or creates it with built-in starting text. */
   onOpenPeriod: (period: Period, date: Date) => void;
   onOpenNote: (path: string) => void;

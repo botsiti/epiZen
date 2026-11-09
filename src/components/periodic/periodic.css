@@ -3440,3 +3440,5 @@ button.quest-log-words {
 .quest-dialog.is-editing .quest-edit-form { padding: 0; border: 0; background: none; }
 .quest-dialog.is-editing .quest-dialog-title { font-size: 32px; }
 .quest-dialog .quest-art-blank { background: radial-gradient(ellipse at 20% 20%, color-mix(in oklch, var(--tone) 18%, transparent), transparent 75%), var(--surface); }
+.day-rows .day-row { grid-template-columns: var(--day-columns, 140px minmax(120px, 1fr) 64px repeat(5, 56px)); }
+.periodic .split.without-checkins { grid-template-columns: 1fr; }

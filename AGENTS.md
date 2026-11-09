@@ -17,15 +17,26 @@ here; keep workflow rules here so the two cannot drift.
   app or test windows; keep the external display available for the user's work. Preserve the
   display arrangement and main-display setting. If the built-in display is unavailable, report
   that constraint rather than silently using the Xiaomi display.
+- All agent preview and test windows belong on **Desktop 2** of that display. Never show them
+  on every Space or switch the user's desktop to run checks. Verify Desktop 2 before launching
+  or showing windows; if it cannot be verified, continue non-UI work and report native checks
+  as deferred. Local E2E startup enforces this in `e2e/desktop.ts`. Production smoke previews
+  must set `EPIZEN_PREVIEW_DESKTOP_ONLY=1` so Spike also stays on that desktop.
 - Notes remain ordinary Obsidian-compatible Markdown: frontmatter, wikilinks, embeds,
   callouts, tasks and inline fields. No database, sidecars, proprietary syntax or execution
   of Obsidian plugins. Preserve text outside the requested edit, including formatting.
 - Never lose a note or change one the user did not ask to change. New files must not replace
   existing ones. Saves are atomic and conditional on the content still matching what was
   read. A conflict preserves the user's unsaved text and offers recovery.
-- No accounts or app-managed sync. Network access is limited to user-triggered library
-  lookups through `src-tauri/src/net.rs`, which owns the host allowlist, redirect validation,
-  HTTPS, response limits, timeouts and rate limits. Apple Calendar uses local EventKit.
+- No app-managed accounts or sync. App-owned network requests are limited to user-triggered library
+  lookups and the API assistant adapter through `src-tauri/src/net.rs`, which owns
+  the host allowlist, redirect validation, HTTPS, response limits, timeouts and rate limits.
+  API credentials live in macOS Keychain, never in notes, frontend settings or logs.
+  The Codex subscription adapter runs the installed CLI, which owns its existing ChatGPT login
+  and authenticated network traffic. It must not extract tokens, silently use API billing, run
+  tools against the vault, or bypass Epizen's reviewed conditional writes. Native local speech
+  requires on-device recognition. Authenticated API requests use fixed endpoints and never follow redirects. Tests use fake
+  AI providers and isolated credentials. Apple Calendar uses local EventKit.
 - Tests use temporary copies of `demo-vault/`, isolated app settings and fake calendar/network
   providers. Never point a test at personal notes or calendars. Only remove temporary data
   created by that run; preserve the original fixture.
@@ -83,6 +94,11 @@ Bare filenames in the last column are under `src/lib/`. Backend foundations:
 6. A shared contract change includes its consumers and integration tests in the same change.
    Preserve compatibility where practical. Improve boundaries incrementally; do not bundle
    a repository-wide reorganization with a feature.
+7. Follow the [Codebase Design](https://github.com/mattpocock/skills/tree/main/skills/engineering/codebase-design)
+   principles: keep a module's interface small enough to hide meaningful behavior, accept
+   external dependencies at explicit seams, and test observable behavior through those seams.
+   Introduce adapters only for actual variation. A folder move alone is not an architectural improvement.
+   `test/module-seams.test.ts` enforces domain independence, assistant internals and acyclic domain imports.
 
 ### Contain failures
 
@@ -191,7 +207,7 @@ Use the intended pushed branch in `--ref` if the work is not on `main`.
    cover no vault, a missing vault, the demo-vault copy and the large graph fixture.
 3. Keep one full run per checkout. E2E regenerates `evidence/`; preserve any evidence needed
    before another run. Test windows stay visible without taking keyboard focus so macOS keeps rendering them;
-   do not interact with them. The
+   do not interact with them. They stay on Desktop 2, never on all workspaces. The
    bottom 32px of captures are below the page because of the title bar.
 4. Wait for completion and inspect every result. For GitHub, identify the run for the intended
    workflow/ref/commit, then use `gh run watch RUN_ID --exit-status`. A dispatched, queued or

@@ -54,7 +54,7 @@ export function remarkWikilinks() {
 
 function linkNode(link: WikilinkMatch): Link {
   const label = link.alias ?? (link.heading ? [link.target, link.heading].filter(Boolean).join(' › ') : link.target);
-  return { type: 'link', url: LINK + encodeURIComponent(link.target), children: [{ type: 'text', value: label }] };
+  return { type: 'link', url: LINK + encodeURIComponent(link.target + (/\.base$/i.test(link.target) && link.heading ? `#${link.heading}` : '')), children: [{ type: 'text', value: label }] };
 }
 
 function embedNode(link: WikilinkMatch): Image {
@@ -64,7 +64,7 @@ function embedNode(link: WikilinkMatch): Image {
     type: 'image',
     url: EMBED + encodeURIComponent(link.target),
     alt: link.target,
-    data: width ? { hProperties: { width: Number(width) } } : undefined,
+    data: { hProperties: { ...(width ? { width: Number(width) } : {}), ...(/\.base$/i.test(link.target) && link.heading ? { dataBaseView: link.heading } : {}) } },
   };
 }
 

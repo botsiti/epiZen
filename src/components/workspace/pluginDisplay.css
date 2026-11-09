@@ -1,0 +1,19 @@
+.plugin-display { min-width: 0; }
+.plugin-display[data-density="compact"] :is(.card, .tile, .quest-xp-summary) { padding: 14px; }
+.plugin-display[data-density="compact"] :is(.habit-summary-select, .record-open) { padding: 12px; }
+.plugin-display[data-density="compact"] :is(.hero-main, .hero-aside) { padding-top: 20px; padding-bottom: 20px; }
+.plugin-display[data-density="compact"] :is(.hero-title, .insights-header h1, .habits-head h1) { font-size: clamp(28px, 3.5vw, 42px); }
+.plugin-display[data-density="compact"] :is(.hero-nav, .tabs, .habits-toolbar, .library-tools) { gap: 6px; }
+.plugin-display[data-density="compact"] :is(.base-scroll td, .base-scroll th) { padding-top: 7px; padding-bottom: 7px; }
+.plugin-display[data-density="compact"] .base-card-content { padding: 10px; }
+.plugin-display[data-density="compact"] .base-list > li { padding-block: 5px; }
+.plugin-display[data-density="compact"] .base-card-grid { gap: 10px; }
+.plugin-display[data-density="compact"] .library-list-row { gap: 10px; }
+.plugin-display[data-density="compact"] :is(.habits-layout, .quest-grid, .tiles, .library-grid) { gap: 12px; }
+.plugin-display[data-density="compact"][data-plugin-display="graph"] button,
+.plugin-display[data-density="compact"][data-plugin-display="calendar"] .nav-chip { padding: 5px 9px; }
+.plugin-display[data-plugin-display="graph"] { height: 100%; }
+
+.timer-pill[data-density="compact"] { padding: 5px 8px; gap: 5px; }
+.timer-card[data-density="compact"] { padding: 14px; gap: 10px; }
+.plugin-display[data-plugin-display="checkins"][data-density="compact"] .check-in > li { padding-block: 6px; }

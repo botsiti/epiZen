@@ -1,3 +1,4 @@
+import { usePluginDisplay } from '../workspace/PluginDisplay';
 import { useMemo, useState } from 'react';
 import { habitColor } from '../../lib/categories';
 import { formatMinutes } from '../../lib/day';
@@ -20,6 +21,7 @@ interface QuestProps {
 }
 
 export function QuestPage({ quests, art, today, onToggle, onProgress, onChange }: QuestProps) {
+  const display = usePluginDisplay('quests');
   const [month, setMonth] = useState(() => startOfMonth(today));
   const entries = useMemo(() => questsIn(quests, month, addMonths(month, 1)), [quests, month]);
   const done = entries.filter(({ quest }) => quest.done).length;
@@ -30,11 +32,11 @@ export function QuestPage({ quests, art, today, onToggle, onProgress, onChange }
   return <div className="periodic-frame insights" data-testid="quests-page">
     <header className="insights-header"><p className="kicker">Your adventures</p><h1>Quests</h1><p>Weekly, monthly and mythic quests active in this month.</p></header>
     <MonthNavigation month={month} onChange={setMonth} today={today} />
-    <section className="quest-xp-summary glass" aria-labelledby="quest-xp-heading" data-testid="quest-xp-summary">
+    {display.sections.progress && <section className="quest-xp-summary glass" aria-labelledby="quest-xp-heading" data-testid="quest-xp-summary">
       <div className="quest-xp-heading"><div><p className="kicker">Your progress</p><h2 id="quest-xp-heading">Quest XP</h2><p>Current progress on quests active in {formatDate(month, 'MMMM YYYY')}.</p></div><span>{done} of {entries.length} complete</span></div>
       <div className="quest-xp-totals"><div><span>Earned</span><strong>{xp ? '+' : ''}{xp.toLocaleString('en-US')} <small>XP</small></strong></div><div><span>Overdue penalty</span><strong>{lost ? '−' : ''}{lost.toLocaleString('en-US')} <small>XP</small></strong></div><div><span>Net</span><strong>{(xp - lost).toLocaleString('en-US')} <small>XP</small></strong></div><div><span>Lifetime net</span><strong>{questXp(quests, iso).toLocaleString('en-US')} <small>XP</small></strong></div></div>
       {overdue.length > 0 && <div className="quest-xp-overdue"><h3>Overdue <span>{overdue.length}</span></h3><ul>{overdue.map(({ quest, lost: amount }) => <li key={`${quest.path}:${quest.line}`}><span>{quest.title}</span><strong>−{amount.toLocaleString('en-US')} XP</strong></li>)}</ul></div>}
-    </section>
+    </section>}
     <QuestBoard key={formatDate(month, 'YYYY-MM')} quests={entries} art={art} today={today} onToggle={onToggle} onProgress={onProgress} onChange={onChange} pageSize={8} groups={{ weekly: 'Weekly quests', monthly: 'Monthly quests' }} />
   </div>;
 }
@@ -45,8 +47,9 @@ function MonthNavigation({ month, onChange, today }: { month: Date; onChange: (d
 
 type Range = 'Weekly' | 'Monthly' | 'Yearly';
 export function StatisticsPage({ days, dayOf, today, showHabits }: { days: DayEntry[]; dayOf: (date: Date) => DayEntry; today: Date; showHabits: boolean }) {
+  const display = usePluginDisplay('statistics');
   const [period, setPeriod] = useState(today);
-  const [range, setRange] = useState<Range>('Monthly');
+  const [range, setRange] = useState<Range>(display.defaultView as Range);
   const start = range === 'Weekly' ? startOfWeek(period) : range === 'Monthly' ? startOfMonth(period) : day(period.getFullYear(), 0, 1);
   const end = range === 'Weekly' ? addDays(start, 7) : range === 'Monthly' ? addMonths(start, 1) : day(start.getFullYear() + 1, 0, 1);
   const summary = rollup(days.filter(({ date }) => date >= start && date < end));
@@ -56,13 +59,13 @@ export function StatisticsPage({ days, dayOf, today, showHabits }: { days: DayEn
   const periodLabel = range === 'Weekly' ? `${formatDate(start, 'MMM D')} – ${formatDate(addDays(end, -1), 'MMM D, YYYY')}` : formatDate(start, range === 'Monthly' ? 'MMMM YYYY' : 'YYYY');
   return <div className="periodic-frame insights" data-testid="statistics-page">
     <header className="insights-header"><p className="kicker">Deep statistics</p><h1>Statistics</h1><p>Explore your focus and the habits you are keeping.</p></header>
-    <FocusActivity dayOf={dayOf} today={today} />
+    {display.sections.activity && <FocusActivity dayOf={dayOf} today={today} />}
     <section className="card glass insight-card"><div className="insight-card-head"><div><h2>Focus analysis</h2><p className="insight-subtitle">Time by category</p></div><div className="insight-range" role="group" aria-label="Focus period">{(['Weekly', 'Monthly', 'Yearly'] as const).map((item) => <button key={item} className={range === item ? 'chip-filter is-on' : 'chip-filter'} aria-pressed={range === item} onClick={() => setRange(item)}>{item}</button>)}</div></div>
       <div className="insight-period"><button className="shelf-all" onClick={() => changePeriod(-1)} aria-label="Previous focus period">←</button><strong>{periodLabel}</strong><button className="shelf-all" onClick={() => changePeriod(1)} aria-label="Next focus period">→</button></div>
       <div className="focus-analysis"><Donut parts={summary.byCategory.map(([meta, value]) => ({ color: meta.color, value, label: `${meta.name}: ${formatMinutes(value)}` }))} center={<><strong>{formatMinutes(summary.totals.logged)}</strong><span>Focus time</span></>} /><div className="focus-breakdown">{summary.byCategory.length === 0 ? <p className="empty-line">No time logged in this period.</p> : summary.byCategory.map(([meta, value]) => <div className="focus-category" key={meta.name}><span style={{ color: meta.color }}>{meta.name}</span><span className="focus-track"><i style={{ width: `${summary.totals.logged ? value / summary.totals.logged * 100 : 0}%`, background: meta.color }} /></span><small>{Math.round(value / summary.totals.logged * 100)}% · {formatMinutes(value)}</small></div>)}</div></div>
       <div className="insight-totals"><div><span>Hours</span><strong>{(summary.totals.logged / 60).toFixed(1)}</strong></div><div><span>Tasks</span><strong>{summary.totals.tasks}</strong></div><div><span>Top category</span><strong>{summary.byCategory[0]?.[0].name ?? '—'}</strong></div></div>
     </section>
-    {showHabits && <section className="card glass insight-card"><h2>Habits</h2><p className="insight-subtitle">Completed days out of calendar days · last 12 months</p>{habitNames.length === 0 ? <p className="empty-line">No habits recorded yet.</p> : <div className="habits-scroll"><div className="habit-months"><span />{months.map((month) => <span key={month.getTime()} title={formatDate(month, 'MMMM YYYY')}>{formatDate(month, 'MMM')}</span>)}{habitNames.map((name, i) => <HabitRow key={name} name={name} color={habitColor(i)} months={months} days={days} />)}</div></div>}</section>}
+    {showHabits && display.sections.habits && <section className="card glass insight-card"><h2>Habits</h2><p className="insight-subtitle">Completed days out of calendar days · last 12 months</p>{habitNames.length === 0 ? <p className="empty-line">No habits recorded yet.</p> : <div className="habits-scroll"><div className="habit-months"><span />{months.map((month) => <span key={month.getTime()} title={formatDate(month, 'MMMM YYYY')}>{formatDate(month, 'MMM')}</span>)}{habitNames.map((name, i) => <HabitRow key={name} name={name} color={habitColor(i)} months={months} days={days} />)}</div></div>}</section>}
   </div>;
 }
 

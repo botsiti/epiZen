@@ -1,0 +1,91 @@
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { expect, it, vi } from 'vitest';
+import { readBase, readNote, writeBase, writeNoteScoped, type VaultFile } from '../../lib/api';
+import { flushAll } from '../../lib/saving';
+import { parseBase } from '../../lib/bases/bases';
+import { BaseDocument } from './BaseDocument';
+import { BaseBlock } from './BaseBlock';
+import { BasesProvider } from './context';
+import { NoteMarkdown } from '../NoteMarkdown';
+
+vi.mock('../../lib/api', () => ({ readBase: vi.fn(), writeBase: vi.fn(), readNote: vi.fn(), writeNoteScoped: vi.fn(), readImage: vi.fn() }));
+const SOURCE = '# preserved\nfilters: file.ext == "md"\nviews:\n  - type: table\n    name: Albums\n    order: [file.name, Artist, rating]\n  - type: list\n    name: Reading list\n    order: [file.name, Artist]\n';
+const files: VaultFile[] = [{ path: 'Music.base', kind: 'base' }, { path: 'Album.md', kind: 'note' }];
+const TEXT = '---\nArtist: Someone\nrating: 88 # keep\n---\n\nKeep this body.\n';
+const texts = new Map([['Album.md', TEXT]]);
+function setup(options: { recover?: (path: string, draft: string, error: string) => void; save?: (before: string, after: string) => Promise<void> } = {}) {
+  const onSaved = vi.fn(), onRefresh = vi.fn().mockResolvedValue(undefined);
+  const content = options.save ? <BaseBlock source={SOURCE} path="Music.base" onOpenLink={vi.fn()} onSaveSource={options.save} onRecover={(draft, error) => options.recover?.('Music.base', draft, error)} /> : <BaseDocument path="Music.base" onOpenLink={vi.fn()} />;
+  return { ...render(<BasesProvider files={files} texts={texts} root="/vault" onRefresh={onRefresh} onNoteSaved={onSaved} onRecover={options.recover}>{content}</BasesProvider>), onSaved };
+}
+it('opens a .base file, saves a new layout conditionally and retains changes after rejection', async () => {
+  vi.mocked(readBase).mockResolvedValue(SOURCE); vi.mocked(writeBase).mockRejectedValueOnce('Changed on disk').mockResolvedValueOnce(undefined);
+  const user = userEvent.setup(); setup();
+  await screen.findByRole('table');
+  await user.click(screen.getByRole('button', { name: 'Views' }));
+  await user.selectOptions(screen.getByLabelText('View layout'), 'cards');
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
+  await screen.findByText(/Changed on disk/);
+  expect(document.querySelector('.base-card')).toBeInTheDocument();
+  expect(screen.getByText('Unsaved base changes')).toBeVisible();
+  expect(writeBase).toHaveBeenCalledWith('/vault', 'Music.base', expect.stringContaining('type: cards'), SOURCE);
+  await user.click(screen.getByRole('button', { name: 'Try again' }));
+  await waitFor(() => expect(screen.queryByText('Unsaved base changes')).toBeNull());
+  expect(vi.mocked(writeBase).mock.calls[1]![3]).toBe(SOURCE);
+});
+it('selects a named .base embed and keeps normal note content around it', async () => {
+  vi.mocked(readBase).mockResolvedValue(SOURCE);
+  render(<BasesProvider files={files} texts={texts} root="/vault" onRefresh={vi.fn()}><NoteMarkdown path="MOC.md" body={'Before\n\n![[Music.base#Reading list]]\n\nAfter'} files={files} onOpenLink={vi.fn()} /></BasesProvider>);
+  await screen.findByRole('link', { name: 'Album' });
+  expect(screen.getByLabelText('Table view')).toHaveValue('1');
+  expect(document.querySelector('.base-list')).toBeInTheDocument();
+  expect(screen.getByText('Before')).toBeVisible(); expect(screen.getByText('After')).toBeVisible();
+});
+it('edits a single property through the scoped note writer and preserves the note body and comments', async () => {
+  vi.mocked(readBase).mockResolvedValue(SOURCE); vi.mocked(readNote).mockResolvedValue(TEXT); vi.mocked(writeNoteScoped).mockResolvedValue(undefined);
+  const user = userEvent.setup(), { onSaved } = setup();
+  await user.click(await screen.findByRole('button', { name: 'Edit rating in Album' }));
+  await user.clear(screen.getByRole('textbox', { name: 'rating' }));
+  await user.type(screen.getByRole('textbox', { name: 'rating' }), '95');
+  await user.click(screen.getByRole('button', { name: /^Save$/ }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  expect(writeNoteScoped).toHaveBeenCalledWith('/vault', 'Album.md', TEXT.replace('rating: 88', 'rating: 95'), TEXT);
+});
+it('creates nested filters, changes visible properties and creates another view', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined); setup({ save });
+  await user.click(screen.getByRole('button', { name: 'Filter' }));
+  await user.click(screen.getByRole('button', { name: '+ Add filter group' }));
+  const group = document.querySelectorAll('.base-filter-group')[1] as HTMLElement;
+  await user.click(within(group).getByRole('button', { name: /^\+ Add filter$/ }));
+  await user.selectOptions(within(group).getByLabelText('Filter property'), 'note.rating');
+  await user.selectOptions(within(group).getByLabelText('Filter comparison'), '>=');
+  await user.selectOptions(within(group).getByLabelText('Filter value type'), 'number');
+  await user.clear(within(group).getByLabelText('Filter value'));
+  await user.type(within(group).getByLabelText('Filter value'), '90');
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
+  await screen.findByText('No notes match this view’s filters.');
+  expect(save.mock.calls[0]![1]).toContain('note["rating"] >= 90');
+  await user.click(screen.getByRole('button', { name: 'Properties' }));
+  await user.click(screen.getByRole('checkbox', { name: 'Show Artist' }));
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+  expect(parseBase(save.mock.calls[1]![1] as string).views[0]!.columns.map((column) => column.property)).not.toContain('note.Artist');
+  await user.click(screen.getByRole('button', { name: 'Views' }));
+  await user.click(screen.getByRole('button', { name: '+ Add view' }));
+  await user.type(screen.getByLabelText('New view name'), 'Gallery');
+  await user.selectOptions(screen.getByLabelText('New view layout'), 'cards');
+  await user.click(screen.getByRole('button', { name: 'Create view' }));
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(3));
+  expect(screen.getByLabelText('Table view')).toHaveValue('2');
+});
+it('keeps an invalid source draft recoverable when navigating away, and blocks closing with unsaved text', async () => {
+  const user = userEvent.setup(), save = vi.fn(), recover = vi.fn(), view = setup({ save, recover });
+  await user.click(screen.getByRole('button', { name: 'Base source' }));
+  await user.clear(screen.getByLabelText('Base YAML source'));
+  await user.paste('views: [unfinished');
+  expect(await flushAll()).toContain('Music.base');
+  view.unmount();
+  await waitFor(() => expect(recover).toHaveBeenCalledWith('Music.base', 'views: [unfinished', expect.any(String)));
+  expect(save).not.toHaveBeenCalled();
+});

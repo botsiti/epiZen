@@ -1207,7 +1207,7 @@ describe('the demo vault', () => {
     await showTab('Habits');
     expect(await $$('[data-testid="habit-pill"]').length).toBe(7);
     await screenshot('27-day-habits');
-    await showTab('Stream');
+    await showTab('CBT');
     await screenshot('28-day-stream');
 
     // A thought record, walked through the wizard, lands as one row in a table under the stream.
@@ -1442,6 +1442,7 @@ describe('the demo vault', () => {
 
   it('keeps the periodic notes setup in Settings', async () => {
     await $('[data-testid="open-settings"]').click();
+    await $('[data-testid="settings-nav-periodic"]').click();
     await expect($('[data-testid="settings-day-format"]')).toHaveValue('DD.MM.YYYY');
     await expect($('[data-testid="settings-day"]')).toHaveText(expect.stringContaining('This day:'));
     await screenshot('16-settings');
@@ -1449,8 +1450,9 @@ describe('the demo vault', () => {
 
   it('keeps optional periodic features in settings without changing notes', async () => {
     const before = snapshotVault(vaultCopy());
-    const habits = () => $('[data-testid="settings-feature-habits"]');
-    const records = () => $('[data-testid="settings-feature-thoughtRecords"]');
+    await $('[data-testid="settings-nav-plugins"]').click();
+    const habits = () => $('[aria-label="Enable Habits"]');
+    const records = () => $('[aria-label="Enable CBT"]');
     await habits().click();
     await records().click();
     await $('[data-testid="settings-save"]').click();

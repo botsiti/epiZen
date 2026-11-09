@@ -8,6 +8,7 @@ import { GraphView } from '../GraphView';
 import './workspace.css';
 
 interface Props {
+  graphEnabled?: boolean;
   /** The note the tab in front shows, if it shows one. */
   note?: string;
   backlinks: Backlink[];
@@ -20,7 +21,7 @@ interface Props {
 }
 
 /** Beside the main pane, for the note in front: what links to it, and its local graph. */
-export function RightSidebar({ note, backlinks, graph, closed, onTogglePanel, onOpen }: Props) {
+export function RightSidebar({ note, backlinks, graph, graphEnabled = true, closed, onTogglePanel, onOpen }: Props) {
   const neighbours = graph ? Math.max(0, graph.nodes.length - 1) : 0;
   return (
     <aside className="right-sidebar" aria-label="About the note in front" data-testid="right-sidebar" data-note={note ?? ''}>
@@ -32,7 +33,7 @@ export function RightSidebar({ note, backlinks, graph, closed, onTogglePanel, on
       <Panel id="backlinks" title="Backlinks" count={note ? backlinks.length : undefined} open={!closed.includes('backlinks')} onToggle={onTogglePanel}>
         {note ? <Backlinks links={backlinks} onOpen={onOpen} /> : <p className="panel-quiet">Open a note to see what links to it.</p>}
       </Panel>
-      <Panel id="graph" title="Local graph" count={note && graph ? neighbours : undefined} open={!closed.includes('graph')} onToggle={onTogglePanel}>
+      {graphEnabled && <Panel id="graph" title="Local graph" count={note && graph ? neighbours : undefined} open={!closed.includes('graph')} onToggle={onTogglePanel}>
         {note && graph ? (
           <>
             <GraphView key={note} graph={graph} onOpen={onOpen} local={{ center: note }} />
@@ -41,7 +42,7 @@ export function RightSidebar({ note, backlinks, graph, closed, onTogglePanel, on
         ) : (
           <p className="panel-quiet">Open a note to see its neighbours.</p>
         )}
-      </Panel>
+      </Panel>}
     </aside>
   );
 }

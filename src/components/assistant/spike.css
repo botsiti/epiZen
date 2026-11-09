@@ -1,0 +1,10 @@
+.spike-sprite {
+  display: inline-block;
+  flex: none;
+  background-image: url('/assistant/spike.png');
+  background-repeat: no-repeat;
+  background-size: 800% 1100%;
+  background-position: var(--spike-x) var(--spike-y);
+  pointer-events: none;
+  user-select: none;
+}

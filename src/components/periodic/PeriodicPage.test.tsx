@@ -442,13 +442,40 @@ it('hides optional features on periodic pages without changing the note', async 
   expect(screen.queryByRole('tab', { name: 'Habits' })).not.toBeInTheDocument();
   expect(screen.queryByTestId('tile-habits')).not.toBeInTheDocument();
   expect(screen.queryByTestId('hero-record')).not.toBeInTheDocument();
-  await user.click(screen.getByRole('tab', { name: 'Stream' }));
+  expect(screen.queryByRole('tab', { name: 'Stream' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'CBT' })).not.toBeInTheDocument();
   expect(screen.queryByTestId('records')).not.toBeInTheDocument();
   expect(act.onToggle).not.toHaveBeenCalled();
   view.rerender(<PeriodicPage spec={{ ...spec('week'), features: hidden }} path="w.md" text="" actions={act} />);
   expect(screen.queryByRole('tab', { name: 'Habits' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('tab', { name: 'Overview' }));
   expect(within(screen.getByTestId('totals')).queryByText('Habits')).not.toBeInTheDocument();
+});
+
+it('removes the active CBT tab when disabled and restores it without editing the note', async () => {
+  const user = userEvent.setup(), act = actions();
+  const view = render(<PeriodicPage spec={{ ...spec('day'), features: { habits: true, thoughtRecords: true } }} path="d.md" text={DAY} actions={act} />);
+  await user.click(screen.getByRole('tab', { name: 'CBT' }));
+  expect(screen.queryByRole('tab', { name: 'Stream' })).toBeNull();
+  view.rerender(<PeriodicPage spec={{ ...spec('day'), features: { habits: false, thoughtRecords: false } }} path="d.md" text={DAY} actions={act} />);
+  expect(screen.queryByRole('tab', { name: 'CBT' })).toBeNull();
+  expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByTestId('records')).toBeNull();
+  expect(act.onAddRecord).not.toHaveBeenCalled();
+  expect(act.onSetProperty).not.toHaveBeenCalled();
+});
+
+it('shows only selected check-ins and can hide the entire block without changing data', async () => {
+  const user = userEvent.setup(), act = actions();
+  const base = { ...spec('day'), features: { habits: true, thoughtRecords: false, checkIns: { enabled: true, metrics: ['mood', 'sleep'] as ('mood' | 'sleep')[] } } };
+  const view = render(<PeriodicPage spec={base} path="d.md" text={DAY} actions={act} />);
+  await user.click(screen.getByRole('tab', { name: 'Overview' }));
+  const checkIn = within(screen.getByTestId('check-in'));
+  expect(checkIn.getByText('Mood')).toBeVisible(); expect(checkIn.getByText('Sleep')).toBeVisible();
+  expect(checkIn.queryByText('Energy')).toBeNull(); expect(checkIn.queryByText('Focus')).toBeNull(); expect(checkIn.queryByText('Social')).toBeNull();
+  view.rerender(<PeriodicPage spec={{ ...base, features: { ...base.features, checkIns: { enabled: false, metrics: ['mood'] } } }} path="d.md" text={DAY} actions={act} />);
+  expect(screen.queryByTestId('check-in')).toBeNull();
+  expect(act.onSetProperty).not.toHaveBeenCalled();
 });
 
 it('omits hidden habits from yesterday’s reminders but keeps other missing fields', () => {

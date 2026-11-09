@@ -1,3 +1,4 @@
+import { PluginAppearance } from '../workspace/PluginDisplay';
 import type { PointerEvent } from 'react';
 import { DayPage } from './DayPage';
 import { followPointer } from './effects';
@@ -21,13 +22,13 @@ interface Props {
 export function PeriodicPage({ spec, path, text, actions, warning, files }: Props) {
   const page = { spec, path, text, actions, files };
   return (
-    <div className="periodic-frame" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
+    <PluginAppearance id="periodic"><div className="periodic-frame" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
       {warning && (
         <p className="note-warning" data-testid="periodic-warning">
           {warning}
         </p>
       )}
       {spec.period === 'day' ? <DayPage {...page} /> : spec.period === 'week' ? <WeekPage {...page} /> : <MonthPage {...page} />}
-    </div>
+    </div></PluginAppearance>
   );
 }

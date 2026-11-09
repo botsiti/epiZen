@@ -23,10 +23,14 @@ import { Editor } from './Editor';
 import { NoteTitle } from './workspace/NoteTitle';
 import { MediaPage } from './library/MediaPage';
 import { NoteMarkdown } from './NoteMarkdown';
+import { TableBuilder } from './bases/TableBuilder';
+import { appendBase } from '../lib/bases/bases';
+import { replaceBaseBlock } from '../lib/bases/document';
 import { PeriodicPage } from './periodic/PeriodicPage';
 import type { PeriodicActions, PeriodicSpec } from './periodic/types';
 
 interface NoteProps {
+  onChangeBase?: (before: string, after: string, occurrence: number) => Promise<void>;
   path: string;
   vaultRoot?: string;
   onImageAdded?: (path: string) => void;
@@ -36,6 +40,7 @@ interface NoteProps {
 }
 
 interface ViewProps extends NoteProps {
+  basesEnabled?: boolean;
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   onRename: () => void;
@@ -79,6 +84,7 @@ export function NoteView(props: ViewProps) {
   }
   const [changeError, setChangeError] = useState<string>();
   const [reviewPath, setReviewPath] = useState<string>();
+  const [addingTable, setAddingTable] = useState(false);
   const changes = useRef(Promise.resolve());
   const monthlyRecovery = useRef<{ path: string; source: string; drafts: Map<MonthlyField, { value: string; expected: string }> } | undefined>(undefined);
   const latest = useRef<string | undefined>(undefined);
@@ -128,6 +134,7 @@ export function NoteView(props: ViewProps) {
   const seenLine = useCallback((line: number) => (latest.current ?? '').split('\n')[line]?.replace(/\r$/, '') ?? '', []);
   const actions = useMemo(
     (): PeriodicActions => ({
+      focusEnabled: periodic?.features?.timer !== false,
       onOpenPeriod,
       onOpenNote,
       onEdit: () => onEditingChange(true),
@@ -292,12 +299,13 @@ export function NoteView(props: ViewProps) {
     );
   }
   const edit = (<>
+    {props.basesEnabled !== false && <button type="button" className="quiet-button" onClick={() => setAddingTable(true)} data-testid="add-table">Add table</button>}
     {periodic?.period === 'month' && <button type="button" className="quiet-button" onClick={() => setReviewPath(path)} data-testid="open-month-review">Monthly review</button>}
     <button type="button" className="quiet-button" onClick={() => onEditingChange(true)} data-testid="edit-note">
       Edit
     </button>
   </>);
-  return <NoteContent path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} onRename={props.onRename} />;
+  return <NoteContent onChangeBase={(before, after, occurrence) => new Promise<void>((resolve, reject) => change((text) => replaceBaseBlock(text, before, after, occurrence), undefined, undefined, (problem) => problem ? reject(new Error(problem)) : resolve()))} path={path} text={note.text} files={files} onOpenLink={onOpenLink} actions={edit} onRename={props.onRename} beforeBody={addingTable && <TableBuilder path={path} onCancel={() => setAddingTable(false)} onOpenLink={onOpenLink} onSave={(source) => new Promise<void>((resolve, reject) => change((text) => appendBase(text, source), undefined, () => setAddingTable(false), (problem) => problem ? reject(new Error(problem)) : resolve()))} />} />;
 }
 
 type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'failed'; message: string };
@@ -422,7 +430,7 @@ function NoteEditor({ path, text, files, onOpenLink, onSaved, onDone, onUnsaved,
   );
 }
 
-export function NoteContent({ path, text, files, onOpenLink, actions, onRename }: NoteProps & { text: string; actions?: ReactNode; onRename?: () => void }) {
+export function NoteContent({ path, text, files, onOpenLink, actions, onRename, beforeBody, onChangeBase }: NoteProps & { text: string; actions?: ReactNode; onRename?: () => void; beforeBody?: ReactNode }) {
   const folder = noteFolder(path);
   return (
     <article className="note" data-testid="note" data-path={path}>
@@ -433,19 +441,20 @@ export function NoteContent({ path, text, files, onOpenLink, actions, onRename }
           {actions}
         </div>
       </header>
-      <NoteBody path={path} text={text} files={files} onOpenLink={onOpenLink} />
+      {beforeBody}
+      <NoteBody path={path} text={text} files={files} onOpenLink={onOpenLink} onChangeBase={onChangeBase} />
     </article>
   );
 }
 
 /** A note's properties and Markdown, rendered. */
-function NoteBody({ path, text, files, onOpenLink }: NoteProps & { text: string }) {
+function NoteBody({ path, text, files, onOpenLink, onChangeBase }: NoteProps & { text: string }) {
   const { properties, body, error } = useMemo(() => parseNote(text), [text]);
   return (
     <>
       {error && <p className="note-warning">These properties aren't valid YAML, so the note is shown as written.</p>}
       <PropertyList properties={properties} />
-      <NoteMarkdown path={path} body={body} files={files} onOpenLink={onOpenLink} />
+      <NoteMarkdown path={path} body={body} files={files} onOpenLink={onOpenLink} onChangeBase={onChangeBase} />
     </>
   );
 }

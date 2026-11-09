@@ -3,6 +3,7 @@ import type { Period } from '../lib/periodic';
 import { openClicks } from './workspace/clicks';
 
 interface Props {
+  calendarEnabled?: boolean;
   month: Date;
   onMonthChange: (month: Date) => void;
   /** Whether that day's, week's or month's note exists, for the dot under it. */
@@ -18,7 +19,7 @@ interface Props {
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 /** A month in the sidebar. A day opens its daily note, a week number its weekly note, the month's name its monthly note. */
-export function Calendar({ month, onMonthChange, has, selected, onOpen, onOpenCalendar }: Props) {
+export function Calendar({ month, onMonthChange, has, selected, onOpen, onOpenCalendar, calendarEnabled = true }: Props) {
   const now = today();
   const isSelected = (period: Period, date: Date) => selected?.period === period && sameDay(selected.date, date);
   const classes = (...names: (string | false)[]) => names.filter(Boolean).join(' ');
@@ -35,13 +36,13 @@ export function Calendar({ month, onMonthChange, has, selected, onOpen, onOpenCa
         >
           {formatDate(month, 'MMMM YYYY')}
         </button>
-        <button type="button" className="icon-button calendar-open" {...openClicks(onOpenCalendar)} aria-label="Open the calendar" title="Open the calendar: time blocks and the timer" data-testid="calendar-open">
+        {calendarEnabled && <button type="button" className="icon-button calendar-open" {...openClicks(onOpenCalendar)} aria-label="Open the calendar" title="Open the calendar: time blocks and the timer" data-testid="calendar-open">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
             <rect x="2" y="3" width="12" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
             <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             <rect x="5" y="8.5" width="3" height="2.5" rx="0.6" fill="currentColor" />
           </svg>
-        </button>
+        </button>}
         <button type="button" className="icon-button" onClick={() => onMonthChange(addMonths(month, -1))} aria-label="Previous month" data-testid="calendar-prev">
           ‹
         </button>

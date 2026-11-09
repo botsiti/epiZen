@@ -1,6 +1,21 @@
 import { $, $$, browser, expect } from '@wdio/globals';
 import { join } from 'node:path';
 import { EVIDENCE } from './paths';
+import { assertTestDesktop } from './desktop';
+
+/** WKWebView's WebDriver option click can return without changing the native select.
+ * Use the same input/change path as the existing preferences and Bases journeys. */
+export async function selectOption(selector: string, value: string) {
+  await $(selector).waitForEnabled();
+  await browser.execute((css, next) => {
+    const element = document.querySelector<HTMLSelectElement>(css);
+    if (!element || ![...element.options].some((option) => option.value === next)) throw new Error(`Missing option ${next} in ${css}`);
+    element.value = next;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  }, selector, value);
+  await expect($(selector)).toHaveValue(value);
+}
 
 /**
  * Same size on every machine, and no transitions or animations: macOS pauses them in a window
@@ -8,6 +23,7 @@ import { EVIDENCE } from './paths';
  * `data-motion="off"` tells the periodic pages to show every move's end state at once.
  */
 export async function prepareWindow() {
+  assertTestDesktop();
   // Start hidden, choose the requested panel, then show without focus. This runs in a
   // Mocha hook so an unavailable local display fails the suite before any test runs.
   // Hosted runners may only have a virtual monitor; an explicit local flag requires Retina.

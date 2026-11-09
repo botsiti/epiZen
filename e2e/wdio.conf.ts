@@ -6,7 +6,13 @@ import type { TauriCapabilities } from '@wdio/tauri-service';
 import { makeBigVault } from './big-vault';
 import { failureScreenshotName } from './failure-screenshot';
 import { APP, COPY_PREFIX, DEMO_VAULT, EVIDENCE, PERIODIC, vaultCopy } from './paths';
+import { builtInPeriodicText } from '../src/lib/periodic';
+import { setProperty } from '../src/lib/edits';
 import { DEFAULT_PERIODIC } from '../src/lib/periodic';
+import { addBaseFixtures } from './bases-fixture';
+import { assertTestDesktop } from './desktop';
+
+assertTestDesktop();
 
 // Tests only ever touch a copy of the demo vault. The launcher makes the copy once;
 // the test workers it starts inherit the path through the environment.
@@ -23,13 +29,27 @@ function copyDemoVault() {
   const copy = join(mkdtempSync(join(tmpdir(), COPY_PREFIX)), 'demo-vault');
   cpSync(DEMO_VAULT, copy, { recursive: true });
   cpSync(DEMO_VAULT, join(dirname(copy), 'preferences-vault'), { recursive: true });
+  cpSync(DEMO_VAULT, join(dirname(copy), 'bases-vault'), { recursive: true });
+  addBaseFixtures(join(dirname(copy), 'bases-vault'));
+  cpSync(DEMO_VAULT, join(dirname(copy), 'base-files-vault'), { recursive: true });
+  cpSync(DEMO_VAULT, join(dirname(copy), 'assistant-vault'), { recursive: true });
+  addBaseFixtures(join(dirname(copy), 'base-files-vault'));
+  cpSync(DEMO_VAULT, join(dirname(copy), 'plugins-vault'), { recursive: true });
+  const journal = join(dirname(copy), 'plugins-vault', 'Journal');
+  mkdirSync(journal);
+  for (const [day, focus] of [[1, 2], [2, 4], [3, 5], [24, undefined]] as const) {
+    let text = builtInPeriodicText('day', new Date(2026, 10, day));
+    text = setProperty(text, 'mood', '4');
+    if (focus !== undefined) text = setProperty(text, 'focus', String(focus));
+    writeFileSync(join(journal, `${String(day).padStart(2, '0')}.11.2026.md`), text, { flag: 'wx' });
+  }
   // The demo vault's periodic notes, set up the way a user would in Settings.
   const config = join(dirname(copy), 'config');
   mkdirSync(config);
   // Vault::open canonicalizes paths (on macOS, /var resolves to /private/var).
   // Settings must use the same roots or the test vaults appear to need first-run setup.
   const canonicalParent = realpathSync(dirname(copy));
-  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC, legacyPeriodicVault: join(canonicalParent, 'demo-vault'), vaults: { [join(canonicalParent, 'preferences-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'big-vault')]: { complete: true, periodic: DEFAULT_PERIODIC } } }));
+  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC, legacyPeriodicVault: join(canonicalParent, 'demo-vault'), vaults: { [join(canonicalParent, 'preferences-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'bases-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'base-files-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'assistant-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'big-vault')]: { complete: true, periodic: DEFAULT_PERIODIC } } }));
   // A generated vault for the graph's 2,000-note check, beside the copy so it goes with it.
   makeBigVault(join(dirname(copy), 'big-vault'));
   mkdirSync(join(dirname(copy), 'starter-vault'));
@@ -57,6 +77,10 @@ export const config: WebdriverIO.Config = {
     launch(4447, './specs/vault.e2e.ts', ['--vault', vaultCopy()]),
     launch(4448, './specs/graph-2000.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'big-vault')]),
     launch(4450, './specs/preferences.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'preferences-vault')]),
+    launch(4451, './specs/bases.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'bases-vault')]),
+    launch(4452, './specs/base-files.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'base-files-vault')]),
+    launch(4453, './specs/plugins.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'plugins-vault')]),
+    launch(4454, './specs/assistant.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'assistant-vault')]),
     launch(4449, './specs/setup.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'starter-vault')]),
   ],
   services: [['@wdio/tauri-service', { driverProvider: 'embedded' }]],
@@ -94,6 +118,8 @@ export const config: WebdriverIO.Config = {
     if (!passed) await browser.saveScreenshot(join(EVIDENCE, failureScreenshotName(test.parent, test.title)));
   },
   onComplete() {
-    rmSync(dirname(vaultCopy()), { recursive: true, force: true });
+    // The native service can finish its final settings flush while shutting the apps down.
+    // Retry only removal of this run's verified disposable directory, never test assertions.
+    rmSync(dirname(vaultCopy()), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   },
 };

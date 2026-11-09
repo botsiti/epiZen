@@ -1,0 +1,55 @@
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { expect, it, vi } from 'vitest';
+import { SettingsScreen, type SettingsDraft } from './SettingsScreen';
+import { DEFAULT_PERIODIC, DEFAULT_PERIODIC_FEATURES } from '../../lib/periodic';
+import { ALL_PLUGINS, NO_PLUGINS, DEFAULT_HOME_SECTIONS, PLUGINS } from '../../lib/plugins';
+
+it('configures plugins and selected check-ins, keeps failed drafts, and saves per-vault choices together', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockRejectedValueOnce('Settings are busy').mockResolvedValueOnce(undefined);
+  render(<SettingsScreen plugins={NO_PLUGINS} homeSections={DEFAULT_HOME_SECTIONS} periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} birthDate="" podcasts={{ artwork: 'show' }} folders={[]} onSave={save} />);
+  expect(screen.getByRole('heading', { name: 'Plugins' })).toBeVisible();
+  await user.click(screen.getByRole('switch', { name: 'Enable Check-ins' }));
+  expect(screen.getByRole('switch', { name: 'Enable Periodic notes' })).toBeChecked();
+  await user.click(screen.getByRole('button', { name: 'Configure Check-ins' }));
+  for (const name of ['Energy', 'Focus', 'Social']) await user.click(screen.getByRole('checkbox', { name: new RegExp(`^${name}`) }));
+  await user.click(screen.getByRole('switch', { name: 'Enable epiBase' }));
+  await user.click(screen.getByTestId('settings-save'));
+  expect(screen.getByRole('alert')).toHaveTextContent('Settings are busy');
+  expect(screen.getByRole('switch', { name: 'Enable epiBase' })).toBeChecked();
+  expect(screen.getByRole('checkbox', { name: /^Focus/ })).not.toBeChecked();
+  await user.click(screen.getByTestId('settings-save'));
+  const saved = save.mock.calls[1]![0] as SettingsDraft;
+  expect(saved.plugins).toEqual({ ...NO_PLUGINS, bases: true, periodic: true, checkins: true });
+  expect(saved.features.checkIns).toEqual({ enabled: true, metrics: ['mood', 'sleep'] });
+});
+it('opens configuration for every plugin and preserves appearance drafts when visiting setup', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined);
+  render(<SettingsScreen plugins={ALL_PLUGINS} periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} birthDate="" podcasts={{ artwork: 'show' }} folders={[]} onSave={save} />);
+  for (const plugin of PLUGINS) expect(screen.getByRole('button', { name: `Configure ${plugin.name}` })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Configure Habits' }));
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Habits layout' }), 'compact');
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Habits default view' }), 'History');
+  await user.click(screen.getByRole('checkbox', { name: 'Today’s progress' }));
+  await user.click(screen.getByRole('button', { name: 'Configure Periodic notes' }));
+  await user.click(screen.getByRole('button', { name: 'Folders, dates & templates' }));
+  expect(screen.getByRole('heading', { name: 'Periodic notes' })).toBeVisible();
+  await user.click(screen.getByTestId('settings-save'));
+  const saved = save.mock.calls[0]![0] as SettingsDraft;
+  expect(saved.pluginDisplay?.habits).toEqual({ density: 'compact', defaultView: 'History', sections: { today: false } });
+});
+it('keeps independent homepage sections and exposes paused dependencies without deleting preferences', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined);
+  render(<SettingsScreen plugins={ALL_PLUGINS} periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} birthDate="" podcasts={{ artwork: 'show' }} folders={[]} onSave={save} />);
+  await user.click(screen.getByRole('button', { name: 'Configure Homepage' }));
+  await user.click(screen.getByRole('checkbox', { name: 'Memento mori' }));
+  await user.click(screen.getByRole('switch', { name: 'Enable Periodic notes' }));
+  expect(screen.getAllByText(/Paused · enable Periodic/)).not.toHaveLength(0);
+  expect(screen.getByRole('switch', { name: 'Enable CBT' })).toBeChecked();
+  await user.type(screen.getByRole('searchbox', { name: 'Find a plugin' }), 'habit');
+  const panel = within(screen.getByTestId('plugin-settings'));
+  expect(panel.getByRole('switch', { name: 'Enable Habits' })).toBeVisible();
+  expect(panel.queryByRole('switch', { name: 'Enable Library' })).toBeNull();
+  await user.click(screen.getByTestId('settings-save'));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ homeSections: { ...DEFAULT_HOME_SECTIONS, memento: false }, plugins: { ...ALL_PLUGINS, periodic: false } }));
+});

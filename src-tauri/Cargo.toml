@@ -1,6 +1,6 @@
 [package]
 name = "epizen"
-version = "0.7.0"
+version = "0.8.0"
 description = "A calm desktop app for a vault of plain Markdown notes"
 edition = "2024"
 publish = false
@@ -18,15 +18,21 @@ tauri-build = { version = "2.7", features = [] }
 tauri = { version = "~2.12", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "=0.10.9"
+base64 = "=0.23.1"
+futures-util = { version = "=0.3.34", features = ["sink"] }
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 tauri-plugin-dialog = "2.8"
 xattr = "1"
 # Lookups for the library (src/net.rs): https only, to a fixed list of hosts. Pinned, with rustls
 # and the system's certificate store, and no cookies, proxies' auth or anything else.
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls"] }
 # Already in the tree through Tauri; `time` paces MusicBrainz to one request a second.
-tokio = { version = "1", features = ["sync", "time"] }
+tokio = { version = "1", features = ["sync", "time", "macros", "process", "io-util"] }
+tempfile = "3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "=3.7.0"
 libc = "0.2"
 # Apple Calendar, through EventKit (src/eventkit.rs).
 block2 = "0.6"
@@ -36,9 +42,6 @@ objc2-event-kit = { version = "0.3", default-features = false, features = ["std"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSDate", "NSError", "NSGeometry", "NSPredicate", "NSString", "NSURL", "objc2-core-foundation"] }
 tauri-plugin-wdio = { version = "=1.5.0", optional = true }
 tauri-plugin-wdio-webdriver = { version = "=1.5.0", optional = true }
-
-[dev-dependencies]
-tempfile = "3"
 
 [features]
 # Test-only: lets WebdriverIO drive the app over a local WebDriver port.

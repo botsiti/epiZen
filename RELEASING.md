@@ -41,6 +41,9 @@ own configured credentials; do not claim them for these builds.
 
 For a local package after a production build, use `npm run release:package`. It verifies the
 bundle's identifier, version and architecture and refuses to overwrite an existing archive.
+Signing applies the microphone and calendar declarations from `src-tauri/Entitlements.plist`
+with the hardened runtime, then verifies the signed entitlements before packaging. For a local
+packaging check, pass the app path followed by `--output` and a fresh project-local folder.
 
 ## Branding and rollback
 

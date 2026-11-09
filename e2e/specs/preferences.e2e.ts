@@ -23,6 +23,7 @@ describe('focused preferences and file creation', () => {
   it('connects existing daily notes and persists homepage sources without changing Markdown', async () => {
     const before = snapshotVault(root);
     await $('[data-testid="open-settings"]').click();
+    await section('periodic');
     await screenshot('160-settings-daily');
     await $('[data-testid="daily-import"] summary').click();
     await $('button=Find daily notes').click();
@@ -30,10 +31,12 @@ describe('focused preferences and file creation', () => {
     await screenshot('161-settings-connect-notes');
     await $('.daily-import-preview').$('button*=Connect').click();
     await save();
-    await section('week');
+    await expect($('[data-testid="settings-nav-periodic"]')).toBeDisplayed();
+    await expect($('[data-testid="settings-nav-day"]')).not.toBeExisting();
+    await $('[data-testid="settings-period-week"]').click();
     await expect($('[data-testid="settings-week-format"]')).toHaveValue('GGGG-[W]WW - DD.MM.YY');
     await screenshot('170-settings-weekly');
-    await section('month');
+    await $('[data-testid="settings-period-month"]').click();
     await expect($('[data-testid="settings-month-format"]')).toHaveValue('MM.YY [RPG]');
     await screenshot('171-settings-monthly');
     await section('home');
@@ -89,8 +92,11 @@ describe('focused preferences and file creation', () => {
     await $('[aria-label="Notes folder"]').setValue('Fresh ideas');
     await save();
     await screenshot('167-settings-files');
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await browser.refresh(); await prepareWindow();
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await $('[data-testid="new-note-button"]').click();
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await expect($('[data-testid="new-note-folder"]')).toHaveValue('Fresh ideas');
     await $('[data-testid="new-note-name"]').setValue('First thought');
     await screenshot('168-new-note');
