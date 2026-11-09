@@ -48,7 +48,7 @@ it('routes subscription recordings to local speech and stops capture when the pr
   await act(() => hook.result.current.start());
   act(() => hook.result.current.stop());
   await waitFor(() => expect(send).toHaveBeenCalledWith('My local transcript.'));
-  expect(assistantTranscribe).toHaveBeenCalledWith(expect.any(Uint8Array), 'audio/mp4', expect.any(AbortSignal), 'codex');
+  expect(assistantTranscribe).toHaveBeenCalledWith(expect.any(Uint8Array), 'audio/mp4', expect.any(AbortSignal), 'codex', undefined);
   await act(() => hook.result.current.start());
   hook.rerender({ provider: 'openai' });
   expect(stopTrack).toHaveBeenCalledTimes(2);
@@ -122,4 +122,30 @@ it('stops playback immediately and never requests remaining chunks after cancell
   expect(Playback.instances[0]!.pause).toHaveBeenCalled();
   expect(assistantSpeak).toHaveBeenCalledOnce();
   expect(hook.result.current.phase).toBe('idle');
+});
+
+it('does not let an older declined microphone request stop a newer recording', async () => {
+  let reject!: (error: Error) => void;
+  getUserMedia.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+  const hook = renderHook(() => useVoice(vi.fn()));
+  let old: Promise<void>;
+  act(() => { old = hook.result.current.start(); });
+  act(() => hook.result.current.cancel());
+  await act(() => hook.result.current.start());
+  expect(hook.result.current.phase).toBe('recording');
+  await act(async () => { reject(new Error('Old request denied')); await old; });
+  expect(hook.result.current.phase).toBe('recording');
+  expect(hook.result.current.error).toBeUndefined();
+  expect(stopTrack).not.toHaveBeenCalled();
+  act(() => hook.result.current.cancel());
+  expect(stopTrack).toHaveBeenCalledOnce();
+});
+
+it('uses the selected transcription model independently of the assistant subscription', async () => {
+  vi.mocked(assistantTranscribe).mockResolvedValue('My words.');
+  const voice = { provider: 'openrouter' as const, model: 'microsoft/mai-transcribe-2' };
+  const hook = renderHook(() => useVoice(vi.fn().mockResolvedValue(undefined), 'codex', voice));
+  await act(() => hook.result.current.start());
+  act(() => hook.result.current.stop());
+  await waitFor(() => expect(assistantTranscribe).toHaveBeenCalledWith(expect.any(Uint8Array), 'audio/mp4', expect.any(AbortSignal), 'codex', voice));
 });

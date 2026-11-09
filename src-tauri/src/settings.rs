@@ -2,6 +2,8 @@
 //! in a JSON file in the app's config folder, never in the vault, so a vault stays plain
 //! Markdown that only Obsidian's own files sit beside.
 
+mod prompt;
+
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

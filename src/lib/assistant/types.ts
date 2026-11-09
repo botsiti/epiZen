@@ -1,9 +1,11 @@
+import { voiceSettings, type VoiceSettings } from './voice';
 import type { Settings, VaultFile } from '../api';
 import type { PeriodicRecognition, PeriodicSettings } from '../periodic';
 
 export type AssistantProvider = 'codex' | 'openai';
 export interface AssistantSettings {
   provider: AssistantProvider;
+  voice: VoiceSettings;
   enabled: boolean;
   desktopPet: boolean;
   petMotion: boolean;
@@ -15,7 +17,7 @@ export interface AssistantSettings {
   allowChanges: boolean;
 }
 export const DEFAULT_ASSISTANT: AssistantSettings = {
-  provider: 'codex',
+  provider: 'codex', voice: voiceSettings(undefined),
   enabled: false, desktopPet: false, petMotion: true, speakReplies: false, model: 'gpt-6.1-sol',
   profilePath: 'Assistant/Profile.md', inboxFolder: 'Inbox', shareCurrentNote: true, allowChanges: false,
 };
@@ -104,6 +106,7 @@ export function assistantSettings(value: unknown): AssistantSettings {
   const text = (key: 'model' | 'profilePath' | 'inboxFolder') => typeof saved[key] === 'string' && saved[key].trim() ? saved[key] : DEFAULT_ASSISTANT[key];
   return {
     provider: saved.provider === 'openai' || saved.provider === undefined && saved.enabled === true ? 'openai' : 'codex',
+    voice: voiceSettings(saved.voice, saved.provider === 'openai' || saved.provider === undefined && saved.enabled === true ? 'openai' : 'local'),
     enabled: saved.enabled === true, desktopPet: saved.desktopPet === true, petMotion: saved.petMotion !== false, speakReplies: saved.speakReplies === true,
     shareCurrentNote: saved.shareCurrentNote !== false, allowChanges: saved.allowChanges === true,
     model: text('model'), profilePath: text('profilePath'), inboxFolder: text('inboxFolder'),

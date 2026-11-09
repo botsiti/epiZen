@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "prompt",
+  "description": "Spike quick entry receives status and submits bounded capture requests. Native commands verify the window and vault; actions stay in the main workspace.",
+  "windows": ["spike-prompt"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

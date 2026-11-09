@@ -3,6 +3,13 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.9.0 — 2026-11-09
+
+Configurable Spike plugin, global quick text and dictation prompts, independent voice providers
+including OpenRouter, and ⌘8 for the conversation sidebar. Faster link indexing and quieter
+animation work, with microphone, dragging and cross-window recovery fixes. Advanced library
+filters and cover pagination are restored. [Full release notes](releases/0.9.0.md).
+
 ## 0.8.0 — 2026-11-09
 
 Spike personal assistant and desktop companion, editable Obsidian Bases, optional per-vault

@@ -133,3 +133,36 @@ it('allows a new conversation after a full thread has been exported, preserving 
   expect(vi.mocked(api.assistantExportChat).mock.calls[0]![1]).toContain('An unsent thought to preserve.');
   await controller.newChat(); expect(controller.getSnapshot().thread.id).not.toBe(id);
 });
+
+it('accepts a quick prompt only once while keeping the sidebar draft and ordinary action review', async () => {
+  const { controller } = await setup();
+  vi.mocked(api.assistantHasMessage).mockResolvedValue(false);
+  vi.mocked(api.assistantRespond).mockResolvedValue({ output: [action] });
+  controller.setDraft('A separate unfinished thought.');
+  await controller.acceptQuickPrompt('quick-request-1', 'Add Quiet Harbour.');
+  await waitFor(() => expect(controller.getSnapshot().busy).toBe(false));
+  await controller.acceptQuickPrompt('quick-request-1', 'Add Quiet Harbour.');
+  expect(controller.getSnapshot().thread.messages.filter((message) => message.role === 'user')).toHaveLength(1);
+  expect(controller.getSnapshot().thread.draft).toBe('A separate unfinished thought.');
+  expect(api.assistantRespond).toHaveBeenCalledOnce();
+  expect(api.assistantApplyNote).not.toHaveBeenCalled();
+  expect(controller.getSnapshot().thread.actions[0]?.status).toBe('review');
+});
+it('acknowledges a quick request already saved in another conversation without replaying it', async () => {
+  const { controller } = await setup();
+  vi.mocked(api.assistantHasMessage).mockResolvedValue(true);
+  await controller.acceptQuickPrompt('previous-request', 'An already processed request');
+  expect(api.assistantRespond).not.toHaveBeenCalled();
+  expect(controller.getSnapshot().thread.messages).toHaveLength(0);
+});
+it('retains a quick prompt when its conversation save fails and does not run actions until recovery', async () => {
+  const { controller } = await setup();
+  vi.mocked(api.assistantHasMessage).mockResolvedValue(false);
+  vi.mocked(api.assistantSaveChat).mockRejectedValueOnce(new Error('Disk full'));
+  await expect(controller.acceptQuickPrompt('failed-request', 'Keep my request')).rejects.toThrow('Disk full');
+  expect(api.assistantRespond).not.toHaveBeenCalled();
+  expect(controller.getSnapshot().thread.messages[0]?.text).toBe('Keep my request');
+  await controller.acceptQuickPrompt('failed-request', 'Keep my request');
+  expect(controller.getSnapshot().thread.messages).toHaveLength(1);
+  expect(controller.getSnapshot().thread.run?.phase).toBe('ready');
+});

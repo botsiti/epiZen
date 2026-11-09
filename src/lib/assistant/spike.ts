@@ -27,3 +27,14 @@ export function spikeLook(dx: number, dy: number): { column: number; row: number
   const frame = Math.round(angle / (Math.PI / 8)) % 16;
   return { column: frame % 8, row: 9 + Math.floor(frame / 8) };
 }
+
+/** Time until the next atlas cell, retaining the original per-frame timing. */
+export function spikeFrameDelay(state: SpikeState, elapsed: number): number {
+  const durations = SPIKE_FRAMES[state].durations;
+  let time = Math.max(0, elapsed) % durations.reduce((sum: number, value) => sum + value, 0);
+  for (const duration of durations) {
+    if (time < duration) return Math.max(1, duration - time);
+    time -= duration;
+  }
+  return durations[0];
+}

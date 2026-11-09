@@ -1,7 +1,7 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { AssistantSettings as Preferences } from '../../lib/assistant/types';
+import type { ChatMessage, AssistantSettings as Preferences } from '../../lib/assistant/types';
 import { noteTitle } from '../../lib/links';
 import { AssistantSettings } from './AssistantSettings';
 import { Spike } from './Spike';
@@ -22,7 +22,7 @@ export function AssistantPanel({ controller, snapshot, voice, companionError, se
   const { thread, busy, error } = snapshot;
   const [linkError, setLinkError] = useState<string>();
   const voiceBusy = ['requesting', 'recording', 'transcribing'].includes(voice.phase);
-  const openUrl = (url: string) => { void assistantOpenUrl(url).catch((error: unknown) => setLinkError(String(error))); };
+  const openUrl = useCallback((url: string) => { void assistantOpenUrl(url).catch((error: unknown) => setLinkError(String(error))); }, []);
   const waiting = thread.actions.filter((action) => action.status === 'review' || action.status === 'failed');
   const interrupted = Boolean(thread.run && thread.run.phase !== 'complete');
   useEffect(() => { bottom.current?.scrollIntoView?.({ block: 'nearest' }); }, [thread.messages.length, waiting.length, busy, preferences]);
@@ -39,7 +39,7 @@ export function AssistantPanel({ controller, snapshot, voice, companionError, se
         {!thread.messages.length && <div className="assistant-welcome"><Spike size={116} state="greeting" followPointer /><h2>A little help, right here.</h2><p>Capture what you watched, make a plan, or talk through what’s on your mind.</p>
           {!connected ? <button type="button" className="assistant-primary" onClick={() => setPreferences(true)}>Connect Spike</button> : <div className="assistant-starters">{['I watched a movie yesterday', 'Help me plan tomorrow', 'Let’s start a thought record'].map((text) => <button type="button" key={text} onClick={() => { controller.setDraft(text); input.current?.focus(); }}>{text}<span>↗</span></button>)}</div>}
         </div>}
-        {thread.messages.map((message) => <Fragment key={message.id}>{thread.actions.filter((action) => action.id.startsWith(`${message.id}:`)).map((action) => <AssistantAction key={action.id} action={action} busy={busy || voiceBusy || snapshot.switching} onReview={(id, accept) => void controller.review(id, accept)} onOpenNote={onOpenNote} />)}<article className={`assistant-message is-${message.role}`}><span className="assistant-message-author">{message.role === 'user' ? 'You' : 'Spike'}</span><div className="assistant-message-text"><Markdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <a href={href} className="assistant-source-text" onClick={(event) => { event.preventDefault(); if (href) openUrl(href); }}>{children}</a> }}>{message.text}</Markdown></div>{message.role === 'assistant' && <button type="button" className="assistant-read-aloud" disabled={voiceBusy || !snapshot.configured || !settings.enabled} onClick={() => void voice.speak(message.text)}>Read aloud</button>}{message.sources?.length ? <div className="assistant-sources">{message.sources.map((source) => <button type="button" key={source.url} title={source.url} onClick={() => openUrl(source.url)}>{source.title}</button>)}</div> : null}</article></Fragment>)}
+        {thread.messages.map((message) => <Fragment key={message.id}>{thread.actions.filter((action) => action.id.startsWith(`${message.id}:`)).map((action) => <AssistantAction key={action.id} action={action} busy={busy || voiceBusy || snapshot.switching} onReview={(id, accept) => void controller.review(id, accept)} onOpenNote={onOpenNote} />)}<AssistantMessage message={message} voiceDisabled={voiceBusy || !snapshot.configured || !settings.enabled} speak={voice.speak} openUrl={openUrl} /></Fragment>)}
         {thread.actions.filter((action) => !thread.messages.some((message) => action.id.startsWith(`${message.id}:`))).map((action) => <AssistantAction key={action.id} action={action} busy={busy || voiceBusy || snapshot.switching} onReview={(id, accept) => void controller.review(id, accept)} onOpenNote={onOpenNote} />)}
         {busy && <div className="assistant-working" role="status"><Spike size={40} state="thinking" /><span>{snapshot.progress ?? 'Thinking'}…</span></div>}
         {snapshot.notice && <p className="assistant-notice" role="status">{snapshot.notice}</p>}{linkError && <p className="assistant-error" role="alert">{linkError}</p>}{error && <div className="assistant-error" role="alert"><p>{error}</p>{snapshot.loaded && <button type="button" disabled={busy || voiceBusy || snapshot.switching} onClick={() => void controller.exportConversation()}>Export this conversation</button>}{!snapshot.loaded && <button type="button" onClick={() => void controller.load()}>Try loading again</button>}</div>}
@@ -59,3 +59,10 @@ function AssistantAction({ action, busy, onReview, onOpenNote }: { action: impor
           {action.status === 'saved' && action.change.kind === 'note' && <button type="button" className="assistant-text-button" onClick={() => onOpenNote(action.change.kind === 'note' ? action.change.path : '')}>Open note ↗</button>}
         </section>;
 }
+
+// A keystroke changes only the composer; old Markdown messages keep their rendered tree.
+const AssistantMessage = memo(function AssistantMessage({ message, voiceDisabled, speak, openUrl }: {
+  message: ChatMessage; voiceDisabled: boolean; speak: (text: string) => Promise<void>; openUrl: (url: string) => void;
+}) {
+  return <article className={`assistant-message is-${message.role}`}><span className="assistant-message-author">{message.role === 'user' ? 'You' : 'Spike'}</span><div className="assistant-message-text"><Markdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <a href={href} className="assistant-source-text" onClick={(event) => { event.preventDefault(); if (href) openUrl(href); }}>{children}</a> }}>{message.text}</Markdown></div>{message.role === 'assistant' && <button type="button" className="assistant-read-aloud" disabled={voiceDisabled} onClick={() => void speak(message.text)}>Read aloud</button>}{message.sources?.length ? <div className="assistant-sources">{message.sources.map((source) => <button type="button" key={source.url} title={source.url} onClick={() => openUrl(source.url)}>{source.title}</button>)}</div> : null}</article>;
+});

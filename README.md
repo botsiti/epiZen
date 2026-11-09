@@ -7,7 +7,7 @@ Obsidian-compatible vault, write and connect ideas, then enable only the workflo
 Built with Tauri 2, Rust, React and TypeScript.
 
 [Download the latest release](https://github.com/botsiti/epiZen/releases/latest) ·
-[Changelog](CHANGELOG.md) · [Release process](RELEASING.md)
+[All features & shortcuts](docs/FEATURES.md) · [Changelog](CHANGELOG.md) · [Release process](RELEASING.md)
 
 ## What you can do
 
@@ -17,7 +17,7 @@ Built with Tauri 2, Rust, React and TypeScript.
   reveal in Finder, or move a note to recoverable trash from the sidebar. Saves check for external
   edits, and failed saves preserve your text.
 - **Choose your plugins.** New vaults start with Markdown. Enable Homepage, epiBase, Library,
-  Periodic notes, Habits, CBT, check-ins and planning tools in Settings → Plugins. Existing users
+  Graph, Spike, Periodic notes, Habits, CBT, check-ins, Quests, Statistics and planning tools in Settings → Plugins. Existing users
   keep their workflows on upgrade; plugin choices belong to each vault.
 - **Use your Obsidian Bases with epiBase.** Open or import `.base` files and embed named views in notes.
   Configure tables, cards and lists with properties, nested filters, sorting, grouping, formulas
@@ -36,17 +36,21 @@ Built with Tauri 2, Rust, React and TypeScript.
 - **Choose your check-ins.** Enable or hide mood, energy, focus, social and sleep. Averages count
   only recorded days; a month without a metric omits it. Disabling CBT removes its daily tab.
 - **Build your library.** Albums, films, books, podcast episodes and videos, with covers, ratings,
-  metadata, filters and a calendar view. Mixed shelves identify each kind with a small cover badge.
+  metadata, advanced filters, paginated covers and a calendar view. Mixed shelves identify each kind with a small cover badge.
   Add notes, find covers, suggest existing genres, and keep favorite album tracks and thoughts.
 - **Plan and focus.** Built-in daily, weekly and monthly pages, local Apple Calendar integration,
   and a focus timer with a menu-bar panel. Logged time stays in your daily notes.
-- **Talk to Spike.** An animated desktop companion opens a conversation beside your notes.
-  Type or record a voice message to add library entries, create or edit notes, capture links, schedule
+- **Talk to Spike anywhere.** Enable the Spike plugin and click the desktop companion to open
+  a compact text or voice prompt above your other apps. Global shortcuts open typing or dictation;
+  **⌘8** opens and closes the full conversation sidebar. Choose on-device, OpenAI or OpenRouter
+  transcription with your own model and Keychain credential. Type or record a voice message to add library entries, create or edit notes, capture links, schedule
   calendar events, or work through a thought record saved in today's note. Spike can recall
   relevant past conversations and preferences you choose to keep in an editable profile note.
   Proposed changes can be reviewed or applied automatically when you enable that preference.
 
 ![The mixed library with media-type badges](docs/images/library.png)
+
+![Spike’s compact quick prompt, shown with demo content](docs/images/spike-quick-prompt.png)
 
 ## Your vault stays yours
 
@@ -57,13 +61,30 @@ calendar access uses local EventKit. Spike can use the installed Codex CLI with 
 ChatGPT subscription, or an OpenAI API key stored in macOS Keychain. Choose the connection in
 Spike's settings. For a subscription, install Codex CLI and run `codex login` once; normal plan
 limits apply. Messages and relevant context are sent through the selected provider when used.
-Codex owns its login; Epizen does not read or copy its tokens. Subscription voice uses macOS
-on-device speech recognition and the system voice, with permission and an installed language.
+Codex owns its login; Epizen does not read or copy its tokens. Dictation is configured separately
+from the assistant connection: use on-device recognition or send recordings to your chosen OpenAI
+or OpenRouter transcription model. API usage is billed by that provider. On-device recognition
+requires permission and a supported installed language. Subscription spoken replies use the macOS
+system voice; API spoken replies are AI-generated.
 
-Open Spike from the tab bar, then use its settings to connect the AI service, choose a profile
-note, and enable the desktop companion. The companion can be shown before connecting an AI
+Enable **Settings → Plugins → Spike**, then choose **Configure → Set up Spike** to connect the
+assistant, choose a profile note, configure dictation and show the desktop companion. The companion can be shown before connecting an AI
 account. Conversation history is scoped to the vault, and Export creates an ordinary Markdown
 transcript, including unsent text and unresolved changes, without replacing an existing file.
+
+The quick prompt keeps unsent drafts when hidden or restarted. Submitted requests enter the same
+conversation and review flow without replacing an unfinished sidebar draft. Closing the main
+window saves and hides it while Spike is enabled; use **Quit Epizen** to exit the app.
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘7 / ⌘9 | Toggle the left / right workspace sidebar |
+| ⌘8 | Toggle the Spike conversation sidebar |
+| ⇧⌘Space | Open or close Spike’s quick prompt from any app |
+| ⌥⇧⌘Space | Start or finish Spike dictation from any app |
+
+Spike’s global shortcuts are active while its plugin is enabled. The [feature guide](docs/FEATURES.md)
+contains the complete plugin list, setup details, limits and keyboard reference.
 
 Every plugin row has Configure. Display preferences belong to the vault: compact or comfortable
 layout, the initial daily tab, habit collection, calendar view and statistics range, plus optional
