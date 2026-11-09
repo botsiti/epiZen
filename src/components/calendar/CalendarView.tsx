@@ -1,3 +1,4 @@
+import { usePluginDisplay } from '../workspace/PluginDisplay';
 import { useCallback, useMemo, useState, type CSSProperties, type PointerEvent } from 'react';
 import { addDays, formatDate, isoWeek, sameDay, startOfWeek, today } from '../../lib/dates';
 import { formatMinutes, parseDay } from '../../lib/day';
@@ -23,6 +24,7 @@ import '../periodic/periodic.css';
 import './calendar.css';
 
 interface Props {
+  timerEnabled?: boolean;
   /** The day behind a date: its note, if it has one, and what the note holds. */
   dayOf: (date: Date) => DayEntry;
   /** A note's text as the app last read or wrote it. */
@@ -80,8 +82,9 @@ function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], even
  * Calendar, never minutes in the note. The note's time blocks aren't drawn: they are the timer's
  * record, and the minutes are what counts.
  */
-export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, onOpenDay, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
-  const [mode, setMode] = useState<Mode>(remembered.mode);
+export function CalendarView({ dayOf, textOf, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
+  const display = usePluginDisplay('calendar');
+  const [mode, setMode] = useState<Mode>(display.defaultView === 'Week' ? 'week' : display.defaultView === 'Day' ? 'day' : remembered.mode);
   const [date, setDate] = useState(remembered.date);
   const [early, setEarly] = useState(false);
   const [late, setLate] = useState(false);
@@ -274,11 +277,12 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
             </div>
           </nav>
         </header>
-        <TimerCard timer={timer} tasks={todayTasks} categories={categories} onStart={onStartTimer} />
+        {timerEnabled && <TimerCard timer={timer} tasks={todayTasks} categories={categories} onStart={onStartTimer} />}
       </div>
 
       <div className={single ? 'cal-main is-day' : 'cal-main'}>
         <TimeGrid
+          focusEnabled={timerEnabled}
           key={mode}
           columns={columns}
           hours={hours}
@@ -350,6 +354,7 @@ export function CalendarView({ dayOf, textOf, categories, timer, onStartTimer, o
       </div>
       {menu && (
         <FocusMenu
+          focusEnabled={timerEnabled}
           at={menu}
           label={menu.item.task.label}
           noFocus={sameDay(menu.date, now) ? undefined : 'Focus runs on today’s tasks: the timer logs into today’s note.'}

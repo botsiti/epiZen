@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {} from 'webdriverio';
 import { prepareWindow } from '../e2e/support';
+import { assertTestDesktop } from '../e2e/desktop';
 
 vi.mock('../e2e/paths', () => ({ EVIDENCE: '/unused-e2e-evidence' }));
+vi.mock('../e2e/desktop', () => ({ assertTestDesktop: vi.fn() }));
 vi.mock('@wdio/globals', () => ({
   browser: {
     execute: (fn: (...args: unknown[]) => unknown, ...args: unknown[]) => fn(...args),
@@ -41,6 +43,14 @@ it('rejects unavailable display setup before showing a test window', async () =>
   vi.stubEnv('EPIZEN_TEST_DISPLAY', 'Missing Retina display');
   await expect(prepareWindow()).rejects.toThrow('The MacBook display is unavailable');
   expect(show).not.toHaveBeenCalled();
+  expect(setAlwaysOnTop).not.toHaveBeenCalled();
+});
+
+it('does not show or raise a window when Desktop 2 cannot be verified', async () => {
+  vi.mocked(assertTestDesktop).mockImplementationOnce(() => { throw new Error('Desktop 2 is unavailable.'); });
+  await expect(prepareWindow()).rejects.toThrow('Desktop 2 is unavailable');
+  expect(show).not.toHaveBeenCalled();
+  expect(setPosition).not.toHaveBeenCalled();
   expect(setAlwaysOnTop).not.toHaveBeenCalled();
 });
 

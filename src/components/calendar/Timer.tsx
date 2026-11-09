@@ -1,3 +1,4 @@
+import { usePluginDisplay } from '../workspace/PluginDisplay';
 import { useId, useState, type CSSProperties } from 'react';
 import { category } from '../../lib/categories';
 import { clock } from '../../lib/day';
@@ -77,6 +78,7 @@ interface CardProps {
 
 /** The timer on the calendar page: the dial, the task, and what can be done now. */
 export function TimerCard({ timer, tasks, categories, onStart }: CardProps) {
+  const display = usePluginDisplay('timer');
   const { state } = timer;
   const { session, rest, prefs } = state;
   const counting = Boolean(rest ?? (session && session.pausedAt === undefined));
@@ -112,7 +114,7 @@ export function TimerCard({ timer, tasks, categories, onStart }: CardProps) {
   }
 
   return (
-    <section className={`timer-card glass rise is-${phase}`} data-testid="timer" data-state={phase}>
+    <section className={`timer-card glass rise is-${phase}`} data-testid="timer" data-density={display.density} data-state={phase}>
       <p className="tile-label">{session ? (session.mode === 'pomodoro' ? `Pomodoro · ${Math.round((session.planned ?? 0) / 60)} min` : 'Stopwatch') : rest ? 'Rest' : 'Focus'}</p>
       {dial}
       {session && (
@@ -265,6 +267,7 @@ function StartFocus({ timer, tasks, categories, onCancel, onStart }: { timer: Ti
 
 /** The running timer at the top of the sidebar: its task, its time, and a way back to the calendar. */
 export function TimerPill({ timer, onOpen }: { timer: TimerApi; onOpen: () => void }) {
+  const display = usePluginDisplay('timer');
   const { session, rest } = timer.state;
   const counting = Boolean(rest ?? (session && session.pausedAt === undefined));
   const now = useNow(counting, 250);
@@ -275,7 +278,7 @@ export function TimerPill({ timer, onOpen }: { timer: TimerApi; onOpen: () => vo
   const time = session ? formatSeconds(shownSeconds(session, now)) : rest ? formatSeconds(restLeft(rest, now)) : '!';
   const paused = session?.pausedAt !== undefined;
   return (
-    <button type="button" className={paused ? 'timer-pill is-paused' : 'timer-pill'} style={{ '--tone': tone } as CSSProperties} onClick={onOpen} title="Open the calendar" data-testid="timer-pill">
+    <button type="button" className={paused ? 'timer-pill is-paused' : 'timer-pill'} style={{ '--tone': tone } as CSSProperties} onClick={onOpen} title="Open the calendar" data-testid="timer-pill" data-density={display.density}>
       <span className="timer-pill-dot" aria-hidden="true" />
       <span className="timer-pill-label">{paused ? `Paused · ${label}` : label}</span>
       <span className="timer-pill-time">{time}</span>

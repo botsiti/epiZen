@@ -28,7 +28,9 @@ pub struct Vault {
 #[serde(rename_all = "lowercase")]
 pub enum FileKind {
     Note,
+    Base,
     Image,
+    Attachment,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -36,6 +38,12 @@ pub struct VaultFile {
     /// Path relative to the vault folder, with `/` separators.
     pub path: String,
     pub kind: FileKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modified: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
 }
 
 /// A note's path and text, for reading the whole vault at once.
@@ -126,6 +134,23 @@ impl Vault {
 
     pub fn read_note(&self, path: &str) -> Result<String, VaultError> {
         Ok(fs::read_to_string(self.resolve(path, FileKind::Note)?)?)
+    }
+
+    pub fn read_base(&self, path: &str) -> Result<String, VaultError> {
+        Ok(fs::read_to_string(self.resolve(path, FileKind::Base)?)?)
+    }
+
+    pub fn file_path(&self, path: &str) -> Result<PathBuf, VaultError> {
+        let kind = kind_of(Path::new(path)).ok_or_else(|| VaultError::WrongKind(path.to_owned()))?;
+        self.resolve(path, kind)
+    }
+
+    pub fn create_base(&self, path: &str, text: &str) -> Result<(), VaultError> {
+        self.create(path, FileKind::Base, text.as_bytes())
+    }
+
+    pub fn write_base(&self, path: &str, text: &str, expected: &str) -> Result<(), VaultError> {
+        self.write_text_with(path, FileKind::Base, text, expected, |_| {})
     }
 
     /// Every note's text, for links, backlinks and the graph. A note that can't be read as
@@ -426,10 +451,21 @@ impl Vault {
         path: &str,
         text: &str,
         expected: &str,
+        before: impl FnMut(Step),
+    ) -> Result<(), VaultError> {
+        self.write_text_with(path, FileKind::Note, text, expected, before)
+    }
+
+    fn write_text_with(
+        &self,
+        path: &str,
+        kind: FileKind,
+        text: &str,
+        expected: &str,
         mut before: impl FnMut(Step),
     ) -> Result<(), VaultError> {
         let changed = || VaultError::Changed(path.to_owned());
-        let real = self.resolve(path, FileKind::Note)?;
+        let real = self.resolve(path, kind)?;
         if fs::read(&real)? != expected.as_bytes() {
             return Err(changed());
         }
@@ -502,9 +538,16 @@ impl Vault {
                 && let Some(kind) = kind_of(&path)
                 && let Some(relative) = self.relative(&path)
             {
+                let metadata = entry.metadata().ok();
+                let millis = |time: std::io::Result<std::time::SystemTime>| {
+                    time.ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis().try_into().ok()
+                };
                 files.push(VaultFile {
                     path: relative,
                     kind,
+                    created: metadata.as_ref().and_then(|m| millis(m.created())),
+                    modified: metadata.as_ref().and_then(|m| millis(m.modified())),
+                    size: metadata.as_ref().map(|m| m.len()),
                 });
             }
         }
@@ -689,13 +732,15 @@ fn plain_path(path: &str, expected: FileKind) -> Result<&Path, VaultError> {
 }
 
 fn kind_of(path: &Path) -> Option<FileKind> {
-    let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+    let extension = path.extension().and_then(|extension| extension.to_str()).unwrap_or("").to_ascii_lowercase();
     if extension == "md" {
         Some(FileKind::Note)
+    } else if extension == "base" {
+        Some(FileKind::Base)
     } else if IMAGE_EXTENSIONS.contains(&extension.as_str()) {
         Some(FileKind::Image)
     } else {
-        None
+        Some(FileKind::Attachment)
     }
 }
 
@@ -891,7 +936,7 @@ mod tests {
     }
 
     #[test]
-    fn lists_notes_and_images_sorted_and_skips_everything_else() {
+    fn lists_supported_files_and_attachment_metadata_but_skips_hidden_paths() {
         let (_dir, vault) = vault_with(&[
             ("b.md", ""),
             ("A/z.md", ""),
@@ -909,10 +954,71 @@ mod tests {
             listed,
             vec![
                 ("A/_attachments/cover.SVG", FileKind::Image),
+                ("A/board.canvas", FileKind::Attachment),
                 ("A/z.md", FileKind::Note),
                 ("b.md", FileKind::Note),
+                ("data.csv", FileKind::Attachment),
             ]
         );
+    }
+
+    #[test]
+    fn lists_real_file_metadata_without_changing_notes() {
+        let (dir, vault) = vault_with(&[("album.md", "---\nrating: 90\n---\nMusic")]);
+        let before = fs::read(dir.path().join("album.md")).unwrap();
+        let file = vault.list_files().unwrap().pop().unwrap();
+        assert_eq!(file.size, Some(before.len() as u64));
+        assert!(file.modified.is_some_and(|time| time > 0));
+        #[cfg(target_os = "macos")]
+        assert!(file.created.is_some_and(|time| time > 0));
+        assert_eq!(fs::read(dir.path().join("album.md")).unwrap(), before);
+    }
+
+    #[test]
+    fn bases_use_the_guarded_text_boundary_and_preserve_other_files() {
+        let (dir, vault) = vault_with(&[("albums.md", "---\nrating: 90\n---\nKeep me"), ("music.base", "# comment\r\nviews: [{type: table, name: Albums}]\r\n")]);
+        let before = fs::read(dir.path().join("albums.md")).unwrap();
+        let original = vault.read_base("music.base").unwrap();
+        assert!(vault.list_files().unwrap().iter().any(|file| file.path == "music.base" && file.kind == FileKind::Base));
+        assert_eq!(vault.read_all_notes().unwrap().len(), 1);
+        vault.write_base("music.base", &original, &original).unwrap();
+        assert_eq!(vault.read_base("music.base").unwrap(), original);
+        let next = original.replace("table", "cards");
+        vault.write_base("music.base", &next, &original).unwrap();
+        assert_eq!(vault.read_base("music.base").unwrap(), next);
+        assert!(matches!(vault.write_base("music.base", "bad", &original), Err(VaultError::Changed(_))));
+        assert!(matches!(vault.create_base("music.base", "bad"), Err(VaultError::Exists(_))));
+        assert!(vault.write_note("music.base", "bad", &next).is_err());
+        assert!(vault.write_base("albums.md", "bad", "Keep me").is_err());
+        assert_eq!(fs::read(dir.path().join("albums.md")).unwrap(), before);
+        vault.create_base("nested/new.base", &original).unwrap();
+        assert_eq!(vault.read_base("nested/new.base").unwrap(), original);
+    }
+
+    #[test]
+    fn base_saves_preserve_a_racing_external_edit() {
+        let (dir, vault) = vault_with(&[("music.base", "views: [{type: table}]")]);
+        let result = vault.write_text_with("music.base", FileKind::Base, "views: [{type: cards}]", "views: [{type: table}]", |step| {
+            if step == Step::Swap { fs::write(dir.path().join("music.base"), "outside edit").unwrap(); }
+        });
+        assert!(matches!(result, Err(VaultError::Changed(_))));
+        assert_eq!(vault.read_base("music.base").unwrap(), "outside edit");
+    }
+
+    #[test]
+    fn bases_refuse_traversal_hidden_paths_and_external_aliases() {
+        use std::os::unix::fs::symlink;
+        let (dir, vault) = vault_with(&[("safe.base", "views: [{type: table}]")]);
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("outside.base"), "private").unwrap();
+        symlink(outside.path().join("outside.base"), dir.path().join("linked.base")).unwrap();
+        symlink(outside.path(), dir.path().join("linked-folder")).unwrap();
+        for path in ["../outside.base", ".hidden.base", "/outside.base", "linked.base", "linked-folder/new.base"] {
+            assert!(vault.read_base(path).is_err());
+            assert!(vault.create_base(path, "new").is_err());
+            assert!(vault.write_base(path, "new", "private").is_err());
+        }
+        assert_eq!(fs::read_to_string(outside.path().join("outside.base")).unwrap(), "private");
     }
 
     #[test]

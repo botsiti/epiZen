@@ -30,6 +30,16 @@ function run(write: (block: PendingBlock) => Promise<void>) {
 }
 
 describe('the timer at work', () => {
+  it('does not load, save or tick while the timer plugin is disabled', async () => {
+    const deps = { save: vi.fn().mockResolvedValue(undefined), write: vi.fn().mockResolvedValue(undefined), chime: vi.fn() };
+    const { value } = stored();
+    const { result, rerender } = renderHook(({ enabled }) => useTimer(deps, value, true, enabled), { initialProps: { enabled: false } });
+    expect(result.current.state.session).toBeUndefined();
+    expect(deps.save).not.toHaveBeenCalled(); expect(deps.write).not.toHaveBeenCalled();
+    rerender({ enabled: true });
+    await waitFor(() => expect(result.current.state.session?.pausedAt).toBeDefined());
+    expect(deps.save).toHaveBeenCalledTimes(1);
+  });
   it('comes back paused at its last heartbeat, and saves a block before it writes it', async () => {
     const { result, order, block } = run(() => Promise.resolve());
     expect(result.current.state.session?.pausedAt).toBeDefined();

@@ -27,7 +27,7 @@ export function buildTree(files: VaultFile[], folders: string[] = []): TreeNode[
   // Preserve image-only folder hiding, while making newly created empty folders visible.
   const empty = folders.filter((path) => !files.some((file) => file.path.startsWith(`${path}/`)));
   for (const file of [...empty.map((path) => ({ path: `${path}/`, kind: 'folder' })), ...files]) {
-    if (file.kind === 'image') continue;
+    if (file.kind === 'image' || file.kind === 'attachment') continue;
     const parts = file.path.split('/');
     let folder = root;
     for (const part of parts.slice(0, -1)) {
@@ -39,7 +39,7 @@ export function buildTree(files: VaultFile[], folders: string[] = []): TreeNode[
       }
       folder = next;
     }
-    if (file.kind === 'note') folder.children.push({ kind: 'note', name: noteTitle(file.path), path: file.path });
+    if (file.kind === 'note' || file.kind === 'base') folder.children.push({ kind: 'note', name: noteTitle(file.path), path: file.path });
   }
   sortTree(root);
   return root.children;

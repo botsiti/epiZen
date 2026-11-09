@@ -20,7 +20,7 @@ export function Averages({ dayOf, today, scales, i }: { dayOf: (date: Date) => D
         <span className="card-note">{logged ? `${logged}/7 days` : 'no data'}</span>
       </div>
       <ul className="home-averages">
-        {rows.map((row) => (
+        {rows.filter((row) => row.count > 0).map((row) => (
           <li key={row.key} data-metric={row.key} data-status={metricStatus(row.key, row.value, scales[row.key] ?? 5)} title={`${row.label}: ${row.count} of 7 days logged, out of ${row.scale}${row.unit}`}>
             <span className="home-average-label">{row.label}</span>
             <span className="home-average-value" style={{ color: row.value === undefined ? undefined : row.color }}>

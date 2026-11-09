@@ -144,13 +144,6 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 
 ## Periodic pages
 
-A compatible daily, weekly or monthly note opens as a page computed from the vault: no code in the note.
-Older notes with other content stay in the normal Markdown reading view while remaining available
-from the calendar. New notes get the built-in dashboard template and an explicit period and date,
-so changing their future naming pattern does not change their identity.
-The note itself is a file, opened with Edit note; the page doesn't show its raw text. The look is Stravinsky's lit glass with the Obsidian dashboards'
-content, and the moves are written here after react-bits (`src/components/periodic/`).
-
 - **Width**: up to 1000px, wider than a note. Under 760px of pane the grids fold to one or two columns.
 - **Glass**: cards are a faint top-lit gradient over the page, a 1px hairline, an inner top light
   and a soft drop shadow, radius 18px (24px for the hero). A soft light follows the pointer across
@@ -537,8 +530,9 @@ all past months. Archive, resume and create forms retain failed drafts and repor
 
 ### Focused preferences and file creation
 
-Settings has its own navigation for Daily notes, Weekly notes, Monthly notes, Files & folders,
-Homepage and Hotkeys. Compact grouped rows use workspace surfaces, hairlines and sage selection;
+Settings has its own navigation for Plugins, Periodic notes, Files & folders, Homepage and Hotkeys.
+Periodic notes contains a compact Daily / Weekly / Monthly selector; drafts and the shared Save
+action span all three periods. Compact grouped rows use workspace surfaces, hairlines and sage selection;
 controls sit beside their descriptions and stack in narrow panes. Homepage owns the birth date,
 media lookup sources for Add, and podcast artwork. Changing a catalogue preserves the same result
 cards, edit form and library page. Wikipedia podcast results describe shows; the episode title is
@@ -553,3 +547,127 @@ vault-relative destination, retains failed drafts and refuses existing destinati
 remain visible after reopening. Files & folders stores per-vault defaults for notes and folder
 parents: the current note's folder, the vault root or a specified folder. Periodic notes retain their
 own locations.
+
+### Markdown core and built-in plugins
+
+A new vault opens as a Markdown workspace: files, editor, wikilinks, backlinks, tabs and history.
+There is no automatic dashboard or periodic-note setup. Settings → Plugins enables optional
+Homepage, epiBase, Library, Graph, Periodic notes, Check-ins, Habits, CBT, Quests, Statistics,
+Calendar and Focus timer modules. Existing configured vaults retain their previous features on
+upgrade; new plugin preferences are per-vault. The homepage's profile, memento mori, recent
+check-ins, focus, tasks, spheres, quests and library sections can be selected individually.
+
+The plugin list uses grouped rows, leading line icons, brief secondary descriptions and trailing
+switches. Configure expands only the relevant options. This follows the AppLlama references for
+Sorted³ settings, Endel notification preferences, Opal feature settings and Reeder's organization,
+adapted to desktop controls and Epizen's sage palette. The research board is local in the work
+artifacts; no mobile UI frameworks or dependencies are added to the app.
+
+Disabled plugins leave Markdown untouched. Their navigation, dashboards and independent timers
+or event subscriptions disappear, and expensive library, habit, quest and graph indexes are
+skipped. Dependent daily plugins pause when Periodic notes is disabled, retaining their choices.
+Switching into a vault without the timer pauses an old session; explicitly disabling an active
+timer first requires stopping it and resolving pending saves so logged time cannot disappear.
+
+The daily tab is **CBT**. Disabling CBT removes the tab, its shortcut and thought-record wizard;
+an active disabled tab falls back to Overview. Check-ins has one enable switch plus Mood, Energy,
+Focus, Social and Sleep selection. Historical values remain in the notes. Monthly and weekly
+averages use only recorded days, and unrecorded metrics are omitted from cards, charts and columns.
+
+### Obsidian Bases
+
+The built-in **epiBase** plugin is enabled per vault in Settings → Plugins. When disabled,
+embedded Bases show a quiet placeholder with a link to plugin settings and collapsed source.
+The existing `bases` preference key remains compatible with saved choices.
+
+Bases opens `.base` files directly from the explorer and renders `![[File.base#View name]]`
+embeds and fenced `base` blocks. The explorer's New base action creates a normal `.base` file or
+imports one without rewriting its bytes or replacing an existing file. Tables, cards and lists
+use the original YAML, with no database, migration or sidecar. Reading a base never writes it.
+
+A compact toolbar contains the view picker, result count, Views, Sort, Group, Filter, Properties,
+Search, Refresh, New and Source. Configuration panels edit view names/layouts, nested all/any/not
+filters for all views or one view, multiple sort priorities, grouping, selected/reordered properties,
+column labels, formula columns and summaries. Table headers sort, lists have markers/indentation,
+and cards support vault cover images, size, fit and aspect ratio. Imported column widths are honored.
+New opens the normal note-creation flow in an unambiguous folder from the base's filters.
+
+Standard file metadata includes names, folder, path, extension, size, timestamps, tags, links,
+embeds, backlinks and properties; attachments can participate through their metadata. Formulas
+use a bounded interpreter for arithmetic, dates/durations, text, lists, objects, links and file
+functions. They cannot invoke JavaScript, Tauri or Obsidian plugins. Formula errors stay local to
+cells where possible. Unavailable third-party view types retain their YAML and do not block other
+views. Remote image URLs remain offline; HTML is treated as text. Complex regular expressions
+are refused rather than allowed to block the app.
+
+Applying view settings patches YAML nodes while preserving comments, unknown options and other
+views. All writes are atomic, expected-content checked and scoped to the vault. Table property
+edits replace only the selected frontmatter value; the rest of the note remains byte-identical.
+Failed configuration saves retain their draft, and navigation exposes unsaved YAML for recovery.
+Embedded edits replace only the selected fenced block. Refresh picks up external edits without
+silently replacing an unsaved draft. Reading panes can widen to 1040px for embedded bases and
+1280px for standalone bases; horizontal overflow belongs to the table.
+
+Older declarative Dataview TABLE queries still render through the same engine. They remain
+queries in their original notes; no DataviewJS or Obsidian plugin code is executed.
+
+### Spike assistant and desktop companion
+
+The original Spike artwork is an 8×11 transparent sprite atlas, with its original frame timing.
+A small Spike button in the tab bar opens the conversation sidebar. At wide sizes the sidebar
+gets its own 400px column; on smaller windows it overlays the right edge. Messages have clear
+speaker labels, readable Markdown, source links and optional read-aloud controls. Action cards
+sit beside the turn that produced them, with a destination, a preview, and a confirmed result.
+An interrupted turn offers Resume or End this turn. The conversation owner lives outside the
+rendering boundary so a view failure cannot discard a draft.
+
+Settings offers ChatGPT subscription through installed Codex CLI and OpenAI API as distinct
+connections. Subscription login stays with Codex; it never becomes an API-key requirement or
+silently falls back to API billing. Missing CLI/sign-in and exhausted limits remain local errors.
+Codex returns proposed actions through the same review, receipts and conditional-save interface.
+Its worker has a read-only sandbox and no local shell, computer, plugin or child-agent tools;
+only Epizen's typed actions can write notes. The API connection keeps its key in macOS Keychain and offers the
+model, current-note sharing, review/automatic action mode, spoken replies, profile note and
+link-capture folder. These choices belong to the vault. The speaking voice is clearly identified
+as AI-generated. Recording has an explicit listening state, elapsed time, Send voice and Cancel.
+Closing the conversation stops the microphone. Failed transcription retains the recording for
+retry. Spoken replies are played in complete bounded chunks and stop immediately when cancelled.
+Subscription voice uses the Speech framework with on-device recognition required, and the macOS
+system voice for replies. It asks for Speech Recognition permission only when transcribing a
+user recording. Unsupported languages, denied permission and cancellation leave typed chat available.
+
+The desktop companion is optional and works even before connecting an AI account. Its transparent
+window stays above ordinary apps and joins workspaces without taking keyboard focus. Dragging
+moves Spike; Talk returns to the main conversation, and the small toolbar pauses motion or hides
+him. `prefers-reduced-motion` always wins. Working, review and error states use the corresponding
+original animations, with short generic labels that expose no note content on the desktop.
+Closing the main window while the companion is enabled saves and hides it; explicit Quit exits
+the app. The main controller remains the sole owner of agent actions.
+
+Personal context comes from the chosen profile, relevant note excerpts and bounded searches of
+past conversations in the current vault. The user can edit or remove remembered facts in ordinary
+Markdown. The assistant distinguishes self-reports from suggestions and does not invent a
+psychological diagnosis. A supportive CBT conversation uses the existing thought-record format,
+keeps unfinished feelings empty, and opens the saved record in today's note. Ambiguous daily-note
+dates require choosing a note rather than creating a duplicate.
+
+Ordinary note capture uses the configured Inbox unless the user names a destination. The action
+card previews the path and complete Markdown before saving. A successful creation opens the note;
+an existing destination is reported without replacing it or silently changing the title.
+
+Conversation history and action receipts live in isolated app settings, outside the vault. Saves
+are atomic and revision-checked. A successful note/calendar action is not repeated after a failed
+model continuation. Uncertain writes retain recovery text; stopping a retry preserves that text
+and prevents replay. Export creates a new Markdown file through a user-selected destination and
+never replaces an existing file. A complete export permits moving to a new conversation when the
+old conversation cannot be saved.
+
+### Plugin display configuration and isolation
+
+Every plugin has Configure next to its enable switch. Compact/comfortable layout is saved per
+vault; module-specific options set daily-note, habit, calendar and statistics starting views and
+optional summary sections. Disabled plugins retain these choices. Existing folders/templates
+and library setup open from the relevant panel without discarding other preference drafts.
+Shared display context carries validated values; modules read only their own choices. Home,
+Library, Calendar, Graph, Habits, Quests and Statistics have independent rendering recovery while
+workspace navigation remains available. Ordinary note drafts live outside these optional screens.

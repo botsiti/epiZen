@@ -11,7 +11,11 @@ export type VaultStatus =
 /** Mirrors `VaultFile` in src-tauri/src/vault.rs. Paths are vault-relative with `/`. */
 export interface VaultFile {
   path: string;
-  kind: 'note' | 'image';
+  kind: 'note' | 'base' | 'image' | 'attachment';
+  /** File timestamps in Unix milliseconds; absent when unavailable. */
+  created?: number;
+  modified?: number;
+  size?: number;
 }
 
 /** The app's own settings, kept in its config folder (src-tauri/src/settings.rs), never in the vault. */
@@ -24,7 +28,12 @@ export const listFiles = () => invoke<VaultFile[]>('list_files');
 export const listFolders = () => invoke<string[]>('list_folders');
 export const createFolder = (path: string) => invoke<void>('create_folder', { path });
 export const readNote = (path: string) => invoke<string>('read_note', { path });
+export const readBase = (root: string, path: string) => invoke<string>('read_base', { root, path });
+export const createBase = (root: string, path: string, text: string) => invoke<void>('create_base', { root, path, text });
+export const writeBase = (root: string, path: string, text: string, expected: string) => invoke<void>('write_base', { root, path, text, expected });
+export const writeNoteScoped = (root: string, path: string, text: string, expected: string) => invoke<void>('write_note_scoped', { root, path, text, expected });
 export const readImage = (path: string) => invoke<ArrayBuffer>('read_image', { path });
+export const revealFile = (root: string, path: string) => invoke<void>('reveal_file', { root, path });
 /** Saves a selected image beside this note without replacing any existing file. */
 export const saveExpensePhoto = (root: string, notePath: string, bytes: Uint8Array) =>
   invoke<string>('save_expense_photo', { root, notePath, bytes: Array.from(bytes) });
@@ -60,6 +69,44 @@ export const getSettings = () => invoke<Settings>('get_settings');
 /** Merges by top-level key; `null` removes a key. Returns every setting. */
 export const updateSettings = (patch: Settings) => invoke<Settings>('update_settings', { patch });
 
+// Spike's provider boundary. Credentials are stored by the backend in macOS Keychain.
+export const assistantConnection = (provider: 'openai' | 'codex' = 'openai') => invoke<{ configured: boolean }>('assistant_connection', { provider });
+export const assistantReadNote = (root: string, path: string) => invoke<string>('assistant_read_note', { root, path });
+export const assistantApplyNote = (action: { id: string; root: string; path: string; before: string | null; after: string }) => invoke<string>('assistant_apply_note', { action });
+export const assistantAbandonAction = (root: string, id: string) => invoke<void>('assistant_abandon_action', { root, id });
+export const assistantApplyCalendar = (action: { id: string; root: string; calendar: string; title: string; start: number; end: number; notes?: string }) => invoke<string>('assistant_apply_calendar', { action });
+export const assistantListChats = (root: string) => invoke<unknown>('assistant_list_chats', { root });
+export const assistantSearchChats = (root: string, query: string, excludeMessage?: string) => invoke<unknown>('assistant_search_chats', { root, query, excludeMessage });
+export const assistantExportChat = (name: string, text: string) => invoke<string | null>('assistant_export_chat', { name, text });
+export const assistantLoadChat = (root: string, id: string) => invoke<unknown>('assistant_load_chat', { root, id });
+export const assistantSaveChat = (root: string, id: string, state: unknown, expectedRevision: number) => invoke<number>('assistant_save_chat', { root, id, state, expectedRevision });
+export const setAssistantKey = (key: string | null) => invoke<{ configured: boolean }>('assistant_set_key', { key });
+async function assistantRequest<T>(command: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  signal?.throwIfAborted();
+  const requestId = crypto.randomUUID();
+  const cancel = () => { void invoke('assistant_cancel', { requestId }).catch(() => undefined); };
+  signal?.addEventListener('abort', cancel, { once: true });
+  try { const result = await invoke<T>(command, { ...args, requestId }); signal?.throwIfAborted(); return result; }
+  finally { signal?.removeEventListener('abort', cancel); }
+}
+export const assistantRespond = (request: { provider?: 'openai' | 'codex'; model: string; instructions: string; input: Record<string, unknown>[]; tools: Record<string, unknown>[] }, signal?: AbortSignal) => assistantRequest<unknown>('assistant_respond', { request }, signal);
+export const assistantTranscribe = (audio: Uint8Array, mime: string, signal?: AbortSignal, provider: 'openai' | 'codex' = 'openai') => assistantRequest<string>('assistant_transcribe', { request: { audio: Array.from(audio), mime, provider } }, signal);
+export const assistantSpeak = (text: string, signal?: AbortSignal, provider: 'openai' | 'codex' = 'openai') => assistantRequest<ArrayBuffer>('assistant_speak', { text, provider }, signal);
+export const assistantOpenUrl = (url: string) => invoke<void>('assistant_open_url', { url });
+export interface PetStatus { animation: string; label: string; motion: boolean }
+export const enablePet = (root: string, enabled: boolean) => invoke<void>('pet_enable', { root, enabled });
+export const publishPet = (root: string, state: PetStatus) => invoke<void>('pet_publish', { root, state });
+export const petState = () => invoke<PetStatus>('pet_state');
+export const onPetState = (handler: (state: PetStatus) => void) => listen<PetStatus>('epizen://pet-state', (event) => handler(event.payload));
+export const onPetCommand = (handler: (command: unknown) => void) => listen<unknown>('epizen://pet-command', (event) => handler(event.payload));
+export const onMainHidden = (handler: () => void) => listen('epizen://main-hidden', handler);
+export interface PetPosition { x: number; y: number; scale: number }
+export const petPosition = () => invoke<PetPosition>('pet_position');
+export const movePet = (x: number, y: number) => invoke<void>('pet_move', { x, y });
+export const openPetConversation = () => invoke<void>('pet_open_main');
+export const hidePet = () => invoke<void>('pet_hide');
+export const setPetMotion = (motion: boolean) => invoke<void>('pet_motion', { motion });
+
 /**
  * Closing the window or quitting waits for the app: `handler` runs on each attempt and calls
  * `closeNow` when the editor's saves are done. Returns a function that stops listening.
@@ -80,6 +127,7 @@ export const closeNow = () => invoke<void>('close_now');
 
 /** The main window's timer, for the item's title and tooltip and for the panel (src/lib/tray.ts). */
 export const publishTray = (status: { clock: unknown; tooltip: string; panel: unknown }) => invoke<void>('tray_publish', { status });
+export const enableTray = (enabled: boolean) => invoke<void>('tray_enable', { enabled });
 /** In the main window: a command from one of the panel's buttons, unchecked. */
 export const onTrayCommand = (handler: (command: unknown) => void) => listen<unknown>('epizen://tray-command', (event) => handler(event.payload));
 /** In the main window: the round or rest it published has run out, though its own timers may be held back. */

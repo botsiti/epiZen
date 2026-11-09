@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { onTimerDue, onTrayCommand, onTrayShown, publishTray } from '../../lib/api';
+import { enableTray, onTimerDue, onTrayCommand, onTrayShown, publishTray } from '../../lib/api';
 import { today } from '../../lib/dates';
 import { dayKey } from '../../lib/timer';
 import { readCommand, trayClock, trayTooltip, type PanelView, type TrayCommand } from '../../lib/tray';
@@ -50,11 +50,13 @@ export function runCommand(command: TrayCommand, { timer, onStart, onStale }: Tr
  * soon as the item says a round or a rest has run out, and looks at the date again when the
  * panel opens, since a hidden window's own timers are held back.
  */
-export function useTrayBridge(timer: TimerApi, view: PanelView, onStart: TrayHandlers['onStart'], onStale: TrayHandlers['onStale']) {
+export function useTrayBridge(timer: TimerApi, view: PanelView, onStart: TrayHandlers['onStart'], onStale: TrayHandlers['onStale'], enabled = true) {
   const clock = useMemo(() => trayClock(timer.state), [timer.state]);
   const tooltip = useMemo(() => trayTooltip(timer.state), [timer.state]);
   const published = useRef<string>(undefined);
+  useEffect(() => { void enableTray(enabled).catch((error: unknown) => console.error('Could not change focus timer visibility', error)); }, [enabled]);
   useEffect(() => {
+    if (!enabled) return;
     const status = { clock, tooltip, panel: view };
     const text = JSON.stringify(status);
     if (text === published.current) return;
@@ -63,13 +65,14 @@ export function useTrayBridge(timer: TimerApi, view: PanelView, onStart: TrayHan
       // Tried again with the next change.
       published.current = undefined;
     });
-  }, [clock, tooltip, view]);
+  }, [clock, tooltip, view, enabled]);
 
   const handlers = useRef<TrayHandlers & { tick: () => void }>({ timer, onStart, onStale, tick: timer.tick });
   useEffect(() => {
     handlers.current = { timer, onStart, onStale, tick: timer.tick };
   }, [timer, onStart, onStale]);
   useEffect(() => {
+    if (!enabled) return;
     const commands = onTrayCommand((value) => {
       const command = readCommand(value);
       if (command) runCommand(command, handlers.current);
@@ -82,5 +85,5 @@ export function useTrayBridge(timer: TimerApi, view: PanelView, onStart: TrayHan
       void due.then((unlisten) => unlisten());
       void shown.then((unlisten) => unlisten());
     };
-  }, []);
+  }, [enabled]);
 }

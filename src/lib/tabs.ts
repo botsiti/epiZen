@@ -4,11 +4,11 @@ import { noteTitle } from './links';
 /** What a tab shows: one screen of the main pane. */
 export type View =
   | { kind: 'home' }
-  | { kind: 'note'; path: string; editing?: boolean }
+  | { kind: 'note'; path: string; editing?: boolean; baseView?: string }
   | { kind: 'missing'; target: string }
-  | { kind: 'new'; folder: string; item?: 'folder' }
+  | { kind: 'new'; folder: string; item?: 'folder' | 'base' }
   | { kind: 'unsaved'; path: string; text: string; message: string }
-  | { kind: 'settings' }
+  | { kind: 'settings'; section?: 'plugins' | 'periodic' | 'home' | 'files' | 'hotkeys' }
   | { kind: 'graph' }
   | { kind: 'calendar' }
   | { kind: 'quests' }
@@ -60,13 +60,13 @@ export const notePath = (view: View) => (view.kind === 'note' ? view.path : unde
 export function sameView(a: View, b: View): boolean {
   switch (a.kind) {
     case 'note':
-      return b.kind === 'note' && a.path === b.path && Boolean(a.editing) === Boolean(b.editing);
+      return b.kind === 'note' && a.path === b.path && Boolean(a.editing) === Boolean(b.editing) && a.baseView === b.baseView;
     case 'missing':
       return b.kind === 'missing' && a.target === b.target;
     case 'library':
       return b.kind === 'library' && a.tab === b.tab;
+    case 'settings': return b.kind === 'settings' && a.section === b.section;
     case 'home':
-    case 'settings':
     case 'graph':
     case 'calendar':
     case 'quests':
@@ -199,7 +199,7 @@ export function tabTitle(view: View): string {
     case 'missing':
       return view.target;
     case 'new':
-      return view.item === 'folder' ? 'New folder' : 'New note';
+      return view.item === 'folder' ? 'New folder' : view.item === 'base' ? 'New base' : 'New note';
     case 'unsaved':
       return 'Not saved';
     case 'settings':
@@ -292,7 +292,7 @@ export function parseView(value: unknown, notes: ReadonlySet<string>): View | un
     case 'summaries':
       return { kind: value.kind };
     case 'note':
-      return typeof value.path === 'string' && notes.has(value.path) ? { kind: 'note', path: value.path } : undefined;
+      return typeof value.path === 'string' && notes.has(value.path) ? { kind: 'note', path: value.path, ...(typeof value.baseView === 'string' ? { baseView: value.baseView } : {}) } : undefined;
     case 'library':
       return isLibraryTab(value.tab) ? { kind: 'library', tab: value.tab } : undefined;
     default:

@@ -12,7 +12,7 @@
         "height": 820,
         "minWidth": 720,
         "minHeight": 480,
-        "visibleOnAllWorkspaces": true,
+        "visibleOnAllWorkspaces": false,
         "theme": "Dark",
         "backgroundColor": "#121416",
         "focus": false,
@@ -23,11 +23,13 @@
       "capabilities": [
         "default",
         "tray",
+        "pet",
         {
           "identifier": "e2e",
           "description": "Test-only: lets WebdriverIO drive the window. Only in `npm run build:e2e`.",
           "windows": [
-            "main"
+            "main",
+            "spike"
           ],
           "permissions": [
             "core:default",
@@ -35,7 +37,8 @@
             "wdio-webdriver:default",
             "core:window:allow-set-always-on-top",
             "core:window:allow-set-position",
-            "core:window:allow-show"
+            "core:window:allow-show",
+            "core:window:allow-close"
           ]
         }
       ]

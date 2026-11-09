@@ -57,6 +57,8 @@ fn reading_every_note_and_image_changes_nothing() {
         match file.kind {
             FileKind::Note => assert!(!vault.read_note(&file.path).unwrap().is_empty()),
             FileKind::Image => assert!(!vault.read_image(&file.path).unwrap().is_empty()),
+            FileKind::Base => assert!(!vault.read_base(&file.path).unwrap().is_empty()),
+            FileKind::Attachment => assert!(vault.file_path(&file.path).unwrap().is_file()),
         }
     }
 
@@ -81,6 +83,27 @@ fn lists_the_demo_vault() {
     assert_eq!(count("Rating/books/", FileKind::Note), 6);
     assert_eq!(count("Rating/books/_attachments/", FileKind::Image), 6);
     assert_eq!(count("Rating/podcasts/", FileKind::Note), 4);
+}
+
+#[test]
+fn creating_and_editing_a_base_changes_only_that_file_in_a_demo_copy() {
+    let (_dir, copy) = copy_of_demo_vault();
+    let mut expected = snapshot(&copy);
+    let vault = Vault::open(&copy).unwrap();
+    let path = "Rating/music/Albums.base";
+    let source = "# Obsidian base\r\nfilters: 'file.ext == \"md\"'\r\nviews:\r\n  - type: table\r\n    name: Albums\r\n    order: [file.name, Artist, rating]\r\n";
+    vault.create_base(path, source).unwrap();
+    expected.insert(PathBuf::from(path), source.as_bytes().to_vec());
+    assert_eq!(snapshot(&copy), expected);
+    vault.write_base(path, source, source).unwrap();
+    assert_eq!(snapshot(&copy), expected);
+    let cards = source.replace("type: table", "type: cards");
+    vault.write_base(path, &cards, source).unwrap();
+    expected.insert(PathBuf::from(path), cards.as_bytes().to_vec());
+    assert_eq!(snapshot(&copy), expected);
+    assert!(vault.write_base(path, "stale", source).is_err());
+    assert!(vault.create_base(path, "replacement").is_err());
+    assert_eq!(snapshot(&copy), expected);
 }
 
 /// What the library's Add does, through the same calls: the cover first, then the note. On a

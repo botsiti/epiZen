@@ -73,6 +73,7 @@ class TimerRuntime {
   private failures = new Map<string, string>();
   private saveError: string | undefined;
   private loaded = false;
+  private enabled = true;
   private deps: TimerDeps;
 
   constructor(deps: TimerDeps) {
@@ -81,6 +82,14 @@ class TimerRuntime {
 
   setDeps(deps: TimerDeps) {
     this.deps = deps;
+  }
+
+  setEnabled(enabled: boolean) {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    // Switching to a vault without this plugin pauses the old session, retaining its time.
+    if (!enabled && this.loaded && this.state.session && !this.state.session.pausedAt) this.set(pause(this.state, Date.now()));
+    if (enabled && this.loaded) this.flush(this.state);
   }
 
   subscribe = (listener: () => void) => {
@@ -106,11 +115,11 @@ class TimerRuntime {
   }
 
   apply(change: (state: TimerState, now: number) => TimerState) {
-    if (this.loaded) this.set(change(this.state, Date.now()));
+    if (this.loaded && this.enabled) this.set(change(this.state, Date.now()));
   }
 
   tick() {
-    if (!this.loaded) return;
+    if (!this.loaded || !this.enabled) return;
     const { state, chime } = tick(this.state, Date.now());
     if (chime) this.deps.chime(chime);
     this.set(state);
@@ -143,6 +152,7 @@ class TimerRuntime {
 
   /** Writes the blocks that this saved state owes and that are still owed, one attempt each. */
   private flush(saved: TimerState) {
+    if (!this.enabled) return;
     for (const block of saved.pending) {
       if (this.writing.has(block.id) || this.failures.has(block.id)) continue;
       if (!this.state.pending.some((pending) => pending.id === block.id)) continue;
@@ -185,19 +195,20 @@ class TimerRuntime {
  * The focus timer for the whole app. `stored` is the timer as the settings held it at startup,
  * read once `ready`.
  */
-export function useTimer(deps: TimerDeps, stored: unknown, ready: boolean): TimerApi {
+export function useTimer(deps: TimerDeps, stored: unknown, ready: boolean, enabled = true): TimerApi {
   const [runtime] = useState(() => new TimerRuntime(deps));
   useEffect(() => runtime.setDeps(deps), [runtime, deps]);
+  useEffect(() => runtime.setEnabled(enabled), [runtime, enabled]);
   useEffect(() => {
-    if (ready) runtime.load(stored);
-  }, [runtime, ready, stored]);
+    if (ready && enabled) runtime.load(stored);
+  }, [runtime, ready, stored, enabled]);
   const view = useSyncExternalStore(runtime.subscribe, runtime.snapshot);
   const running = Boolean(view.state.session ?? view.state.rest);
   useEffect(() => {
-    if (!running) return;
+    if (!running || !enabled) return;
     const timer = setInterval(() => runtime.tick(), 1000);
     return () => clearInterval(timer);
-  }, [runtime, running]);
+  }, [runtime, running, enabled]);
 
   return useMemo(
     (): TimerApi => ({

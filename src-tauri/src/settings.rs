@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 
 pub struct Settings {
     file: PathBuf,
@@ -18,6 +19,7 @@ pub struct Settings {
 const LAST_VAULT: &str = "lastVault";
 
 impl Settings {
+    pub fn assistant_runtime_dir(&self) -> PathBuf { self.file.with_file_name("assistant-runtime") }
     pub fn new(dir: impl AsRef<Path>) -> Self {
         Self {
             file: dir.as_ref().join("settings.json"),
@@ -68,6 +70,119 @@ impl Settings {
         let value = Value::String(path.to_string_lossy().into_owned());
         self.update(Map::from_iter([(LAST_VAULT.to_owned(), value)]))
             .map(|_| ())
+    }
+
+    /// Assistant action receipts are kept outside the vault. Corruption must block actions,
+    /// never silently erase the evidence that a write may already have happened.
+    pub fn assistant_actions(&self) -> io::Result<Value> {
+        let path = self.file.with_file_name("assistant-actions.json");
+        match fs::read(path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).map_err(io::Error::other),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Value::Array(vec![])),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn save_assistant_actions(&self, value: &Value) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap_or_else(|p| p.into_inner());
+        let path = self.file.with_file_name("assistant-actions.json");
+        let dir = path.parent().unwrap_or(Path::new("."));
+        fs::create_dir_all(dir)?;
+        let temp = path.with_extension(format!("{}.tmp", std::process::id()));
+        let mut file = fs::File::create(&temp)?;
+        file.write_all(&serde_json::to_vec(value)?)?;
+        file.sync_all()?;
+        fs::rename(temp, path)
+    }
+
+    fn chat_path(&self, root: &str, id: &str) -> io::Result<PathBuf> {
+        if root.is_empty() || root.len() > 4096 || id.is_empty() || id.len() > 80 || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+            return Err(io::Error::other("Invalid conversation identifier."));
+        }
+        let folder = format!("{:x}", Sha256::digest(root.as_bytes()));
+        Ok(self.file.parent().unwrap_or(Path::new(".")).join("assistant-conversations").join(folder).join(format!("{id}.json")))
+    }
+
+    pub fn assistant_chat(&self, root: &str, id: &str) -> io::Result<Value> {
+        let bytes = fs::read(self.chat_path(root, id)?)?;
+        serde_json::from_slice(&bytes).map_err(io::Error::other)
+    }
+
+    pub fn assistant_chats(&self, root: &str) -> io::Result<Vec<Value>> {
+        let parent = self.chat_path(root, "index")?.parent().unwrap().to_owned();
+        let entries = match fs::read_dir(parent) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(vec![]),
+            Err(error) => return Err(error),
+        };
+        let mut chats = vec![];
+        for entry in entries {
+            let entry = entry?; let path = entry.path();
+            if path.extension().is_none_or(|ext| ext != "json") || !entry.file_type()?.is_file() { continue; }
+            let id = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or_default();
+            match self.assistant_chat(root, id) {
+                Ok(value) if value["revision"].as_u64().is_some_and(|revision| revision > 0) && value["state"]["id"].as_str() == Some(id) && value["state"]["root"].as_str() == Some(root) && value["state"]["title"].is_string() && value["state"]["updated"].is_string() => chats.push(serde_json::json!({ "id": id, "title": value["state"]["title"], "updated": value["state"]["updated"] })),
+                _ => chats.push(serde_json::json!({ "id": id, "title": "Unreadable conversation", "updated": "", "error": true })),
+            }
+        }
+        chats.sort_by(|a, b| b["updated"].as_str().cmp(&a["updated"].as_str()));
+        Ok(chats)
+    }
+
+    /// Only bounded, relevant excerpts leave local conversation storage.
+    pub fn search_assistant_chats(&self, root: &str, query: &str, exclude_message: Option<&str>) -> io::Result<Vec<Value>> {
+        let words: Vec<String> = query.split(|c: char| !c.is_alphanumeric()).filter(|word| word.chars().count() >= 2).take(8).map(str::to_lowercase).collect();
+        if query.len() > 1000 || words.is_empty() { return Ok(vec![]); }
+        let mut found: Vec<(usize, String, Value)> = vec![];
+        for summary in self.assistant_chats(root)? {
+            if summary["error"] == true { continue; }
+            let id = summary["id"].as_str().unwrap_or_default();
+            let Ok(chat) = self.assistant_chat(root, id) else { continue };
+            let Some(messages) = chat["state"]["messages"].as_array() else { continue };
+            for message in messages {
+                if exclude_message.is_some() && message["id"].as_str() == exclude_message { continue; }
+                let Some(text) = message["text"].as_str() else { continue };
+                let role = message["role"].as_str().unwrap_or_default();
+                if !matches!(role, "user" | "assistant") { continue; }
+                let lower = text.to_lowercase();
+                let score = words.iter().filter(|word| lower.contains(word.as_str())).count();
+                if score == 0 { continue; }
+                let offset = words.iter().filter_map(|word| lower.find(word)).min().unwrap_or(0);
+                let start = lower[..offset].chars().count().saturating_sub(160);
+                let excerpt: String = text.chars().skip(start).take(1600).collect();
+                let date = message["created"].as_str().unwrap_or_default().to_owned();
+                found.push((score, date.clone(), serde_json::json!({ "conversation": id, "title": summary["title"], "date": date, "role": role, "excerpt": excerpt, "truncated": start > 0 || text.chars().count() > 1600 })));
+                if found.len() > 8 { found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1))); found.truncate(8); }
+            }
+        }
+        found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
+        Ok(found.into_iter().take(8).map(|(_, _, value)| value).collect())
+    }
+
+    #[cfg(feature = "e2e")]
+    pub fn assistant_fixture_export_folder(&self) -> io::Result<PathBuf> {
+        let folder = self.file.parent().unwrap_or(Path::new(".")).join("assistant-exports"); fs::create_dir_all(&folder)?; Ok(folder)
+    }
+
+    /// Compare-and-save contains stale windows; each conversation has its own atomic file.
+    pub fn save_assistant_chat(&self, root: &str, id: &str, state: Value, expected_revision: u64) -> io::Result<u64> {
+        let _guard = self.lock.lock().unwrap_or_else(|p| p.into_inner());
+        let path = self.chat_path(root, id)?;
+        if !state.is_object() || state["id"].as_str() != Some(id) || state["root"].as_str() != Some(root) { return Err(io::Error::other("Conversation identity does not match.")); }
+        let revision = match fs::read(&path) {
+            Ok(bytes) => serde_json::from_slice::<Value>(&bytes).map_err(io::Error::other)?["revision"].as_u64().ok_or_else(|| io::Error::other("Conversation revision is unreadable."))?,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => 0,
+            Err(error) => return Err(error),
+        };
+        if revision != expected_revision { return Err(io::Error::other("This conversation changed in another window. Your draft has been retained.")); }
+        let next = revision.checked_add(1).ok_or_else(|| io::Error::other("Conversation revision overflow."))?;
+        let bytes = serde_json::to_vec(&serde_json::json!({ "revision": next, "state": state }))?;
+        if bytes.len() > 20 * 1024 * 1024 { return Err(io::Error::other("This conversation is full. Export it and start a new one; its history is retained.")); }
+        fs::create_dir_all(path.parent().unwrap())?;
+        let temp = path.with_extension(format!("{}.tmp", std::process::id()));
+        let mut file = fs::File::create(&temp)?; file.write_all(&bytes)?; file.sync_all()?;
+        fs::rename(temp, path)?;
+        Ok(next)
     }
 
     /// Written beside the file and renamed over it, so a crash never leaves half a file.
@@ -132,5 +247,32 @@ mod tests {
         assert!(settings.load().is_empty());
         settings.set_last_vault(Path::new("/v")).unwrap();
         assert_eq!(settings.last_vault(), Some(PathBuf::from("/v")));
+    }
+    #[test]
+    fn assistant_conversations_are_isolated_conditional_and_preserve_corrupt_history() {
+        let dir = tempfile::tempdir().unwrap(); let settings = Settings::new(dir.path());
+        let state = serde_json::json!({ "id": "chat-1", "root": "/one", "title": "Hello", "updated": "2026-11-08", "draft": "Keep this" });
+        assert_eq!(settings.save_assistant_chat("/one", "chat-1", state.clone(), 0).unwrap(), 1);
+        assert_eq!(settings.assistant_chat("/one", "chat-1").unwrap()["state"]["draft"], "Keep this");
+        assert!(settings.assistant_chats("/two").unwrap().is_empty());
+        assert!(settings.save_assistant_chat("/one", "chat-1", state.clone(), 0).is_err());
+        assert!(settings.save_assistant_chat("/one", "../outside", state.clone(), 0).is_err());
+        assert!(settings.save_assistant_chat("/two", "chat-1", state.clone(), 0).is_err());
+        fs::write(settings.chat_path("/one", "chat-1").unwrap(), "{").unwrap();
+        assert!(settings.save_assistant_chat("/one", "chat-1", state, 1).is_err());
+        assert_eq!(settings.assistant_chats("/one").unwrap()[0]["error"], true);
+        assert_eq!(fs::read_to_string(settings.chat_path("/one", "chat-1").unwrap()).unwrap(), "{");
+    }
+    #[test]
+    fn conversation_search_is_bounded_role_aware_and_never_crosses_vaults() {
+        let dir = tempfile::tempdir().unwrap(); let settings = Settings::new(dir.path());
+        for (root, text) in [("/personal", "I missed a deadline and felt anxious."), ("/work", "A different private deadline.")] {
+            let state = serde_json::json!({ "id":"chat", "root":root, "title":"Earlier conversation", "updated":"2026-11-08", "messages":[{"id":"old","role":"user","created":"2026-11-07","text":text},{"id":"current","role":"user","created":"2026-11-08","text":"What did I say about that deadline?"}] });
+            settings.save_assistant_chat(root, "chat", state, 0).unwrap();
+        }
+        let results = settings.search_assistant_chats("/personal", "deadline", Some("current")).unwrap();
+        assert_eq!(results.len(), 1); assert_eq!(results[0]["role"], "user");
+        assert!(results[0]["excerpt"].as_str().unwrap().contains("felt anxious"));
+        assert!(!serde_json::to_string(&results).unwrap().contains("different private"));
     }
 }

@@ -39,7 +39,9 @@ export function WeekPage({ spec, path, text, actions }: Props) {
   const monday = startOfWeek(spec.date);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => spec.dayOf(addDays(startOfWeek(spec.date), i))), [spec]);
   const sum = useMemo(() => rollup(days), [days]);
-  const [tab, setTab] = useState<WeekTab>(lastWeekTab);
+  const [selected, setTab] = useState<WeekTab>(lastWeekTab);
+  const visible = WEEK_TABS.filter((item) => (spec.features?.habits !== false || item !== 'Habits') && (spec.features?.quests !== false || item !== 'Quests') && (spec.features?.statistics !== false || item !== 'Stats'));
+  const tab = visible.includes(selected) ? selected : 'Overview';
   const choose = (next: WeekTab) => {
     lastWeekTab = next;
     setTab(next);
@@ -74,7 +76,7 @@ export function WeekPage({ spec, path, text, actions }: Props) {
           {sum.noted} of 7 days written · {formatMinutes(sum.totals.logged)} logged
         </p>
       </Hero>
-      <Tabs tabs={WEEK_TABS.filter((item) => spec.features?.habits !== false || item !== 'Habits')} active={spec.features?.habits === false && tab === 'Habits' ? 'Overview' : tab} onChange={choose} />
+      <Tabs tabs={visible} active={spec.features?.habits === false && tab === 'Habits' ? 'Overview' : tab} onChange={choose} />
       <div className="tab-panel" key={tab}>
         {(tab === 'Overview' || (tab === 'Habits' && spec.features?.habits === false)) && (
           <>
@@ -122,7 +124,9 @@ export function MonthPage({ spec, path, text, actions, files }: Props) {
     return list;
   }, [spec]);
   const sum = useMemo(() => rollup(days), [days]);
-  const [tab, setTab] = useState<MonthTab>(lastMonthTab);
+  const [selected, setTab] = useState<MonthTab>(lastMonthTab);
+  const visible = MONTH_TABS.filter((item) => (spec.features?.habits !== false || item !== 'Habits') && (spec.features?.quests !== false || item !== 'Quests') && (spec.features?.statistics !== false || item !== 'Stats'));
+  const tab = visible.includes(selected) ? selected : 'Overview';
   const choose = (tab: MonthTab) => {
     lastMonthTab = tab;
     setTab(tab);
@@ -159,7 +163,7 @@ export function MonthPage({ spec, path, text, actions, files }: Props) {
           <span className="faint">{current ? `day ${elapsed} of ${days.length}` : elapsed ? 'the whole month' : 'still to come'}</span>
         </div>
       </Hero>
-      <Tabs tabs={MONTH_TABS.filter((item) => spec.features?.habits !== false || item !== 'Habits')} active={spec.features?.habits === false && tab === 'Habits' ? 'Overview' : tab} onChange={choose} />
+      <Tabs tabs={visible} active={spec.features?.habits === false && tab === 'Habits' ? 'Overview' : tab} onChange={choose} />
       <MonthlyReview path={path} text={text} tab={tab} files={files} onSave={actions.onSetMonthlySection} onRecover={actions.onRecoverMonthlySection} onImportPhoto={actions.onImportExpensePhoto} />
       <div className="tab-panel" key={tab}>
         {(tab === 'Overview' || (tab === 'Habits' && spec.features?.habits === false)) && (
@@ -236,7 +240,7 @@ function Totals({ sum, spec, span }: { sum: Rollup; spec: PeriodicSpec; span: nu
         </Tile>
       </div>
       <div className="tiles is-metrics" data-testid="averages">
-        {metrics.map(({ key, label, max, unit }, i) => {
+        {metrics.filter(({ key }) => sum.average(key) !== undefined).map(({ key, label, max, unit }, i) => {
           const value = sum.average(key);
           const tone = metricColor(key, metricMean(sum.days, key), max);
           return (
@@ -366,16 +370,21 @@ function Media({ days, spec, actions, title }: { days: DayEntry[]; spec: Periodi
 /** Every day as a row: time by category as one bar, and its numbers. */
 function DayRows({ days, actions, scales }: { days: DayEntry[]; actions: PeriodicActions; scales: Record<string, number> }) {
   const most = Math.max(1, ...days.map((entry) => entry.day?.totals.logged ?? 0));
+  const summary = rollup(days);
+  const metrics = METRICS.filter(({ key }) => summary.average(key) !== undefined);
+  const sleep = summary.average('sleep') !== undefined;
+  const count = metrics.length + (sleep ? 1 : 0);
+  const columns = `140px minmax(120px, 1fr) 64px${count ? ` repeat(${count}, 56px)` : ''}`;
   return (
-    <div className="day-rows" data-testid="day-rows">
+    <div className="day-rows" style={{ '--day-columns': columns } as CSSProperties} data-testid="day-rows">
       <div className="day-row is-head" aria-hidden="true">
         <span>Day</span>
         <span>Time by category</span>
         <span>Done</span>
-        {METRICS.map(({ key, label }) => (
+        {metrics.map(({ key, label }) => (
           <span key={key}>{label}</span>
         ))}
-        <span>Sleep</span>
+        {sleep && <span>Sleep</span>}
       </div>
       {days.map((entry, i) => {
         const { day } = entry;
@@ -388,12 +397,12 @@ function DayRows({ days, actions, scales }: { days: DayEntry[]; actions: Periodi
               ))}
             </span>
             <span>{day?.numbers.done === undefined ? '—' : `${day.numbers.done}%`}</span>
-            {METRICS.map(({ key }) => (
+            {metrics.map(({ key }) => (
               <span key={key} style={{ color: metricColor(key, day?.numbers[key], scales[key] ?? 5) }}>
                 {day?.numbers[key] || '—'}
               </span>
             ))}
-            <span style={{ color: metricColor('sleep', day?.numbers.sleep) }}>{day?.numbers.sleep ?? '—'}</span>
+            {sleep && <span style={{ color: metricColor('sleep', day?.numbers.sleep) }}>{day?.numbers.sleep ?? '—'}</span>}
           </button>
         );
       })}
@@ -428,15 +437,16 @@ function Habits({ sum, labels }: { sum: Rollup; labels: string[] }) {
 }
 
 function Stats({ sum, spec, labels }: { sum: Rollup; spec: PeriodicSpec; labels: string[] }) {
+  const metrics = METRICS.filter(({ key }) => sum.average(key) !== undefined);
   const scale = Math.max(...METRICS.map(({ key }) => spec.scales[key] ?? 5));
   const done = spread(sum.series('done'));
   return (
     <>
-      <Section title="How the days felt" note={METRICS.map(({ label }) => label).join(' · ')}>
+      {metrics.length > 0 && <Section title="How the days felt" note={metrics.map(({ label }) => label).join(' · ')}>
         <div className="card glass rise chart-card">
-          <LineChart series={METRICS.map(({ key, label, color }) => ({ label, color, values: sum.series(key) }))} max={scale} labels={labels} />
+          <LineChart series={metrics.map(({ key, label, color }) => ({ label, color, values: sum.series(key) }))} max={scale} labels={labels} />
           <ul className="chart-legend">
-            {METRICS.map(({ key, label, color }) => (
+            {metrics.map(({ key, label, color }) => (
               <li key={key}>
                 <span className="chip-dot" style={{ background: color }} />
                 {label} <span className="faint">{sum.average(key) ?? '—'}</span>
@@ -444,7 +454,7 @@ function Stats({ sum, spec, labels }: { sum: Rollup; spec: PeriodicSpec; labels:
             ))}
           </ul>
         </div>
-      </Section>
+      </Section>}
       <Section title="Plan done" note={done ? `min ${done.min}% · median ${done.median}% · average ${done.mean}% · max ${done.max}%` : undefined} i={1}>
         <div className="card glass rise chart-card">
           <LineChart series={[{ label: 'Plan done', color: 'var(--accent)', values: sum.series('done') }]} max={100} labels={labels} height={150} />

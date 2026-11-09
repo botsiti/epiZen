@@ -12,12 +12,15 @@ import { Bar, Section } from '../periodic/parts';
 import { QuestBoard } from '../periodic/Quests';
 import { Memento } from './Memento';
 import { RecentLibrary } from './RecentLibrary';
+import { DEFAULT_HOME_SECTIONS, type HomeSections } from '../../lib/plugins';
 import { LeadSphere, Spheres } from './Spheres';
 import { Averages, Focus, Today } from './Week';
 import '../periodic/periodic.css';
 import './home.css';
 
 export interface HomeProps {
+  sections?: HomeSections;
+  statisticsEnabled?: boolean;
   vaultName: string;
   stats: { notes: number; folders: number; images: number };
   /** Today, as the app's clock reads it; everything below counts from it. */
@@ -59,6 +62,7 @@ const thousands = (n: number) => Math.round(n).toLocaleString('en-US');
  */
 export function Home(props: HomeProps) {
   const { days, today, dayOf } = props;
+  const sections = props.sections ?? DEFAULT_HOME_SECTIONS;
   const xp = useMemo(() => lifeXp(days, questXp(props.quests, formatDate(today, 'YYYY-MM-DD'))), [days, props.quests, today]);
   const run = useMemo(() => streak(days, today), [days, today]);
   const spheres = useMemo(() => sphereXp(days, questSphereXp(props.quests)), [days, props.quests]);
@@ -67,23 +71,23 @@ export function Home(props: HomeProps) {
   const todayEntry = dayOf(today);
   return (
     <div className="periodic-frame home-frame" data-testid="home" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
-      <Hero {...props} xp={xp} streak={run} todayEntry={todayEntry} />
-      <Memento today={today} birth={props.birthDate} i={1} />
-      <div className="home-shortcuts"><button className="shelf-all" onClick={props.onSeeSummaries} data-testid="open-summaries">Summaries →</button><button className="shelf-all" onClick={props.onSeeStatistics}>Statistics →</button></div>
+      {sections.profile ? <Hero {...props} xp={xp} streak={run} todayEntry={todayEntry} /> : <header className="insights-header"><p className="kicker">{props.vaultName}</p><h1>Home</h1></header>}
+      {sections.memento && <Memento today={today} birth={props.birthDate} i={1} />}
+      {props.statisticsEnabled !== false && <div className="home-shortcuts"><button className="shelf-all" onClick={props.onSeeSummaries} data-testid="open-summaries">Summaries →</button><button className="shelf-all" onClick={props.onSeeStatistics}>Statistics →</button></div>}
       <div className="home-row">
-        <Averages dayOf={dayOf} today={today} scales={props.scales} i={2} />
-        <Focus dayOf={dayOf} today={today} onOpenNote={props.onOpenNote} i={3} />
-        <Today entry={todayEntry} today={today} todayNote={props.todayNote} exists={props.exists} onOpenPeriod={props.onOpenPeriod} i={4} />
+        {sections.averages && <Averages dayOf={dayOf} today={today} scales={props.scales} i={2} />}
+        {sections.focus && <Focus dayOf={dayOf} today={today} onOpenNote={props.onOpenNote} i={3} />}
+        {sections.today && <Today entry={todayEntry} today={today} todayNote={props.todayNote} exists={props.exists} onOpenPeriod={props.onOpenPeriod} i={4} />}
       </div>
-      <div className="home-row is-spheres">
+      {sections.spheres && <div className="home-row is-spheres">
         <Spheres spheres={spheres} i={5} />
         <LeadSphere spheres={spheres} dayOf={dayOf} today={today} i={6} />
-      </div>
-      <Section title={`Quests · ${formatDate(month, 'MMMM')}`} note={`${thisMonth.filter(({ quest }) => quest.done).length}/${thisMonth.length} done`} i={7} testId="home-quests">
+      </div>}
+      {sections.quests && <Section title={`Quests · ${formatDate(month, 'MMMM')}`} note={`${thisMonth.filter(({ quest }) => quest.done).length}/${thisMonth.length} done`} i={7} testId="home-quests">
         <button className="shelf-all home-see-all" onClick={props.onSeeQuests}>See all quests →</button>
         <QuestBoard pageSize={8} quests={thisMonth} art={props.art} today={today} onToggle={props.onQuestToggle} onProgress={props.onQuestProgress} onChange={props.onQuestChange} />
-      </Section>
-      <RecentLibrary items={props.library} onOpen={props.onOpenNote} onSeeAll={props.onSeeLibrary} />
+      </Section>}
+      {sections.library && <RecentLibrary items={props.library} onOpen={props.onOpenNote} onSeeAll={props.onSeeLibrary} />}
     </div>
   );
 }

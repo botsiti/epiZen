@@ -1,0 +1,7 @@
+{
+  "movie": {"kind":"film","title":"Quiet Harbour","maker":"Sample Director","year":"2024","date":"2026-11-07","rating":"","genres":["drama"],"thoughts":"Watched yesterday."},
+  "ordinaryNote": {"title":"A small idea","path":"","text":"---\r\ntags: [idea]\r\n---\r\n\r\n# A small idea\r\n\r\nKeep one useful thought each day.  \r\nLink it to [[00. Home 2026]].\r\n"},
+  "thoughtRecord": {"situation":"I missed a deadline and thought I was failing.","before":["Disappointed","Anxious"],"distortions":["All-or-nothing"],"balanced":"One missed deadline does not define my work. I can agree on a smaller next step.","after":["Calmer"]},
+  "calendar": {"calendar":"","title":"Read and reflect","start":"2026-11-09T18:00:00+03:00","end":"2026-11-09T19:00:00+03:00","notes":"A quiet reading hour."},
+  "link": {"title":"Connected notes","url":"https://example.com/second-brain","summary":"Small, connected notes become more useful through regular review."}
+}

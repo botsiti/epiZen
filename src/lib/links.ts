@@ -28,7 +28,7 @@ export function findWikilinks(text: string): WikilinkMatch[] {
   }));
 }
 
-const KNOWN_EXTENSION = /\.(md|svg|png|jpe?g|gif|webp)$/i;
+const KNOWN_EXTENSION = /\.(md|base|svg|png|jpe?g|gif|webp)$/i;
 
 const normalize = (path: string) => path.normalize('NFC').toLowerCase();
 const folderOf = (path: string) => path.slice(0, path.lastIndexOf('/') + 1);
@@ -42,7 +42,8 @@ const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 export function resolveLink(target: string, files: VaultFile[], fromPath?: string): VaultFile | undefined {
   if (!target) return files.find((file) => file.path === fromPath);
 
-  const wanted = normalize(KNOWN_EXTENSION.test(target) ? target : `${target}.md`);
+  const exactFile = files.some((file) => normalize(file.path) === normalize(target) || normalize(baseName(file.path)) === normalize(target));
+  const wanted = normalize(KNOWN_EXTENSION.test(target) || exactFile ? target : `${target}.md`);
   const byPath = wanted.includes('/');
   const matches = files.filter((file) => {
     const path = normalize(file.path);
@@ -72,14 +73,14 @@ export function linkResolver(files: VaultFile[]): (target: string, fromPath: str
   }
   return (target, fromPath) => {
     if (!target || target.includes('/')) return resolveLink(target, files, fromPath);
-    const candidates = byName.get(normalize(KNOWN_EXTENSION.test(target) ? target : `${target}.md`)) ?? [];
+    const candidates = byName.get(normalize(KNOWN_EXTENSION.test(target) || byName.has(normalize(target)) ? target : `${target}.md`)) ?? [];
     return candidates.length <= 1 ? candidates[0] : resolveLink(target, candidates, fromPath);
   };
 }
 
 /** A note's title is its file name without `.md`, as in Obsidian. */
 export function noteTitle(path: string): string {
-  return baseName(path).replace(/\.md$/i, '');
+  return baseName(path).replace(/\.(md|base)$/i, '');
 }
 
 export function noteFolder(path: string): string {

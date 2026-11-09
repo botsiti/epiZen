@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { canGoBack, canGoForward, currentView, tabTitle, type Tab, type Workspace } from '../../lib/tabs';
 import { useEscape } from '../calendar/useEscape';
+import { Spike } from '../assistant/Spike';
 import './workspace.css';
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
   onToggleLeft: () => void;
   rightOpen: boolean;
   onToggleRight: () => void;
+  onAssistant?: () => void;
+  assistantOpen?: boolean;
 }
 
 /**
@@ -22,7 +25,7 @@ interface Props {
  * the tabs (pinned ones first, with a pin where the × would be), + for a new one, and at the right
  * the right sidebar's switch. A right-click on a tab pins or unpins it, or closes it.
  */
-export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onForward, leftOpen, onToggleLeft, rightOpen, onToggleRight }: Props) {
+export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onForward, leftOpen, onToggleLeft, rightOpen, onToggleRight, onAssistant, assistantOpen }: Props) {
   const [menu, setMenu] = useState<{ id: number; x: number; y: number }>();
   const front = ws.tabs.find((tab) => tab.id === ws.active);
   const menuTab = menu && ws.tabs.find((tab) => tab.id === menu.id);
@@ -70,6 +73,7 @@ export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onFor
           </svg>
         </button>
       </div>
+      {onAssistant && <button type="button" className="tabbar-button assistant-tab-button" aria-label="Talk to Spike" aria-pressed={assistantOpen} title="Talk to Spike" onClick={onAssistant} data-testid="open-assistant"><Spike size={28} /></button>}
       <button
         type="button"
         className={rightOpen ? 'tabbar-button tabbar-right is-on' : 'tabbar-button tabbar-right'}

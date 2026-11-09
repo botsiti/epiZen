@@ -10,3 +10,22 @@ demo-vault/.obsidian/
 
 # Versioned desktop archives are uploaded to GitHub Releases, not committed.
 release-artifacts/
+
+# Local assistant verification artifacts and isolated app data.
+.assistant-work/
+
+# Disposable validation, installation and nested checkout artifacts.
+.bases-work/
+.settings-work/
+.worktrees/
+.evening-check.*/
+.note-actions-install-*/
+.release-*/
+.review-*/
+night-test-results.*/
+night-validation-*/
+.claude/worktrees/
+.claude/library-release-*/
+.claude/library-research/
+.claude/library-delivery*
+.delivery-work/

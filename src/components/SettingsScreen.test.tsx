@@ -7,6 +7,30 @@ import { DEFAULT_SOURCES } from '../lib/librarySources';
 import { DEFAULT_FILE_PREFERENCES } from '../lib/filePreferences';
 import { SettingsScreen } from './SettingsScreen';
 
+it('groups all periods in one section and retains drafts across periods and failed saves', async () => {
+  const user = userEvent.setup(), onSave = vi.fn().mockRejectedValueOnce('Try again').mockResolvedValueOnce(undefined);
+  render(<SettingsScreen periodic={DEFAULT_PERIODIC} birthDate="" podcasts={{ artwork: 'show' }} folders={[]} features={DEFAULT_PERIODIC_FEATURES} onSave={onSave} />);
+  const nav = within(screen.getByRole('navigation', { name: 'Settings sections' }));
+  expect(nav.getByRole('button', { name: 'Periodic notes' })).toHaveAttribute('aria-current', 'page');
+  expect(nav.queryByRole('button', { name: 'Daily notes' })).toBeNull();
+  await user.clear(screen.getByLabelText('Daily notes folder'));
+  await user.type(screen.getByLabelText('Daily notes folder'), 'Days');
+  await user.click(screen.getByRole('button', { name: 'Weekly' }));
+  await user.clear(screen.getByLabelText('Weekly notes folder'));
+  await user.type(screen.getByLabelText('Weekly notes folder'), 'Weeks');
+  await user.click(screen.getByRole('button', { name: 'Monthly' }));
+  await user.clear(screen.getByLabelText('Monthly notes folder'));
+  await user.type(screen.getByLabelText('Monthly notes folder'), 'Months');
+  await user.click(screen.getByTestId('settings-save'));
+  expect(screen.getByRole('alert')).toHaveTextContent('Try again');
+  await user.click(screen.getByRole('button', { name: 'Daily' }));
+  expect(screen.getByLabelText('Daily notes folder')).toHaveValue('Days');
+  await user.click(screen.getByTestId('settings-save'));
+  expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ periodic: { day: { ...DEFAULT_PERIODIC.day, folder: 'Days' }, week: { ...DEFAULT_PERIODIC.week, folder: 'Weeks' }, month: { ...DEFAULT_PERIODIC.month, folder: 'Months' } } }));
+  await user.type(screen.getByLabelText('Search settings'), 'monthly');
+  expect(nav.getByRole('button', { name: 'Periodic notes' })).toBeVisible();
+});
+
 it('filters the keyboard reference without submitting or changing preferences', async () => {
   const user = userEvent.setup();
   const onSave = vi.fn();
@@ -83,7 +107,7 @@ it('keeps drafts across sections and saves the selected sources and creation loc
   expect(screen.queryByLabelText('Birth date')).not.toBeInTheDocument();
   await user.type(screen.getByLabelText('Search settings'), 'music');
   expect(screen.getByTestId('settings-nav-home')).toBeVisible();
-  expect(screen.queryByTestId('settings-nav-day')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('settings-nav-periodic')).not.toBeInTheDocument();
   await user.clear(screen.getByLabelText('Search settings'));
   await user.click(screen.getByTestId('settings-nav-home'));
   await user.type(screen.getByLabelText('Birth date'), '1995-01-02');

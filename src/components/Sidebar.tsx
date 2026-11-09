@@ -3,11 +3,13 @@ import './workspace/creation.css';
 import type { ReactNode } from 'react';
 import type { TreeNode } from '../lib/tree';
 import { openClicks } from './workspace/clicks';
+import type { PluginSettings } from '../lib/plugins';
 
 /** Opens a view; `newTab` for a ⌘-click or a middle click. */
 type Open = (newTab: boolean) => void;
 
 interface Props {
+  plugins?: PluginSettings;
   vaultName: string;
   tree: TreeNode[];
   selected?: string;
@@ -18,6 +20,7 @@ interface Props {
   onHome: Open;
   onNewNote: () => void;
   onNewFolder?: () => void;
+  onNewBase?: () => void;
   onOpenFolder: () => void;
   onSettings: Open;
   onGraph: Open;
@@ -54,23 +57,24 @@ export function Sidebar(props: Props) {
         <button type="button" className="icon-button" onClick={onNewNote} title="New note (⌘N)" aria-label="New note" aria-keyshortcuts="Meta+N" data-testid="new-note-button">
           <PreferenceIcon name="note" />
         </button>
+        {props.onNewBase && <button type="button" className="icon-button" onClick={props.onNewBase} title="New base or import an Obsidian Base" aria-label="New base" data-testid="new-base-button"><PreferenceIcon name="bases" /></button>}
 {props.onNewFolder && <button type="button" className="icon-button" onClick={props.onNewFolder} title="New folder" aria-label="New folder" data-testid="new-folder-button"><PreferenceIcon name="folder" /></button>}</div>
       <ul className="tree" role="tree">
         <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isFolderOpen} toggle={onToggleFolder} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} />
       </ul>
       <div className="sidebar-foot">
-        <button type="button" className="sidebar-action" {...openClicks(onCalendar)} data-testid="open-calendar">
+        {props.plugins?.calendar !== false && <button type="button" className="sidebar-action" {...openClicks(onCalendar)} data-testid="open-calendar">
           Calendar
-        </button>
-        <button type="button" className="sidebar-action" {...openClicks(onLibrary)} data-testid="open-library">
+        </button>}
+        {props.plugins?.library !== false && <button type="button" className="sidebar-action" {...openClicks(onLibrary)} data-testid="open-library">
           Library
-        </button>
-        <button type="button" className="sidebar-action" {...openClicks(onQuests)} data-testid="open-quests">Quests</button>
-        {onHabits && <button type="button" className="sidebar-action" {...openClicks(onHabits)} data-testid="open-habits">Habits</button>}
-        <button type="button" className="sidebar-action" {...openClicks(onStatistics)} data-testid="open-statistics">Statistics</button>
-        <button type="button" className="sidebar-action" {...openClicks(onGraph)} data-testid="open-graph">
+        </button>}
+        {props.plugins?.quests !== false && <button type="button" className="sidebar-action" {...openClicks(onQuests)} data-testid="open-quests">Quests</button>}
+        {onHabits && props.plugins?.habits !== false && <button type="button" className="sidebar-action" {...openClicks(onHabits)} data-testid="open-habits">Habits</button>}
+        {props.plugins?.statistics !== false && <button type="button" className="sidebar-action" {...openClicks(onStatistics)} data-testid="open-statistics">Statistics</button>}
+        {props.plugins?.graph !== false && <button type="button" className="sidebar-action" {...openClicks(onGraph)} data-testid="open-graph">
           Graph
-        </button>
+        </button>}
         <button type="button" className="sidebar-action" {...openClicks(onSettings)} data-testid="open-settings">
           Settings
         </button>
