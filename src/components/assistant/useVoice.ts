@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { assistantSpeak, assistantTranscribe } from '../../lib/api';
 import { speechChunks } from '../../lib/assistant/speech';
+import type { VoiceSettings } from '../../lib/assistant/voice';
 import type { AssistantProvider } from '../../lib/assistant/types';
 
 export type VoicePhase = 'idle' | 'requesting' | 'recording' | 'transcribing' | 'speaking';
 const LIMIT = 20 * 1024 * 1024;
-export function useVoice(onTranscript: (text: string) => Promise<void>, provider: AssistantProvider = 'openai') {
+export function useVoice(onTranscript: (text: string) => Promise<void>, provider: AssistantProvider = 'openai', voice?: VoiceSettings, transcriber = assistantTranscribe) {
   const [phase, setPhase] = useState<VoicePhase>('idle'), [error, setError] = useState<string>(), [seconds, setSeconds] = useState(0), [canRetry, setCanRetry] = useState(false);
+  const voiceProvider = voice?.provider, voiceModel = voice?.model;
   const callback = useRef(onTranscript), alive = useRef(false), recorder = useRef<MediaRecorder | undefined>(undefined), stream = useRef<MediaStream | undefined>(undefined), saved = useRef<Blob | undefined>(undefined), request = useRef<AbortController | undefined>(undefined), playback = useRef<HTMLAudioElement | undefined>(undefined), objectUrl = useRef<string | undefined>(undefined), timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined), limitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), generation = useRef(0), recording = useRef(false), sendOnStop = useRef(true);
   useEffect(() => { callback.current = onTranscript; }, [onTranscript]);
   const clearAudio = useCallback(() => {
@@ -22,7 +24,7 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
     const token = ++generation.current; request.current?.abort(); const abort = new AbortController(); request.current = abort;
     setError(undefined); setPhase('transcribing'); setCanRetry(false);
     try {
-      const text = await assistantTranscribe(new Uint8Array(await blob.arrayBuffer()), blob.type, abort.signal, provider);
+      const text = await transcriber(new Uint8Array(await blob.arrayBuffer()), blob.type, abort.signal, provider, voiceProvider ? { provider: voiceProvider, model: voiceModel ?? '' } : undefined);
       if (!alive.current || generation.current !== token) return;
       if (!text.trim()) throw new Error('No speech was detected. Try recording again.');
       // Keep the recording until its transcript has been handed to the persistent controller.
@@ -30,15 +32,16 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
     } catch (error) {
       if (alive.current && generation.current === token && !abort.signal.aborted) { setError(String(error)); setCanRetry(true); }
     } finally { if (alive.current && generation.current === token) setPhase('idle'); }
-  }, [provider]);
+  }, [provider, voiceProvider, voiceModel, transcriber]);
   const pauseRecording = useCallback(() => {
     sendOnStop.current = false;
     if (recorder.current?.state === 'recording') recorder.current.stop();
     else { generation.current++; request.current?.abort(); clearAudio(); setPhase('idle'); setCanRetry(Boolean(saved.current)); }
     clearCapture();
   }, [clearCapture, clearAudio]);
-  const previousProvider = useRef(provider);
-  useEffect(() => { if (previousProvider.current !== provider) { previousProvider.current = provider; pauseRecording(); } }, [provider, pauseRecording]);
+  const connection = `${provider}:${voiceProvider ?? ''}:${voiceModel ?? ''}`;
+  const previousProvider = useRef(connection);
+  useEffect(() => { if (previousProvider.current !== connection) { previousProvider.current = connection; pauseRecording(); } }, [connection, pauseRecording]);
   const cancel = useCallback(() => {
     generation.current++; request.current?.abort(); sendOnStop.current = false;
     if (recorder.current?.state === 'recording') recorder.current.stop();
@@ -58,15 +61,16 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
       const device = new MediaRecorder(media, { mimeType: mime }); recorder.current = device;
       const chunks: Blob[] = []; let bytes = 0; sendOnStop.current = true;
       device.ondataavailable = (event) => {
+        if (!alive.current || generation.current !== token) return;
         if (!event.data.size) return;
         bytes += event.data.size;
         if (bytes > LIMIT) { sendOnStop.current = false; setError('The recording reached 20 MB. Please record a shorter message.'); device.stop(); return; }
         chunks.push(event.data);
       };
-      device.onerror = () => { sendOnStop.current = false; clearCapture(); if (alive.current) { setError('The microphone stopped unexpectedly. Try again.'); setPhase('idle'); } };
+      device.onerror = () => { if (!alive.current || generation.current !== token) return; sendOnStop.current = false; clearCapture(); setError('The microphone stopped unexpectedly. Try again.'); setPhase('idle'); };
       device.onstop = () => {
-        clearCapture();
         if (!alive.current || generation.current !== token) return;
+        clearCapture();
         const blob = new Blob(chunks, { type: device.mimeType || mime }); saved.current = blob;
         if (sendOnStop.current && blob.size) void transcribe(blob);
         else { setPhase('idle'); setCanRetry(blob.size > 0); }
@@ -75,7 +79,7 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
       const started = Date.now(); timer.current = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
       limitTimer.current = setTimeout(() => { if (device.state === 'recording') device.stop(); }, 5 * 60_000);
     } catch (error) {
-      clearCapture(); if (alive.current && generation.current === token) { setError(error instanceof DOMException && error.name === 'NotAllowedError' ? 'Microphone access was declined. Allow Epizen in macOS Privacy & Security → Microphone, or type your message.' : String(error)); setPhase('idle'); }
+      if (alive.current && generation.current === token) { clearCapture(); setError(error instanceof DOMException && error.name === 'NotAllowedError' ? 'Microphone access was declined. Allow Epizen in macOS Privacy & Security → Microphone, or type your message.' : String(error)); setPhase('idle'); }
     }
   }, [clearAudio, clearCapture, transcribe]);
   const stop = useCallback(() => { if (recorder.current?.state === 'recording') recorder.current.stop(); }, []);

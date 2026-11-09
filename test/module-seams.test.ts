@@ -30,7 +30,7 @@ it('keeps domain rules independent of feature rendering and native invocation', 
   expect(violations).toEqual([]);
 });
 it('keeps the assistant implementation behind its public workspace and artwork interfaces', () => {
-  const folder = join(root, 'components/assistant') + '/', publicFiles = ['AssistantWorkspace.tsx', 'Spike.tsx'];
+  const folder = join(root, 'components/assistant') + '/', publicFiles = ['AssistantWorkspace.tsx', 'AssistantConfiguration.tsx', 'QuickPrompt.tsx', 'Spike.tsx'];
   const violations = files.filter((file) => !file.startsWith(folder)).flatMap((file) => imports(file).filter(({ target }) => target?.startsWith(folder) && !publicFiles.some((name) => target === folder + name)).map(({ target }) => `${relative(root, file)} imports ${relative(root, target!)}`));
   expect(violations).toEqual([]);
 });

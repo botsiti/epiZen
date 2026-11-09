@@ -6,7 +6,7 @@ export type PluginDisplays = Record<PluginId, PluginDisplay>;
 interface DisplayOptions { views?: readonly string[]; viewLabel?: string; sections?: readonly { key: string; label: string }[]; setup?: 'periodic' | 'home' }
 /** The plugin catalog's presentation contract. Every option is consumed by its owning screen. */
 export const DISPLAY_OPTIONS: Record<PluginId, DisplayOptions> = {
-  home: { setup: 'home' }, bases: {}, library: { setup: 'home' }, graph: {},
+  home: { setup: 'home' }, bases: {}, library: { setup: 'home' }, graph: {}, spike: {},
   periodic: { views: ['Remember last tab', 'Overview', 'Tasks', 'Habits', 'Quests', 'CBT'], viewLabel: 'Open daily notes on', setup: 'periodic' },
   checkins: {},
   habits: { views: ['Active', 'Archived', 'History'], viewLabel: 'Initial collection', sections: [{ key: 'today', label: 'Today’s progress' }] },

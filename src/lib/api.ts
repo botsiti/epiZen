@@ -1,3 +1,4 @@
+import type { VoiceProvider, VoiceSettings } from './assistant/voice';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -75,6 +76,7 @@ export const assistantReadNote = (root: string, path: string) => invoke<string>(
 export const assistantApplyNote = (action: { id: string; root: string; path: string; before: string | null; after: string }) => invoke<string>('assistant_apply_note', { action });
 export const assistantAbandonAction = (root: string, id: string) => invoke<void>('assistant_abandon_action', { root, id });
 export const assistantApplyCalendar = (action: { id: string; root: string; calendar: string; title: string; start: number; end: number; notes?: string }) => invoke<string>('assistant_apply_calendar', { action });
+export const assistantHasMessage = (root: string, id: string) => invoke<boolean>('assistant_has_message', { root, id });
 export const assistantListChats = (root: string) => invoke<unknown>('assistant_list_chats', { root });
 export const assistantSearchChats = (root: string, query: string, excludeMessage?: string) => invoke<unknown>('assistant_search_chats', { root, query, excludeMessage });
 export const assistantExportChat = (name: string, text: string) => invoke<string | null>('assistant_export_chat', { name, text });
@@ -90,9 +92,31 @@ async function assistantRequest<T>(command: string, args: Record<string, unknown
   finally { signal?.removeEventListener('abort', cancel); }
 }
 export const assistantRespond = (request: { provider?: 'openai' | 'codex'; model: string; instructions: string; input: Record<string, unknown>[]; tools: Record<string, unknown>[] }, signal?: AbortSignal) => assistantRequest<unknown>('assistant_respond', { request }, signal);
-export const assistantTranscribe = (audio: Uint8Array, mime: string, signal?: AbortSignal, provider: 'openai' | 'codex' = 'openai') => assistantRequest<string>('assistant_transcribe', { request: { audio: Array.from(audio), mime, provider } }, signal);
+export const assistantTranscribe = (audio: Uint8Array, mime: string, signal?: AbortSignal, provider: 'openai' | 'codex' = 'openai', voice?: VoiceSettings) => assistantRequest<string>('assistant_transcribe', { request: { audio: Array.from(audio), mime, provider, ...(voice ? { voice } : {}) } }, signal);
+export const voiceConnection = (provider: VoiceProvider) => invoke<{ configured: boolean }>('voice_connection', { provider });
+export const setVoiceKey = (provider: VoiceProvider, key: string | null) => invoke<void>('voice_set_key', { provider, key });
 export const assistantSpeak = (text: string, signal?: AbortSignal, provider: 'openai' | 'codex' = 'openai') => assistantRequest<ArrayBuffer>('assistant_speak', { text, provider }, signal);
 export const assistantOpenUrl = (url: string) => invoke<void>('assistant_open_url', { url });
+export interface QuickCapture { id: string; text: string; error: string | null }
+export interface QuickDocument { revision: number; draft: string; pending: QuickCapture | null }
+export interface QuickStatus { connected: boolean; busy: boolean; review: boolean; label: string; reply: string; voice: VoiceSettings }
+export interface QuickSnapshot { shortcuts: { typing: boolean; dictation: boolean }; root: string; visible: boolean; opened: number; dictate: boolean; status: QuickStatus; document: QuickDocument }
+export const enableQuickPrompt = (root: string, enabled: boolean) => invoke<void>('prompt_enable', { root, enabled });
+export const publishQuickPrompt = (root: string, status: QuickStatus) => invoke<void>('prompt_publish', { root, status });
+export const quickPromptState = () => invoke<QuickSnapshot>('prompt_state');
+export const onQuickPrompt = (handler: (snapshot: QuickSnapshot) => void, target: 'main' | 'spike-prompt' = 'spike-prompt') => listen<QuickSnapshot>('epizen://prompt-state', (event) => handler(event.payload), { target });
+export const onQuickCommand = (handler: (command: string) => void, target: 'main' | 'spike-prompt' = 'spike-prompt') => listen<string>('epizen://prompt-command', (event) => handler(event.payload), { target });
+export const saveQuickDraft = (root: string, revision: number, draft: string) => invoke<QuickDocument>('prompt_save', { root, revision, draft });
+export const submitQuickPrompt = (root: string, revision: number, id: string) => invoke<void>('prompt_submit', { root, revision, id });
+export const finishQuickPrompt = (root: string, id: string, error: string | null = null) => invoke<void>('prompt_finish', { root, id, error });
+export const openQuickPrompt = (dictate = false) => invoke<void>('prompt_open', { dictate });
+export const flushQuickPrompt = () => invoke<void>('prompt_flush');
+export const quickPromptFlushed = (error: string | null = null) => invoke<void>('prompt_flushed', { error });
+export const consumeQuickOpen = (opened: number) => invoke<void>('prompt_consumed', { opened });
+export const hideQuickPrompt = () => invoke<void>('prompt_hide');
+export const openQuickConversation = () => invoke<void>('prompt_open_main');
+export const transcribeQuickPrompt = (root: string, audio: Uint8Array, mime: string, signal?: AbortSignal, _provider?: 'codex' | 'openai', voice?: VoiceSettings) => assistantRequest<string>('assistant_transcribe', { request: { root, audio: Array.from(audio), mime, voice } }, signal);
+
 export interface PetStatus { animation: string; label: string; motion: boolean }
 export const enablePet = (root: string, enabled: boolean) => invoke<void>('pet_enable', { root, enabled });
 export const publishPet = (root: string, state: PetStatus) => invoke<void>('pet_publish', { root, state });
@@ -145,7 +169,7 @@ export const hideTray = () => invoke<void>('tray_hide');
 export const quitApp = () => invoke<void>('tray_quit');
 
 /** An item of the menu bar the page acts on (src-tauri/src/menu.rs). */
-export type MenuItemId = 'new-tab' | 'close-tab' | 'left-sidebar' | 'right-sidebar' | 'collapse-folders' | 'new-note' | 'settings' | 'home' | 'library' | 'today';
+export type MenuItemId = 'new-tab' | 'close-tab' | 'left-sidebar' | 'right-sidebar' | 'spike-sidebar' | 'collapse-folders' | 'new-note' | 'settings' | 'home' | 'library' | 'today';
 
 /** Calls `handler` when one of those items is chosen. Returns a function that stops listening. */
 export async function onMenu(handler: (item: MenuItemId) => void): Promise<() => void> {

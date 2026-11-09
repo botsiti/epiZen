@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { today } from '../../lib/dates';
 import { parseBirthDate } from '../../lib/home';
 import { DEFAULT_RECOGNITION, periodicNamingError, type Period, type PeriodicRecognition, type PeriodicSettings, type PeriodicFeatures } from '../../lib/periodic';
@@ -30,6 +30,7 @@ export interface SettingsDraft {
   fileDefaults: FilePreferences;
 }
 interface Props {
+  spikeSettings?: (onBack: () => void) => ReactNode;
   pluginDisplay?: PluginDisplays;
   initialSection?: Section;
   plugins?: PluginSettings;
@@ -47,15 +48,16 @@ interface Props {
   onSave: (settings: SettingsDraft) => Promise<void>;
 }
 const SECTIONS = [
-  { id: 'plugins', title: 'Plugins', group: 'Your vault', hint: 'Start with Markdown. Add only what you use.', words: 'enable disable epiBase bases home library habits cbt check-ins mood energy focus social sleep calendar graph timer' },
+  { id: 'plugins', title: 'Plugins', group: 'Your vault', hint: 'Start with Markdown. Add only what you use.', words: 'enable disable epiBase bases home library habits cbt check-ins mood energy focus social sleep calendar graph timer spike assistant companion' },
   { id: 'periodic', title: 'Periodic notes', group: 'Your vault', hint: 'A place for your days, weeks and months.', words: 'daily weekly monthly import dates calendar habits thought records format folder' },
   { id: 'files', title: 'Files & folders', group: 'Your vault', hint: 'Choose where new ideas begin.', words: 'new note create folder location' },
   { id: 'home', title: 'Homepage', group: 'Personal', hint: 'A home for your days and the things you love.', words: 'birth birthday memento books podcasts movies films music albums library sources artwork' },
+  { id: 'spike', title: 'Spike', group: 'Personal', hint: 'Your companion, on your terms.', words: 'assistant voice connection api companion desktop microphone' },
   { id: 'hotkeys', title: 'Hotkeys', group: 'Personal', hint: 'Move through Epizen without leaving the keyboard.', words: 'keyboard shortcuts commands' },
 ] as const;
 type Section = typeof SECTIONS[number]['id'];
 
-export function SettingsScreen({ periodic, birthDate, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
+export function SettingsScreen({ spikeSettings, periodic, birthDate, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
   const id = useId();
   const heading = useRef<HTMLElement>(null);
   const [section, setSection] = useState<Section>(initialSection ?? (plugins ? 'plugins' : 'periodic'));
@@ -106,7 +108,7 @@ export function SettingsScreen({ periodic, birthDate, podcasts, features, folder
     </aside>
     <div className="preferences-main">
       <header className="preferences-heading" ref={heading}><PreferenceIcon name={section} /><div><h2>{active.title}</h2><p>{active.hint}</p></div></header>
-      {section === 'hotkeys' ? <><ShortcutReference />{dirty && <footer className="preferences-save"><span>Unsaved preferences</span><button type="button" className="quiet-button" disabled={saving} onClick={() => void save()}>Save changes</button>{state.error && <p role="alert">{state.error}</p>}</footer>}</> : <form className="preferences-form" onSubmit={(event) => void save(event)}>
+      {section === 'spike' ? <>{spikeSettings?.(() => setSection('plugins')) ?? <p>Open a vault to configure Spike.</p>}{dirty && <footer className="preferences-save"><span>Unsaved plugin preferences</span><button type="button" className="quiet-button" disabled={saving} onClick={() => void save()}>Save changes</button>{state.error && <p role="alert">{state.error}</p>}</footer>}</> : section === 'hotkeys' ? <><ShortcutReference />{dirty && <footer className="preferences-save"><span>Unsaved preferences</span><button type="button" className="quiet-button" disabled={saving} onClick={() => void save()}>Save changes</button>{state.error && <p role="alert">{state.error}</p>}</footer>}</> : <form className="preferences-form" onSubmit={(event) => void save(event)}>
         <fieldset className="preferences-fields" disabled={saving}>
           {section === 'plugins' && <PluginPreferences value={pluginDraft} onChange={(next) => { setPluginDraft(next); changed(); }} onSetup={setSection} />}
           {period && <>

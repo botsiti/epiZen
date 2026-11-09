@@ -6,6 +6,7 @@ export const PLUGINS = [
   { id: 'bases', name: 'epiBase', description: 'Render Obsidian Bases as tables, cards and lists from your vault properties.', group: 'Workspace' },
   { id: 'library', name: 'Library', description: 'Collect books, music, films, podcasts and videos.', group: 'Workspace' },
   { id: 'graph', name: 'Graph', description: 'Explore connections between your notes.', group: 'Workspace' },
+  { id: 'spike', name: 'Spike', description: 'A personal assistant and desktop companion, with text and voice.', group: 'Workspace' },
   { id: 'periodic', name: 'Periodic notes', description: 'Daily, weekly and monthly notes, with calendar navigation.', group: 'Daily life' },
   { id: 'checkins', name: 'Check-ins', description: 'Choose the daily numbers you want to record.', group: 'Daily life', requires: 'periodic' },
   { id: 'habits', name: 'Habits', description: 'Keep a routine and see its history over time.', group: 'Daily life', requires: 'periodic' },
@@ -46,7 +47,8 @@ export function pluginSettings(settings: Settings, root: string): PluginSettings
   const legacyDefaults = existing && !Object.hasOwn(vault, 'plugins');
   const defaults = legacyDefaults ? ALL_PLUGINS : NO_PLUGINS;
   const legacy = record(settings.periodicFeatures);
-  return Object.fromEntries(PLUGINS.map(({ id }) => [id, typeof saved[id] === 'boolean' ? saved[id] : id === 'habits' && legacyDefaults ? legacy.habits !== false : id === 'cbt' && legacyDefaults ? legacy.thoughtRecords !== false : defaults[id]])) as PluginSettings;
+  const assistant = record(vault.assistant);
+  return Object.fromEntries(PLUGINS.map(({ id }) => [id, typeof saved[id] === 'boolean' ? saved[id] : id === 'spike' ? assistant.enabled === true || assistant.desktopPet === true : id === 'habits' && legacyDefaults ? legacy.habits !== false : id === 'cbt' && legacyDefaults ? legacy.thoughtRecords !== false : defaults[id]])) as PluginSettings;
 }
 export function effectivePlugins(configured: PluginSettings): PluginSettings {
   return Object.fromEntries(PLUGINS.map((plugin) => [plugin.id, configured[plugin.id] && (!('requires' in plugin) || configured[plugin.requires])])) as PluginSettings;

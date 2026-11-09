@@ -8,6 +8,7 @@ interface Props {
   selectedYears: string[];
   onYears: (years: string[]) => void;
   minimumRating?: number;
+  ratingFilterPresent?: boolean;
   onMinimumRating: (rating?: number) => void;
   direction: SortDirection;
   onDirection: (direction: SortDirection) => void;
@@ -26,8 +27,8 @@ interface Props {
   onKinds: ReadonlySet<MediaKind>;
   onToggleKind: (kind: MediaKind) => void;
   genres: [string, number][];
-  genre?: string;
-  onGenre: (genre?: string) => void;
+  selectedGenres: readonly string[];
+  onGenres: (genres: string[]) => void;
   onClear: () => void;
   sort: SortOrder;
   onSort: (sort: SortOrder) => void;
@@ -168,11 +169,11 @@ const SORTS: { sort: SortOrder; name?: string; hint: string }[] = [
  * genres), Properties (the list's columns) and Search. Covers show the latest, so they only filter.
  */
 export function LibraryToolbar(props: Props) {
-  const { layout, onLayout, count, summary, spec, kinds, onKinds, onToggleKind, genres, genre, onGenre, onClear, sort, onSort, hidden, onHidden, search, onSearch } = props;
+  const { layout, onLayout, count, summary, spec, kinds, onKinds, onToggleKind, genres, selectedGenres, onGenres, onClear, sort, onSort, hidden, onHidden, search, onSearch } = props;
   const [searching, setSearching] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   const list = layout === 'list';
-  const filters = onKinds.size + (genre ? 1 : 0) + props.selectedYears.length + (props.minimumRating !== undefined ? 1 : 0);
+  const filters = onKinds.size + selectedGenres.length + props.selectedYears.length + (props.ratingFilterPresent ? 1 : 0);
   const columns: { column: ListColumn; name: string }[] = [
     { column: 'cover', name: 'Cover' },
     { column: 'maker', name: spec?.makerLabel ?? 'By' },
@@ -243,11 +244,11 @@ export function LibraryToolbar(props: Props) {
             {genres.length > 0 && (
               <div role="group" aria-label="Genre" className="tool-group">
                 <p className="tool-label">Genre</p>
-                <Item checked={!genre} onSelect={() => onGenre(undefined)} testId="genre-chip" data={{ 'data-genre': '' }}>
+                <Item checked={!selectedGenres.length} onSelect={() => onGenres([])} testId="genre-chip" data={{ 'data-genre': '' }}>
                   <span className="tool-item-name">Any</span>
                 </Item>
                 {genres.map(([name, n]) => (
-                  <Item key={name} checked={genre === name} onSelect={() => onGenre(genre === name ? undefined : name)} testId="genre-chip" data={{ 'data-genre': name }}>
+                  <Item key={name} role="menuitemcheckbox" checked={selectedGenres.includes(name)} onSelect={() => onGenres(selectedGenres.includes(name) ? selectedGenres.filter((item) => item !== name) : [...selectedGenres, name])} testId="genre-chip" data={{ 'data-genre': name }}>
                     <span className="tool-item-name">{name}</span>
                     <span className="tool-item-hint">{n}</span>
                   </Item>
@@ -259,7 +260,7 @@ export function LibraryToolbar(props: Props) {
               {props.years.map((year) => <Item key={year} role="menuitemcheckbox" checked={props.selectedYears.includes(year)} onSelect={() => props.onYears(props.selectedYears.includes(year) ? props.selectedYears.filter((value) => value !== year) : [...props.selectedYears, year])} testId="year-filter" data={{ 'data-year': year }}><span className="tool-item-name">{year}</span></Item>)}
             </div>
             <div className="tool-group" role="group" aria-label="Minimum rating"><p className="tool-label">Rating at least</p>
-              {[undefined, 50, 70, 80, 90].map((rating) => <Item key={rating ?? 'any'} checked={props.minimumRating === rating} onSelect={() => props.onMinimumRating(rating)} testId="rating-filter" data={{ 'data-rating': String(rating ?? '') }}><span className="tool-item-name">{rating ?? 'Any rating'}</span></Item>)}
+              {[undefined, 50, 70, 80, 90].map((rating) => <Item key={rating ?? 'any'} checked={rating === undefined ? !props.ratingFilterPresent : props.minimumRating === rating} onSelect={() => props.onMinimumRating(rating)} testId="rating-filter" data={{ 'data-rating': String(rating ?? '') }}><span className="tool-item-name">{rating ?? 'Any rating'}</span></Item>)}
             </div>
             {filters > 0 && (
               <button type="button" role="menuitem" className="tool-clear" onClick={onClear} tabIndex={-1} data-testid="filter-clear">

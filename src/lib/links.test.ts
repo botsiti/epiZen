@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { VaultFile } from './api';
-import { findWikilinks, noteTitle, resolveLink } from './links';
+import { findWikilinks, noteTitle, resolveLink, linkResolver } from './links';
 
 const note = (path: string): VaultFile => ({ path, kind: 'note' });
 const image = (path: string): VaultFile => ({ path, kind: 'image' });
@@ -63,4 +63,14 @@ describe('noteTitle', () => {
   it('is the file name without .md', () => {
     expect(noteTitle('Calendar/2026/weeks/2026-W33 - 10.08.26.md')).toBe('2026-W33 - 10.08.26');
   });
+});
+
+it('indexed links preserve direct resolution for paths, duplicate names, attachments and Unicode', () => {
+  const files = ['Notes/Plan.md', 'Archive/Notes/Plan.md', 'Projects/Plan.md', 'Notes/Йога.md'.normalize('NFD'), 'Media/voice.mp3', 'Media/Cover.png', 'Tasks.base', 'Notes/README'].map(note);
+  const resolve = linkResolver(files);
+  for (const from of ['Notes/Index.md', 'Archive/Notes/Index.md', 'Projects/Index.md', files[3]!.path]) {
+    for (const target of ['', 'Plan', 'Notes/Plan', 'Archive/Notes/Plan.md', 'ЙОГА', 'notes/йога', 'voice.mp3', 'Media/voice.mp3', 'Cover.png', 'Tasks.base', 'README', 'missing']) {
+      expect(resolve(target, from), `${target} from ${from}`).toBe(resolveLink(target, files, from));
+    }
+  }
 });

@@ -66,15 +66,35 @@ export function resolveLink(target: string, files: VaultFile[], fromPath?: strin
  * of scanning every file per link. For backlinks and the graph.
  */
 export function linkResolver(files: VaultFile[]): (target: string, fromPath: string) => VaultFile | undefined {
-  const byName = new Map<string, VaultFile[]>();
+  const byName = new Map<string, VaultFile[]>(), bySuffix = new Map<string, VaultFile[]>();
+  const byPath = new Map<string, VaultFile>(), original = new Map<string, VaultFile>();
+  const add = (index: Map<string, VaultFile[]>, key: string, file: VaultFile) => {
+    const entries = index.get(key);
+    if (entries) entries.push(file); else index.set(key, [file]);
+  };
   for (const file of files) {
-    const name = baseName(normalize(file.path));
-    byName.set(name, [...(byName.get(name) ?? []), file]);
+    const path = normalize(file.path);
+    if (!byPath.has(path)) byPath.set(path, file);
+    if (!original.has(file.path)) original.set(file.path, file);
+    add(byName, baseName(path), file);
+    // Index folder suffixes too: [[2026/Plan]] should not scan the entire vault.
+    let suffix = path;
+    while (suffix.includes('/')) { add(bySuffix, suffix, file); suffix = suffix.slice(suffix.indexOf('/') + 1); }
   }
   return (target, fromPath) => {
-    if (!target || target.includes('/')) return resolveLink(target, files, fromPath);
-    const candidates = byName.get(normalize(KNOWN_EXTENSION.test(target) || byName.has(normalize(target)) ? target : `${target}.md`)) ?? [];
-    return candidates.length <= 1 ? candidates[0] : resolveLink(target, candidates, fromPath);
+    if (!target) return original.get(fromPath);
+    const normalized = normalize(target);
+    const wanted = KNOWN_EXTENSION.test(target) || byPath.has(normalized) || byName.has(normalized) ? normalized : `${normalized}.md`;
+    if (wanted.includes('/') && byPath.has(wanted)) return byPath.get(wanted);
+    const candidates = (wanted.includes('/') ? bySuffix : byName).get(wanted) ?? [];
+    if (candidates.length <= 1) return candidates[0];
+    const home = normalize(folderOf(fromPath));
+    // Pick without sorting or altering the shared candidates.
+    return candidates.reduce((best, candidate) => {
+      const order = Number(normalize(folderOf(candidate.path)) !== home) - Number(normalize(folderOf(best.path)) !== home)
+        || candidate.path.length - best.path.length || candidate.path.localeCompare(best.path);
+      return order < 0 ? candidate : best;
+    });
   };
 }
 

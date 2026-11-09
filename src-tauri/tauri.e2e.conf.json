@@ -24,12 +24,14 @@
         "default",
         "tray",
         "pet",
+        "prompt",
         {
           "identifier": "e2e",
           "description": "Test-only: lets WebdriverIO drive the window. Only in `npm run build:e2e`.",
           "windows": [
             "main",
-            "spike"
+            "spike",
+            "spike-prompt"
           ],
           "permissions": [
             "core:default",

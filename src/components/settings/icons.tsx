@@ -1,5 +1,6 @@
 export function PreferenceIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
+    spike: 'M4 8V5l4 2m8 1V5l-4 2M4 8c0-3 12-3 12 0v5c0 5-12 5-12 0zM7 10h.1M13 10h.1M8 14l2 1 2-1',
     plugins: 'M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z',
     bases: 'M2 4h16v13H2zM2 8h16M7 8v9',
     library: 'M3 3h4v14H3zM8 5h4v12H8zM13 4l3-1 3 13-3 1z',

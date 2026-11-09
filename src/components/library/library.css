@@ -278,6 +278,243 @@
   height: 11px;
 }
 
+/* The sort chosen, faint after the word, with its way round. */
+.library-frame .tool-current {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  margin-left: 2px;
+  color: var(--text-faint);
+}
+
+.library-frame .tool-current .kind-mark {
+  width: 11px;
+  height: 11px;
+  stroke: var(--accent);
+}
+
+.library-frame .tool-item > .kind-mark + .tool-item-name {
+  margin-left: -2px;
+}
+
+/* The filters, after Notion's: a pill each, under the toolbar. The period's is always there. */
+.library-frame .filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: calc(var(--space-2) * -1) 0 var(--space-5);
+}
+
+.library-frame .filter-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 3%);
+  transition: border-color 160ms ease-out;
+}
+
+.library-frame .filter-pill:hover,
+.library-frame .filter-pill:focus-within {
+  border-color: rgb(143 188 170 / 40%);
+}
+
+.library-frame .filter-pill-button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.library-frame .filter-pill:has(.pill-remove) .filter-pill-button {
+  padding-right: 4px;
+}
+
+.library-frame .filter-pill-button .kind-mark {
+  width: 12px;
+  height: 12px;
+  stroke: var(--accent);
+}
+
+.library-frame .pill-key {
+  color: var(--text-muted);
+}
+
+.library-frame .pill-value.is-any {
+  color: var(--text-faint);
+}
+
+.library-frame .pill-remove {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 3px;
+  border-radius: 999px;
+  color: var(--text-faint);
+}
+
+.library-frame .pill-remove:hover {
+  background: rgb(255 255 255 / 7%);
+  color: var(--text);
+}
+
+.library-frame .pill-remove .kind-mark {
+  width: 10px;
+  height: 10px;
+}
+
+.library-frame .filter-add {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 28px;
+  padding: 0 11px 0 9px;
+  border: 1px dashed var(--glass-line-strong);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.library-frame .filter-add:hover,
+.library-frame .filter-add[aria-expanded='true'] {
+  border-color: rgb(143 188 170 / 45%);
+  color: var(--text);
+}
+
+.library-frame .filter-add .kind-mark {
+  width: 11px;
+  height: 11px;
+}
+
+.library-frame .filter-quiet {
+  padding: 0 4px;
+  color: var(--accent);
+  font-size: 12.5px;
+}
+
+.library-frame .filter-quiet:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.library-frame .filter-bar .tool-menu {
+  min-width: 240px;
+}
+
+.library-frame .tool-menu.is-dialog {
+  min-width: 260px;
+}
+
+/* A genre found by its letters, and the choices under it. */
+.library-frame .filter-find {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 2px 2px 6px;
+  padding: 0 10px;
+  height: 32px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-faint);
+}
+
+.library-frame .filter-find:focus-within {
+  border-color: rgb(143 188 170 / 55%);
+}
+
+.library-frame .filter-find .kind-mark {
+  width: 12px;
+  height: 12px;
+}
+
+.library-frame .filter-find input,
+.library-frame .filter-between input {
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.library-frame .filter-find input {
+  flex: 1;
+}
+
+.library-frame .filter-choices {
+  display: grid;
+  gap: 1px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.library-frame .filter-none {
+  margin: 6px 10px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+/* From and to, typed: two small fields on a line under the choices. */
+.library-frame .filter-between {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--glass-line);
+  font-size: 12.5px;
+}
+
+.library-frame .filter-between-error {
+  width: 100%;
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.library-frame .library-filter-error {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.library-frame .filter-between .tool-label {
+  margin: 0 4px 0 22px;
+}
+
+.library-frame .filter-between input {
+  width: 64px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.library-frame .filter-between input:focus {
+  border-color: rgb(143 188 170 / 55%);
+}
+
+/* Under the covers: fifteen more, or all of them in the list. */
+.library-frame .library-more-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: baseline;
+  margin: var(--space-5) 0 0;
+}
+
+.library-frame .library-more-line .library-more {
+  margin-top: 0;
+}
+
 /* Under the latest covers: the rest is in the list. */
 .library-more {
   display: inline-flex;

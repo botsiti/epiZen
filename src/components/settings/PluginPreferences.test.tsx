@@ -53,3 +53,19 @@ it('keeps independent homepage sections and exposes paused dependencies without 
   await user.click(screen.getByTestId('settings-save'));
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ homeSections: { ...DEFAULT_HOME_SECTIONS, memento: false }, plugins: { ...ALL_PLUGINS, periodic: false } }));
 });
+
+it('opens Spike setup from its plugin while retaining other unsaved preferences', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined);
+  render(<SettingsScreen spikeSettings={(onBack) => <button onClick={onBack}>Back to plugins</button>} plugins={NO_PLUGINS} periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} birthDate="" podcasts={{ artwork: 'show' }} folders={[]} onSave={save} />);
+  await user.click(screen.getByRole('switch', { name: 'Enable Spike' }));
+  await user.click(screen.getByRole('switch', { name: 'Enable Library' }));
+  for (let visit = 0; visit < 2; visit++) {
+    await user.click(screen.getByRole('button', { name: 'Configure Spike' }));
+    await user.click(screen.getByRole('button', { name: 'Set up Spike' }));
+    await user.click(screen.getByRole('button', { name: 'Back to plugins' }));
+  }
+  expect(screen.getByRole('switch', { name: 'Enable Spike' })).toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Enable Library' })).toBeChecked();
+  await user.click(screen.getByTestId('settings-save'));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ plugins: { ...NO_PLUGINS, spike: true, library: true } }));
+});

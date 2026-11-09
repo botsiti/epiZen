@@ -5,6 +5,9 @@ import { formatDate, monthGrid } from '../../lib/dates';
 import {
   allEntries,
   calendarStart,
+  coversCount,
+  datedYears,
+  filterEntries,
   genreCounts,
   kindCounts,
   kindSpec,
@@ -12,11 +15,11 @@ import {
   libraryStats,
   monthCounts,
   monthCovers,
+  releaseDecades,
   searchEntries,
   SHELVED_KINDS,
-  toggleKind,
-  withGenre,
   type KindSpec,
+  type LibraryFilters,
   type LibraryLayout,
   type LibraryTab,
   type ListColumn,
@@ -32,13 +35,14 @@ import { Section, Tabs } from '../periodic/parts';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { VaultImage } from '../VaultImage';
 import { AddMedia } from './AddMedia';
+import { FilterBar } from './FilterBar';
 import type { PodcastArtwork } from '../../lib/podcasts';
 import { FindCovers } from './FindCovers';
 import { LibraryList } from './LibraryList';
 import { LibraryToolbar } from './LibraryToolbar';
 import { LibraryActions, type LibrarySelection } from './LibraryActions';
 import { LibraryDialog } from './LibraryDialog';
-import { filterLibrary, libraryYears, sortLibrary, sortDirection, LIST_PAGE_SIZE, type SortDirection, type LibrarySort } from '../../lib/libraryViews';
+import { libraryYears, sortLibrary, sortDirection, LIST_PAGE_SIZE, type SortDirection, type LibrarySort } from '../../lib/libraryViews';
 import { KindMark, ToolMark } from './marks';
 import { KindBadge } from './KindBadge';
 import '../periodic/periodic.css';
@@ -54,6 +58,10 @@ interface Props {
   onLayout: (layout: LibraryLayout) => void;
   hidden: readonly ListColumn[];
   onHidden: (hidden: ListColumn[]) => void;
+  filters?: LibraryFilters;
+  onFilters?: (filters: LibraryFilters) => void;
+  filterError?: string;
+  onRetryFilters?: () => void;
   today: Date;
   podcastArtwork?: PodcastArtwork;
   sources?: LibrarySources;
@@ -82,12 +90,7 @@ interface Choice {
   sort: SortOrder;
   direction?: SortDirection;
   secondary?: LibrarySort;
-  years?: string[];
-  minimumRating?: number;
   limit?: number;
-  genre?: string;
-  /** The All tab's kinds; none on shows every kind. */
-  kinds?: ReadonlySet<MediaKind>;
   /** What the list is searched for. */
   search?: string;
 }
@@ -117,7 +120,7 @@ const results = (n: number) => `${n} ${n === 1 ? 'result' : 'results'}`;
  * search and pick the columns of. Both filter by genre, and on All by kind. The hero has an Add
  * for every kind on every tab.
  */
-export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidden, onHidden, today, podcastArtwork, sources = DEFAULT_SOURCES, onOpenNote, onCreated, onChanged, onDelete }: Props) {
+export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidden, onHidden, filters, onFilters, filterError, onRetryFilters, today, podcastArtwork, sources = DEFAULT_SOURCES, onOpenNote, onCreated, onChanged, onDelete }: Props) {
   // Videos are read as pages, not shelved here: the library is what is rated and added.
   const kinds = SHELVED_KINDS.map((kind) => ({ ...kindSpec(kind), source: kind === 'video' ? undefined : sources[kind] }));
   const spec = tab === 'all' ? undefined : kinds.find((candidate) => candidate.kind === tab);
@@ -127,6 +130,10 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
   const [selection, setSelection] = useState<LibrarySelection>();
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [adding, setAdding] = useState<MediaKind>();
+  const [localFilters, setLocalFilters] = useState<LibraryFilters>({ period: 'all' });
+  const activeFilters = filters ?? localFilters;
+  const changeFilters = onFilters ?? setLocalFilters;
+  const [more, setMore] = useState<{ key: string; count: number }>();
   // The notes that were in view without a cover when "Find covers" was pressed.
   const [finding, setFinding] = useState<MediaEntry[]>();
   // A new tab brings back what was chosen on it last.
@@ -149,14 +156,14 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
   };
 
   const everything = useMemo(() => allEntries(library), [library]);
-  const onKinds = choice.kinds ?? new Set<MediaKind>();
+  const onKinds = new Set(activeFilters.kinds ?? []);
   const entries = spec ? (library.get(spec.kind) ?? NONE) : everything;
   // On All, the kinds narrow the covers, the list and the calendar, as the genre does; the hero counts everything.
   const listed = spec ? entries : allEntries(library, onKinds);
   const stats = libraryStats(entries, today);
-  const genres = genreCounts(listed).slice(0, 12);
-  const genre = choice.genre && genres.some(([name]) => name === choice.genre) ? choice.genre : undefined;
-  const filtered = filterLibrary(withGenre(listed, genre), choice.years, choice.minimumRating);
+  const filtered = filterEntries(entries, activeFilters, shownTab, today);
+  const selectedGenres = activeFilters.genres?.[shownTab] ?? [];
+  const genres = genreCounts(filterEntries(entries, activeFilters, shownTab, today, 'genres')).slice(0, 12);
   const list = layout === 'list';
   const search = choice.search ?? '';
   // The covers are the latest few; the list is all of them, sorted and searched.
@@ -165,12 +172,19 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
   const shown = sortLibrary(searchEntries(filtered, search), rules);
   const limit = choice.limit ?? LIST_PAGE_SIZE;
   const sortBy = (sort: SortOrder) => choose({ ...choice, sort, direction: sort === choice.sort ? (direction === 'asc' ? 'desc' : 'asc') : sortDirection(sort), limit: LIST_PAGE_SIZE });
-  const latest = list ? NONE : shown.slice(0, LATEST);
+  const coverKey = JSON.stringify([shownTab, activeFilters, choice.sort, direction, choice.secondary]);
+  const covers = more?.key === coverKey ? more.count : LATEST;
+  const latest = list ? NONE : shown.slice(0, covers);
   const adder = adding ? kindSpec(adding) : undefined;
   // Those in view a cover can be looked up for: all that are filtered (and searched) to, not only the latest.
   const coverless = shown.filter((entry) => !entry.cover && kindSpec(entry.kind).source);
-  const count = list ? (shown.length > limit ? `Showing ${limit} of ${shown.length}` : results(shown.length)) : shown.length > LATEST ? `${choice.sort === 'recent' && direction === 'desc' ? 'The latest' : 'Showing'} ${LATEST} of ${shown.length}` : results(shown.length);
-  const summary = [...onKinds].map((kind) => kindSpec(kind).tab).concat(genre ? [genre] : [], choice.years ?? [], choice.minimumRating !== undefined ? [`Rating ≥ ${choice.minimumRating}`] : []).join(' · ') || undefined;
+  const count = list ? (shown.length > limit ? `Showing ${limit} of ${shown.length}` : results(shown.length)) : coversCount({ by: choice.sort, reverse: direction !== sortDirection(choice.sort) }, latest.length, shown.length, spec);
+  const rating = activeFilters.rating;
+  const minimumRating = rating && rating !== 'unrated' ? rating.min : undefined;
+  const summary = [...onKinds].map((kind) => kindSpec(kind).tab).concat(selectedGenres, activeFilters.years ?? [], minimumRating !== undefined ? [`Rating ≥ ${minimumRating}`] : [], rating === 'unrated' ? ['Not rated'] : []).join(' · ') || undefined;
+  const kindChoices = filterEntries(everything, activeFilters, 'all', today, 'kinds');
+  const filterKinds: [MediaKind, number][] = SHELVED_KINDS.map((kind) => [kind, kindChoices.filter((entry) => entry.kind === kind).length]);
+  const filterGenres = genreCounts(filterEntries(entries, activeFilters, shownTab, today, 'genres'));
 
   return (
     <div className="periodic-frame library-frame" data-testid="library" data-tab={shownTab} data-layout={layout} onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)} onContextMenu={(event) => {
@@ -222,17 +236,17 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
             layout={layout}
             onLayout={showAs}
             count={count}
-            summary={summary}
+            summary={onFilters ? undefined : summary}
             spec={spec}
             kinds={kindCounts(library)}
             onKinds={onKinds}
-            onToggleKind={(kind) => choose({ ...choice, kinds: toggleKind(onKinds, kind) })}
+            onToggleKind={(kind) => changeFilters({ ...activeFilters, kinds: onKinds.has(kind) ? [...onKinds].filter((other) => other !== kind) : [...onKinds, kind] })}
             genres={genres}
-            genre={genre}
-            onGenre={(next) => choose({ ...choice, genre: next })}
-            onClear={() => choose({ sort: choice.sort, direction, secondary: choice.secondary })}
-            years={libraryYears(listed)} selectedYears={choice.years ?? []} onYears={(years) => choose({ ...choice, years, limit: LIST_PAGE_SIZE })}
-            minimumRating={choice.minimumRating} onMinimumRating={(minimumRating) => choose({ ...choice, minimumRating, limit: LIST_PAGE_SIZE })}
+            selectedGenres={selectedGenres}
+            onGenres={(next) => changeFilters({ ...activeFilters, genres: { ...activeFilters.genres, [shownTab]: next } })}
+            onClear={() => { choose({ sort: choice.sort, direction, secondary: choice.secondary }); changeFilters({ period: 'all' }); }}
+            years={libraryYears(listed)} selectedYears={activeFilters.years ?? []} onYears={(years) => changeFilters({ ...activeFilters, period: years.length ? 'all' : activeFilters.period, years })}
+            minimumRating={minimumRating} ratingFilterPresent={Boolean(rating && (rating === 'unrated' || rating.min !== undefined || rating.max !== undefined))} onMinimumRating={(minimumRating) => { const next = { ...activeFilters }; if (minimumRating === undefined) delete next.rating; else next.rating = { min: minimumRating }; changeFilters(next); }}
             direction={direction} onDirection={(next) => choose({ ...choice, direction: next })}
             secondary={choice.secondary} onSecondary={(secondary) => choose({ ...choice, secondary })}
             onCalendar={() => setCalendarOpen(true)}
@@ -243,6 +257,9 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
             search={search}
             onSearch={(next) => choose({ ...choice, search: next })}
           />
+
+          {onFilters && <FilterBar filters={activeFilters} onFilters={changeFilters} tab={shownTab} spec={spec} years={datedYears(entries)} decades={releaseDecades(entries)} kinds={filterKinds} genres={filterGenres} />}
+          {filterError && <p className="library-filter-error" role="alert">Couldn't save these filters: {filterError} {onRetryFilters && <button type="button" className="quiet-button" onClick={onRetryFilters}>Retry saving</button>}</p>}
 
           {coverless.length > 0 && (
             <p className="library-missing" data-testid="library-missing">
@@ -256,17 +273,15 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
             </p>
           )}
 
-          {list ? (
-            shown.length ? (
+          {shown.length === 0 ? (
+            <p className="library-none" data-testid="library-none">
+              {search.trim() ? `Nothing here matches “${search.trim()}”.` : 'No items match these filters.'}{' '}
+              <button type="button" className="library-find" onClick={() => { if (search.trim()) choose({ ...choice, search: '' }); else { choose({ ...choice, limit: LIST_PAGE_SIZE }); changeFilters({ period: 'all' }); } }}>
+                {search.trim() ? 'Clear the search' : 'Show everything'}
+              </button>
+            </p>
+          ) : list ? (
               <><LibraryList entries={shown.slice(0, limit)} spec={spec} sort={choice.sort} direction={direction} onSort={sortBy} hidden={hidden} onOpen={onOpenNote} rising={RISING} />{shown.length > limit && <button type="button" className="library-more" data-testid="library-show-more" onClick={() => choose({ ...choice, limit: limit + LIST_PAGE_SIZE })}>Show {Math.min(LIST_PAGE_SIZE, shown.length - limit)} more <ToolMark name="arrow" /></button>}</>
-            ) : (
-              <p className="library-none" data-testid="library-none">
-                {search.trim() ? `Nothing here matches “${search.trim()}”.` : 'No items match these filters.'}{' '}
-                <button type="button" className="library-find" onClick={() => choose({ sort: choice.sort, direction, search: '' })}>
-                  {search.trim() ? 'Clear the search' : 'Clear filters'}
-                </button>
-              </p>
-            )
           ) : (
             <>
               <ul className={spec ? 'library-grid' : 'library-grid is-mixed'} data-testid="library-grid">
@@ -276,11 +291,8 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
                   </li>
                 ))}
               </ul>
-              {shown.length > LATEST && (
-                <button type="button" className="library-more" onClick={() => { choose({ ...choice, limit: shown.length }); showAs('list'); }} data-testid="library-see-all">
-                  See all {shown.length} in the list
-                  <ToolMark name="arrow" />
-                </button>
+              {shown.length > latest.length && (
+                <p className="library-more-line"><button type="button" className="library-more" onClick={() => setMore({ key: coverKey, count: covers + LATEST })} data-testid="library-show-more">Show {Math.min(LATEST, shown.length - latest.length)} more</button><span className="faint" aria-hidden="true"> · </span><button type="button" className="library-more" onClick={() => { choose({ ...choice, limit: shown.length }); showAs('list'); }} data-testid="library-see-all">See all {shown.length} in the list <ToolMark name="arrow" /></button></p>
               )}
 
             </>

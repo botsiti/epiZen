@@ -27,6 +27,7 @@ import { QuestPage, StatisticsPage } from './components/insights/Insights';
 import { Summaries } from './components/home/Summaries';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LibraryView } from './components/library/LibraryView';
+import { useLibraryFilters } from './components/library/useLibraryFilters';
 import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { VaultSetup } from './components/workspace/VaultSetup';
@@ -38,6 +39,7 @@ import { Sidebar } from './components/Sidebar';
 import { NoteActionDialog, NoteMenu, type NoteAction } from './components/workspace/NoteActions';
 import { useTrayBridge } from './components/tray/useTrayBridge';
 import { RightSidebar } from './components/workspace/RightSidebar';
+import { AssistantConfiguration } from './components/assistant/AssistantConfiguration';
 import { AssistantWorkspace } from './components/assistant/AssistantWorkspace';
 import { vaultAssistantSettings, assistantPreferencesPatch } from './lib/assistant/types';
 import { TabBar } from './components/workspace/TabBar';
@@ -79,7 +81,8 @@ import { buildGraph } from './lib/graph';
 import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
 import { renameLinkEdits } from './lib/rename';
-import { collectLibrary, genreCounts, hiddenColumns, isLibraryLayout, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
+import { collectLibrary, DEFAULT_FILTERS, genreCounts, hiddenColumns, isLibraryLayout, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
+import type { LibraryFilters } from './lib/library';
 import { collectMedia } from './lib/media';
 import { podcastSettings } from './lib/podcasts';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
@@ -144,7 +147,7 @@ export function App() {
   // The open tabs, each with its own history (src/lib/tabs.ts); the main pane shows the one in front.
   const { ws, update, restore, reset } = useWorkspace();
   const [right, setRight] = useState<RightSidebarState>({ open: false, closed: [] });
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantRequested, setAssistantOpen] = useState(false);
   const [assistantCbt, setAssistantCbt] = useState<{ path: string; token: number }>();
   const [leftOpen, setLeftOpen] = useState(true);
   const [loads, setLoads] = useState(0);
@@ -217,17 +220,25 @@ export function App() {
   const tree = useMemo(() => buildTree(files, folders), [files, folders]);
   const notes = useMemo(() => files.filter((file) => file.kind === 'note').map((file) => file.path.replace(/\.md$/i, '')), [files]);
   const preferences = useMemo(() => vaultPreferences(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
+  const persistLibraryFilters = useCallback((filters: LibraryFilters) => updateSettings({ libraryFilters: filters }).then(() => undefined), []);
+  const savedLibraryFilters = useLibraryFilters(settings.libraryFilters, status?.state === 'open', preferences.complete, persistLibraryFilters);
   const periodic = preferences.periodic;
   const recognition = preferences.recognition;
   const pluginDisplay = useMemo(() => savedPluginDisplays(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
   const configuredPlugins = useMemo(() => pluginSettings(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
   const plugins = useMemo(() => effectivePlugins(configuredPlugins), [configuredPlugins]);
+  const assistantOpen = plugins.spike && assistantRequested;
+  const assistantSettings = useMemo(() => vaultAssistantSettings(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
+  const saveAssistantSettings = useCallback(async (assistant: typeof assistantSettings) => {
+    if (status?.state !== 'open') throw new Error('No vault is open.');
+    setSettings(await updateSettings(assistantPreferencesPatch(await getSettings(), status.root, assistant)));
+  }, [status]);
   const homeSections = useMemo(() => savedHomeSections(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
   const features = useMemo(() => ({ ...periodicFeatures(settings.periodicFeatures), habits: plugins.habits, thoughtRecords: plugins.cbt, quests: plugins.quests, timer: plugins.timer, statistics: plugins.statistics, checkIns: { ...savedCheckIns(settings, status?.state === 'open' ? status.root : ''), enabled: plugins.checkins } }), [settings, status, plugins]);
   const sources = useMemo(() => librarySources(settings.librarySources), [settings.librarySources]);
   const podcasts = useMemo(() => podcastSettings(settings.podcasts), [settings.podcasts]);
   const catalog = useMemo(() => periodicCatalog(plugins.periodic ? files : [], periodic, plugins.periodic ? texts : new Map(), recognition), [files, periodic, texts, recognition, plugins.periodic]);
-  const assistantCatalog = useMemo(() => plugins.periodic ? catalog : periodicCatalog(files, periodic, texts, recognition), [plugins.periodic, catalog, files, periodic, texts, recognition]);
+  const assistantCatalog = useMemo(() => plugins.periodic || !plugins.spike ? catalog : periodicCatalog(files, periodic, texts, recognition), [plugins.periodic, plugins.spike, catalog, files, periodic, texts, recognition]);
   const periodicNotes = catalog.index;
   // Opens a screen in the tab in front, or in a new tab (⌘-click, or when the tab in front is pinned).
   const go = useCallback((next: View, newTab?: boolean) => update((prev) => open(prev, next, { newTab })), [update]);
@@ -540,6 +551,7 @@ export function App() {
     closeTab: () => update(closeActive),
     toggleLeftSidebar: toggleLeft,
     toggleRightSidebar: toggleRight,
+    toggleAssistant: () => { if (plugins.spike) setAssistantOpen((open) => !open); else go({ kind: 'settings', section: 'plugins' }); },
     collapseFolders: explorer.collapseAll,
     newNote,
     settings: () => { if (view.kind !== 'settings') go({ kind: 'settings' }); },
@@ -572,17 +584,23 @@ export function App() {
     async (next: SettingsDraft) => {
       if (status?.state !== 'open') throw new Error('No vault is open.');
       if (next.plugins && plugins.timer && !effectivePlugins(next.plugins).timer && timerBusy.current) throw new Error('Stop the focus timer and resolve its pending saves before disabling this plugin.');
-      const patch = vaultPreferencesPatch(settings, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition, next.fileDefaults);
-      const pluginPatch = next.plugins ? pluginPreferencesPatch({ ...settings, ...patch }, status.root, next.plugins, next.homeSections ?? homeSections, next.features.checkIns, next.pluginDisplay) : {};
-      setSettings(await updateSettings({ ...patch, ...pluginPatch, librarySources: next.sources, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
+      if (plugins.spike && next.plugins?.spike === false) {
+        const unsaved = await flushAll();
+        if (unsaved.length) throw new Error(`Save or recover ${unsaved.join(', ')} before disabling Spike.`);
+        setAssistantOpen(false);
+      }
+      const latest = await getSettings();
+      const patch = vaultPreferencesPatch(latest, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition, next.fileDefaults);
+      const pluginPatch = next.plugins ? pluginPreferencesPatch({ ...latest, ...patch }, status.root, next.plugins, next.homeSections ?? homeSections, next.features.checkIns, next.pluginDisplay) : {};
+      setSettings(await updateSettings({ ...patch, ...pluginPatch, ...(!preferences.complete && settings.libraryFilters === undefined ? { libraryFilters: DEFAULT_FILTERS } : {}), librarySources: next.sources, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
     },
-    [settings, status, periodic, recognition, homeSections, plugins.timer],
+    [settings, status, periodic, recognition, homeSections, plugins.timer, plugins.spike, preferences.complete],
   );
   const finishSetup = useCallback(async (next: PeriodicSettings, reading: PeriodicRecognition, create = false) => {
     if (status?.state !== 'open') throw new Error('No vault is open.');
     if (create) await createStarterVault(starterNotes(now), await readAllNotes(), createNote);
     const patch = vaultPreferencesPatch(settings, status.root, preferences.complete ? rememberPeriodic(periodic, next) : next, reading);
-    setSettings(await updateSettings({ ...patch, ...pluginPreferencesPatch({ ...settings, ...patch }, status.root, configuredPlugins, homeSections, features.checkIns) }));
+    setSettings(await updateSettings({ ...patch, ...pluginPreferencesPatch({ ...settings, ...patch }, status.root, configuredPlugins, homeSections, features.checkIns), ...(!preferences.complete && settings.libraryFilters === undefined ? { libraryFilters: DEFAULT_FILTERS } : {}) }));
     await refresh();
     setSetup(undefined);
   }, [status, settings, periodic, preferences.complete, now, refresh, configuredPlugins, homeSections, features.checkIns]);
@@ -879,7 +897,7 @@ export function App() {
           onToggleLeft={toggleLeft}
           rightOpen={right.open}
           onToggleRight={toggleRight}
-          onAssistant={() => setAssistantOpen((open) => !open)}
+          onAssistant={plugins.spike ? () => setAssistantOpen((open) => !open) : undefined}
           assistantOpen={assistantOpen}
         />
         <main className={view.kind === 'graph' ? 'main is-graph' : view.kind === 'settings' ? 'main is-preferences' : 'main'} ref={main} onScroll={onScroll}>
@@ -991,6 +1009,10 @@ export function App() {
                 onLayout={setLibraryLayout}
                 hidden={libraryHidden}
                 onHidden={setLibraryHidden}
+                filters={savedLibraryFilters.filters}
+                onFilters={savedLibraryFilters.change}
+                filterError={savedLibraryFilters.error}
+                onRetryFilters={savedLibraryFilters.retry}
                 today={now}
                 onOpenNote={openNote}
                 onCreated={mediaCreated}
@@ -1005,7 +1027,7 @@ export function App() {
             {view.kind === 'new' && view.item === 'base' && <NewBase root={status.root} folder={view.folder} folders={folders} onCreated={async (path) => { await refresh(); openNote(path); }} />}
             {view.kind === 'new' && view.item !== 'base' && <NewNote key={`${tab.index}-${view.item ?? 'note'}`} kind={view.item ?? 'note'} folders={folders} folder={view.folder} onNewNote={(folder) => go({ kind: 'new', folder })} onCreate={view.item === 'folder' ? async (path) => { await createFolder(path); setFolders((previous) => [...new Set([...previous, path])]); } : create} />}
             {view.kind === 'graph' && plugins.graph && <PluginSurface id="graph"><GraphView graph={graph} onOpen={openNote} /></PluginSurface>}
-            {view.kind === 'settings' && <SettingsScreen pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
+            {view.kind === 'settings' && <SettingsScreen spikeSettings={(onBack) => <AssistantConfiguration value={assistantSettings} pluginEnabled={plugins.spike} profileExists={files.some((file) => file.path === assistantSettings.profilePath)} onSave={saveAssistantSettings} onOpenProfile={() => openNote(assistantSettings.profilePath)} onBack={onBack} />} pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
             {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
           </Fragment>
         </main>
@@ -1023,7 +1045,7 @@ export function App() {
           onOpen={openNote}
         />
       )}
-      <AssistantWorkspace key={status.root} context={{ root: status.root, now, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, settings: vaultAssistantSettings(settings, status.root) }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenNote={(path, cbt) => { if (cbt) setAssistantCbt({ path, token: Date.now() }); openNote(path); }} onSaveSettings={async (assistant) => { setSettings(await updateSettings(assistantPreferencesPatch(await getSettings(), status.root, assistant))); }} />
+      {plugins.spike && <AssistantWorkspace key={status.root} context={{ root: status.root, now, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenNote={(path, cbt) => { if (cbt) setAssistantCbt({ path, token: Date.now() }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
     </div></PluginDisplayProvider>
   );
 }

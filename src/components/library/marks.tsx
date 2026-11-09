@@ -28,6 +28,9 @@ const TOOLS = {
   check: 'M3.75 8.25 6.75 11.25 12.25 4.75',
   close: 'M4.5 4.5l7 7M11.5 4.5l-7 7',
   arrow: 'M3 8h9.5M9 4.5 12.5 8 9 11.5',
+  down: 'M8 3v10M4.5 9.5 8 13l3.5-3.5',
+  up: 'M8 13V3M4.5 6.5 8 3l3.5 3.5',
+  plus: 'M8 3.5v9M3.5 8h9',
 };
 
 /** The toolbar's small marks, drawn in lines like the kinds'. */

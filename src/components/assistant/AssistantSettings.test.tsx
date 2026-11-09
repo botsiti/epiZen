@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { AssistantSettings } from './AssistantSettings';
 import { DEFAULT_ASSISTANT } from '../../lib/assistant/types';
-import { assistantConnection, setAssistantKey } from '../../lib/api';
-vi.mock('../../lib/api', () => ({ assistantConnection: vi.fn(), setAssistantKey: vi.fn() }));
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(assistantConnection).mockResolvedValue({ configured: true }); });
+import { voiceConnection, assistantConnection, setAssistantKey } from '../../lib/api';
+vi.mock('../../lib/api', () => ({ assistantConnection: vi.fn(), setAssistantKey: vi.fn(), voiceConnection: vi.fn(), setVoiceKey: vi.fn() }));
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(assistantConnection).mockResolvedValue({ configured: true }); vi.mocked(voiceConnection).mockResolvedValue({ configured: true }); });
 function setup() {
   const onSave = vi.fn().mockResolvedValue(undefined), onConnection = vi.fn().mockResolvedValue(undefined), onBack = vi.fn();
   render(<AssistantSettings value={DEFAULT_ASSISTANT} configured={false} profileExists={false} onSave={onSave} onConnection={onConnection} onBack={onBack} onCompanionChange={vi.fn()} onProfile={vi.fn()} />);

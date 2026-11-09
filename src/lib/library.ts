@@ -223,7 +223,7 @@ export function collectLibrary(notes: NoteText[], files: VaultFile[]): Map<Media
 }
 
 /** A genre as the library groups it: trimmed and lower case ("self improvement " and "Self improvement" are one). */
-export const genreName = (genre: string) => genre.trim().toLowerCase();
+export const genreName = (genre: string) => genre.normalize('NFC').trim().toLowerCase().normalize('NFC');
 
 export interface LibraryStats {
   total: number;
@@ -252,31 +252,200 @@ export function libraryStats(entries: MediaEntry[], today: Date): LibraryStats {
   };
 }
 
-/** Recent, Rating and Title are the chips; the list's headers sort by those and by maker and year too. */
+/** What the covers and the list can be sorted by. */
 export type SortOrder = 'recent' | 'rating' | 'title' | 'maker' | 'year';
+export const SORT_ORDERS: readonly SortOrder[] = ['recent', 'rating', 'title', 'maker', 'year'];
+
+/** A sort: by what, and whether its own way round (the latest, the best, the newest, A to Z) or the other. */
+export interface Sort {
+  by: SortOrder;
+  reverse?: boolean;
+}
+
+export const LATEST_FIRST: Sort = { by: 'recent' };
 
 const words = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
 const byTitle = (a: MediaEntry, b: MediaEntry) => words(a.title, b.title);
 const byDate = (a: MediaEntry, b: MediaEntry) => (b.date ?? '').localeCompare(a.date ?? '');
 const byRating = (a: MediaEntry, b: MediaEntry) => (b.rating ?? -1) - (a.rating ?? -1);
-// Those without a maker or a year go last, as the unrated and undated do.
-const byMaker = (a: MediaEntry, b: MediaEntry) => Number(!a.maker) - Number(!b.maker) || words(a.maker ?? '', b.maker ?? '');
-const yearOf = (entry: MediaEntry) => (entry.year && /^\d{1,4}$/.test(entry.year) ? Number(entry.year) : -1);
-const byYear = (a: MediaEntry, b: MediaEntry) => yearOf(b) - yearOf(a);
+const byMaker = (a: MediaEntry, b: MediaEntry) => words(a.maker ?? '', b.maker ?? '');
+const yearOf = (entry: MediaEntry) => (entry.year && /^\d{1,4}$/.test(entry.year) ? Number(entry.year) : undefined);
+const byYear = (a: MediaEntry, b: MediaEntry) => (yearOf(b) ?? -1) - (yearOf(a) ?? -1);
+
+type Compare = (a: MediaEntry, b: MediaEntry) => number;
+/** Each sort: what it has nothing to sort by, its own way round, and what settles a tie (never turned round). */
+const SORTS: Record<SortOrder, { missing: (entry: MediaEntry) => boolean; compare: Compare; tie: Compare }> = {
+  recent: { missing: (entry) => !entry.date, compare: byDate, tie: (a, b) => byRating(a, b) || byTitle(a, b) },
+  rating: { missing: (entry) => entry.rating === undefined, compare: byRating, tie: (a, b) => byDate(a, b) || byTitle(a, b) },
+  title: { missing: () => false, compare: byTitle, tie: () => 0 },
+  maker: { missing: (entry) => !entry.maker, compare: byMaker, tie: (a, b) => byYear(a, b) || byTitle(a, b) },
+  year: { missing: (entry) => yearOf(entry) === undefined, compare: byYear, tie: (a, b) => byDate(a, b) || byTitle(a, b) },
+};
 
 /**
  * Recent: the latest listened, watched or finished first. Rating: the best first. Title and maker:
- * A to Z. Year: the newest first. Unrated, undated, nameless and yearless go last.
+ * A to Z. Year: the newest first. `reverse` turns each the other way. Either way the undated,
+ * unrated, nameless and yearless go last.
  */
-export function sortEntries(entries: MediaEntry[], order: SortOrder): MediaEntry[] {
-  const compare = {
-    recent: (a: MediaEntry, b: MediaEntry) => byDate(a, b) || byRating(a, b) || byTitle(a, b),
-    rating: (a: MediaEntry, b: MediaEntry) => byRating(a, b) || byDate(a, b) || byTitle(a, b),
-    title: byTitle,
-    maker: (a: MediaEntry, b: MediaEntry) => byMaker(a, b) || byYear(a, b) || byTitle(a, b),
-    year: (a: MediaEntry, b: MediaEntry) => byYear(a, b) || byDate(a, b) || byTitle(a, b),
-  }[order];
-  return entries.toSorted(compare);
+export function sortEntries(entries: MediaEntry[], by: SortOrder, reverse = false): MediaEntry[] {
+  const sort = SORTS[by];
+  return entries.toSorted((a, b) => Number(sort.missing(a)) - Number(sort.missing(b)) || (reverse ? -sort.compare(a, b) : sort.compare(a, b)) || sort.tie(a, b));
+}
+
+/** Each sort's name, and how its own way round and the other read. The maker's name is the kind's. */
+export const SORT_WAYS: Record<SortOrder, { name?: string; own: string; other: string }> = {
+  recent: { name: 'Recent', own: 'Latest first', other: 'Earliest first' },
+  rating: { name: 'Rating', own: 'Best first', other: 'Lowest first' },
+  title: { name: 'Title', own: 'A to Z', other: 'Z to A' },
+  maker: { own: 'A to Z', other: 'Z to A' },
+  year: { name: 'Year', own: 'Newest first', other: 'Oldest first' },
+};
+
+export const sortName = (by: SortOrder, spec?: KindSpec) => SORT_WAYS[by].name ?? spec?.makerLabel ?? 'Maker';
+
+/**
+ * What the covers say they show, by the sort: "The latest 15 of 233", "Top 15 by rating of 233",
+ * "30 by artist, A to Z of 553"; "12 results" when they show all there is.
+ */
+export function coversCount(sort: Sort, shown: number, total: number, spec?: KindSpec): string {
+  if (shown >= total) return `${total} ${total === 1 ? 'result' : 'results'}`;
+  const way = sort.reverse ? 'other' : 'own';
+  const lead = {
+    recent: { own: `The latest ${shown}`, other: `The earliest ${shown}` },
+    rating: { own: `Top ${shown} by rating`, other: `The lowest ${shown} by rating` },
+    title: { own: `${shown} by title, A to Z`, other: `${shown} by title, Z to A` },
+    maker: { own: `${shown} by ${sortName('maker', spec).toLowerCase()}, A to Z`, other: `${shown} by ${sortName('maker', spec).toLowerCase()}, Z to A` },
+    year: { own: `The newest ${shown} by year`, other: `The oldest ${shown} by year` },
+  }[sort.by][way];
+  return `${lead} of ${total}`;
+}
+
+/** A sort kept in the settings, or Recent when it isn't one. */
+export function readSort(value: unknown): Sort {
+  const sort = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const by = SORT_ORDERS.find((order) => order === sort.by) ?? 'recent';
+  return sort.reverse === true ? { by, reverse: true } : { by };
+}
+
+// ---------------------------------------------------------------- filters
+
+/** When it was listened to, watched or finished: this calendar year, the last twelve months, one year, or ever. */
+export type Period = 'this-year' | 'last-12' | 'all' | number;
+
+/**
+ * The library's filters, after Notion's: a period always (This year unless chosen otherwise), and
+ * any of the others, each one added on purpose and shown as a pill. One that is there with nothing
+ * chosen in it yet lets everything through. Kinds count on All only; genres are each tab's own.
+ */
+export interface LibraryFilters {
+  period: Period;
+  /** Recorded years can be selected together from the quick filter. */
+  years?: string[];
+  /** The year it came out, from and to, either end open. */
+  released?: { from?: number; to?: number };
+  /** 0–100, both ends in; or only those not rated yet. */
+  rating?: { min?: number; max?: number } | 'unrated';
+  kinds?: MediaKind[];
+  genres?: Partial<Record<LibraryTab, string[]>>;
+  cover?: 'any' | 'with' | 'without';
+}
+
+/** The filters the first time, and after Reset: this year. */
+export const DEFAULT_FILTERS: LibraryFilters = { period: 'this-year' };
+
+const isWhole = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value);
+const range = (value: unknown, low: number, high: number) => {
+  const raw = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const end = (n: unknown) => (isWhole(n) && n >= low && n <= high ? n : undefined);
+  const from = end(raw.from ?? raw.min);
+  const to = end(raw.to ?? raw.max);
+  return { from, to };
+};
+
+/** The filters kept in the settings, anything that isn't one of them left out; This year when there are none. */
+export function readFilters(value: unknown): LibraryFilters {
+  if (typeof value !== 'object' || value === null) return { ...DEFAULT_FILTERS };
+  const raw = value as Record<string, unknown>;
+  const period: Period = raw.period === 'all' || raw.period === 'last-12' || raw.period === 'this-year' ? raw.period : isWhole(raw.period) && raw.period > 0 && raw.period < 10000 ? raw.period : 'this-year';
+  const filters: LibraryFilters = { period };
+  if (Array.isArray(raw.years)) filters.years = [...new Set(raw.years.filter((year): year is string => typeof year === 'string' && /^\d{4}$/.test(year)).slice(0, 100))];
+  if ('released' in raw) {
+    const { from, to } = range(raw.released, 0, 9999);
+    filters.released = { ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) };
+  }
+  if (raw.rating === 'unrated') filters.rating = 'unrated';
+  else if ('rating' in raw) {
+    const { from, to } = range(raw.rating, 0, 100);
+    filters.rating = { ...(from === undefined ? {} : { min: from }), ...(to === undefined ? {} : { max: to }) };
+  }
+  if (Array.isArray(raw.kinds)) filters.kinds = SHELVED_KINDS.filter((kind) => (raw.kinds as unknown[]).includes(kind));
+  if (typeof raw.genres === 'object' && raw.genres !== null) {
+    const kept = raw.genres as Record<string, unknown>;
+    filters.genres = Object.fromEntries(
+      Object.entries(kept)
+        .filter(([tab, names]) => isLibraryTab(tab) && Array.isArray(names))
+        .map(([tab, names]) => [tab, [...new Set((names as unknown[]).filter((name): name is string => typeof name === 'string' && name.length > 0 && name.length <= 100).map(genreName).filter(Boolean).slice(0, 100))]]),
+    );
+  }
+  if (raw.cover === 'any' || raw.cover === 'with' || raw.cover === 'without') filters.cover = raw.cover;
+  return filters;
+}
+
+/** How a period reads on its pill and in its menu. */
+export function periodName(period: Period): string {
+  if (period === 'this-year') return 'This year';
+  if (period === 'last-12') return 'Last 12 months';
+  if (period === 'all') return 'All time';
+  return String(period);
+}
+
+/** True when the filters are This year and nothing else. */
+export const isDefaultFilters = (filters: LibraryFilters) => filters.period === 'this-year' && Object.keys(filters).length === 1;
+
+/** Whether an entry falls in the period; one without a date only in All time. */
+export function inPeriod(entry: MediaEntry, period: Period, today: Date): boolean {
+  if (period === 'all') return true;
+  if (!entry.date) return false;
+  if (period === 'this-year') return entry.date.startsWith(`${today.getFullYear()}-`);
+  if (period === 'last-12') {
+    const since = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+    return entry.date > isoDate(since) && entry.date <= isoDate(today);
+  }
+  return entry.date.startsWith(`${period}-`);
+}
+
+/** What the filters let through on a tab, `except` one of them (for the counts of its own choices). */
+export function filterEntries(entries: MediaEntry[], filters: LibraryFilters, tab: LibraryTab, today: Date, except?: 'kinds' | 'genres'): MediaEntry[] {
+  const { released, rating, cover } = filters;
+  const kinds = tab === 'all' && except !== 'kinds' && filters.kinds?.length ? new Set(filters.kinds) : undefined;
+  const genres = except === 'genres' ? undefined : filters.genres?.[tab];
+  return entries.filter((entry) => {
+    if (!inPeriod(entry, filters.period, today)) return false;
+    if (filters.years?.length && (!entry.date || !filters.years.includes(entry.date.slice(0, 4)))) return false;
+    if (kinds && !kinds.has(entry.kind)) return false;
+    if (genres?.length && !entry.genres.some((genre) => genres.includes(genre))) return false;
+    if (released && (released.from !== undefined || released.to !== undefined)) {
+      const year = yearOf(entry);
+      if (year === undefined || (released.from !== undefined && year < released.from) || (released.to !== undefined && year > released.to)) return false;
+    }
+    if (rating === 'unrated' && entry.rating !== undefined) return false;
+    if (rating && rating !== 'unrated' && (rating.min !== undefined || rating.max !== undefined)) {
+      if (entry.rating === undefined || (rating.min !== undefined && entry.rating < rating.min) || (rating.max !== undefined && entry.rating > rating.max)) return false;
+    }
+    if (cover === 'with' && !entry.cover) return false;
+    if (cover === 'without' && entry.cover) return false;
+    return true;
+  });
+}
+
+/** The years something was listened to, watched or finished in, the latest first, for the period's choices. */
+export function datedYears(entries: MediaEntry[]): number[] {
+  return [...new Set(entries.flatMap((entry) => (entry.date ? [Number(entry.date.slice(0, 4))] : [])))].sort((a, b) => b - a);
+}
+
+/** The decades things came out in, the latest first, for the release year's choices. */
+export function releaseDecades(entries: MediaEntry[]): number[] {
+  return [...new Set(entries.flatMap((entry) => (yearOf(entry) === undefined ? [] : [Math.floor((yearOf(entry) ?? 0) / 10) * 10])))].sort((a, b) => b - a);
 }
 
 /** How the library shows what is in view: the latest as covers, or all of it as a list. Kept in the app's settings. */
@@ -284,7 +453,7 @@ export type LibraryLayout = 'covers' | 'list';
 
 export const isLibraryLayout = (value: unknown): value is LibraryLayout => value === 'covers' || value === 'list';
 
-/** How many the covers show: the latest listened to, watched or finished. The list has the rest. */
+/** How many covers show at first, and how many more each "Show more" adds. The list has them all. */
 export const LATEST = 15;
 
 /** The list's columns that can be hidden; the title always shows. */
@@ -313,7 +482,6 @@ export function genreCounts(entries: MediaEntry[]): [string, number][] {
   return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
-export const withGenre = (entries: MediaEntry[], genre?: string) => (genre ? entries.filter((entry) => entry.genres.includes(genre)) : entries);
 
 // ---------------------------------------------------------------- everything together
 

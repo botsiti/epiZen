@@ -20,14 +20,30 @@ async function apply() {
 }
 describe('Spike conversations and second-brain actions', () => {
   before(prepareWindow);
+  it('enables Spike from Plugins and reserves Command 8 for the sidebar', async () => {
+    await expect($('[data-testid="open-assistant"]')).not.toBeExisting();
+    await browser.execute(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, bubbles: true, cancelable: true })));
+    await $('[aria-label="Enable Spike"]').click();
+    await $('[data-testid="settings-save"]').click();
+    await $('[data-testid="open-assistant"]').waitForDisplayed();
+    await $('[aria-label="Configure Spike"]').click();
+    await $('button=Set up Spike').click();
+    await expect($('.spike-configuration')).toBeDisplayed();
+    await screenshot('209-spike-plugin-settings');
+    for (const open of [true, false]) {
+      await browser.execute(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '8', metaKey: true, bubbles: true, cancelable: true })));
+      if (open) await expect($('[data-testid="assistant-sidebar"]')).toBeDisplayed();
+      else await expect($('[data-testid="assistant-sidebar"]')).not.toBeExisting();
+    }
+  });
   it('connects with a test-only key and adds a requested film through a reviewed note change', async () => {
     const before = snapshotVault(root);
     await $('[data-testid="open-assistant"]').click();
     await screenshot('210-spike-welcome');
-    await $('button=Connect Spike').click();
-    await selectOption('[aria-label="Spike connection"]', 'openai');
-    await $('[aria-label="OpenAI API key"]').setValue('sk-test-not-a-real-credential');
-    await $('.assistant-preferences button[type="submit"]').click();
+    await $('.assistant-sidebar').$('button=Connect Spike').click();
+    await selectOption('.assistant-sidebar [aria-label="Spike connection"]', 'openai');
+    await $('.assistant-sidebar [aria-label="OpenAI API key"]').setValue('sk-test-not-a-real-credential');
+    await $('.assistant-sidebar .assistant-preferences button[type="submit"]').click();
     await $('[aria-label="Message Spike"]').waitForEnabled();
     await send('Yesterday I watched Quiet Harbour. Add it to my library.');
     await expect($('.assistant-action')).toHaveText(expect.stringContaining('Quiet Harbour'));
@@ -41,14 +57,14 @@ describe('Spike conversations and second-brain actions', () => {
   });
   it('connects the subscription adapter without an API key and keeps the same reviewed actions', async () => {
     await $('[aria-label="Assistant settings"]').click();
-    await selectOption('[aria-label="Spike connection"]', 'codex');
-    await expect($('[aria-label="OpenAI API key"]')).not.toBeExisting();
+    await selectOption('.assistant-sidebar [aria-label="Spike connection"]', 'codex');
+    await expect($('.assistant-sidebar [aria-label="OpenAI API key"]')).not.toBeExisting();
     await browser.execute(async () => {
       const api = (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core;
       await api.invoke('assistant_set_key', { key: null });
     });
     await screenshot('224-spike-subscription');
-    await $('.assistant-preferences button[type="submit"]').click();
+    await $('.assistant-sidebar .assistant-preferences button[type="submit"]').click();
     await $('.assistant-context').$('button=New chat').click();
     const before = snapshotVault(root);
     await send('Remember that I prefer to use my subscription.');
@@ -146,6 +162,17 @@ describe('Spike conversations and second-brain actions', () => {
     expect(readFileSync(path, 'utf8').startsWith(outside)).toBe(true);
     expect(diffSnapshots(before, snapshotVault(root))).toEqual(['changed: Assistant/Profile.md']);
   });
+  it('configures an independent OpenRouter voice model with an isolated test key', async () => {
+    await $('[aria-label="Assistant settings"]').click();
+    await selectOption('.assistant-sidebar [aria-label="Voice provider"]', 'openrouter');
+    await $('.assistant-sidebar [aria-label="Transcription model"]').setValue('microsoft/mai-transcribe-2');
+    await $('.assistant-sidebar [aria-label="Voice API key"]').setValue('router-test-only-credential');
+    await $('.assistant-sidebar').$('button=Save voice settings').click();
+    await expect($('.assistant-sidebar .assistant-voice-preferences [role="status"]')).toHaveText('Voice settings saved.');
+    await scrollIntoView('.assistant-sidebar .assistant-voice-preferences');
+    await screenshot('225-spike-voice-settings');
+    await $('button=← Conversation').click();
+  });
   it('accepts a recorded voice message without accessing the real microphone', async () => {
     await $('.assistant-context').$('button=New chat').click();
     await browser.execute(() => {
@@ -164,6 +191,43 @@ describe('Spike conversations and second-brain actions', () => {
     await screenshot('215-spike-voice');
     await $('[aria-label="Send voice message"]').click();
     await expect($('.assistant-message.is-user')).toHaveText(expect.stringContaining('I prefer voice notes'));
+    await $('.assistant-action-buttons').$('button=Decline').waitForEnabled();
+    await $('.assistant-action-buttons').$('button=Decline').click();
+    await browser.waitUntil(async () => !(await $('[aria-label="Stop assistant"]').isExisting()));
+  });
+  it('captures text in the quick pill, retains an unsent draft, and keeps changes in the main review flow', async () => {
+    const before = snapshotVault(root);
+    await browser.execute(async () => { await (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke('prompt_open', { dictate: false }); });
+    await browser.waitUntil(async () => (await browser.getWindowHandles()).includes('spike-prompt'));
+    await browser.switchToWindow('spike-prompt');
+    await $('[aria-label="Quick message to Spike"]').setValue('Remember that I enjoy quiet walks.');
+    await $('[aria-label="Close quick prompt"]').click();
+    await browser.switchToWindow('main');
+    await browser.execute(async () => { await (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke('prompt_open', { dictate: false }); });
+    await browser.switchToWindow('spike-prompt');
+    await expect($('[aria-label="Quick message to Spike"]')).toHaveValue('Remember that I enjoy quiet walks.');
+    const forbidden = await browser.execute(async () => {
+      try { await (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke('assistant_apply_note', { action: { id: 'forbidden', root: '/invalid', path: 'Never.md', before: null, after: 'Not allowed' } }); return false; }
+      catch { return true; }
+    });
+    expect(forbidden).toBe(true);
+    const coreWritesBlocked = await browser.execute(async () => {
+      const invoke = (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke;
+      const results = await Promise.all(['create_note', 'write_note', 'calendar_create', 'update_settings'].map(async (command) => {
+        try { await invoke(command, {}); return false; } catch (error) { return String(error).includes('companion window'); }
+      }));
+      return results.every(Boolean);
+    });
+    expect(coreWritesBlocked).toBe(true);
+    await screenshot('226-spike-quick-prompt');
+    await $('.quick-send').click();
+    await expect($('[aria-label="Quick message to Spike"]')).toHaveValue('');
+    await $('button=Review in conversation ↗').waitForDisplayed();
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
+    await $('button=Review in conversation ↗').click();
+    await browser.switchToWindow('main');
+    await expect($('.assistant-action-buttons')).toBeDisplayed();
+    await $('.assistant-action-buttons').$('button=Decline').waitForEnabled();
     await $('.assistant-action-buttons').$('button=Decline').click();
     await browser.waitUntil(async () => !(await $('[aria-label="Stop assistant"]').isExisting()));
   });
@@ -195,7 +259,7 @@ describe('Spike conversations and second-brain actions', () => {
   it('shows animated desktop Spike, pauses motion, and returns to an unsent draft after closing the main window', async () => {
     const before = snapshotVault(root);
     await $('[aria-label="Assistant settings"]').click();
-    await $('button=Show Spike on desktop').click();
+    await $('.assistant-sidebar').$('button=Show Spike on desktop').click();
     await browser.waitUntil(async () => (await browser.getWindowHandles()).includes('spike'));
     await $('button=← Conversation').click();
     await browser.switchToWindow('spike');
@@ -224,7 +288,9 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.waitUntil(async () => !(await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { isVisible: () => Promise<boolean> } } } }).__TAURI__.window.getCurrentWindow().isVisible())));
     await browser.switchToWindow('spike');
     await expect($('[data-testid="desktop-pet"]')).toBeDisplayed();
-    await $('[aria-label="Open conversation"]').click();
+    await $('[aria-label="Open quick prompt"]').click();
+    await browser.switchToWindow('spike-prompt');
+    await $('button=Open conversation ↗').click();
     await browser.switchToWindow('main');
     await expect($('[aria-label="Message Spike"]')).toHaveValue('Keep this unsent thought while Spike stays on my desktop.');
     await browser.switchToWindow('spike'); await $('[aria-label="Hide Spike"]').click();

@@ -318,15 +318,18 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   Each opens a small menu under it in the pages' glass, radius 14px: a check in accent by what is
   chosen, hints faint at the right. Sort: Recent (latest first), Rating (best first), Title (A to
   Z), the maker (A to Z) and Year (newest first). Filter: on All the kinds, each with its mark and
-  count, several at once and none on for all; the twelve most used genres with their counts, one at
+  count, several at once and none on for all; the twelve most used genres with their counts, several at
   a time; "Clear the filters" in accent. Filter lit (its mark in accent, a count on a sage pill)
   while any is on. Properties: the list's columns, ticked to show, the title always. Search: the
   word opens a field in its place (title, maker or genre); Escape empties and closes it. The menus
   take the focus, ↑ ↓ move in them, Escape or a click outside closes them. Covers or List, and the
-  columns, are the app's (its settings), not the vault's; the sort and the filters are kept per tab
-  for the session, and the search until the covers are shown.
-- **Covers**: the latest fifteen listened to, watched or finished of what the tab and the filters
-  show, and under them "See all 533 in the list →" in accent. On All each card says its kind, faint,
+  columns, are the app's (its settings), not the vault's; the sort is kept per tab for the session,
+  and the search until the covers are shown. A row of filter pills exposes the period, recorded years,
+  multiple genres, rating ranges or unrated items, release years, kinds and cover availability. New
+  vaults start with This year; existing vaults retain the previous all-time view. Filters persist in
+  settings, and a failed save leaves the selection visible with an explicit retry.
+- **Covers**: fifteen listened to, watched or finished entries in the chosen sort order, then
+  "Show 15 more" or "See all 533 in the list →". On All each card says its kind, faint,
   before the maker, and posters and square covers stand on one line with their titles level. The
   covers in a grid, each with its rating on a small glass pill in the top-right corner (a faint dash
   when not rated yet), the title, and the maker and year faint. Mixed views, including Home, add a
@@ -457,7 +460,7 @@ Obsidian's workspace in Epizen's own chrome: the sidebar's dark, hairlines, no g
 
 ### Keyboard shortcuts
 
-⌘7 toggles the left sidebar and ⌘9 the right; both have visible switches in the tab bar.
+⌘7 toggles the left sidebar, ⌘8 the Spike sidebar and ⌘9 the right; both have visible switches in the tab bar.
 ⌃3 collapses every folder in the file explorer, including nested folders and the selected
 note's ancestors, without closing the note. Folder expansion survives hiding the sidebar.
 ⌘N opens New note, ⌘, opens Settings, and ⇧⌘H, ⇧⌘L and ⇧⌘D open Home, Library and today's
@@ -614,7 +617,12 @@ queries in their original notes; no DataviewJS or Obsidian plugin code is execut
 ### Spike assistant and desktop companion
 
 The original Spike artwork is an 8×11 transparent sprite atlas, with its original frame timing.
-A small Spike button in the tab bar opens the conversation sidebar. At wide sizes the sidebar
+Spike is an optional per-vault plugin. Existing connected assistants and desktop companions stay
+enabled on upgrade; new vaults opt in from Settings → Plugins. Configure leads to Spike settings,
+including the local companion controls, without discarding other preference drafts. Disabling
+Spike first flushes the conversation and refuses to discard a failed save, then removes its
+sidebar, companion and listeners while retaining its settings and history.
+A small Spike button in the tab bar or ⌘8 opens and closes the conversation sidebar. At wide sizes the sidebar
 gets its own 400px column; on smaller windows it overlays the right edge. Messages have clear
 speaker labels, readable Markdown, source links and optional read-aloud controls. Action cards
 sit beside the turn that produced them, with a destination, a preview, and a confirmed result.
@@ -635,13 +643,18 @@ retry. Spoken replies are played in complete bounded chunks and stop immediately
 Subscription voice uses the Speech framework with on-device recognition required, and the macOS
 system voice for replies. It asks for Speech Recognition permission only when transcribing a
 user recording. Unsupported languages, denied permission and cancellation leave typed chat available.
+Dictation can independently use on-device recognition, OpenAI or OpenRouter. API dictation has
+an editable transcription-model identifier and a Keychain credential; OpenRouter's key is separate
+from OpenAI's. Only an explicit voice send uploads a recording to the selected provider. There
+is no fallback between providers. Existing assistant connections retain their prior speech route.
+Voice settings can be saved without connecting the conversation provider.
 
 The desktop companion is optional and works even before connecting an AI account. Its transparent
 window stays above ordinary apps and joins workspaces without taking keyboard focus. Dragging
-moves Spike; Talk returns to the main conversation, and the small toolbar pauses motion or hides
+moves Spike; clicking him or Talk opens a compact prompt pill, and the small toolbar pauses motion or hides
 him. `prefers-reduced-motion` always wins. Working, review and error states use the corresponding
 original animations, with short generic labels that expose no note content on the desktop.
-Closing the main window while the companion is enabled saves and hides it; explicit Quit exits
+Closing the main window while the Spike plugin is enabled saves and hides it; explicit Quit exits
 the app. The main controller remains the sole owner of agent actions.
 
 Personal context comes from the chosen profile, relevant note excerpts and bounded searches of
@@ -671,3 +684,26 @@ and library setup open from the relevant panel without discarding other preferen
 Shared display context carries validated values; modules read only their own choices. Home,
 Library, Calendar, Graph, Habits, Quests and Statistics have independent rendering recovery while
 workspace navigation remains available. Ordinary note drafts live outside these optional screens.
+
+Spike's atlas wakes only at its original frame boundaries and stops while the page is hidden.
+The tab-bar mark is still. Typing in the composer retains the rendered Markdown of earlier
+messages. Vault link indexes reuse normalized filename and folder-suffix lookups, including
+inside epiBase, with the same duplicate-name, explicit-path and Unicode resolution rules.
+
+
+### Spike quick prompt
+
+Clicking the desktop companion opens a small rounded prompt with a quiet status, text field,
+Speak and Send controls. Dragging never opens it. The global shortcuts are ⇧⌘Space for typing
+and ⌥⇧⌘Space for dictation; a second dictation shortcut sends the recording. They are registered
+only while the Spike plugin is enabled. A shortcut-registration failure reports a local error, while clicking
+Spike remains available. The regular ⌘8 sidebar command stays local to Epizen.
+
+The prompt opens on the cursor's display and current workspace without bringing the main app
+forward. Preview/test windows retain the Desktop 2 restriction. Escape or the close control saves
+the draft and stops recording; a failed save keeps the pill open with its text. Its per-vault
+app-owned draft survives hiding and restarting. A submitted prompt retains a stable identity until
+the main conversation has saved it, so retrying a handoff cannot repeat a request or note action.
+Unsent sidebar drafts remain separate. Proposed changes still require the normal review unless
+the user enabled automatic actions; the pill links directly to the conversation for review.
+Only the main conversation executes tools. The pill has scoped dictation and capture commands.

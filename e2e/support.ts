@@ -297,10 +297,29 @@ export async function closeTool(name: string) {
   await $(`[data-testid="${name}-menu"]`).waitForExist({ reverse: true });
 }
 
-/** Turns one of the library's filters on or off from Filter (a kind, a genre, or Clear), leaving the menu open. */
+/** Turns a quick library filter on or off, leaving its menu open. */
 export async function filterBy(selector: string) {
   await openTool('library-filter');
   await $(selector).click();
+}
+
+/** Adds one of the library's filters from "+ Filter" (kinds, genres, rating, released, cover); its pill opens to be set. */
+export async function addFilter(name: string) {
+  await openTool('filter-add');
+  await $(`[data-testid="filter-add-item"][data-filter="${name}"]`).click();
+  await $(`[data-testid="filter-${name}-menu"]`).waitForDisplayed();
+}
+
+/** Picks a choice in a filter's pill (opening it unless it is open), as a kind, a genre or a rating. */
+export async function pickFilter(name: string, selector: string) {
+  await openTool(`filter-${name}`);
+  await $(selector).click();
+}
+
+/** Takes a filter away with its pill's ×. */
+export async function removeFilter(name: string) {
+  await $(`[data-testid="filter-remove"][data-filter="${name}"]`).click();
+  await $(`[data-testid="filter-pill"][data-filter="${name}"]`).waitForExist({ reverse: true });
 }
 
 /** Shows the library as covers or as a list, from Covers or List, unless it is shown so already. */

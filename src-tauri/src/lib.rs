@@ -14,6 +14,7 @@ mod menu;
 mod net;
 mod photos;
 mod pet;
+mod prompt;
 mod settings;
 mod tray;
 mod vault;
@@ -434,7 +435,7 @@ fn guard_close(closing: State<'_, Closing>, on: bool) {
 
 #[tauri::command]
 fn close_now(app: tauri::AppHandle, closing: State<'_, Closing>) {
-    if app.state::<pet::Pet>().enabled() && !closing.quit_requested.load(Ordering::SeqCst) {
+    if (app.state::<pet::Pet>().enabled() || app.state::<prompt::Prompt>().enabled()) && !closing.quit_requested.load(Ordering::SeqCst) {
         if let Some(main) = app.get_webview_window(tray::MAIN) { let _ = main.hide(); }
         let _ = app.emit_to(tray::MAIN, "epizen://main-hidden", ());
         return;
@@ -450,6 +451,7 @@ pub fn run() {
         .manage(Closing::default())
         .manage(assistant::Assistant::default())
         .manage(pet::Pet::default())
+        .manage(prompt::Prompt::default())
         .manage(calendars())
         .manage(Net::new().expect("couldn't set up the lookups' HTTP client"))
         .manage(tray::Tray::default())
@@ -466,10 +468,10 @@ pub fn run() {
                 tray::hide(window.app_handle());
             }
             // The panel's window goes with the main one, so closing the main window still quits.
-            WindowEvent::CloseRequested { api, .. } if window.label() == tray::MAIN && window.state::<pet::Pet>().enabled() => {
+            WindowEvent::CloseRequested { api, .. } if window.label() == tray::MAIN && (window.state::<pet::Pet>().enabled() || window.state::<prompt::Prompt>().enabled()) => {
                 api.prevent_close(); let _ = window.hide(); let _ = window.emit("epizen://main-hidden", ());
             }
-            WindowEvent::Destroyed if window.label() == tray::MAIN => { pet::close(window.app_handle()); tray::close(window.app_handle()); },
+            WindowEvent::Destroyed if window.label() == tray::MAIN => { pet::close(window.app_handle()); prompt::close(window.app_handle()); tray::close(window.app_handle()); },
             _ => {}
         })
         .setup(|app| {
@@ -486,15 +488,20 @@ pub fn run() {
             );
             app.manage(RwLock::new(state));
             app.manage(settings);
+            prompt::install(app.handle())?;
             // The menu bar item is a convenience: without it the app still runs.
             if let Err(err) = tray::install(app.handle()) {
                 eprintln!("Epizen couldn't put its item in the menu bar: {err}");
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler({
+            let dispatch: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
             pet::pet_enable, pet::pet_publish, pet::pet_state, pet::pet_position, pet::pet_move,
             pet::pet_open_main, pet::pet_hide, pet::pet_motion,
+            prompt::prompt_enable, prompt::prompt_publish, prompt::prompt_state, prompt::prompt_save,
+            prompt::prompt_submit, prompt::prompt_finish, prompt::prompt_consumed, prompt::prompt_flush, prompt::prompt_flushed, prompt::prompt_open, prompt::prompt_hide, prompt::prompt_open_main,
+            assistant::assistant_has_message,
             assistant::assistant_connection,
             assistant::assistant_cancel,
             assistant::assistant_open_url,
@@ -510,6 +517,7 @@ pub fn run() {
             assistant::assistant_set_key,
             assistant::assistant_respond,
             assistant::assistant_transcribe,
+            assistant::voice::voice_connection, assistant::voice::voice_set_key,
             assistant::assistant_speak,
             vault_status,
             pick_vault,
@@ -552,7 +560,14 @@ pub fn run() {
             tray::tray_open_main,
             tray::tray_hide,
             tray::tray_quit
-        ]);
+            ];
+            move |invoke: tauri::ipc::Invoke<tauri::Wry>| {
+                if !prompt::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
+                    invoke.resolver.reject("This companion window cannot access workspace commands.");
+                    true
+                } else { dispatch(invoke) }
+            }
+        });
 
     // ⌘W closes a tab (src/lib/tabs.ts), not the window.
     #[cfg(target_os = "macos")]

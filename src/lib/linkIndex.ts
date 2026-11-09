@@ -52,7 +52,8 @@ export function buildLinkIndex(notes: NoteText[], files: VaultFile[]): LinkIndex
       if (file?.kind !== 'note' || file.path === path || targets.has(file.path)) continue;
       targets.add(file.path);
       const context = plainLine(originalLines[line] ?? '').slice(0, 160);
-      backlinks.set(file.path, [...(backlinks.get(file.path) ?? []), { from: path, context }]);
+      const incoming = backlinks.get(file.path);
+      if (incoming) incoming.push({ from: path, context }); else backlinks.set(file.path, [{ from: path, context }]);
     }
     outgoing.set(path, [...targets]);
   }

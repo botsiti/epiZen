@@ -38,12 +38,14 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, String> {
     if let Some(window) = app.get_webview_window(LABEL) { return Ok(window); }
     // Agent previews and E2E must stay on Desktop 2 instead of covering the user's Space.
     let all_workspaces = !cfg!(feature = "e2e") && std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_none();
-    let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("pet.html".into()))
+    let mut builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("pet.html".into()))
         .title("Spike · Epizen").inner_size(WIDTH, HEIGHT).resizable(false)
         .maximizable(false).minimizable(false).closable(false).decorations(false)
         .transparent(true).shadow(false).always_on_top(true).skip_taskbar(true)
         .visible_on_all_workspaces(all_workspaces).accept_first_mouse(true).focused(false)
-        .visible(false).build().map_err(|error| error.to_string())?;
+        .visible(false);
+    if !all_workspaces { builder = builder.parent(&app.get_webview_window("main").ok_or("The workspace is unavailable.")?).map_err(|error| error.to_string())?; }
+    let window = builder.build().map_err(|error| error.to_string())?;
     #[cfg(target_os = "macos")]
     {
         let panel = window.clone();
@@ -73,7 +75,8 @@ fn place(app: &AppHandle, window: &WebviewWindow) -> Result<(), String> {
     let monitors = main.available_monitors().map_err(|error| error.to_string())?;
     let settings = app.state::<crate::Settings>().load();
     let saved = settings.get("desktopPetPosition");
-    if let Some((x, y)) = saved.and_then(|value| Some((i32::try_from(value["x"].as_i64()?).ok()?, i32::try_from(value["y"].as_i64()?).ok()?)))
+    if !cfg!(feature = "e2e") && std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_none()
+        && let Some((x, y)) = saved.and_then(|value| Some((i32::try_from(value["x"].as_i64()?).ok()?, i32::try_from(value["y"].as_i64()?).ok()?)))
         && monitors.iter().any(|monitor| { let area = monitor.work_area(); within((x, y), (area.position.x, area.position.y, area.size.width, area.size.height), ((WIDTH * monitor.scale_factor()).round() as i32, (HEIGHT * monitor.scale_factor()).round() as i32)) }) {
             return window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string());
     }
@@ -138,7 +141,7 @@ pub fn pet_open_main(app: AppHandle, window: WebviewWindow) -> Result<(), String
     if let Some(main) = app.get_webview_window("main") {
         main.unminimize().map_err(|error| error.to_string())?;
         main.show().map_err(|error| error.to_string())?;
-        if !cfg!(feature = "e2e") { main.set_focus().map_err(|error| error.to_string())?; }
+        if !cfg!(feature = "e2e") && std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_none() { main.set_focus().map_err(|error| error.to_string())?; }
         let root = app.state::<Pet>().owner.lock().unwrap_or_else(|p| p.into_inner()).clone();
         app.emit_to("main", COMMAND, serde_json::json!({ "type": "open", "root": root })).map_err(|error| error.to_string())?;
     }

@@ -1,9 +1,9 @@
 .app.has-assistant { grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 400px; }
 .app.without-left.has-assistant { grid-template-columns: minmax(0, 1fr) 400px; }
 .assistant-sidebar { display: flex; flex-direction: column; min-width: 0; height: 100%; overflow: hidden; border-left: 1px solid var(--border); background: var(--bg-sidebar); color: var(--text); font-size: 13px; }
-.assistant-sidebar button { font: inherit; cursor: pointer; color: var(--text-muted); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; }
-.assistant-sidebar button:hover { color: var(--text); background: var(--surface); }
-.assistant-sidebar button:disabled { opacity: .45; cursor: default; }
+.assistant-sidebar button, .assistant-preferences button { font: inherit; cursor: pointer; color: var(--text-muted); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; }
+.assistant-sidebar button:hover, .assistant-preferences button:hover { color: var(--text); background: var(--surface); }
+.assistant-sidebar button:disabled, .assistant-preferences button:disabled { opacity: .45; cursor: default; }
 .assistant-sidebar button:focus-visible, .assistant-launcher:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .assistant-header { display: flex; gap: 8px; align-items: center; min-height: 64px; padding: 8px 16px 8px 8px; border-bottom: 1px solid var(--border); flex: none; }
 .assistant-header > div { flex: 1; min-width: 0; display: grid; gap: 3px; }
@@ -80,3 +80,11 @@
 .assistant-companion-settings .assistant-hint { margin: 0; }
 
 .assistant-notice { color: var(--text-muted); font-size: 12px; line-height: 1.6; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
+
+.spike-configuration { max-width: 680px; }
+.spike-configuration .assistant-preferences { padding: 0; overflow: visible; }
+.spike-configuration .assistant-preferences h2 { margin-top: 16px; }
+
+.assistant-voice-preferences { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding-block: 16px; }
+.assistant-voice-preferences h3 { margin: 0 0 16px; font-size: 14px; font-weight: 600; }
+.assistant-voice-preferences > .assistant-hint { margin: 0 0 16px; }
