@@ -33,6 +33,7 @@ function copyDemoVault() {
   addBaseFixtures(join(dirname(copy), 'bases-vault'));
   cpSync(DEMO_VAULT, join(dirname(copy), 'base-files-vault'), { recursive: true });
   cpSync(DEMO_VAULT, join(dirname(copy), 'assistant-vault'), { recursive: true });
+  cpSync(DEMO_VAULT, join(dirname(copy), 'filters-vault'), { recursive: true });
   addBaseFixtures(join(dirname(copy), 'base-files-vault'));
   cpSync(DEMO_VAULT, join(dirname(copy), 'plugins-vault'), { recursive: true });
   const journal = join(dirname(copy), 'plugins-vault', 'Journal');
@@ -49,7 +50,7 @@ function copyDemoVault() {
   // Vault::open canonicalizes paths (on macOS, /var resolves to /private/var).
   // Settings must use the same roots or the test vaults appear to need first-run setup.
   const canonicalParent = realpathSync(dirname(copy));
-  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC, legacyPeriodicVault: join(canonicalParent, 'demo-vault'), vaults: { [join(canonicalParent, 'preferences-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'bases-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'base-files-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'assistant-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'big-vault')]: { complete: true, periodic: DEFAULT_PERIODIC } } }));
+  writeFileSync(join(config, 'settings.json'), JSON.stringify({ periodic: PERIODIC, legacyPeriodicVault: join(canonicalParent, 'demo-vault'), vaults: { [join(canonicalParent, 'preferences-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'bases-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'base-files-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'assistant-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'filters-vault')]: { complete: true, periodic: PERIODIC }, [join(canonicalParent, 'big-vault')]: { complete: true, periodic: DEFAULT_PERIODIC } } }));
   // A generated vault for the graph's 2,000-note check, beside the copy so it goes with it.
   makeBigVault(join(dirname(copy), 'big-vault'));
   mkdirSync(join(dirname(copy), 'starter-vault'));
@@ -81,6 +82,7 @@ export const config: WebdriverIO.Config = {
     launch(4452, './specs/base-files.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'base-files-vault')]),
     launch(4453, './specs/plugins.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'plugins-vault')]),
     launch(4454, './specs/assistant.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'assistant-vault')]),
+    launch(4455, './specs/library-filters.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'filters-vault')]),
     launch(4449, './specs/setup.e2e.ts', ['--vault', join(dirname(vaultCopy()), 'starter-vault')]),
   ],
   services: [['@wdio/tauri-service', { driverProvider: 'embedded' }]],

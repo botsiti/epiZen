@@ -318,15 +318,18 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   Each opens a small menu under it in the pages' glass, radius 14px: a check in accent by what is
   chosen, hints faint at the right. Sort: Recent (latest first), Rating (best first), Title (A to
   Z), the maker (A to Z) and Year (newest first). Filter: on All the kinds, each with its mark and
-  count, several at once and none on for all; the twelve most used genres with their counts, one at
+  count, several at once and none on for all; the twelve most used genres with their counts, several at
   a time; "Clear the filters" in accent. Filter lit (its mark in accent, a count on a sage pill)
   while any is on. Properties: the list's columns, ticked to show, the title always. Search: the
   word opens a field in its place (title, maker or genre); Escape empties and closes it. The menus
   take the focus, ↑ ↓ move in them, Escape or a click outside closes them. Covers or List, and the
-  columns, are the app's (its settings), not the vault's; the sort and the filters are kept per tab
-  for the session, and the search until the covers are shown.
-- **Covers**: the latest fifteen listened to, watched or finished of what the tab and the filters
-  show, and under them "See all 533 in the list →" in accent. On All each card says its kind, faint,
+  columns, are the app's (its settings), not the vault's; the sort is kept per tab for the session,
+  and the search until the covers are shown. A row of filter pills exposes the period, recorded years,
+  multiple genres, rating ranges or unrated items, release years, kinds and cover availability. New
+  vaults start with This year; existing vaults retain the previous all-time view. Filters persist in
+  settings, and a failed save leaves the selection visible with an explicit retry.
+- **Covers**: fifteen listened to, watched or finished entries in the chosen sort order, then
+  "Show 15 more" or "See all 533 in the list →". On All each card says its kind, faint,
   before the maker, and posters and square covers stand on one line with their titles level. The
   covers in a grid, each with its rating on a small glass pill in the top-right corner (a faint dash
   when not rated yet), the title, and the maker and year faint. Mixed views, including Home, add a

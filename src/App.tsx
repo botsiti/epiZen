@@ -27,6 +27,7 @@ import { QuestPage, StatisticsPage } from './components/insights/Insights';
 import { Summaries } from './components/home/Summaries';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LibraryView } from './components/library/LibraryView';
+import { useLibraryFilters } from './components/library/useLibraryFilters';
 import type { PeriodicSpec } from './components/periodic/types';
 import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { VaultSetup } from './components/workspace/VaultSetup';
@@ -79,7 +80,8 @@ import { buildGraph } from './lib/graph';
 import { parseBirthDate } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
 import { renameLinkEdits } from './lib/rename';
-import { collectLibrary, genreCounts, hiddenColumns, isLibraryLayout, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
+import { collectLibrary, DEFAULT_FILTERS, genreCounts, hiddenColumns, isLibraryLayout, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
+import type { LibraryFilters } from './lib/library';
 import { collectMedia } from './lib/media';
 import { podcastSettings } from './lib/podcasts';
 import { noteFolder, noteTitle, resolveLink } from './lib/links';
@@ -217,6 +219,8 @@ export function App() {
   const tree = useMemo(() => buildTree(files, folders), [files, folders]);
   const notes = useMemo(() => files.filter((file) => file.kind === 'note').map((file) => file.path.replace(/\.md$/i, '')), [files]);
   const preferences = useMemo(() => vaultPreferences(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
+  const persistLibraryFilters = useCallback((filters: LibraryFilters) => updateSettings({ libraryFilters: filters }).then(() => undefined), []);
+  const savedLibraryFilters = useLibraryFilters(settings.libraryFilters, status?.state === 'open', preferences.complete, persistLibraryFilters);
   const periodic = preferences.periodic;
   const recognition = preferences.recognition;
   const pluginDisplay = useMemo(() => savedPluginDisplays(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
@@ -574,15 +578,15 @@ export function App() {
       if (next.plugins && plugins.timer && !effectivePlugins(next.plugins).timer && timerBusy.current) throw new Error('Stop the focus timer and resolve its pending saves before disabling this plugin.');
       const patch = vaultPreferencesPatch(settings, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition, next.fileDefaults);
       const pluginPatch = next.plugins ? pluginPreferencesPatch({ ...settings, ...patch }, status.root, next.plugins, next.homeSections ?? homeSections, next.features.checkIns, next.pluginDisplay) : {};
-      setSettings(await updateSettings({ ...patch, ...pluginPatch, librarySources: next.sources, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
+      setSettings(await updateSettings({ ...patch, ...pluginPatch, ...(!preferences.complete && settings.libraryFilters === undefined ? { libraryFilters: DEFAULT_FILTERS } : {}), librarySources: next.sources, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
     },
-    [settings, status, periodic, recognition, homeSections, plugins.timer],
+    [settings, status, periodic, recognition, homeSections, plugins.timer, preferences.complete],
   );
   const finishSetup = useCallback(async (next: PeriodicSettings, reading: PeriodicRecognition, create = false) => {
     if (status?.state !== 'open') throw new Error('No vault is open.');
     if (create) await createStarterVault(starterNotes(now), await readAllNotes(), createNote);
     const patch = vaultPreferencesPatch(settings, status.root, preferences.complete ? rememberPeriodic(periodic, next) : next, reading);
-    setSettings(await updateSettings({ ...patch, ...pluginPreferencesPatch({ ...settings, ...patch }, status.root, configuredPlugins, homeSections, features.checkIns) }));
+    setSettings(await updateSettings({ ...patch, ...pluginPreferencesPatch({ ...settings, ...patch }, status.root, configuredPlugins, homeSections, features.checkIns), ...(!preferences.complete && settings.libraryFilters === undefined ? { libraryFilters: DEFAULT_FILTERS } : {}) }));
     await refresh();
     setSetup(undefined);
   }, [status, settings, periodic, preferences.complete, now, refresh, configuredPlugins, homeSections, features.checkIns]);
@@ -991,6 +995,10 @@ export function App() {
                 onLayout={setLibraryLayout}
                 hidden={libraryHidden}
                 onHidden={setLibraryHidden}
+                filters={savedLibraryFilters.filters}
+                onFilters={savedLibraryFilters.change}
+                filterError={savedLibraryFilters.error}
+                onRetryFilters={savedLibraryFilters.retry}
                 today={now}
                 onOpenNote={openNote}
                 onCreated={mediaCreated}

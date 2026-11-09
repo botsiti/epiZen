@@ -6,6 +6,11 @@ import { join } from 'node:path';
 import { parseEpisodes, parseSearch } from './lookup';
 import {
   allEntries,
+  datedYears,
+  DEFAULT_FILTERS,
+  filterEntries,
+  inPeriod,
+  isDefaultFilters,
   bodyWithoutCover,
   calendarStart,
   collectLibrary,
@@ -31,13 +36,18 @@ import {
   monthCounts,
   monthCovers,
   noteFileName,
+  readFilters,
+  readSort,
+  releaseDecades,
   notePath,
   searchEntries,
   sortEntries,
   toggleKind,
-  withGenre,
   yamlText,
+  type LibraryFilters,
+  type LibraryTab,
   type MediaDraft,
+  type MediaEntry,
 } from './library';
 import { linkResolver } from './links';
 
@@ -159,8 +169,18 @@ describe('collectLibrary', () => {
     expect(libraryStats(library.get('book') ?? [], new Date(2026, 9, 27)).thisYear).toBe(0);
   });
 
-  it('sorts by the latest, the best or the title, and filters by genre', () => {
+  it('sorts by the latest, the best, the title, the maker or the year, either way round', () => {
     const all = [...(library.get('album') ?? []), ...(library.get('film') ?? [])];
+    const titles = (sorted: MediaEntry[]) => sorted.map((entry) => entry.title);
+    // The other way round; what has nothing to sort by (unrated, no maker) still goes last.
+    expect(titles(sortEntries(all, 'recent', true))).toEqual(['Glasshouse Weather', 'Election', 'Dog Man Star']);
+    expect(titles(sortEntries(all, 'rating', true))).toEqual(['Election', 'Glasshouse Weather', 'Dog Man Star']);
+    expect(titles(sortEntries(all, 'title', true))).toEqual(['Glasshouse Weather', 'Election', 'Dog Man Star']);
+    expect(titles(sortEntries(all, 'maker', true))).toEqual(['Dog Man Star', 'Glasshouse Weather', 'Election']);
+    expect(sortEntries(all, 'year', true).map((entry) => entry.year)).toEqual(['1994', '1999', '2021']);
+    expect(readSort({ by: 'rating', reverse: true })).toEqual({ by: 'rating', reverse: true });
+    expect(readSort({ by: 'nonsense', reverse: 'yes' })).toEqual({ by: 'recent' });
+    expect(readSort(undefined)).toEqual({ by: 'recent' });
     expect(sortEntries(all, 'recent').map((entry) => entry.title)).toEqual(['Dog Man Star', 'Election', 'Glasshouse Weather']);
     expect(sortEntries(all, 'rating').map((entry) => entry.title)).toEqual(['Glasshouse Weather', 'Election', 'Dog Man Star']);
     expect(sortEntries(all, 'title').map((entry) => entry.title)).toEqual(['Dog Man Star', 'Election', 'Glasshouse Weather']);
@@ -178,8 +198,58 @@ describe('collectLibrary', () => {
     const cyrillic = { ...all[0]!, title: 'Пепел и йод', maker: undefined, genres: [] };
     expect(searchEntries([cyrillic], 'йод'.normalize('NFD'))).toHaveLength(1);
     expect(genreCounts(all)[0]).toEqual(['alternative rock', 1]);
-    expect(withGenre(all, 'drama').map((entry) => entry.title)).toEqual(['Election']);
-    expect(withGenre(all)).toHaveLength(3);
+  });
+
+  it('filters by when, release year, rating, kind, genre and cover, after Notion', () => {
+    const today = new Date(2026, 9, 28);
+    const every = allEntries(library);
+    const titles = (filters: Partial<LibraryFilters>, tab: LibraryTab = 'all', except?: 'kinds' | 'genres') =>
+      filterEntries(every, { period: 'all', ...filters }, tab, today, except).map((entry) => entry.title).sort();
+    // When: this year by default; the book was finished in 2025.
+    expect(titles(DEFAULT_FILTERS)).toEqual(['Dog Man Star', 'Election', 'Glasshouse Weather', 'Jensen Huang']);
+    expect(titles({ period: 2025 })).toEqual(['Life 3.0']);
+    expect(titles({ period: 'last-12' })).toEqual(['Dog Man Star', 'Election', 'Glasshouse Weather', 'Jensen Huang']);
+    expect(titles({ period: 'all' })).toHaveLength(5);
+    expect(inPeriod({ ...every[0]!, date: undefined }, 'this-year', today)).toBe(false);
+    expect(inPeriod({ ...every[0]!, date: undefined }, 'all', today)).toBe(true);
+    expect(inPeriod({ ...every[0]!, date: '2025-10-29' }, 'last-12', today)).toBe(true);
+    expect(inPeriod({ ...every[0]!, date: '2025-10-28' }, 'last-12', today)).toBe(false);
+    // Release year, both ends in; a podcast without a year is out once it is set.
+    expect(titles({ released: { from: 1990, to: 1999 } })).toEqual(['Dog Man Star', 'Election']);
+    expect(titles({ released: { from: 2000 } })).toEqual(['Glasshouse Weather', 'Life 3.0']);
+    expect(titles({ released: {} })).toHaveLength(5);
+    // Rating: a range, or not rated yet.
+    expect(titles({ rating: { min: 80 } })).toEqual(['Glasshouse Weather', 'Life 3.0']);
+    expect(titles({ rating: { min: 60, max: 79 } })).toEqual(['Jensen Huang']);
+    expect(titles({ rating: 'unrated' })).toEqual(['Dog Man Star']);
+    // Kinds on All only; genres, any of several, each tab's own.
+    expect(titles({ kinds: ['film', 'book'] })).toEqual(['Election', 'Life 3.0']);
+    expect(filterEntries(library.get('album') ?? [], { period: 'all', kinds: ['film'] }, 'album', today)).toHaveLength(2);
+    expect(titles({ kinds: ['film'] }, 'all', 'kinds')).toHaveLength(5);
+    expect(titles({ genres: { all: ['drama', 'art pop'] } })).toEqual(['Election', 'Glasshouse Weather']);
+    expect(titles({ genres: { album: ['drama'] } })).toHaveLength(5);
+    expect(titles({ genres: { all: ['drama'] } }, 'all', 'genres')).toHaveLength(5);
+    // Cover: with one or without.
+    expect(titles({ cover: 'with' })).toEqual(['Glasshouse Weather']);
+    expect(titles({ cover: 'without' })).toHaveLength(4);
+    expect(titles({ cover: 'any' })).toHaveLength(5);
+    // The choices: the years with something in them, the decades things came out in.
+    expect(datedYears(every)).toEqual([2026, 2025]);
+    expect(releaseDecades(every)).toEqual([2020, 2010, 1990]);
+  });
+
+  it('reads the filters kept in the settings, leaving out what is not one of them', () => {
+    expect(readFilters(undefined)).toEqual(DEFAULT_FILTERS);
+    expect(readFilters('all')).toEqual(DEFAULT_FILTERS);
+    expect(readFilters({ period: 'all' })).toEqual({ period: 'all' });
+    expect(readFilters({ period: 2025.5 })).toEqual({ period: 'this-year' });
+    expect(
+      readFilters({ period: 2025, rating: { min: 70, max: 300 }, released: { from: 1990, to: 'x' }, kinds: ['film', 'video', 'x'], genres: { album: ['ambient', 3], nope: ['b'] }, cover: 'with', other: 1 }),
+    ).toEqual({ period: 2025, rating: { min: 70 }, released: { from: 1990 }, kinds: ['film'], genres: { album: ['ambient'] }, cover: 'with' });
+    expect(readFilters({ period: 'last-12', rating: 'unrated', cover: 'maybe' })).toEqual({ period: 'last-12', rating: 'unrated' });
+    expect(isDefaultFilters(DEFAULT_FILTERS)).toBe(true);
+    expect(isDefaultFilters({ period: 'this-year', cover: 'any' })).toBe(false);
+    expect(isDefaultFilters({ period: 'all' })).toBe(false);
   });
 
   it('lays a month out by day for the calendar of covers, and opens on the latest month', () => {
