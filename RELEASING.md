@@ -50,5 +50,7 @@ packaging check, pass the app path followed by `--output` and a fresh project-lo
 `assets/branding/epizen.png` is the supplied master logo. The macOS icon set, sidebar icon, README
 and repository social preview all derive from it. Keep the functional menu-bar timer dial.
 
-Keep the previous installed app when replacing it. Roll back to a previous GitHub Release or
+Keep the previous installed app until its replacement is verified. Remove that local backup
+after verification when the user requests cleanup; published releases remain available for rollback.
+Roll back to a previous GitHub Release or
 revert the feature PR and build a new patch release. Never overwrite user notes during rollback.

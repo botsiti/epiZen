@@ -22,6 +22,9 @@ here; keep workflow rules here so the two cannot drift.
   or showing windows; if it cannot be verified, continue non-UI work and report native checks
   as deferred. Local E2E startup enforces this in `e2e/desktop.ts`. Production smoke previews
   must set `EPIZEN_PREVIEW_DESKTOP_ONLY=1` so Spike also stays on that desktop.
+  If the installed desktop manager is available, assign only the task's preview app to Desktop 2
+  without following that Space, then verify its window assignment and the unchanged active desktop.
+  Remove the task-specific assignment when the preview is cleaned up.
 - Notes remain ordinary Obsidian-compatible Markdown: frontmatter, wikilinks, embeds,
   callouts, tasks and inline fields. No database, sidecars, proprietary syntax or execution
   of Obsidian plugins. Preserve text outside the requested edit, including formatting.
@@ -237,7 +240,7 @@ Use the intended pushed branch in `--ref` if the work is not on `main`.
   For authorized feature delivery, open/update the PR, wait for CI, merge and reinstall when
   that is within the user's requested scope or standing authorization. Do not create extra
   approval steps for actions already authorized, or infer a release from a documentation task.
-- When shipping an executable, build the intended revision with `npm run tauri -- build`
+- When shipping an executable, build the intended revision with `npm run tauri -- build --bundles app`
   using the normal production configuration, then smoke-check the built app on a vault copy.
   Never distribute the `e2e` feature or WebDriver plugins. `npm run build` only builds the web
   bundle and is useful for frontend build changes; it does not validate the native package.
