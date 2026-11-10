@@ -88,7 +88,8 @@ fn request_command(binary: &Path, request: &AgentRequest, schema_path: &Path, sc
     let mut cmd = command(binary);
     // The web tool uses this execution host even when Code Mode itself is disabled.
     // Keep local writes sandboxed and non-interactive; approved writes belong to Epizen.
-    cmd.current_dir(scratch).args(["exec","--ignore-user-config","--ignore-rules","--ephemeral","--skip-git-repo-check","--sandbox","read-only","--json","--color","never","--output-schema"]).arg(schema_path).args(["--model",&request.model,"-c","approval_policy=\"never\"","-c","project_doc_max_bytes=0","-c","skills.include_instructions=false","-c","web_search=\"live\"","-c","model_reasoning_effort=\"low\"","--enable","code_mode_host"]);
+    cmd.args(["-c", &format!("model_reasoning_effort={:?}", request.effort)]);
+    cmd.current_dir(scratch).args(["exec","--ignore-user-config","--ignore-rules","--ephemeral","--skip-git-repo-check","--sandbox","read-only","--json","--color","never","--output-schema"]).arg(schema_path).args(["--model",&request.model,"-c","approval_policy=\"never\"","-c","project_doc_max_bytes=0","-c","skills.include_instructions=false","-c","web_search=\"live\"","--enable","code_mode_host"]);
     for feature in ["shell_tool","view_image","hooks","plugins","apps","multi_agent","multi_agent_v2","computer_use","browser_use","in_app_browser","skill_search","remote_plugin","image_generation","goals","code_mode"] { cmd.args(["--disable",feature]); }
     cmd.arg("-");
     cmd
@@ -109,7 +110,7 @@ pub async fn respond(request: &AgentRequest, id: &str, cancel: &Notify, runtime:
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn request() -> AgentRequest { AgentRequest { model:"test".into(), instructions:"Help".into(), input:vec![json!({"role":"user","content":"Create a note"})], tools:vec![json!({"type":"function","name":"create_note","parameters":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}})], provider:super::super::Provider::Codex } }
+    fn request() -> AgentRequest { AgentRequest { effort:"low".into(), model:"test".into(), instructions:"Help".into(), input:vec![json!({"role":"user","content":"Create a note"})], tools:vec![json!({"type":"function","name":"create_note","parameters":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}})], provider:super::super::Provider::Codex } }
     fn output(reply: Value) -> Vec<u8> { format!("{}\n{}\n",json!({"type":"item.completed","item":{"type":"agent_message","text":reply.to_string()}}),json!({"type":"turn.completed"})).into_bytes() }
     #[test] fn web_transport_retains_read_only_noninteractive_permissions() {
         let cmd = request_command(Path::new("/test/codex"), &request(), Path::new("/scratch/reply.json"), Path::new("/scratch"));
@@ -121,6 +122,14 @@ mod tests {
         assert!(has("-c", "approval_policy=\"never\""));
         for feature in ["shell_tool", "multi_agent", "multi_agent_v2", "plugins", "apps", "computer_use", "image_generation", "goals"] { assert!(has("--disable", feature), "{feature} must remain disabled"); }
         assert_eq!(cmd.as_std().get_current_dir(), Some(Path::new("/scratch")));
+    }
+    #[test] fn selected_effort_reaches_the_cli_and_api() {
+        let mut req = request(); req.effort = "high".into();
+        let cmd = request_command(Path::new("/test/codex"), &req, Path::new("/scratch/schema"), Path::new("/scratch"));
+        assert!(cmd.as_std().get_args().any(|arg| arg == "model_reasoning_effort=\"high\""));
+        let body: Value = serde_json::from_slice(&req.body().unwrap()).unwrap();
+        assert_eq!(body["reasoning"]["effort"], "high");
+        req.effort = "invalid".into(); assert!(req.body().is_err());
     }
     #[test] fn turns_proposed_actions_into_the_existing_review_contract() {
         let value=response(&output(json!({"text":"Prepared","calls":[{"name":"create_note","arguments":{"text":"Keep [[links]]"}}],"sources":[]})),&request(),"request").unwrap();

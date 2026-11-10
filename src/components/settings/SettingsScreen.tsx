@@ -30,6 +30,7 @@ export interface SettingsDraft {
   fileDefaults: FilePreferences;
 }
 interface Props {
+  appearance?: 'solid' | 'glass'; ambientMotion?: boolean;
   spikeSettings?: (onBack: () => void) => ReactNode;
   pluginDisplay?: PluginDisplays;
   initialSection?: Section;
@@ -57,7 +58,7 @@ const SECTIONS = [
 ] as const;
 type Section = typeof SECTIONS[number]['id'];
 
-export function SettingsScreen({ spikeSettings, periodic, birthDate, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
+export function SettingsScreen({ appearance = 'solid', ambientMotion = false, spikeSettings, periodic, birthDate, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
   const id = useId();
   const heading = useRef<HTMLElement>(null);
   const [section, setSection] = useState<Section>(initialSection ?? (plugins ? 'plugins' : 'periodic'));
@@ -98,7 +99,7 @@ export function SettingsScreen({ spikeSettings, periodic, birthDate, podcasts, f
   const shown = SECTIONS.filter((item) => `${item.title} ${item.words}`.toLowerCase().includes(query.trim().toLowerCase()));
   const period = section === 'periodic' ? selectedPeriod : undefined;
   const setReading = (next: PeriodicRecognition) => { setRecognitionDraft(next); changed(); };
-  return <section className="preferences" data-testid="settings">
+  return <section className={`preferences${appearance === 'glass' ? ' has-glass' : ''}${ambientMotion ? ' has-ambient-motion' : ''}`} data-testid="settings">
     <aside className="preferences-nav">
       <h1>Settings</h1>
       <input type="search" aria-label="Search settings" placeholder="Search settings…" value={query} onChange={(event) => setQuery(event.target.value)} />

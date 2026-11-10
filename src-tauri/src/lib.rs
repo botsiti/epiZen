@@ -15,6 +15,7 @@ mod net;
 mod photos;
 mod pet;
 mod prompt;
+mod companion_display;
 mod rewards;
 mod settings;
 mod tray;

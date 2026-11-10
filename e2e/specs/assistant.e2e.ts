@@ -201,11 +201,15 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.execute(async () => { await (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke('prompt_open', { dictate: false }); });
     await browser.waitUntil(async () => (await browser.getWindowHandles()).includes('spike-prompt'));
     await browser.switchToWindow('spike-prompt');
+    await $('[aria-label="Quick message to Spike"]').waitForExist();
+    await browser.execute(() => { document.documentElement.dataset.motion = 'off'; });
     await $('[aria-label="Quick message to Spike"]').setValue('Remember that I enjoy quiet walks.');
     await $('[aria-label="Close quick prompt"]').click();
     await browser.switchToWindow('main');
     await browser.execute(async () => { await (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke('prompt_open', { dictate: false }); });
     await browser.switchToWindow('spike-prompt');
+    await $('[aria-label="Quick message to Spike"]').waitForExist();
+    await browser.execute(() => { document.documentElement.dataset.motion = 'off'; });
     await expect($('[aria-label="Quick message to Spike"]')).toHaveValue('Remember that I enjoy quiet walks.');
     const forbidden = await browser.execute(async () => {
       try { await (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke('assistant_apply_note', { action: { id: 'forbidden', root: '/invalid', path: 'Never.md', before: null, after: 'Not allowed' } }); return false; }
@@ -231,6 +235,48 @@ describe('Spike conversations and second-brain actions', () => {
     await $('.assistant-action-buttons').$('button=Decline').waitForEnabled();
     await $('.assistant-action-buttons').$('button=Decline').click();
     await browser.waitUntil(async () => !(await $('[aria-label="Stop assistant"]').isExisting()));
+  });
+  it('records in the quick prompt and ignores a delayed close from a previous opening', async () => {
+    const before = snapshotVault(root);
+    const oldOpening = await browser.execute(async () => {
+      const api = (window as unknown as { __TAURI__: { core: { invoke: (command: string, args?: unknown) => Promise<{ opened: number }> } } }).__TAURI__.core;
+      const previous = await api.invoke('prompt_state');
+      await api.invoke('prompt_open', { dictate: false });
+      return previous.opened;
+    });
+    await browser.switchToWindow('spike-prompt');
+    await $('[aria-label="Quick message to Spike"]').waitForExist();
+    const visible = await browser.execute(async (opened) => {
+      document.documentElement.dataset.motion = 'off';
+      const api = (window as unknown as { __TAURI__: { core: { invoke: (command: string, args?: unknown) => Promise<{ visible: boolean }> } } }).__TAURI__.core;
+      await api.invoke('prompt_hide', { opened });
+      return (await api.invoke('prompt_state')).visible;
+    }, oldOpening);
+    expect(visible).toBe(true);
+    await browser.execute(() => {
+      class Recorder {
+        static isTypeSupported() { return true; }
+        state = 'inactive'; mimeType = 'audio/webm';
+        ondataavailable?: (event: { data: Blob }) => void; onstop?: () => void;
+        start() { this.state = 'recording'; }
+        stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['EPIZEN_VOICE_FIXTURE'], { type: this.mimeType }) }); this.onstop?.(); }
+      }
+      Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: Recorder });
+      Object.defineProperty(window, 'AudioContext', { configurable: true, value: undefined });
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: () => Promise.resolve({ getTracks: () => [{ stop: () => undefined }] }) } });
+    });
+    await $('[aria-label="Dictate to Spike"]').waitForEnabled();
+    await $('[aria-label="Dictate to Spike"]').click();
+    await expect($('.quick-recording')).toHaveText(expect.stringContaining('Listening'));
+    await screenshot('227-spike-quick-dictation');
+    await $('[aria-label="Send quick voice message"]').click();
+    await $('button=Review in conversation ↗').waitForDisplayed();
+    await $('button=Review in conversation ↗').click();
+    await browser.switchToWindow('main');
+    await $('.assistant-action-buttons').$('button=Decline').waitForEnabled();
+    await $('.assistant-action-buttons').$('button=Decline').click();
+    await browser.waitUntil(async () => !(await $('[aria-label="Stop assistant"]').isExisting()));
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
   });
   it('retains conversation history across reload and contains a provider failure', async () => {
     await browser.refresh(); await prepareWindow(); await $('[data-testid="open-assistant"]').click();
@@ -291,10 +337,12 @@ describe('Spike conversations and second-brain actions', () => {
     await expect($('[data-testid="desktop-pet"]')).toBeDisplayed();
     await $('[aria-label="Open quick prompt"]').click();
     await browser.switchToWindow('spike-prompt');
+    await $('[aria-label="Quick message to Spike"]').waitForExist();
+    await browser.execute(() => { document.documentElement.dataset.motion = 'off'; });
     await $('button=Open conversation ↗').click();
     await browser.switchToWindow('main');
     await expect($('[aria-label="Message Spike"]')).toHaveValue('Keep this unsent thought while Spike stays on my desktop.');
-    await browser.switchToWindow('spike'); await $('[aria-label="Hide Spike"]').click();
+    await browser.switchToWindow('spike'); await browser.switchToWindow('main'); await $('[aria-label="Assistant settings"]').click(); await $('.assistant-sidebar').$('button=Hide desktop Spike').click(); await browser.switchToWindow('spike');
     await browser.waitUntil(async () => !(await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { isVisible: () => Promise<boolean> } } } }).__TAURI__.window.getCurrentWindow().isVisible())));
     await browser.switchToWindow('main');
     await screenshot('221-spike-restored-draft');

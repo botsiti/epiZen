@@ -37,3 +37,15 @@ it('can disable Spike even when the selected provider is unavailable', async () 
   expect(assistantConnection).not.toHaveBeenCalled(); expect(setAssistantKey).not.toHaveBeenCalled();
   expect(onBack).toHaveBeenCalledOnce();
 });
+
+it('saves model and effort together and keeps appearance available without a connection', async () => {
+  const { user, onSave } = setup();
+  await user.selectOptions(screen.getByLabelText('Assistant model'), 'gpt-6-astra');
+  await user.selectOptions(screen.getByLabelText('Reasoning effort'), 'high');
+  await user.click(screen.getByRole('button', { name: 'Connect Spike' }));
+  expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-6-astra', effort: 'high' }));
+  vi.mocked(assistantConnection).mockRejectedValue(new Error('Offline'));
+  await user.selectOptions(screen.getByLabelText('Spike appearance'), 'glass');
+  await user.click(screen.getByRole('button', { name: 'Save appearance' }));
+  expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ appearance: 'glass', enabled: false }));
+});

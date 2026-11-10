@@ -12,7 +12,7 @@ vi.mock('./Spike', () => ({ Spike: () => null }));
 it('keeps earlier messages rendered while typing and updates speech controls when recording starts', () => {
   const setDraft = vi.fn();
   const controller = { setDraft } as unknown as AssistantController;
-  const voice: VoiceControls = { phase: 'idle', seconds: 0, canRetry: false, error: undefined, start: vi.fn(), stop: vi.fn(), pauseRecording: vi.fn(), cancel: vi.fn(), retry: vi.fn(), speak: vi.fn() };
+  const voice: VoiceControls = { level: 0, phase: 'idle', seconds: 0, canRetry: false, error: undefined, start: vi.fn(), stop: vi.fn(), pauseRecording: vi.fn(), cancel: vi.fn(), retry: vi.fn(), speak: vi.fn() };
   const snapshot: AssistantSnapshot = { thread: { ...newConversation('/copy'), messages: [{ id: '1', role: 'assistant', text: 'A long earlier reply.', created: '' }] }, loaded: true, configured: true, busy: false, switching: false, conversations: [] };
   const props = { controller, snapshot, voice, settings: { ...DEFAULT_ASSISTANT, enabled: true }, profileExists: false, onSaveSettings: vi.fn(), onOpenNote: vi.fn(), onClose: vi.fn() };
   const view = render(<AssistantPanel {...props} />);

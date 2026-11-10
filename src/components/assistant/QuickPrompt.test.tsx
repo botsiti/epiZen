@@ -102,3 +102,16 @@ it('retains typed text and allows retry after a rejected submission', async () =
   fireEvent.keyDown(input, { key: 'Escape' });
   await waitFor(() => expect(api.hideQuickPrompt).toHaveBeenCalledOnce());
 });
+it('scopes a delayed close to the opening it belongs to', async () => {
+  let finish!: (value: api.QuickDocument) => void;
+  vi.mocked(api.saveQuickDraft).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+  render(<QuickPrompt />); const input = await screen.findByLabelText('Quick message to Spike');
+  fireEvent.change(input, { target: { value: 'Preserve across reopen' } });
+  await userEvent.click(screen.getByLabelText('Close quick prompt'));
+  act(() => update(state({ opened: 2 })));
+  act(() => { finish({ revision: 1, draft: 'Preserve across reopen', pending: null }); });
+  await waitFor(() => expect(api.hideQuickPrompt).toHaveBeenCalledWith(1));
+  expect(api.hideQuickPrompt).toHaveBeenCalledWith(1);
+  expect(input).not.toHaveFocus();
+  expect(screen.getByLabelText('Quick message to Spike')).toHaveValue('Preserve across reopen');
+});

@@ -2,6 +2,7 @@
 use std::{collections::HashSet, sync::Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use crate::assistant::voice::{VoiceProvider, VoiceSettings};
 
@@ -11,7 +12,7 @@ pub const COMMAND: &str = "epizen://prompt-command";
 pub const TEXT_SHORTCUT: &str = "Command+Shift+Space";
 pub const VOICE_SHORTCUT: &str = "Command+Alt+Shift+Space";
 const WIDTH: f64 = 580.0;
-const HEIGHT: f64 = 300.0;
+const HEIGHT: f64 = 360.0;
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Capture { pub id: String, pub text: String, pub error: Option<String> }
@@ -20,9 +21,9 @@ pub struct Capture { pub id: String, pub text: String, pub error: Option<String>
 pub struct Document { pub revision: u64, pub draft: String, pub pending: Option<Capture> }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Status { pub connected: bool, pub busy: bool, pub review: bool, pub label: String, pub reply: String, pub voice: VoiceSettings }
+pub struct Status { pub connected: bool, pub busy: bool, pub review: bool, pub label: String, pub reply: String, pub voice: VoiceSettings, #[serde(default)] pub glass: bool }
 impl Default for Status {
-    fn default() -> Self { Self { connected: false, busy: false, review: false, label: "Connect Spike to start".into(), reply: String::new(), voice: VoiceSettings { provider: VoiceProvider::Local, model: String::new() } } }
+    fn default() -> Self { Self { glass: false, connected: false, busy: false, review: false, label: "Connect Spike to start".into(), reply: String::new(), voice: VoiceSettings { provider: VoiceProvider::Local, model: String::new() } } }
 }
 #[derive(Clone, Default, Serialize)]
 pub struct Shortcuts { typing: bool, dictation: bool }
@@ -140,6 +141,8 @@ pub async fn prompt_enable(app: AppHandle, window: WebviewWindow, root: String, 
 pub fn prompt_publish(app: AppHandle, window: WebviewWindow, root: String, status: Status) -> Result<(), String> {
     from_window(&window, &["main"])?; current(&app, &root)?;
     if status.label.len() > 2000 || status.reply.len() > 8000 { return Err("The quick prompt status is too long.".into()); }
+    let changed = app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.status.glass != status.glass;
+    if changed && let Some(prompt) = app.get_webview_window(LABEL) { apply_surface(&prompt, status.glass)?; }
     app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.status = status;
     publish(&app)?; Ok(())
 }
@@ -186,6 +189,10 @@ pub fn authorize_voice(app: &AppHandle, root: Option<&str>) -> Result<(), String
     if !state.snapshot.visible || !state.snapshot.status.connected { return Err("Open and connect Spike before dictating.".into()); }
     Ok(())
 }
+fn apply_surface(window: &WebviewWindow, glass: bool) -> Result<(), String> {
+    let effects = glass.then(|| EffectsBuilder::new().effect(Effect::HudWindow).state(EffectState::Active).radius(24.0).build());
+    window.set_effects(effects).map_err(|error| error.to_string())
+}
 pub fn show(app: &AppHandle, dictate: bool) -> Result<(), String> {
     let root = app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.root.clone();
     current(app, &root)?;
@@ -204,15 +211,14 @@ pub fn show(app: &AppHandle, dictate: bool) -> Result<(), String> {
             builder.build().map_err(|error| error.to_string())?
         }
     };
-    let monitor = if preview { main.current_monitor() } else {
-        let cursor = prompt.cursor_position().map_err(|error| error.to_string())?;
-        prompt.monitor_from_point(cursor.x, cursor.y)
-    }.map_err(|error| error.to_string())?.ok_or("No display is available for Spike.")?;
+    apply_surface(&prompt, app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.status.glass)?;
+    let monitor = crate::companion_display::select(&main, preview)?;
     let area = monitor.work_area(); let scale = monitor.scale_factor();
-    let x = area.position.x + ((f64::from(area.size.width) - WIDTH * scale) / 2.0).max(0.0).round() as i32;
-    let y = area.position.y + ((f64::from(area.size.height) - HEIGHT * scale) * 0.65).max(0.0).round() as i32;
+    let x = area.position.x + (f64::from(area.size.width) - (WIDTH + 32.0) * scale).max(0.0).round() as i32;
+    let y = area.position.y + (f64::from(area.size.height) - (HEIGHT + 220.0) * scale).max(0.0).round() as i32;
     prompt.set_position(PhysicalPosition::new(x,y)).map_err(|error| error.to_string())?;
     { let prompt = app.state::<Prompt>(); let mut state = prompt.state.lock().unwrap_or_else(|p| p.into_inner()); state.snapshot.visible = true; state.snapshot.opened += 1; state.snapshot.dictate = dictate; }
+    let _ = app.emit_to(crate::pet::LABEL, "epizen://pet-wake", ());
     publish(app)?; prompt.show().map_err(|error| error.to_string())?;
     if !preview { prompt.set_focus().map_err(|error| error.to_string())?; }
     Ok(())
@@ -224,9 +230,13 @@ pub async fn prompt_open(app: AppHandle, window: WebviewWindow, dictate: bool) -
     show(&app, dictate)
 }
 #[tauri::command]
-pub fn prompt_hide(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+pub async fn prompt_hide(app: AppHandle, window: WebviewWindow, opened: u64) -> Result<(), String> {
     from_window(&window, &[LABEL])?;
-    app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.visible = false;
+    let prompt = app.state::<Prompt>(); let _operation = prompt.operation.lock().await;
+    { let prompt = app.state::<Prompt>(); let mut state = prompt.state.lock().unwrap_or_else(|p| p.into_inner());
+      if state.snapshot.opened != opened { return Ok(()); }
+      state.snapshot.visible = false;
+    }
     publish(&app)?; window.hide().map_err(|error| error.to_string())
 }
 #[tauri::command]
