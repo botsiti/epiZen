@@ -12,7 +12,7 @@ beforeEach(() => {
 });
 function actions(): ShortcutActions {
   return {
-    newTab: vi.fn(), closeTab: vi.fn(), toggleLeftSidebar: vi.fn(), toggleRightSidebar: vi.fn(), collapseFolders: vi.fn(),
+    newTab: vi.fn(), closeTab: vi.fn(), toggleLeftSidebar: vi.fn(), toggleRightSidebar: vi.fn(), toggleAssistant: vi.fn(), collapseFolders: vi.fn(),
     newNote: vi.fn(), settings: vi.fn(), home: vi.fn(), library: vi.fn(), today: vi.fn(), back: vi.fn(), forward: vi.fn(), cycle: vi.fn(), showTab: vi.fn(),
   };
 }
@@ -29,12 +29,13 @@ describe('workspace shortcuts', () => {
     expect(callbacks.newTab).toHaveBeenCalledOnce();
   });
 
-  it('reserves Command 7 and 9 for sidebars, Control 3 for folders, and keeps all tabs reachable', () => {
+  it('reserves Command 7, 8 and 9 for sidebars, Control 3 for folders, and keeps all tabs reachable', () => {
     const act = actions();
     renderHook(() => useShortcuts(act));
-    command('7'); command('9'); command('3', { metaKey: false, ctrlKey: true });
+    command('7'); command('8'); command('9'); command('3', { metaKey: false, ctrlKey: true });
     expect(act.toggleLeftSidebar).toHaveBeenCalledOnce();
     expect(act.toggleRightSidebar).toHaveBeenCalledOnce();
+    expect(act.toggleAssistant).toHaveBeenCalledOnce();
     expect(act.collapseFolders).toHaveBeenCalledOnce();
     expect(act.showTab).not.toHaveBeenCalled();
     command('3'); command('7', { altKey: true }); command('9', { altKey: true });
@@ -83,7 +84,7 @@ describe('workspace shortcuts', () => {
     hook.rerender({ enabled: true });
     const dialog = render(<div role="dialog" aria-modal="true">Draft</div>);
     expect(command('w')).toBe(false);
-    command('7'); command('9'); command('n'); command('Tab', { metaKey: false, ctrlKey: true });
+    command('7'); command('8'); command('9'); command('n'); command('Tab', { metaKey: false, ctrlKey: true });
     menu('left-sidebar'); menu('right-sidebar'); menu('today');
     for (const callback of Object.values(act)) expect(callback).not.toHaveBeenCalled();
     dialog.unmount();
@@ -96,7 +97,7 @@ describe('workspace shortcuts', () => {
     const hook = renderHook(({ callbacks }) => useShortcuts(callbacks), { initialProps: { callbacks: first } });
     await act(async () => {});
     hook.rerender({ callbacks: next });
-    for (const id of ['left-sidebar', 'right-sidebar', 'collapse-folders', 'new-note', 'settings', 'home', 'library', 'today', 'new-tab', 'close-tab'] as const) menu(id);
+    for (const id of ['left-sidebar', 'right-sidebar', 'spike-sidebar', 'collapse-folders', 'new-note', 'settings', 'home', 'library', 'today', 'new-tab', 'close-tab'] as const) menu(id);
     for (const callback of Object.values(first)) expect(callback).not.toHaveBeenCalled();
     expect(next.closeTab).toHaveBeenCalledOnce(); expect(next.collapseFolders).toHaveBeenCalledOnce();
     expect(next.newNote).toHaveBeenCalledOnce(); expect(next.settings).toHaveBeenCalledOnce();

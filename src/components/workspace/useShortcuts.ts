@@ -69,7 +69,7 @@ export function useShortcuts(actions: ShortcutActions, enabled = true) {
         return;
       }
       if ((key === '[' || key === ']') && !inField(event.target)) run(key === '[' ? act.back : act.forward);
-      else if (/^[1-68]$/.test(key)) run(() => act.showTab(Number(key) - 1));
+      else if (/^[1-6]$/.test(key)) run(() => act.showTab(Number(key) - 1));
     };
     window.addEventListener('keydown', press);
     let stopMenu: (() => void) | undefined;
@@ -82,6 +82,7 @@ export function useShortcuts(actions: ShortcutActions, enabled = true) {
         'close-tab': act.closeTab,
         'left-sidebar': act.toggleLeftSidebar,
         'right-sidebar': act.toggleRightSidebar,
+        'spike-sidebar': act.toggleAssistant,
         'collapse-folders': act.collapseFolders,
         'new-note': act.newNote,
         settings: act.settings,

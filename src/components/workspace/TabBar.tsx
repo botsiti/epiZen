@@ -73,7 +73,7 @@ export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onFor
           </svg>
         </button>
       </div>
-      {onAssistant && <button type="button" className="tabbar-button assistant-tab-button" aria-label="Talk to Spike" aria-pressed={assistantOpen} title="Talk to Spike" onClick={onAssistant} data-testid="open-assistant"><Spike size={28} /></button>}
+      {onAssistant && <button type="button" className="tabbar-button assistant-tab-button" aria-label="Talk to Spike" aria-pressed={assistantOpen} title="Toggle Spike sidebar (⌘8)" onClick={onAssistant} data-testid="open-assistant"><Spike size={28} motion={false} /></button>}
       <button
         type="button"
         className={rightOpen ? 'tabbar-button tabbar-right is-on' : 'tabbar-button tabbar-right'}

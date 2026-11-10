@@ -1,0 +1,104 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, expect, it, vi } from 'vitest';
+import * as api from '../../lib/api';
+import { QuickPrompt } from './QuickPrompt';
+import type { QuickSnapshot } from '../../lib/api';
+const voice = vi.hoisted(() => ({ phase: 'idle', seconds: 0, canRetry: false, start: vi.fn(), stop: vi.fn(), pauseRecording: vi.fn(), cancel: vi.fn(), retry: vi.fn() }));
+vi.mock('../../lib/api');
+vi.mock('./Spike', () => ({ Spike: () => null }));
+vi.mock('./useVoice', () => ({ useVoice: () => voice }));
+let update!: (snapshot: QuickSnapshot) => void, command!: (command: string) => void;
+const state = (patch: Partial<QuickSnapshot> = {}): QuickSnapshot => ({ shortcuts: { typing: true, dictation: true }, root: '/copy', visible: true, opened: 1, dictate: false, status: { connected: true, busy: false, review: false, label: 'Ready', reply: '', voice: { provider: 'local', model: '' } }, document: { revision: 0, draft: '', pending: null }, ...patch });
+beforeEach(() => {
+  vi.clearAllMocks(); voice.phase = 'idle';
+  vi.mocked(api.onQuickPrompt).mockImplementation((callback) => { update = callback; return Promise.resolve(() => undefined); });
+  vi.mocked(api.onQuickCommand).mockImplementation((callback) => { command = callback; return Promise.resolve(() => undefined); });
+  vi.mocked(api.quickPromptState).mockResolvedValue(state());
+  vi.mocked(api.saveQuickDraft).mockImplementation((_root, revision, draft) => Promise.resolve({ revision: revision + 1, draft, pending: null }));
+  vi.mocked(api.consumeQuickOpen).mockResolvedValue(undefined);
+  vi.mocked(api.submitQuickPrompt).mockResolvedValue(undefined);
+  vi.mocked(api.hideQuickPrompt).mockResolvedValue(undefined);
+  vi.mocked(api.quickPromptFlushed).mockResolvedValue(undefined);
+});
+it('saves before submitting and retains text until the main controller acknowledges it', async () => {
+  render(<QuickPrompt />);
+  const input = await screen.findByLabelText('Quick message to Spike');
+  fireEvent.change(input, { target: { value: 'Keep my thought.' } });
+  await userEvent.click(screen.getByRole('button', { name: 'Send ↑' }));
+  await waitFor(() => expect(api.submitQuickPrompt).toHaveBeenCalledOnce());
+  expect(api.saveQuickDraft).toHaveBeenCalledWith('/copy', 0, 'Keep my thought.');
+  expect(input).toHaveValue('Keep my thought.');
+  const id = vi.mocked(api.submitQuickPrompt).mock.calls[0]![2];
+  act(() => { update(state({ document: { revision: 2, draft: 'Keep my thought.', pending: { id, text: 'Keep my thought.', error: null } } })); });
+  expect(input).toBeDisabled();
+  act(() => { update(state({ document: { revision: 3, draft: '', pending: null } })); });
+  expect(input).toHaveValue(''); expect(input).not.toBeDisabled();
+});
+it('holds a failed draft open, reports the failure during quit, and closes only after a successful save', async () => {
+  vi.mocked(api.saveQuickDraft).mockRejectedValue(new Error('Disk full'));
+  render(<QuickPrompt />); const input = await screen.findByLabelText('Quick message to Spike');
+  fireEvent.change(input, { target: { value: 'Do not lose this.' } });
+  await userEvent.click(screen.getByLabelText('Close quick prompt'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Disk full');
+  expect(api.hideQuickPrompt).not.toHaveBeenCalled(); expect(input).toHaveValue('Do not lose this.');
+  act(() => { command('flush'); });
+  await waitFor(() => expect(api.quickPromptFlushed).toHaveBeenCalledWith('Error: Disk full'));
+  vi.mocked(api.saveQuickDraft).mockResolvedValue({ revision: 1, draft: 'Do not lose this.', pending: null });
+  await userEvent.click(screen.getByLabelText('Close quick prompt'));
+  await waitFor(() => expect(api.hideQuickPrompt).toHaveBeenCalledOnce());
+  expect(voice.pauseRecording).toHaveBeenCalled();
+});
+it('retries the same queued identity and never creates a second request for a failed handoff', async () => {
+  vi.mocked(api.quickPromptState).mockResolvedValue(state({ document: { revision: 4, draft: 'My request', pending: { id: 'saved-request', text: 'My request', error: 'Conversation unavailable' } } }));
+  render(<QuickPrompt />); await screen.findByLabelText('Quick message to Spike');
+  await userEvent.click(screen.getByRole('button', { name: 'Retry prompt' }));
+  expect(api.submitQuickPrompt).toHaveBeenCalledWith('/copy', 4, 'saved-request');
+  expect(api.saveQuickDraft).not.toHaveBeenCalled();
+});
+it('starts and stops dictation only for a fresh voice shortcut and stops capture when hidden', async () => {
+  render(<QuickPrompt />); await screen.findByLabelText('Quick message to Spike');
+  act(() => { update(state({ opened: 2, dictate: true })); });
+  expect(voice.start).toHaveBeenCalledOnce();
+  voice.phase = 'recording';
+  act(() => { update(state({ opened: 3, dictate: true })); });
+  expect(voice.stop).toHaveBeenCalledOnce();
+  act(() => { update(state({ opened: 3, dictate: false, visible: false })); });
+  expect(voice.pauseRecording).toHaveBeenCalled();
+  expect(voice.start).toHaveBeenCalledOnce();
+});
+it('keeps typed capture available before connecting and does not start the microphone', async () => {
+  vi.mocked(api.quickPromptState).mockResolvedValue(state({ dictate: true, status: { ...state().status, connected: false } }));
+  render(<QuickPrompt />); const input = await screen.findByLabelText('Quick message to Spike');
+  fireEvent.change(input, { target: { value: 'An idea for later' } });
+  expect(input).toHaveValue('An idea for later');
+  expect(screen.getByRole('button', { name: 'Send ↑' })).toBeDisabled();
+  expect(voice.start).not.toHaveBeenCalled();
+});
+
+it('focuses text capture on opening and uses Enter to send while preserving Shift+Enter and composition', async () => {
+  render(<QuickPrompt />);
+  const input = await screen.findByLabelText('Quick message to Spike');
+  await waitFor(() => expect(input).toHaveFocus());
+  fireEvent.change(input, { target: { value: 'A typed thought' } });
+  fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+  fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+  expect(api.submitQuickPrompt).not.toHaveBeenCalled();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(api.submitQuickPrompt).toHaveBeenCalledOnce());
+  expect(input).toBeDisabled();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(api.submitQuickPrompt).toHaveBeenCalledOnce();
+});
+it('retains typed text and allows retry after a rejected submission', async () => {
+  vi.mocked(api.submitQuickPrompt).mockRejectedValueOnce(new Error('Workspace unavailable'));
+  render(<QuickPrompt />);
+  const input = await screen.findByLabelText('Quick message to Spike');
+  fireEvent.change(input, { target: { value: 'Keep this text' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByRole('alert')).toHaveTextContent('Workspace unavailable');
+  expect(input).toHaveValue('Keep this text');
+  expect(input).not.toBeDisabled();
+  fireEvent.keyDown(input, { key: 'Escape' });
+  await waitFor(() => expect(api.hideQuickPrompt).toHaveBeenCalledOnce());
+});

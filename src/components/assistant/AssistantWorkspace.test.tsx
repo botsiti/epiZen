@@ -14,6 +14,11 @@ vi.mock('./AssistantPanel', () => ({ AssistantPanel: ({ controller, snapshot }: 
 } }));
 it('retains an unsent conversation draft outside a failed view and restores it on retry', async () => {
   const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  vi.mocked(api.enableQuickPrompt).mockResolvedValue(undefined);
+  vi.mocked(api.publishQuickPrompt).mockResolvedValue(undefined);
+  vi.mocked(api.onQuickPrompt).mockResolvedValue(() => undefined);
+  vi.mocked(api.onQuickCommand).mockResolvedValue(() => undefined);
+  vi.mocked(api.quickPromptState).mockResolvedValue({ root: '/copy', document: { revision: 0, draft: '', pending: null } } as Awaited<ReturnType<typeof api.quickPromptState>>);
   vi.mocked(api.enablePet).mockResolvedValue(undefined);
   vi.mocked(api.onPetCommand).mockResolvedValue(() => undefined);
   vi.mocked(api.onMainHidden).mockResolvedValue(() => undefined);

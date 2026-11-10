@@ -8,9 +8,10 @@ mod codex;
 mod process;
 #[cfg_attr(any(test, feature = "e2e"), allow(dead_code))]
 mod speech;
+pub mod voice;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tauri::{State, ipc::Response};
+use tauri::{Manager, State, ipc::Response};
 use crate::net::Net;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -26,6 +27,8 @@ pub struct Assistant {
     requests: Mutex<Requests>,
     #[cfg(any(test, feature = "e2e"))]
     key: std::sync::Mutex<Option<String>>,
+    #[cfg(any(test, feature = "e2e"))]
+    voice_key: std::sync::Mutex<Option<String>>,
 }
 #[derive(Default)]
 struct Requests { active: HashMap<String, Arc<Notify>>, cancelled: VecDeque<String> }
@@ -98,6 +101,12 @@ pub async fn assistant_save_chat(window: tauri::WebviewWindow, settings: State<'
     settings.save_assistant_chat(&root, &id, state, expected_revision).map_err(|error| error.to_string())
 }
 #[tauri::command]
+pub async fn assistant_has_message(window: tauri::WebviewWindow, settings: State<'_, crate::Settings>, root: String, id: String) -> Result<bool, String> {
+    workspace_only(&window)?;
+    settings.assistant_has_message(&root, &id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn assistant_apply_calendar(window: tauri::WebviewWindow, assistant: State<'_, Assistant>, state: State<'_, std::sync::RwLock<crate::VaultState>>, settings: State<'_, crate::Settings>, calendars: State<'_, Box<dyn crate::Calendars>>, action: crate::assistant_writes::CalendarAction) -> Result<String, String> {
     workspace_only(&window)?;
     let _write = assistant.writes.lock().unwrap_or_else(|p| p.into_inner());
@@ -159,7 +168,11 @@ impl Assistant {
     fn required_key(&self) -> Result<String, String> { self.key()?.ok_or_else(|| "Connect your AI account in Spike’s settings first.".to_owned()) }
 }
 #[tauri::command]
-pub fn assistant_cancel(window: tauri::WebviewWindow, assistant: State<'_, Assistant>, request_id: String) -> Result<(), String> { workspace_only(&window)?; assistant.cancel(request_id); Ok(()) }
+pub fn assistant_cancel(window: tauri::WebviewWindow, assistant: State<'_, Assistant>, request_id: String) -> Result<(), String> {
+    if window.label() == crate::prompt::LABEL { assistant.cancel(format!("prompt:{request_id}")); }
+    else { workspace_only(&window)?; assistant.cancel(request_id); }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn assistant_open_url(window: tauri::WebviewWindow, url: String) -> Result<(), String> {
@@ -243,7 +256,8 @@ pub async fn assistant_respond(window: tauri::WebviewWindow, assistant: State<'_
     serde_json::from_slice(&bytes).map_err(|_| "The AI service returned unreadable data.".to_owned())
 }
 
-fn audio_body(audio: &[u8], mime: &str) -> Result<(String, Vec<u8>), String> {
+fn audio_body(audio: &[u8], mime: &str, model: &str) -> Result<(String, Vec<u8>), String> {
+    voice::validate_model(model)?;
     if audio.is_empty() || audio.len() > 20 * 1024 * 1024 { return Err("Record up to 20 MB of audio at a time.".to_owned()); }
     let (mime, extension) = match mime.split(';').next().unwrap_or("") {
         "audio/mp4" | "video/mp4" => ("audio/mp4", "m4a"),
@@ -254,33 +268,39 @@ fn audio_body(audio: &[u8], mime: &str) -> Result<(String, Vec<u8>), String> {
     };
     let mut boundary = "epizen-audio-boundary".to_owned();
     while audio.windows(boundary.len()).any(|part| part == boundary.as_bytes()) { boundary.push('x'); }
-    let mut body = format!("--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\ngpt-transcribe\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"recording.{extension}\"\r\nContent-Type: {mime}\r\n\r\n").into_bytes();
+    let mut body = format!("--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n{model}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"recording.{extension}\"\r\nContent-Type: {mime}\r\n\r\n").into_bytes();
     body.extend_from_slice(audio);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
     Ok((format!("multipart/form-data; boundary={boundary}"), body))
 }
 #[tauri::command]
 pub async fn assistant_transcribe(window: tauri::WebviewWindow, assistant: State<'_, Assistant>, net: State<'_, Net>, settings: State<'_, crate::Settings>, request: AudioRequest, request_id: String) -> Result<String, String> {
-    workspace_only(&window)?;
-    let AudioRequest { audio, mime, provider } = request;
+    let request_id = if window.label() == crate::prompt::LABEL {
+        crate::prompt::authorize_voice(window.app_handle(), request.root.as_deref())?;
+        format!("prompt:{request_id}")
+    } else { workspace_only(&window)?; request_id };
+    let AudioRequest { audio, mime, provider, voice, root: _ } = request;
+    let voice = voice.unwrap_or(voice::VoiceSettings { provider: if provider.unwrap_or_default() == Provider::Codex { voice::VoiceProvider::Local } else { voice::VoiceProvider::Openai }, model: "gpt-transcribe".to_owned() });
     let pending = assistant.begin(request_id)?;
-    let (content_type, body) = audio_body(&audio, &mime)?;
+    let (content_type, body) = audio_body(&audio, &mime, if voice.provider == voice::VoiceProvider::Local { "local" } else { &voice.model })?;
     #[cfg(feature = "e2e")]
     if audio.starts_with(b"EPIZEN_VOICE_FIXTURE") { return Ok("Remember that I prefer voice notes.".to_owned()); }
-    if provider.unwrap_or_default() == Provider::Codex {
+    if voice.provider == voice::VoiceProvider::Local {
         #[cfg(any(test, feature = "e2e"))]
         { let _ = settings; return Err("No local speech fixture was provided.".to_owned()); }
         #[cfg(not(any(test, feature = "e2e")))]
         return speech::transcribe(audio, mime, &pending.cancel, &settings.assistant_runtime_dir()).await;
     }
-    let bytes = net.assistant_post("audio/transcriptions", &assistant.required_key()?, &content_type, body, &pending.cancel).await?;
+    let endpoint = if voice.provider == voice::VoiceProvider::Openrouter { "openrouter/transcriptions" } else { "audio/transcriptions" };
+    let key = voice::key(&assistant, voice.provider)?.ok_or("Connect the selected voice provider in Spike’s settings first.")?;
+    let bytes = net.assistant_post(endpoint, &key, &content_type, body, &pending.cancel).await?;
     let value: Value = serde_json::from_slice(&bytes).map_err(|_| "The transcription was unreadable.".to_owned())?;
     value["text"].as_str().map(str::to_owned).ok_or_else(|| "No speech was recognized in this recording.".to_owned())
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct AudioRequest { audio: Vec<u8>, mime: String, provider: Option<Provider> }
+pub struct AudioRequest { audio: Vec<u8>, mime: String, provider: Option<Provider>, voice: Option<voice::VoiceSettings>, root: Option<String> }
 
 /// Deterministic provider for disposable native journeys. Never compiled into a production app.
 #[cfg(any(test, feature = "e2e"))]
@@ -362,13 +382,18 @@ mod tests {
     }
     #[test]
     fn audio_has_format_metadata_and_refuses_header_injection_and_oversize_data() {
-        let (content_type, body) = audio_body(b"recorded-audio", "audio/mp4;codecs=mp4a.40.2").unwrap();
+        let (content_type, body) = audio_body(b"recorded-audio", "audio/mp4;codecs=mp4a.40.2", "gpt-transcribe").unwrap();
         assert!(content_type.starts_with("multipart/form-data; boundary="));
         let text = String::from_utf8(body).unwrap(); assert!(text.contains("recording.m4a")); assert!(text.contains("gpt-transcribe"));
-        assert!(audio_body(b"data", "audio/mp4\r\nInjected: true").is_err());
-        assert!(audio_body(&[], "audio/mp4").is_err());
-        let (header, _) = audio_body(b"epizen-audio-boundary", "audio/wav").unwrap();
+        assert!(audio_body(b"data", "audio/mp4\r\nInjected: true", "gpt-transcribe").is_err());
+        assert!(audio_body(&[], "audio/mp4", "gpt-transcribe").is_err());
+        let (header, _) = audio_body(b"epizen-audio-boundary", "audio/wav", "gpt-transcribe").unwrap();
         assert!(header.ends_with("boundaryx"));
+        let (_, router) = audio_body(b"recorded-audio", "audio/webm;codecs=opus", "microsoft/mai-transcribe-2").unwrap();
+        let router = String::from_utf8(router).unwrap();
+        assert!(router.contains("microsoft/mai-transcribe-2"));
+        assert!(router.contains("recording.webm"));
+        assert!(audio_body(b"recorded-audio", "audio/mp4", "injected\r\nmodel").is_err());
     }
     #[tokio::test]
     async fn cancellation_handles_early_requests_active_requests_and_releases_the_slot() {

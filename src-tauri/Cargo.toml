@@ -30,6 +30,7 @@ reqwest = { version = "=0.13.5", default-features = false, features = ["rustls"]
 # Already in the tree through Tauri; `time` paces MusicBrainz to one request a second.
 tokio = { version = "1", features = ["sync", "time", "macros", "process", "io-util"] }
 tempfile = "3"
+tauri-plugin-global-shortcut = "=2.4.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "=3.7.0"

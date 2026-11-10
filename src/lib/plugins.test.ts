@@ -4,13 +4,13 @@ import { ALL_PLUGINS, NO_PLUGINS, DEFAULT_HOME_SECTIONS, checkInSettings, effect
 describe('built-in plugins', () => {
   it('starts new vaults with the Markdown core and preserves existing configured vaults', () => {
     expect(pluginSettings({}, '/new')).toEqual(NO_PLUGINS);
-    expect(pluginSettings({ vaults: { '/old': { complete: true } } }, '/old')).toEqual(ALL_PLUGINS);
-    expect(pluginSettings({ legacyPeriodicVault: '/old', periodicFeatures: { habits: false, thoughtRecords: false } }, '/old')).toEqual({ ...ALL_PLUGINS, habits: false, cbt: false });
+    expect(pluginSettings({ vaults: { '/old': { complete: true } } }, '/old')).toEqual({ ...ALL_PLUGINS, spike: false });
+    expect(pluginSettings({ legacyPeriodicVault: '/old', periodicFeatures: { habits: false, thoughtRecords: false } }, '/old')).toEqual({ ...ALL_PLUGINS, spike: false, habits: false, cbt: false });
     expect(pluginSettings({ legacyPeriodicVault: '/old' }, '/new')).toEqual(NO_PLUGINS);
   });
   it('retains child preferences while a parent is disabled and enables the required parent explicitly', () => {
     const configured = { ...ALL_PLUGINS, periodic: false };
-    expect(effectivePlugins(configured)).toEqual({ ...NO_PLUGINS, home: true, library: true, bases: true, graph: true });
+    expect(effectivePlugins(configured)).toEqual({ ...NO_PLUGINS, home: true, library: true, bases: true, graph: true, spike: true });
     expect(configured.habits).toBe(true);
     expect(setPlugin(NO_PLUGINS, 'cbt', true)).toEqual({ ...NO_PLUGINS, cbt: true, periodic: true });
     expect(effectivePlugins({ ...configured, periodic: true })).toEqual(ALL_PLUGINS);
@@ -37,4 +37,12 @@ describe('built-in plugins', () => {
     expect(pluginSettings(JSON.parse(JSON.stringify(patch)) as typeof patch, 'one').bases).toBe(true);
     expect(effectivePlugins(enabled).periodic).toBe(false);
   });
+});
+
+it('migrates existing Spike users and respects an explicit per-vault disable', () => {
+  for (const assistant of [{ enabled: true }, { desktopPet: true }]) {
+    expect(pluginSettings({ vaults: { one: { plugins: { bases: true }, assistant } } }, 'one').spike).toBe(true);
+    expect(pluginSettings({ vaults: { one: { plugins: { spike: false }, assistant } } }, 'one').spike).toBe(false);
+  }
+  expect(pluginSettings({ vaults: { one: { assistant: { enabled: true } } } }, 'two').spike).toBe(false);
 });

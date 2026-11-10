@@ -8,7 +8,7 @@ export type View =
   | { kind: 'missing'; target: string }
   | { kind: 'new'; folder: string; item?: 'folder' | 'base' }
   | { kind: 'unsaved'; path: string; text: string; message: string }
-  | { kind: 'settings'; section?: 'plugins' | 'periodic' | 'home' | 'files' | 'hotkeys' }
+  | { kind: 'settings'; section?: 'plugins' | 'periodic' | 'home' | 'files' | 'hotkeys' | 'spike' }
   | { kind: 'graph' }
   | { kind: 'calendar' }
   | { kind: 'quests' }

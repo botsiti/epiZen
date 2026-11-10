@@ -2,6 +2,7 @@
 export const SHORTCUTS = [
   { action: 'collapseFolders', label: 'Collapse all folders', key: '3', control: true, keys: '⌃3' },
   { action: 'toggleLeftSidebar', label: 'Toggle left sidebar', key: '7', keys: '⌘7' },
+  { action: 'toggleAssistant', label: 'Toggle Spike sidebar', key: '8', keys: '⌘8' },
   { action: 'toggleRightSidebar', label: 'Toggle right sidebar', key: '9', keys: '⌘9' },
   { action: 'toggleRightSidebar', label: 'Toggle right sidebar (alternate)', key: 'b', alt: true, keys: '⌥⌘B' },
   { action: 'newNote', label: 'New note', key: 'n', keys: '⌘N' },
@@ -17,11 +18,13 @@ export type ShortcutAction = typeof SHORTCUTS[number]['action'];
 
 export const SHORTCUT_REFERENCE = [
   ...SHORTCUTS,
+  { label: 'Spike quick prompt (global, while plugin enabled)', keys: '⇧⌘Space' },
+  { label: 'Spike dictation (global, start / finish)', keys: '⌥⇧⌘Space' },
   { label: 'Previous tab', keys: '⇧⌃Tab / ⇧⌘[' },
   { label: 'Next tab', keys: '⌃Tab / ⇧⌘]' },
   { label: 'Go to tab 1–8', keys: '⌥⌘1–8' },
   { label: 'Go to last tab', keys: '⌥⌘9' },
-  { label: 'Go to tab 1–6 or 8 (alternate)', keys: '⌘1–6 / ⌘8' },
+  { label: 'Go to tab 1–6 (alternate)', keys: '⌘1–6' },
   { label: 'Back in tab history (outside text fields)', keys: '⌘[' },
   { label: 'Forward in tab history (outside text fields)', keys: '⌘]' },
 ];

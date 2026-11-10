@@ -351,14 +351,17 @@ impl Net {
     }
 
     async fn assistant_post_inner(&self, endpoint: &str, key: &str, content_type: &str, body: Vec<u8>) -> Result<Vec<u8>, String> {
-        if !matches!(endpoint, "responses" | "audio/transcriptions") {
-            return Err("Unknown assistant endpoint.".to_owned());
-        }
+        let url = match endpoint {
+            "responses" => "https://api.openai.com/v1/responses",
+            "audio/transcriptions" => "https://api.openai.com/v1/audio/transcriptions",
+            "openrouter/transcriptions" => "https://openrouter.ai/api/v1/audio/transcriptions",
+            _ => return Err("Unknown assistant endpoint.".to_owned()),
+        };
         if body.len() > 21 * 1024 * 1024 { return Err("This assistant request is too large.".to_owned()); }
         // A test build can never accidentally send a real request, even if a fixture is missing.
         if cfg!(any(test, feature = "e2e")) { return Err("Real assistant network access is disabled in tests.".to_owned()); }
         let _guard = self.assistant_requests.lock().await;
-        let mut response = self.assistant_client.post(format!("https://api.openai.com/v1/{endpoint}"))
+        let mut response = self.assistant_client.post(url)
             .bearer_auth(key).header("Content-Type", content_type).body(body).send().await
             .map_err(|error| NetError::from(error).to_string())?;
         if !response.status().is_success() {

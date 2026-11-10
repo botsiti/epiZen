@@ -1,7 +1,7 @@
 import { parseTasks } from './dashboard';
 import { blocksUnder, clock, parseDay, taskLabel, type TimeBlock } from './day';
 import { addTask } from './edits';
-import { lineEnding } from './text';
+import { lineEnding, textIdentity } from './text';
 
 // The timer's, the calendar's and the task menu's writes: a time block added under a task, a
 // task's minutes, a task edited, deleted, or given a focus-id for a plan. Each returns the note's new text with every other line
@@ -134,8 +134,8 @@ const COMMENT = /<!--[\s\S]*?-->/g;
 export function editTask(text: string, task: LineRef, edit: TaskEdit): string {
   const label = newTaskLabel(edit.words);
   if (!label) throw new Error('Say what the task is.');
-  const category = edit.category?.trim().toLowerCase();
-  if (category !== undefined && !/^[\w-]+$/.test(category)) throw new Error('A category is one word, like code or sport.');
+  const category = edit.category === undefined ? undefined : textIdentity(edit.category);
+  if (category !== undefined && !/^[\p{L}\p{M}\p{N}_-]+$/u.test(category)) throw new Error('A category is one word, like code or sport.');
   if (!Number.isInteger(edit.minutes) || edit.minutes < 0 || edit.minutes > 24 * 60) throw new Error('Minutes are a whole number from 0 to 1440.');
   const { lines, eol } = split(text);
   const at = findLine(text, lines, task);
@@ -200,11 +200,11 @@ export function newTaskLabel(words: string): string {
 /** The note's tasks that the snapshot describes: by focus-id when it has one, else by words and category. */
 function matching(text: string, want: TaskSnapshot) {
   const label = asWritten(want.label);
-  const category = want.category?.toLowerCase();
+  const category = want.category === undefined ? undefined : textIdentity(want.category);
   const tasks = parseDay(text).tasks;
   return want.focusId
     ? tasks.filter((task) => focusIdOf(task.text) === want.focusId)
-    : tasks.filter((task) => task.label === label && task.category?.name.toLowerCase() === category);
+    : tasks.filter((task) => task.label === label && (task.category ? textIdentity(task.category.name) : undefined) === category);
 }
 
 /**

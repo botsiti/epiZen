@@ -12,7 +12,7 @@ const noop = () => {};
 function Explorer() {
   const [visible, setVisible] = useState(true);
   const explorer = useExplorer(tree, 'Notes/Projects/Selected.md');
-  useShortcuts({ newTab: noop, closeTab: noop, toggleLeftSidebar: () => setVisible((shown) => !shown), toggleRightSidebar: noop, collapseFolders: explorer.collapseAll, newNote: noop, settings: noop, home: noop, library: noop, today: noop, back: noop, forward: noop, cycle: noop, showTab: noop });
+  useShortcuts({ newTab: noop, closeTab: noop, toggleLeftSidebar: () => setVisible((shown) => !shown), toggleRightSidebar: noop, toggleAssistant: noop, collapseFolders: explorer.collapseAll, newNote: noop, settings: noop, home: noop, library: noop, today: noop, back: noop, forward: noop, cycle: noop, showTab: noop });
   return <>{visible && <Sidebar vaultName="Test" tree={tree} selected="Notes/Projects/Selected.md" isFolderOpen={explorer.isOpen} onToggleFolder={explorer.toggle} onCollapseFolders={explorer.collapseAll} onOpenNote={noop} onHome={noop} onNewNote={noop} onOpenFolder={noop} onSettings={noop} onGraph={noop} onCalendar={noop} onLibrary={noop} onQuests={noop} onStatistics={noop} onNoteMenu={noop} />}</>;
 }
 

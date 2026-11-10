@@ -154,6 +154,25 @@ export class AssistantController {
       this.update({ thread: next, error: undefined, busy: true }); await this.persist(); await this.run(run);
     } catch (error) { this.update({ error: reason(error), busy: false }); }
   };
+  /** A durable handoff from the quick prompt; retries acknowledge an existing turn, never replay it. */
+  acceptQuickPrompt = async (id: string, text: string) => {
+    this.active();
+    if (!this.snapshot.loaded) throw new Error('The conversation is still loading. Retry in a moment.');
+    if (this.snapshot.thread.messages.some((message) => message.id === id)) { await this.flush(); return; }
+    if (this.snapshot.busy || this.snapshot.switching) throw new Error('Spike is finishing another request. Your prompt is retained.');
+    this.update({ switching: true });
+    try {
+      if (await api.assistantHasMessage(this.root, id)) return;
+      this.active();
+      if (this.snapshot.thread.run && this.snapshot.thread.run.phase !== 'complete') throw new Error('Open the conversation to review or finish the previous turn, then retry this prompt.');
+      const thread = this.snapshot.thread, run = startRun(this.root, crypto.randomUUID(), recentContext(thread.history), text);
+      this.update({ busy: true, switching: false, error: undefined, thread: { ...thread, title: thread.messages.length ? thread.title : text.trim().slice(0, 70), messages: [...thread.messages, { id, role: 'user', text, created: new Date().toISOString() }], run } });
+      await this.persist();
+      // Acknowledge only after saving the user message. Actions retain the ordinary review path.
+      void this.run(run).catch((error: unknown) => this.update({ error: reason(error), busy: false }));
+    } catch (error) { this.update({ error: reason(error), busy: false }); throw error; }
+    finally { this.update({ switching: false }); }
+  };
   receiveVoice = async (text: string) => {
     this.active();
     if (this.snapshot.switching || !this.snapshot.loaded) throw new Error('The conversation is switching. Retry your recording when it is ready.');

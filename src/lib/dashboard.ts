@@ -49,7 +49,7 @@ export function parseTasks(text: string): Task[] {
           offset: offset + (match[1] ?? '').length,
           done: match[2] !== ' ',
           text: body,
-          category: /#daily\/([\w-]+)/.exec(body)?.[1],
+          category: /#daily\/([\p{L}\p{M}\p{N}_-]+)/u.exec(body)?.[1],
           minutes: Number(/\[minutes::\s*(\d+)\s*\]/.exec(body)?.[1]) || undefined,
           habit: callouts.at(-1)?.habit ?? false,
           ...(callouts.at(-1)?.habit && /\[habit::([a-zA-Z0-9-]{8,80})\]/.exec(body)?.[1] ? { habitId: /\[habit::([a-zA-Z0-9-]{8,80})\]/.exec(body)![1] } : {}),

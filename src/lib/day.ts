@@ -92,7 +92,7 @@ export const taskLabel = (text: string) =>
   text
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\[[\w-]+::[^\]]*\]/g, '')
-    .replace(/#daily\/[\w-]+/g, '')
+    .replace(/#daily\/[\p{L}\p{M}\p{N}_-]+/gu, '')
     .replace(/^\s*[—–-]\s*/, '')
     .replace(/\s+/g, ' ')
     .trim();
