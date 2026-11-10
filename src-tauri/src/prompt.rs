@@ -91,6 +91,14 @@ fn shortcut_intent(shortcut: &tauri_plugin_global_shortcut::Shortcut, state: Sho
     else if shortcut == &TEXT_SHORTCUT.parse::<tauri_plugin_global_shortcut::Shortcut>().expect("fixed text shortcut") { Some(false) }
     else { None }
 }
+#[derive(Debug, PartialEq)]
+enum ShortcutAction { Show, ClosePrompt, HidePet }
+fn shortcut_action(dictate: bool, prompt_visible: bool, pet_visible: bool) -> ShortcutAction {
+    if dictate { ShortcutAction::Show }
+    else if prompt_visible { ShortcutAction::ClosePrompt }
+    else if pet_visible { ShortcutAction::HidePet }
+    else { ShortcutAction::Show }
+}
 pub fn install(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     app.plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(|app, shortcut, event| {
         let Some(dictate) = shortcut_intent(shortcut, event.state()) else { return; };
@@ -98,8 +106,13 @@ pub fn install(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         tauri::async_runtime::spawn(async move {
             let prompt = app.state::<Prompt>(); let _operation = prompt.operation.lock().await;
             let visible = prompt.state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.visible;
-            if visible && !dictate { let _ = app.emit_to(LABEL, COMMAND, "close"); }
-            else if let Err(error) = show(&app, dictate) { let _ = app.emit_to("main", COMMAND, error); }
+            let pet_visible = app.get_webview_window(crate::pet::LABEL).is_some_and(|window| window.is_visible().unwrap_or(false));
+            let result = match shortcut_action(dictate, visible, pet_visible) {
+                ShortcutAction::ClosePrompt => app.emit_to(LABEL, COMMAND, "close").map_err(|error| error.to_string()),
+                ShortcutAction::HidePet => crate::pet::hide(&app),
+                ShortcutAction::Show => show(&app, dictate),
+            };
+            if let Err(error) = result { let _ = app.emit_to("main", COMMAND, error); }
         });
     }).build())?;
     Ok(())
@@ -363,6 +376,16 @@ mod tests {
         assert!(validate_document(&doc).is_ok());
         doc.pending.as_mut().unwrap().id = "../outside".into(); assert!(validate_document(&doc).is_err());
         doc.pending = None; doc.draft = "x".repeat(40_001); assert!(validate_document(&doc).is_err());
+    }
+    #[test]
+    fn typing_shortcut_hides_spike_even_without_an_open_prompt_and_dictation_still_opens() {
+        assert_eq!(shortcut_action(false, false, true), ShortcutAction::HidePet);
+        assert_eq!(shortcut_action(false, true, true), ShortcutAction::ClosePrompt);
+        assert_eq!(shortcut_action(false, true, false), ShortcutAction::ClosePrompt);
+        assert_eq!(shortcut_action(false, false, false), ShortcutAction::Show);
+        for prompt in [true, false] { for pet in [true, false] {
+            assert_eq!(shortcut_action(true, prompt, pet), ShortcutAction::Show);
+        } }
     }
     #[test]
     fn prompt_hotkeys_are_distinct_from_each_other_and_the_sidebar() {
