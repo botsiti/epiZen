@@ -3,6 +3,11 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.10.0 — 2026-11-10
+
+Native transcription model selection, safer quick text handoffs, and the pending XP/quest-rule
+foundations with Unicode category tags. [Full release notes](releases/0.10.0.md).
+
 ## 0.9.0 — 2026-11-09
 
 Configurable Spike plugin, global quick text and dictation prompts, independent voice providers
