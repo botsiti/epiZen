@@ -95,3 +95,11 @@
 
 .preferences select, .vault-setup .preference-control select { appearance: none; min-height: 34px; padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239a9f9c' stroke-width='1.5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
 .daily-import-preview li span { min-width: 0; flex: 1; }
+.appearance-preview { padding: 32px; margin-bottom: 24px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface); }
+.appearance-preview[data-surface="glass"] { background: linear-gradient(135deg,#8fbcaa18,#708bba14),#ffffff06; box-shadow: inset 0 1px #ffffff18; }
+.appearance-preview strong { display: block; margin-top: 20px; font-size: 22px; font-weight: 500; }
+.appearance-preview > div { color: var(--accent); }
+.appearance-form .preferences-fields { display: grid; gap: 24px; }
+.appearance-form .appearance-preview { margin-bottom: 0; }
+.appearance-form label:not(.assistant-check) { display: grid; gap: 8px; }
+.appearance-form input[type="range"] { width: 100%; accent-color: var(--accent); }

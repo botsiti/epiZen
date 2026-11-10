@@ -234,3 +234,7 @@ export const deleteEvent = (at: Occurrence) => invoke<void>('calendar_delete', {
 export const openCalendarSettings = () => invoke<void>('calendar_open_settings');
 
 export const onPetWake = (handler: () => void) => listen('epizen://pet-wake', handler);
+
+export const resizeQuickPrompt = (height: number) => invoke<void>('prompt_resize', { height });
+
+export const applyAppearance = (glass: boolean) => invoke<void>('apply_appearance', { glass });

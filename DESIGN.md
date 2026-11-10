@@ -718,6 +718,14 @@ with a brief entrance and a small companion hop; Reduce Motion disables both.
 
 The microphone meter reflects measured audio energy. Listening, transcription, failure and retry
 remain explicit states. Model and reasoning effort use labelled native dropdowns, with a custom
-model escape hatch. Explicit effort reaches both Codex and the API adapter; Connection default preserves legacy routing. Optional Liquid glass uses
-a small native material for the prompt and tinted, lit surfaces for settings; it does not apply a
+model escape hatch. Explicit effort reaches both Codex and the API adapter; Connection default preserves legacy routing. App-wide Appearance settings offer Liquid glass, opacity, and optional ambient motion for every vault.
+Native macOS material sits behind the transparent workspace and the compact prompt; it does not apply a
 window-sized WebKit blur. Ambient movement is opt-in and respects Reduce Motion.
+
+
+The default text prompt is a 440px-wide single-row pill, approximately 56px high. It grows with
+multiline text (up to 96px) and actionable feedback rather than reserving a large empty window.
+Old replies stay hidden on a fresh opening. Native bounds follow measured content and remain within
+the display work area. Appearance is one global app preference, independent of Spike and vaults.
+When local speech reports service failure, guide the user to macOS Keyboard → Dictation and retain
+the recording for retry. Never silently route on-device recordings to a cloud provider.

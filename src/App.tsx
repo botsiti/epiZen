@@ -1,3 +1,5 @@
+import { appearanceSettings, type Appearance } from './lib/appearance';
+import { applyAppearance } from './lib/api';
 import { collectHabits, withHabits, habitActive, habitHistory, habitStats } from './lib/habits';
 import { HabitsPage } from './components/habits/HabitsPage';
 import { useHabitActions } from './components/habits/useHabitActions';
@@ -153,6 +155,18 @@ export function App() {
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
   const [settings, setSettings] = useState<Settings>({});
+  const appearance = useMemo(() => appearanceSettings(settings.appearance), [settings.appearance]);
+  const [appearanceError, setAppearanceError] = useState<string>();
+  useEffect(() => {
+    let gone = false;
+    const root = document.documentElement;
+    root.dataset.appearance = appearance.surface; root.dataset.ambient = String(appearance.motion);
+    root.style.setProperty('--glass-opacity', String(appearance.opacity));
+    void applyAppearance(appearance.surface === 'glass').then(() => { if (!gone) setAppearanceError(undefined); }).catch((error: unknown) => { if (!gone) { root.dataset.appearance = 'solid'; setAppearanceError(String(error)); } });
+    return () => { gone = true; };
+  }, [appearance]);
+  const saveAppearance = async (value: Appearance) => { setSettings(await updateSettings({ appearance: value })); };
+
   const timerBusy = useRef(false);
   // Every note's text, for links, backlinks and the graph. Saves and new notes keep it current.
   const [texts, setTexts] = useState<ReadonlyMap<string, string>>(new Map());
@@ -1027,7 +1041,7 @@ export function App() {
             {view.kind === 'new' && view.item === 'base' && <NewBase root={status.root} folder={view.folder} folders={folders} onCreated={async (path) => { await refresh(); openNote(path); }} />}
             {view.kind === 'new' && view.item !== 'base' && <NewNote key={`${tab.index}-${view.item ?? 'note'}`} kind={view.item ?? 'note'} folders={folders} folder={view.folder} onNewNote={(folder) => go({ kind: 'new', folder })} onCreate={view.item === 'folder' ? async (path) => { await createFolder(path); setFolders((previous) => [...new Set([...previous, path])]); } : create} />}
             {view.kind === 'graph' && plugins.graph && <PluginSurface id="graph"><GraphView graph={graph} onOpen={openNote} /></PluginSurface>}
-            {view.kind === 'settings' && <SettingsScreen appearance={assistantSettings.appearance} ambientMotion={assistantSettings.ambientMotion} spikeSettings={(onBack) => <AssistantConfiguration value={assistantSettings} pluginEnabled={plugins.spike} profileExists={files.some((file) => file.path === assistantSettings.profilePath)} onSave={saveAssistantSettings} onOpenProfile={() => openNote(assistantSettings.profilePath)} onBack={onBack} />} pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
+            {view.kind === 'settings' && <SettingsScreen appearance={appearance} onSaveAppearance={saveAppearance} appearanceError={appearanceError} spikeSettings={(onBack) => <AssistantConfiguration value={assistantSettings} pluginEnabled={plugins.spike} profileExists={files.some((file) => file.path === assistantSettings.profilePath)} onSave={saveAssistantSettings} onOpenProfile={() => openNote(assistantSettings.profilePath)} onBack={onBack} />} pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
             {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
           </Fragment>
         </main>
@@ -1045,7 +1059,7 @@ export function App() {
           onOpen={openNote}
         />
       )}
-      {plugins.spike && <AssistantWorkspace key={status.root} context={{ root: status.root, now, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenNote={(path, cbt) => { if (cbt) setAssistantCbt({ path, token: Date.now() }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
+      {plugins.spike && <AssistantWorkspace glass={appearance.surface === 'glass'} key={status.root} context={{ root: status.root, now, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenNote={(path, cbt) => { if (cbt) setAssistantCbt({ path, token: Date.now() }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
     </div></PluginDisplayProvider>
   );
 }

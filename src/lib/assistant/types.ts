@@ -12,8 +12,6 @@ export interface AssistantSettings {
   speakReplies: boolean;
   model: string;
   effort: 'default' | 'low' | 'medium' | 'high' | 'xhigh';
-  appearance: 'solid' | 'glass';
-  ambientMotion: boolean;
   profilePath: string;
   inboxFolder: string;
   shareCurrentNote: boolean;
@@ -21,7 +19,7 @@ export interface AssistantSettings {
 }
 export const DEFAULT_ASSISTANT: AssistantSettings = {
   provider: 'codex', voice: voiceSettings(undefined),
-  enabled: false, desktopPet: false, petMotion: true, speakReplies: false, model: 'gpt-6.1-sol', effort: 'default', appearance: 'solid', ambientMotion: false,
+  enabled: false, desktopPet: false, petMotion: true, speakReplies: false, model: 'gpt-6.1-sol', effort: 'default',
   profilePath: 'Assistant/Profile.md', inboxFolder: 'Inbox', shareCurrentNote: true, allowChanges: false,
 };
 export interface AssistantContext {
@@ -113,7 +111,6 @@ export function assistantSettings(value: unknown): AssistantSettings {
     enabled: saved.enabled === true, desktopPet: saved.desktopPet === true, petMotion: saved.petMotion !== false, speakReplies: saved.speakReplies === true,
     shareCurrentNote: saved.shareCurrentNote !== false, allowChanges: saved.allowChanges === true,
     effort: saved.effort === 'low' || saved.effort === 'medium' || saved.effort === 'high' || saved.effort === 'xhigh' ? saved.effort : 'default',
-    appearance: saved.appearance === 'glass' ? 'glass' : 'solid', ambientMotion: saved.ambientMotion === true,
     model: text('model'), profilePath: text('profilePath'), inboxFolder: text('inboxFolder'),
   };
 }

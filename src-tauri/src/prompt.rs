@@ -11,8 +11,8 @@ pub const EVENT: &str = "epizen://prompt-state";
 pub const COMMAND: &str = "epizen://prompt-command";
 pub const TEXT_SHORTCUT: &str = "Command+Shift+Space";
 pub const VOICE_SHORTCUT: &str = "Command+Alt+Shift+Space";
-const WIDTH: f64 = 580.0;
-const HEIGHT: f64 = 360.0;
+const WIDTH: f64 = 440.0;
+const HEIGHT: f64 = 64.0;
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Capture { pub id: String, pub text: String, pub error: Option<String> }
@@ -39,7 +39,7 @@ impl Prompt { pub fn enabled(&self) -> bool { self.state.lock().unwrap_or_else(|
 /// Tauri's plugin ACL covers plugin commands; app commands need this explicit window boundary.
 pub fn command_allowed(label: &str, command: &str) -> bool {
     match label {
-        LABEL => matches!(command, "prompt_state" | "prompt_save" | "prompt_submit" | "prompt_open" | "prompt_hide" | "prompt_open_main" | "prompt_consumed" | "prompt_flushed" | "assistant_transcribe" | "assistant_cancel"),
+        LABEL => matches!(command, "prompt_state" | "prompt_save" | "prompt_submit" | "prompt_open" | "prompt_hide" | "prompt_resize" | "prompt_open_main" | "prompt_consumed" | "prompt_flushed" | "assistant_transcribe" | "assistant_cancel"),
         crate::pet::LABEL => matches!(command, "pet_state" | "pet_position" | "pet_move" | "pet_open_main" | "pet_hide" | "pet_motion" | "prompt_open"),
         _ => true,
     }
@@ -230,6 +230,20 @@ pub async fn prompt_open(app: AppHandle, window: WebviewWindow, dictate: bool) -
     show(&app, dictate)
 }
 #[tauri::command]
+pub fn prompt_resize(window: WebviewWindow, height: f64) -> Result<(), String> {
+    from_window(&window, &[LABEL])?;
+    if !height.is_finite() { return Err("Invalid prompt size.".into()); }
+    let height = height.clamp(56.0, 320.0);
+    window.set_size(tauri::LogicalSize::new(WIDTH, height)).map_err(|error| error.to_string())?;
+    if let (Ok(Some(monitor)), Ok(position)) = (window.current_monitor(), window.outer_position()) {
+        let area = monitor.work_area();
+        let bottom = area.position.y as f64 + area.size.height as f64;
+        let y = (position.y as f64).min(bottom - height * monitor.scale_factor()).max(area.position.y as f64);
+        if y.round() as i32 != position.y { window.set_position(PhysicalPosition::new(position.x, y.round() as i32)).map_err(|error| error.to_string())?; }
+    }
+    Ok(())
+}
+#[tauri::command]
 pub async fn prompt_hide(app: AppHandle, window: WebviewWindow, opened: u64) -> Result<(), String> {
     from_window(&window, &[LABEL])?;
     let prompt = app.state::<Prompt>(); let _operation = prompt.operation.lock().await;
@@ -281,7 +295,7 @@ mod tests {
     use super::*;
     #[test]
     fn companion_windows_cannot_bypass_the_workspace_write_and_execution_boundary() {
-        for command in ["write_note", "write_note_scoped", "create_note", "create_folder", "trash_note", "rename_note", "create_base", "write_base", "save_expense_photo", "fetch_image_into_vault", "calendar_create", "calendar_update", "calendar_delete", "assistant_respond", "assistant_apply_note", "assistant_set_key", "voice_set_key", "update_settings", "get_settings", "read_all_notes", "prompt_finish"] {
+        for command in ["write_note", "write_note_scoped", "create_note", "create_folder", "trash_note", "rename_note", "create_base", "write_base", "save_expense_photo", "fetch_image_into_vault", "calendar_create", "calendar_update", "calendar_delete", "assistant_respond", "assistant_apply_note", "assistant_set_key", "voice_set_key", "update_settings", "get_settings", "apply_appearance", "read_all_notes", "prompt_finish"] {
             assert!(!command_allowed(LABEL, command), "{command}");
             assert!(!command_allowed(crate::pet::LABEL, command), "{command}");
             assert!(command_allowed("main", command));

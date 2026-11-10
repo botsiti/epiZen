@@ -36,6 +36,20 @@ describe('Spike conversations and second-brain actions', () => {
       else await expect($('[data-testid="assistant-sidebar"]')).not.toBeExisting();
     }
   });
+  it('persists whole-app glass independently of Spike and restores solid appearance', async () => {
+    await browser.execute(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, bubbles: true, cancelable: true })));
+    await $('[data-testid="settings-nav-appearance"]').click();
+    await selectOption('[aria-label="Application surface"]', 'glass');
+    await $('button=Save appearance').click();
+    await browser.waitUntil(async () => browser.execute(() => document.documentElement.dataset.appearance === 'glass'));
+    await screenshot('228-app-appearance');
+    await browser.refresh(); await prepareWindow();
+    expect(await browser.execute(() => document.documentElement.dataset.appearance)).toBe('glass');
+    await $('[data-testid="settings-nav-appearance"]').click();
+    await selectOption('[aria-label="Application surface"]', 'solid');
+    await $('button=Save appearance').click();
+    await browser.waitUntil(async () => browser.execute(() => document.documentElement.dataset.appearance === 'solid'));
+  });
   it('connects with a test-only key and adds a requested film through a reviewed note change', async () => {
     const before = snapshotVault(root);
     await $('[data-testid="open-assistant"]').click();
@@ -203,6 +217,7 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.switchToWindow('spike-prompt');
     await $('[aria-label="Quick message to Spike"]').waitForExist();
     await browser.execute(() => { document.documentElement.dataset.motion = 'off'; });
+    await browser.waitUntil(async () => browser.execute(() => innerWidth <= 440 && innerHeight <= 80));
     await $('[aria-label="Quick message to Spike"]').setValue('Remember that I enjoy quiet walks.');
     await $('[aria-label="Close quick prompt"]').click();
     await browser.switchToWindow('main');
@@ -339,12 +354,14 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.switchToWindow('spike-prompt');
     await $('[aria-label="Quick message to Spike"]').waitForExist();
     await browser.execute(() => { document.documentElement.dataset.motion = 'off'; });
-    await $('button=Open conversation ↗').click();
+    await $('button[aria-label="Open conversation"]').click();
     await browser.switchToWindow('main');
     await expect($('[aria-label="Message Spike"]')).toHaveValue('Keep this unsent thought while Spike stays on my desktop.');
     await browser.switchToWindow('spike'); await browser.switchToWindow('main'); await $('[aria-label="Assistant settings"]').click(); await $('.assistant-sidebar').$('button=Hide desktop Spike').click(); await browser.switchToWindow('spike');
     await browser.waitUntil(async () => !(await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { isVisible: () => Promise<boolean> } } } }).__TAURI__.window.getCurrentWindow().isVisible())));
     await browser.switchToWindow('main');
+    await $('.assistant-sidebar').$('button=← Conversation').click();
+    await expect($('[aria-label="Message Spike"]')).toHaveValue('Keep this unsent thought while Spike stays on my desktop.');
     await screenshot('221-spike-restored-draft');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
   });

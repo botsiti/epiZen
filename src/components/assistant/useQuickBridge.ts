@@ -4,10 +4,10 @@ import { flushBeforeClose } from '../../lib/saving';
 import type { AssistantController, AssistantSnapshot } from './controller';
 import type { AssistantSettings } from '../../lib/assistant/types';
 
-export function useQuickBridge(root: string, controller: AssistantController, snapshot: AssistantSnapshot, settings: AssistantSettings) {
+export function useQuickBridge(root: string, controller: AssistantController, snapshot: AssistantSnapshot, settings: AssistantSettings, glassSurface = false) {
   const [ready, setReady] = useState(false), [error, setError] = useState<string>();
   const pending = useRef<QuickSnapshot['document']['pending']>(null), handling = useRef(new Set<string>());
-  const status: QuickStatus = { glass: settings.appearance === 'glass', connected: settings.enabled && snapshot.configured && snapshot.loaded, busy: snapshot.busy || snapshot.switching, review: snapshot.thread.actions.some((action) => action.status === 'review' || action.status === 'failed') || Boolean(snapshot.thread.run && snapshot.thread.run.phase !== 'complete' && !snapshot.busy), label: snapshot.error ?? (snapshot.busy ? snapshot.progress ?? 'Thinking…' : 'Ready when you are'), reply: snapshot.thread.messages.filter((message) => message.role === 'assistant').at(-1)?.text.slice(0, 1500) ?? '', voice: settings.voice };
+  const status: QuickStatus = { glass: glassSurface, connected: settings.enabled && snapshot.configured && snapshot.loaded, busy: snapshot.busy || snapshot.switching, review: snapshot.thread.actions.some((action) => action.status === 'review' || action.status === 'failed') || Boolean(snapshot.thread.run && snapshot.thread.run.phase !== 'complete' && !snapshot.busy), label: snapshot.error ?? (snapshot.busy ? snapshot.progress ?? 'Thinking…' : 'Ready when you are'), reply: snapshot.thread.messages.filter((message) => message.role === 'assistant').at(-1)?.text.slice(0, 1500) ?? '', voice: settings.voice };
   const latest = useRef({ status, snapshot });
   useEffect(() => { latest.current = { status, snapshot }; });
   const process = useRef<() => void>(() => undefined);
