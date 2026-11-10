@@ -88,7 +88,7 @@ fn request_command(binary: &Path, request: &AgentRequest, schema_path: &Path, sc
     let mut cmd = command(binary);
     // The web tool uses this execution host even when Code Mode itself is disabled.
     // Keep local writes sandboxed and non-interactive; approved writes belong to Epizen.
-    cmd.args(["-c", &format!("model_reasoning_effort={:?}", request.effort)]);
+    cmd.args(["-c", &format!("model_reasoning_effort={:?}", if request.effort == "default" { "low" } else { &request.effort })]);
     cmd.current_dir(scratch).args(["exec","--ignore-user-config","--ignore-rules","--ephemeral","--skip-git-repo-check","--sandbox","read-only","--json","--color","never","--output-schema"]).arg(schema_path).args(["--model",&request.model,"-c","approval_policy=\"never\"","-c","project_doc_max_bytes=0","-c","skills.include_instructions=false","-c","web_search=\"live\"","--enable","code_mode_host"]);
     for feature in ["shell_tool","view_image","hooks","plugins","apps","multi_agent","multi_agent_v2","computer_use","browser_use","in_app_browser","skill_search","remote_plugin","image_generation","goals","code_mode"] { cmd.args(["--disable",feature]); }
     cmd.arg("-");
@@ -129,6 +129,9 @@ mod tests {
         assert!(cmd.as_std().get_args().any(|arg| arg == "model_reasoning_effort=\"high\""));
         let body: Value = serde_json::from_slice(&req.body().unwrap()).unwrap();
         assert_eq!(body["reasoning"]["effort"], "high");
+        req.effort = "default".into();
+        let body: Value = serde_json::from_slice(&req.body().unwrap()).unwrap();
+        assert!(body.get("reasoning").is_none());
         req.effort = "invalid".into(); assert!(req.body().is_err());
     }
     #[test] fn turns_proposed_actions_into_the_existing_review_contract() {

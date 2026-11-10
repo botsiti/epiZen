@@ -223,21 +223,23 @@ pub struct AgentRequest {
     input: Vec<Value>,
     tools: Vec<Value>,
 }
-fn default_effort() -> String { "low".into() }
+fn default_effort() -> String { "default".into() }
 impl AgentRequest {
     fn body(&self) -> Result<Vec<u8>, String> {
-        if !matches!(self.effort.as_str(), "low" | "medium" | "high" | "xhigh") { return Err("Choose a supported reasoning effort.".into()); }
+        if !matches!(self.effort.as_str(), "default" | "low" | "medium" | "high" | "xhigh") { return Err("Choose a supported reasoning effort.".into()); }
         if self.model.is_empty() || self.model.len() > 128 || !self.model.bytes().all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b)) {
             return Err("Choose a valid model identifier.".to_owned());
         }
         if self.instructions.len() > 100_000 || self.input.is_empty() || self.input.len() > 400 || self.tools.len() > 40 {
             return Err("This conversation is too large. Start a new conversation.".to_owned());
         }
-        let bytes = serde_json::to_vec(&json!({
-            "model": self.model, "reasoning": {"effort": self.effort}, "instructions": self.instructions, "input": self.input,
+        let mut body = json!({
+            "model": self.model, "instructions": self.instructions, "input": self.input,
             "tools": self.tools, "store": false, "parallel_tool_calls": false, "max_output_tokens": 5000,
             "include": ["reasoning.encrypted_content"],
-        })).map_err(|_| "Couldn’t prepare this conversation.".to_owned())?;
+        });
+        if self.effort != "default" { body["reasoning"] = json!({"effort": self.effort}); }
+        let bytes = serde_json::to_vec(&body).map_err(|_| "Couldn’t prepare this conversation.".to_owned())?;
         if bytes.len() > 1_000_000 { return Err("This conversation is too large. Start a new conversation.".to_owned()); }
         Ok(bytes)
     }

@@ -93,7 +93,7 @@ async function assistantRequest<T>(command: string, args: Record<string, unknown
   try { const result = await invoke<T>(command, { ...args, requestId }); signal?.throwIfAborted(); return result; }
   finally { signal?.removeEventListener('abort', cancel); }
 }
-export const assistantRespond = (request: { provider?: 'openai' | 'codex'; model: string; effort?: 'low' | 'medium' | 'high' | 'xhigh'; instructions: string; input: Record<string, unknown>[]; tools: Record<string, unknown>[] }, signal?: AbortSignal) => assistantRequest<unknown>('assistant_respond', { request }, signal);
+export const assistantRespond = (request: { provider?: 'openai' | 'codex'; model: string; effort?: 'default' | 'low' | 'medium' | 'high' | 'xhigh'; instructions: string; input: Record<string, unknown>[]; tools: Record<string, unknown>[] }, signal?: AbortSignal) => assistantRequest<unknown>('assistant_respond', { request }, signal);
 export const assistantTranscribe = (audio: Uint8Array, mime: string, signal?: AbortSignal, provider: 'openai' | 'codex' = 'openai', voice?: VoiceSettings) => assistantRequest<string>('assistant_transcribe', { request: { audio: Array.from(audio), mime, provider, ...(voice ? { voice } : {}) } }, signal);
 export const voiceConnection = (provider: VoiceProvider) => invoke<{ configured: boolean }>('voice_connection', { provider });
 export const setVoiceKey = (provider: VoiceProvider, key: string | null) => invoke<void>('voice_set_key', { provider, key });

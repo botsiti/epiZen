@@ -718,6 +718,6 @@ with a brief entrance and a small companion hop; Reduce Motion disables both.
 
 The microphone meter reflects measured audio energy. Listening, transcription, failure and retry
 remain explicit states. Model and reasoning effort use labelled native dropdowns, with a custom
-model escape hatch. The effort reaches both Codex and the API adapter. Optional Liquid glass uses
+model escape hatch. Explicit effort reaches both Codex and the API adapter; Connection default preserves legacy routing. Optional Liquid glass uses
 a small native material for the prompt and tinted, lit surfaces for settings; it does not apply a
 window-sized WebKit blur. Ambient movement is opt-in and respects Reduce Motion.
