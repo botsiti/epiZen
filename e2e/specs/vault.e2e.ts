@@ -273,7 +273,7 @@ describe('the demo vault', () => {
     await closeTool('library-filter');
     expect(await $$('[data-testid="library-card"]').length).toBe(10);
     expect(new Set(await browser.execute(() => [...document.querySelectorAll('[data-testid="library-card"]')].map((card) => card.getAttribute('data-kind'))))).toEqual(new Set(['film', 'book']));
-    await expect($('[data-testid="library-filters"]')).toHaveText('Films · Books');
+    await expect($('[data-testid="filter-kinds"] .pill-value')).toHaveText('Films, Books');
     await expect($('[data-testid="library-count"]')).toHaveText('10 results');
     await browser.waitUntil(async () => (await $$('.library-cover-image[data-testid="vault-image"]').length) === 10, { timeoutMsg: 'the film and book covers never loaded' });
     await screenshot('81-library-all-kinds');
