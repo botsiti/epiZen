@@ -16,9 +16,14 @@ function validCall(value: unknown): value is ToolCall {
   const item = object(value);
   return item.type === 'function_call' && string(item.call_id) && string(item.name) && string(item.arguments);
 }
+function validArtwork(value: unknown): boolean {
+  if (value === undefined) return true;
+  const artwork = object(value);
+  return string(artwork.url) && string(artwork.path) && string(artwork.embed) && artwork.url.length <= 8000 && artwork.path.length <= 1024 && artwork.embed.length <= 1200;
+}
 function validChange(value: unknown, root: string): value is AssistantChange {
   const item = object(value);
-  return item.root === root && string(item.description) && (item.kind === 'note' ? string(item.path) && (item.before === null || string(item.before)) && string(item.after) : item.kind === 'calendar' && string(item.calendar) && string(item.title) && typeof item.start === 'number' && Number.isFinite(item.start) && typeof item.end === 'number' && Number.isFinite(item.end) && (item.notes === undefined || string(item.notes)));
+  return item.root === root && string(item.description) && (item.kind === 'note' ? validArtwork(item.artwork) && string(item.path) && (item.before === null || string(item.before)) && string(item.after) : item.kind === 'calendar' && (item.avoidConflicts === undefined || typeof item.avoidConflicts === 'boolean') && string(item.calendar) && string(item.title) && typeof item.start === 'number' && Number.isFinite(item.start) && typeof item.end === 'number' && Number.isFinite(item.end) && (item.notes === undefined || string(item.notes)));
 }
 function validSources(value: unknown): boolean {
   return value === undefined || Array.isArray(value) && value.length <= 20 && value.every((raw) => { const source = object(raw); return string(source.title) && string(source.url) && /^https?:\/\//i.test(source.url); });
@@ -39,7 +44,7 @@ export function parseConversation(value: unknown, root: string, id: string): { r
     const action = object(raw);
     if (!string(action.id) || !validCall(action.call) || !validChange(action.change, root) || !['review', 'approved', 'saved', 'failed', 'declined'].includes(String(action.status)) || (action.error !== undefined && !string(action.error))) return invalid();
     const result = object(action.result);
-    if (result.openPath !== undefined && !string(result.openPath) || result.openCbt !== undefined && typeof result.openCbt !== 'boolean' || result.change !== undefined && !validChange(result.change, root)) return invalid();
+    if (result.openCalendar !== undefined && (typeof result.openCalendar !== 'number' || !Number.isFinite(result.openCalendar)) || result.openPath !== undefined && !string(result.openPath) || result.openCbt !== undefined && typeof result.openCbt !== 'boolean' || result.startCbt !== undefined && typeof result.startCbt !== 'boolean' || result.change !== undefined && !validChange(result.change, root)) return invalid();
   }
   if (state.run !== undefined) {
     const run = object(state.run);

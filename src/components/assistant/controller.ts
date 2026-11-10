@@ -1,8 +1,9 @@
 import * as api from '../../lib/api';
 import { ActionNeedsReview, continueRun, parseAgentResponse, startRun } from '../../lib/assistant/agent';
-import { assistantInstructions } from '../../lib/assistant/context';
+import { withSavedCover } from '../../lib/assistant/changes';
+import { assistantInstructions, readAssistantGuidance } from '../../lib/assistant/context';
 import { conversationMarkdown, newConversation, parseConversation, parseConversationList, recentContext, stoppedRun, type Conversation, type ConversationAction, type ConversationSummary } from '../../lib/assistant/conversation';
-import { ASSISTANT_TOOLS, createToolHandler } from '../../lib/assistant/tools';
+import { ASSISTANT_TOOLS, assertToolAvailable, createToolHandler } from '../../lib/assistant/tools';
 import type { AgentRun, AssistantContext, AssistantProvider, ToolCall, ToolResult } from '../../lib/assistant/types';
 import { KINDS, noteFileName } from '../../lib/library';
 import { parseSearch, readDetails, searchRequests, type Service } from '../../lib/lookup';
@@ -11,8 +12,9 @@ import { trackSave } from '../../lib/saving';
 export interface AssistantHost {
   context: () => AssistantContext;
   onSaved: (path: string, text: string) => void;
-  onOpen: (path: string, cbt?: boolean) => void;
+  onOpen: (path: string, cbt?: boolean, startCbt?: boolean) => void;
   onRefresh: () => Promise<void>;
+  onOpenCalendar?: (time: number) => void;
   onReply?: (text: string) => void;
 }
 export interface AssistantSnapshot {
@@ -214,7 +216,9 @@ export class AssistantController {
         respond: async (input, signal) => {
           this.active(signal); this.update({ progress: 'Thinking' });
           const context = this.context();
-          const raw = await api.assistantRespond({ provider: context.settings.provider, model: context.settings.model, effort: context.settings.effort, instructions: assistantInstructions(context), input, tools: [...ASSISTANT_TOOLS, { type: 'web_search' }] }, signal);
+          const guidance = await readAssistantGuidance(context, api.assistantReadNote);
+          this.active(signal);
+          const raw = await api.assistantRespond({ provider: context.settings.provider, model: context.settings.model, effort: context.settings.effort, instructions: assistantInstructions(context, guidance), input, tools: [...ASSISTANT_TOOLS, { type: 'web_search' }] }, signal);
           this.active(signal); return parseAgentResponse(raw);
         },
         execute: (call, signal) => this.execute(call, signal),
@@ -239,6 +243,14 @@ export class AssistantController {
     let entry = this.snapshot.thread.actions.find((action) => action.id === id);
     const result = entry ? entry.result : await this.executeTool(call, signal);
     this.active(signal);
+    if (entry?.status !== 'saved' && entry?.status !== 'declined') {
+      try { assertToolAvailable(call.name, this.context()); }
+      catch (error) {
+        if (!entry) throw error;
+        this.action({ ...entry, status: 'failed', error: reason(error) }); await this.persist();
+        throw new ActionNeedsReview(call, result);
+      }
+    }
     if (result.change) {
       if (!entry) {
         entry = { id, call, result, change: result.change, status: this.context().settings.allowChanges ? 'approved' : 'review' };
@@ -249,31 +261,45 @@ export class AssistantController {
       if (entry.status === 'declined') return { value: 'The user declined this change.' };
       if (entry.status !== 'saved') {
         this.active(signal);
-        let written = false;
+        let written = false, savedCover: string | undefined;
+        let appliedChange = entry.change;
         try {
           const change = entry.change;
           if (change.kind === 'note') {
-            await api.assistantApplyNote({ id, root: this.root, path: change.path, before: change.before, after: change.after });
-            if (this.alive) this.host.onSaved(change.path, change.after);
-          } else await api.assistantApplyCalendar({ id, root: this.root, calendar: change.calendar, title: change.title, start: change.start, end: change.end, notes: change.notes });
+            let after = change.after;
+            if (change.artwork) {
+              savedCover = await api.assistantPrepareCover({ id, root: this.root, note: change.path, path: change.artwork.path, url: change.artwork.url });
+              this.active(signal); assertToolAvailable(call.name, this.context());
+              after = withSavedCover(change, savedCover);
+            }
+            await api.assistantApplyNote({ id, root: this.root, path: change.path, before: change.before, after });
+            appliedChange = { ...change, after };
+            if (this.alive) this.host.onSaved(change.path, after);
+          } else await api.assistantApplyCalendar({ id, root: this.root, calendar: change.calendar, title: change.title, start: change.start, end: change.end, notes: change.notes, avoidConflicts: change.avoidConflicts });
           written = true;
-          this.action({ ...entry, status: 'saved', error: undefined }); await this.persist();
+          this.action({ ...entry, change: appliedChange, status: 'saved', error: undefined }); await this.persist();
         } catch (error) {
-          this.action({ ...entry, status: written ? 'saved' : 'failed', error: reason(error) });
+          this.action({ ...entry, change: written ? appliedChange : entry.change, status: written ? 'saved' : 'failed', error: `${reason(error)}${!written && savedCover ? ` The cover is retained at ${savedCover}; retrying reuses it.` : ''}` });
           this.update({ error: written ? 'Your change was saved, but the conversation could not be saved. Resume once storage is available.' : reason(error) });
           await this.persist().catch(() => undefined);
           throw new ActionNeedsReview(call, result);
         }
       }
       if (this.alive && !signal.aborted) {
-        if (result.openPath) this.host.onOpen(result.openPath, result.openCbt);
         // A refresh failure must not turn a confirmed save into a repeatable failed write.
         await this.host.onRefresh().catch(() => this.update({ error: 'Your change was saved. Refresh the vault to see its latest state.' }));
+        if (result.openPath || result.openCalendar !== undefined) await this.openResult(result).catch(() => this.update({ error: 'Your change was saved, but its page could not be opened. Open it from the file list.' }));
       }
       return { value: { saved: true, description: entry.change.description, path: entry.change.kind === 'note' ? entry.change.path : undefined } };
     }
-    if (result.openPath) this.host.onOpen(result.openPath, result.openCbt);
+    if (result.openPath || result.openCalendar !== undefined) await this.openResult(result);
     return result;
+  }
+  private async openResult(result: ToolResult) {
+    await api.assistantShowWorkspace(this.root);
+    this.context();
+    if (result.openCalendar !== undefined) this.host.onOpenCalendar?.(result.openCalendar);
+    if (result.openPath) this.host.onOpen(result.openPath, result.openCbt, result.startCbt);
   }
   review = async (id: string, accept: boolean) => {
     if (this.snapshot.busy) return;

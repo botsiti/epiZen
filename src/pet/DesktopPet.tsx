@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { movePet, onPetWake, onPetState, openQuickPrompt, petPosition, petState, setPetMotion, type PetPosition, type PetStatus } from '../lib/api';
+import { hidePet, movePet, onPetWake, onPetState, openQuickPrompt, petPosition, petState, setPetMotion, type PetPosition, type PetStatus } from '../lib/api';
 import { Spike } from '../components/assistant/Spike';
 import { SPIKE_FRAMES, type SpikeState } from '../lib/assistant/spike';
 
@@ -47,8 +47,8 @@ export function DesktopPet() {
     return () => { gone = true; stop?.(); };
   }, []);
   const perform = (action: () => Promise<void>) => { setError(undefined); void action().catch((error: unknown) => setError(String(error))); };
-  return <main className="desktop-pet" data-testid="desktop-pet">
-    <div className={`pet-body${wake && status.motion ? ' is-waking' : ''}`} role="button" tabIndex={0} aria-label="Talk to Spike · drag to move" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); perform(() => openQuickPrompt()); } }} title={`${status.label} · Drag to move`} onPointerDown={(event) => {
+  return <main className={`desktop-pet${status.promptOpen ? ' has-prompt' : ''}`} data-testid="desktop-pet">
+    <div className={`pet-body${wake && status.motion ? ' is-waking' : ''}`} role="button" tabIndex={0} aria-label="Talk to Spike · drag to move" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); perform(() => openQuickPrompt()); } }} onContextMenu={(event) => { event.preventDefault(); endDrag(); perform(hidePet); }} title={`${status.label} · Drag to move · Right-click to hide · ⇧⌘Space to show`} onPointerDown={(event) => {
       if (event.button !== 0) return;
       event.preventDefault(); setError(undefined);
       // Pointer capture survives leaving the transparent window. Track the active

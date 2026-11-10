@@ -47,10 +47,10 @@ Choose the assistant connection in Spike settings:
 - **OpenAI API:** uses a key stored in macOS Keychain; API usage is billed separately.
 
 Show the desktop companion before or after connecting. Drag Spike to move him, pause his animation,
-click him or **Talk** for the compact prompt, or hide him. System Reduce Motion is respected.
+click him or **Text** for the prompt directly below him, or right-click to hide him. ⇧⌘Space brings both back and hides them on a second press. System Reduce Motion is respected.
 
 Use the prompt from other apps, or open the full sidebar with ⌘8. Spike can capture ordinary notes
-and links, search relevant notes and past conversations, add library entries, remember preferences
+and links, search relevant notes and past conversations, add library entries with catalogue covers, dates, ratings and comments, remember preferences
 in an editable profile note, propose calendar events and save CBT thought records. Proposed changes
 show their destination and full text for review unless automatic application was explicitly enabled.
 The quick prompt uses the same controller and conditional-write path as the sidebar.
@@ -102,7 +102,7 @@ Calendar denial, a provider failure or a failed optional screen does not prevent
 | --- | --- |
 | ⌘7 / ⌘9 | Left / right workspace sidebar |
 | ⌘8 | Spike conversation sidebar |
-| ⇧⌘Space | Global Spike quick prompt, open/close |
+| ⇧⌘Space | Show/hide Spike and his prompt |
 | ⌥⇧⌘Space | Global Spike dictation, start/finish |
 | ⌃3 | Collapse all explorer folders |
 | ⌘N / ⌘, | New note / Settings |
@@ -125,3 +125,11 @@ reported locally and clicking the companion remains available.
 - Microphone, local Speech Recognition and Calendar features depend on macOS permissions and support.
 - Physical microphone and account-specific paid-provider behaviour cannot be proven by offline tests;
   release notes distinguish automated, native, live and deferred validation.
+
+Spike can open today’s CBT form, add categorized daily tasks, create weekly/monthly quests,
+update requested periodic fields, and schedule a full-duration free calendar block from a part
+of the day. The normal review/automatic preference applies. Calendar availability is checked
+again before a suggested slot is saved. The built-in `SPIKE.MD` and the current vault’s root
+`AGENTS.md`/`SPIKE.MD` provide bounded conversation guidance; hidden memory archives stay private.
+
+A saved calendar block opens its date in the calendar. Library cover downloads happen only when a proposed entry is applied. A failed download keeps the proposal available; retries reuse the same saved attachment instead of creating duplicates. The saved entry opens its media page.

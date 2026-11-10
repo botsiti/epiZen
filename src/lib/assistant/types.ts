@@ -30,6 +30,7 @@ export interface AssistantContext {
   currentPath?: string;
   dailyPath?: string;
   dailyAmbiguous?: boolean;
+  features?: { periodic: boolean; cbt: boolean; quests: boolean; library: boolean; calendar: boolean };
   periodic: PeriodicSettings;
   recognition?: PeriodicRecognition;
   settings: AssistantSettings;
@@ -59,6 +60,7 @@ export interface AgentRun {
   sources?: AssistantSource[];
 }
 export interface NoteChange {
+  artwork?: { url: string; path: string; embed: string };
   kind: 'note';
   root: string;
   path: string;
@@ -68,6 +70,7 @@ export interface NoteChange {
 }
 export interface CalendarChange {
   kind: 'calendar';
+  avoidConflicts?: boolean;
   root: string;
   calendar: string;
   title: string;
@@ -83,7 +86,7 @@ export interface ActionReceipt {
   state: 'prepared' | 'done';
   result?: string;
 }
-export interface ToolResult { value?: unknown; change?: AssistantChange; openPath?: string; openCbt?: boolean }
+export interface ToolResult { openCalendar?: number; value?: unknown; change?: AssistantChange; openPath?: string; openCbt?: boolean; startCbt?: boolean }
 
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected an object.');

@@ -3,6 +3,13 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.12.0 — 2026-11-10
+
+Spike's prompt follows directly below him, with right-click hiding and a shared global toggle.
+Requests open the CBT form, add categorized tasks and quests, fill periodic fields, capture
+Library entries with covers, and schedule free calendar blocks. Editable root guides supply
+fresh conversation context. [Full release notes](releases/0.12.0.md).
+
 ## 0.11.0 — 2026-11-10
 
 Reliable Retina prompt placement and close/reopen recovery, separate Text/Speak controls,

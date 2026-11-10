@@ -115,3 +115,17 @@ it('scopes a delayed close to the opening it belongs to', async () => {
   expect(input).not.toHaveFocus();
   expect(screen.getByLabelText('Quick message to Spike')).toHaveValue('Preserve across reopen');
 });
+
+it('saves a shortcut or right-click close before hiding and retains a failed draft', async () => {
+  vi.mocked(api.saveQuickDraft).mockRejectedValueOnce(new Error('Disk full'));
+  render(<QuickPrompt />);
+  const input = await screen.findByLabelText('Quick message to Spike');
+  fireEvent.change(input, { target: { value: 'A thought to keep' } });
+  act(() => command('close'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Disk full');
+  expect(api.hideQuickPrompt).not.toHaveBeenCalled();
+  expect(input).toHaveValue('A thought to keep');
+  act(() => command('close'));
+  await waitFor(() => expect(api.hideQuickPrompt).toHaveBeenCalledWith(1));
+  expect(api.saveQuickDraft).toHaveBeenLastCalledWith('/copy', 0, 'A thought to keep');
+});

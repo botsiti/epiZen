@@ -651,8 +651,7 @@ Voice settings can be saved without connecting the conversation provider.
 
 The desktop companion is optional and works even before connecting an AI account. Its transparent
 window stays above ordinary apps and joins workspaces without taking keyboard focus. Dragging
-moves Spike; clicking him or Talk opens a compact prompt pill, and the small toolbar pauses motion or hides
-him. `prefers-reduced-motion` always wins. Working, review and error states use the corresponding
+moves Spike; clicking him or Talk opens a compact prompt pill, and the small toolbar pauses motion. A right-click hides him and the prompt. `prefers-reduced-motion` always wins. Working, review and error states use the corresponding
 original animations, with short generic labels that expose no note content on the desktop.
 Closing the main window while the Spike plugin is enabled saves and hides it; explicit Quit exits
 the app. The main controller remains the sole owner of agent actions.
@@ -699,7 +698,7 @@ and ⌥⇧⌘Space for dictation; a second dictation shortcut sends the recordin
 only while the Spike plugin is enabled. A shortcut-registration failure reports a local error, while clicking
 Spike remains available. The regular ⌘8 sidebar command stays local to Epizen.
 
-The prompt opens on the cursor's display and current workspace without bringing the main app
+The prompt opens at Spike's position and current workspace without bringing the main app
 forward. Preview/test windows retain the Desktop 2 restriction. Escape or the close control saves
 the draft and stops recording; a failed save keeps the pill open with its text. Its per-vault
 app-owned draft survives hiding and restarting. A submitted prompt retains a stable identity until
@@ -710,10 +709,10 @@ Only the main conversation executes tools. The pill has scoped dictation and cap
 
 ### Spike capture and appearance
 
-Spike's edge companion offers Speak and Text buttons; hiding stays in its settings. Global capture
+Spike's edge companion offers Speak and Text buttons. Right-click hides him temporarily; ⇧⌘Space summons him with the prompt and hides both on a second press. Hiding retains the startup preference and saves the draft first. Global capture
 uses CoreGraphics screen coordinates to locate the cursor's display on Retina Macs, with a fallback
 for hidden workspace windows. A stale close never hides a later opening. Capture remains on the
-preview's verified display/Space during tests. The prompt appears near the right edge above Spike,
+preview's verified display/Space during tests. The prompt appears centered directly below Spike,
 with a brief entrance and a small companion hop; Reduce Motion disables both.
 
 The microphone meter reflects measured audio energy. Listening, transcription, failure and retry
@@ -725,7 +724,35 @@ window-sized WebKit blur. Ambient movement is opt-in and respects Reduce Motion.
 
 The default text prompt is a 440px-wide single-row pill, approximately 56px high. It grows with
 multiline text (up to 96px) and actionable feedback rather than reserving a large empty window.
-Old replies stay hidden on a fresh opening. Native bounds follow measured content and remain within
-the display work area. Appearance is one global app preference, independent of Spike and vaults.
+Old replies stay hidden on a fresh opening. Native bounds follow measured content; Spike and the prompt move together when dragged or when feedback needs more room, staying within the display work area. The companion toolbar disappears while the prompt is open. Appearance is one global app preference, independent of Spike and vaults.
 When local speech reports service failure, guide the user to macOS Keyboard → Dictation and retain
 the recording for retry. Never silently route on-device recordings to a cloud provider.
+
+### Spike opens app workflows
+
+“Start CBT” opens today’s existing five-step thought-record form. Opening an existing day does
+not write; a missing day uses the ordinary reviewed creation action. A repeated request keeps
+any unfinished form text. Saving a conversational record reveals the CBT tab without reopening
+an empty wizard. A requested page can reveal the hidden main window; previews retain Desktop 2.
+
+Spike adds categorized daily tasks and weekly/monthly quests through the same Markdown writers
+as their composers. It saves only supplied personal reflections. Planned minutes never become
+completed work. Requested calendar blocks use exact local times or the first free interval in
+morning (09–12), afternoon (12–18), evening (18–22), or the day (09–22). The proposal shows the
+chosen times, and the native writer rechecks a free slot before creation. No fitting interval is
+an explicit error. Successful receipts prevent duplicate events on retry.
+
+The built-in `SPIKE.MD` defines the assistant’s behavior. Root vault `AGENTS.md` and `SPIKE.MD`
+are reread for every model request as bounded, user-maintained preferences. Profile and note
+sharing remain separate. Hidden archives are not loaded automatically. Disabled plugins reject
+their typed actions; an already reviewed action remains recoverable if its plugin is disabled.
+
+
+Selected assistant catalogue entries use the existing Library metadata and cover workflow.
+The proposed note includes the user's watched/read/listened date, 0–100 rating and comments.
+Applying downloads the cover through the network boundary, creates one new attachment, then
+conditionally creates the Markdown note. Durable cover receipts recover only verified image
+bytes after interruption and reuse the attachment on retry. A failed download keeps the note
+proposal; it does not silently omit artwork. A failed note creation keeps any saved cover
+available for recovery. Saved entries open their media page. Saved calendar blocks reveal their
+date once; subsequent calendar navigation remains under the user's control.

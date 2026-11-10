@@ -14,8 +14,10 @@ async function send(text: string) {
   await browser.waitUntil(async () => !(await $('[aria-label="Stop assistant"]').isExisting()));
 }
 async function apply() {
+  const saved = await $$('.assistant-action.is-saved').length;
   const buttons = $$('.assistant-action-buttons button');
   await buttons[0]!.scrollIntoView(); await buttons[0]!.click();
+  await browser.waitUntil(async () => await $$('.assistant-action.is-saved').length > saved);
   await browser.waitUntil(async () => !(await $('[aria-label="Stop assistant"]').isExisting()));
 }
 describe('Spike conversations and second-brain actions', () => {
@@ -69,6 +71,25 @@ describe('Spike conversations and second-brain actions', () => {
     expect(readFileSync(join(root, 'Rating/kino/Quiet Harbour.md'), 'utf8')).toContain('Watched: 2026-11-07');
     await screenshot('212-spike-film-saved');
   });
+  it('saves a selected movie with its cover, watched date, rating and comments, then opens its page', async () => {
+    const before = snapshotVault(root);
+    await send('Yesterday I watched American Fiction, 90/100. I liked the cinematography. Add it with its cover.');
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
+    await expect($('.assistant-action.is-review')).toHaveText(expect.stringContaining('with its cover'));
+    await screenshot('233-spike-library-review');
+    await apply();
+    await $('[data-testid="media-page"][data-path="Rating/kino/American Fiction.md"]').waitForDisplayed();
+    await browser.waitUntil(async () => browser.execute(() => { const image = document.querySelector<HTMLImageElement>('.media-cover'); return Boolean(image?.complete && image.naturalWidth > 0); }));
+    const changed = diffSnapshots(before, snapshotVault(root));
+    expect(changed).toHaveLength(2);
+    expect(changed).toContain('added: Rating/kino/American Fiction.md');
+    expect(changed.some((path) => path.startsWith('added: Rating/kino/_attachments/american-fiction'))).toBe(true);
+    const note = readFileSync(join(root, 'Rating/kino/American Fiction.md'), 'utf8');
+    expect(note).toContain('Rating: 90');
+    expect(note).toContain('I liked the cinematography. It is about identity and storytelling.');
+    expect(note).toMatch(/!\[\[Rating\/kino\/_attachments\/american-fiction.*\.png\|/);
+    await screenshot('234-spike-library-saved');
+  });
   it('connects the subscription adapter without an API key and keeps the same reviewed actions', async () => {
     await $('[aria-label="Assistant settings"]').click();
     await selectOption('.assistant-sidebar [aria-label="Spike connection"]', 'codex');
@@ -119,7 +140,7 @@ describe('Spike conversations and second-brain actions', () => {
   it('guides reflection and saves the agreed CBT record into a daily Markdown note', async () => {
     const before = snapshotVault(root);
     await $('.assistant-context').$('button=New chat').click();
-    await send('Let’s start a CBT thought record.');
+    await send('Talk through a CBT thought record with me in chat.');
     await expect($('.assistant-message.is-assistant')).toHaveText(expect.stringContaining('What happened'));
     await send('I missed a deadline and thought I was failing. I felt disappointed and anxious.');
     await send('One missed deadline does not define my work. I can agree on a smaller next step. I feel calmer. Save this thought record.');
@@ -132,6 +153,32 @@ describe('Spike conversations and second-brain actions', () => {
     expect(text).toContain('I missed a deadline and thought I was failing.');
     expect(text).toContain('One missed deadline does not define my work.');
     await expect($(`[data-testid="note"][data-path="${path}"], [data-testid="periodic"][data-path="${path}"]`)).toBeDisplayed();
+  });
+  it('opens the CBT form and fills daily and monthly plans through native actions', async () => {
+    await $('.assistant-context').$('button=New chat').click();
+    const before = snapshotVault(root);
+    await send('Start CBT now.');
+    // The prior CBT journey already created today's daily note; opening it must not write.
+    await $('[data-testid="thought-wizard"]').waitForDisplayed();
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
+    await screenshot('230-spike-start-cbt');
+    await $('[aria-label="Thought record"]').$('button[aria-label="Close"]').click();
+    await send('Add my three study tasks.'); await apply();
+    const changes = diffSnapshots(before, snapshotVault(root));
+    expect(changes).toHaveLength(1);
+    const dailyPath = changes[0]!.replace(/^(added|changed): /, '');
+    const daily = readFileSync(join(root, dailyPath), 'utf8');
+    for (const task of ['#daily/business — Research marketing on X', '#daily/biology — Do the CRISPR course', '#daily/code — Add feature X to Mr Suit']) expect(daily).toContain(task);
+    expect(daily).not.toMatch(/Add feature X to Mr Suit \[minutes::/);
+    await send('Add a monthly biology quest.'); await apply();
+    await send('Save my monthly decisions: I chose to focus on biology.'); await apply();
+    await screenshot('231-spike-monthly-plan');
+    await send('Plan two hours of code on 2026-12-01 in the morning.');
+    await expect($('.assistant-action.is-review')).toHaveText(expect.stringContaining('09:00'));
+    await screenshot('232-spike-calendar-plan'); await apply();
+    await expect($('[data-testid="cal-view"]')).toHaveAttribute('data-start', '2026-12-01');
+    await screenshot('235-spike-calendar-result');
+    expect(diffSnapshots(before, snapshotVault(root))).toHaveLength(2);
   });
   it('reads a supplied link with a source and captures it as an ordinary Inbox note', async () => {
     const before = snapshotVault(root);
@@ -380,6 +427,36 @@ describe('Spike conversations and second-brain actions', () => {
     await $('button=Export conversation…').click();
     await expect($('.assistant-error')).toHaveText(expect.stringContaining('already exists'));
     expect(readFileSync(join(folder, files[0]!), 'utf8')).toBe(exported);
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
+  });
+
+  it('anchors capture below Spike, hides both on right-click, and restores the draft', async () => {
+    const before = snapshotVault(root);
+    const invoke = (command: string, args: Record<string, unknown> = {}) => browser.execute(async (command, args) => (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke(command, args), command, args);
+    await invoke('prompt_open', { dictate: false });
+    await browser.switchToWindow('spike-prompt');
+    await $('[aria-label="Quick message to Spike"]').waitForExist();
+    await $('[aria-label="Quick message to Spike"]').setValue('Keep this draft beside Spike.');
+    await browser.switchToWindow('spike');
+    await browser.waitUntil(async () => (await $('.desktop-pet').getAttribute('class'))?.includes('has-prompt') === true);
+    await expect($('.pet-tools')).not.toBeDisplayed();
+    const position = await invoke('pet_position') as { x: number; y: number; scale: number };
+    await invoke('pet_move', { x: position.x - 100, y: position.y - 100 });
+    const dog = await invoke('pet_position') as typeof position;
+    await browser.switchToWindow('spike-prompt');
+    const prompt = await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { outerPosition: () => Promise<{ x: number; y: number }> } } } }).__TAURI__.window.getCurrentWindow().outerPosition());
+    expect(prompt.y - dog.y).toBeCloseTo(156 * dog.scale, 0);
+    expect(dog.x - prompt.x).toBeCloseTo(130 * dog.scale, 0);
+    await screenshot('229-spike-attached-prompt');
+    await browser.switchToWindow('spike');
+    await $('[aria-label="Talk to Spike · drag to move"]').click({ button: 'right' });
+    await browser.waitUntil(async () => !(await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { isVisible: () => Promise<boolean> } } } }).__TAURI__.window.getCurrentWindow().isVisible())));
+    await browser.switchToWindow('main');
+    await invoke('prompt_open', { dictate: false });
+    await browser.switchToWindow('spike-prompt');
+    await expect($('[aria-label="Quick message to Spike"]')).toHaveValue('Keep this draft beside Spike.');
+    await $('[aria-label="Close quick prompt"]').click();
+    await browser.switchToWindow('main');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
   });
 

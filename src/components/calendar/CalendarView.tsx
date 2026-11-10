@@ -1,5 +1,5 @@
 import { usePluginDisplay } from '../workspace/PluginDisplay';
-import { useCallback, useMemo, useState, type CSSProperties, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type PointerEvent } from 'react';
 import { addDays, formatDate, isoWeek, sameDay, startOfWeek, today } from '../../lib/dates';
 import { formatMinutes, parseDay } from '../../lib/day';
 import type { CalendarEvent } from '../../lib/api';
@@ -24,6 +24,9 @@ import '../periodic/periodic.css';
 import './calendar.css';
 
 interface Props {
+  /** A newly saved assistant block reveals its date once; ordinary navigation remains local. */
+  focusDate?: { time: number; token: number };
+  onFocusDate?: () => void;
   timerEnabled?: boolean;
   /** The day behind a date: its note, if it has one, and what the note holds. */
   dayOf: (date: Date) => DayEntry;
@@ -82,10 +85,16 @@ function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], even
  * Calendar, never minutes in the note. The note's time blocks aren't drawn: they are the timer's
  * record, and the minutes are what counts.
  */
-export function CalendarView({ dayOf, textOf, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
+export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
   const display = usePluginDisplay('calendar');
   const [mode, setMode] = useState<Mode>(display.defaultView === 'Week' ? 'week' : display.defaultView === 'Day' ? 'day' : remembered.mode);
   const [date, setDate] = useState(remembered.date);
+  const [seenFocus, setSeenFocus] = useState<number>();
+  if (focusDate && focusDate.token !== seenFocus && Number.isFinite(focusDate.time)) {
+    const target = new Date(focusDate.time), date = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+    setSeenFocus(focusDate.token); setDate(date); setMode('day');
+  }
+  useEffect(() => { if (focusDate?.token === seenFocus && focusDate !== undefined) onFocusDate?.(); }, [focusDate, seenFocus, onFocusDate]);
   const [early, setEarly] = useState(false);
   const [late, setLate] = useState(false);
   const [highlight, setHighlight] = useState<number>();

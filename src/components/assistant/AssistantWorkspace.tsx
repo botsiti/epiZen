@@ -13,17 +13,18 @@ import './assistant.css';
 interface Props {
   glass?: boolean;
   context: AssistantContext; open: boolean; onOpen: () => void; onClose: () => void;
-  onSaved: (path: string, text: string) => void; onOpenNote: (path: string, cbt?: boolean) => void;
+  onSaved: (path: string, text: string) => void; onOpenNote: (path: string, cbt?: boolean, startCbt?: boolean) => void;
+  onOpenCalendar?: (time: number) => void;
   onRefresh: () => Promise<void>; onSaveSettings: (value: AssistantSettings) => Promise<void>;
 }
 export function AssistantWorkspace(props: Props) {
   const [controller] = useState(() => new AssistantController(props.context.root, {
     context: () => currentAssistantContext(props.context),
-    onSaved: props.onSaved, onOpen: props.onOpenNote, onRefresh: props.onRefresh,
+    onSaved: props.onSaved, onOpen: props.onOpenNote, onOpenCalendar: props.onOpenCalendar, onRefresh: props.onRefresh,
   }));
   const voice = useVoice(controller.receiveVoice, props.context.settings.provider, props.context.settings.voice);
   const { speak, pauseRecording } = voice;
-  useEffect(() => { controller.updateHost({ context: () => currentAssistantContext(props.context), onSaved: props.onSaved, onOpen: props.onOpenNote, onRefresh: props.onRefresh, onReply: (text) => { if (props.context.settings.speakReplies) void speak(text); } }); }, [controller, props, speak]);
+  useEffect(() => { controller.updateHost({ context: () => currentAssistantContext(props.context), onSaved: props.onSaved, onOpen: props.onOpenNote, onOpenCalendar: props.onOpenCalendar, onRefresh: props.onRefresh, onReply: (text) => { if (props.context.settings.speakReplies) void speak(text); } }); }, [controller, props, speak]);
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const quickError = useQuickBridge(props.context.root, controller, snapshot, props.context.settings, props.glass ?? false);
   const petError = usePetBridge({ root: props.context.root, enabled: props.context.settings.desktopPet, status: { animation: voice.phase === 'recording' ? 'listening' : snapshot.busy ? 'thinking' : snapshot.error ? 'error' : snapshot.thread.actions.some((action) => action.status === 'review') ? 'review' : 'idle', label: snapshot.busy ? 'Working on your request' : snapshot.error ? 'Needs attention' : 'Talk to Spike', motion: props.context.settings.petMotion }, onOpen: props.onOpen, onHide: () => props.onSaveSettings({ ...props.context.settings, desktopPet: false }), onMotion: (petMotion) => props.onSaveSettings({ ...props.context.settings, petMotion }), onMainHidden: voice.pauseRecording });

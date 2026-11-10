@@ -47,6 +47,11 @@ export function DayPage({ spec, path, text, actions }: Props) {
   }
   // The thought-record wizard: open on a record to edit it, or on nothing for a new one.
   const [wizard, setWizard] = useState<{ record?: ThoughtRecord }>();
+  const [seenStart, setSeenStart] = useState<number>();
+  if (spec.startThoughtRecord !== undefined && spec.startThoughtRecord !== seenStart) {
+    setSeenStart(spec.startThoughtRecord);
+    if (spec.features?.thoughtRecords !== false && !wizard) setWizard({});
+  }
   const choose = (next: Tab) => {
     lastTab = next;
     setTab(next);

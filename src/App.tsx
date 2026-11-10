@@ -150,7 +150,8 @@ export function App() {
   const { ws, update, restore, reset } = useWorkspace();
   const [right, setRight] = useState<RightSidebarState>({ open: false, closed: [] });
   const [assistantRequested, setAssistantOpen] = useState(false);
-  const [assistantCbt, setAssistantCbt] = useState<{ path: string; token: number }>();
+  const [assistantCalendar, setAssistantCalendar] = useState<{ time: number; token: number }>();
+  const [assistantCbt, setAssistantCbt] = useState<{ path: string; token: number; start?: boolean }>();
   const [leftOpen, setLeftOpen] = useState(true);
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
@@ -976,7 +977,7 @@ export function App() {
                 onSaved={noteSaved}
                 onUnsaved={(path, text, message) => showUnsaved(tab.id, path, text, message)}
                 linkTargets={linkTargets}
-                periodic={periodicPage ? { ...periodicPage, focusThoughtRecord: assistantCbt?.path === view.path ? assistantCbt.token : undefined } : undefined}
+                periodic={periodicPage ? { ...periodicPage, focusThoughtRecord: assistantCbt?.path === view.path ? assistantCbt.token : undefined, startThoughtRecord: assistantCbt?.path === view.path && assistantCbt.start ? assistantCbt.token : undefined } : undefined}
                 media={mediaPage}
                 genreSuggestions={mediaPage ? genreCounts(library.get(mediaPage.spec.kind) ?? []).map(([name]) => name) : []}
                 onManageHabits={() => go({ kind: 'habits' })}
@@ -997,7 +998,7 @@ export function App() {
               </BasesProvider>
             )}
             {view.kind === 'calendar' && plugins.calendar && (
-              <PluginSurface id="calendar"><CalendarView
+              <PluginSurface id="calendar"><CalendarView focusDate={assistantCalendar} onFocusDate={() => setAssistantCalendar(undefined)}
                 timerEnabled={plugins.timer}
                 dayOf={dayOf}
                 textOf={textOf}
@@ -1059,7 +1060,7 @@ export function App() {
           onOpen={openNote}
         />
       )}
-      {plugins.spike && <AssistantWorkspace glass={appearance.surface === 'glass'} key={status.root} context={{ root: status.root, now, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenNote={(path, cbt) => { if (cbt) setAssistantCbt({ path, token: Date.now() }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
+      {plugins.spike && <AssistantWorkspace glass={appearance.surface === 'glass'} key={status.root} context={{ root: status.root, now, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, features: { periodic: plugins.periodic, cbt: plugins.cbt, quests: plugins.quests, library: plugins.library, calendar: plugins.calendar }, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenCalendar={(time) => { setAssistantCalendar({ time, token: Date.now() }); go({ kind: 'calendar' }); }} onOpenNote={(path, cbt, start) => { if (cbt) setAssistantCbt({ path, token: Date.now(), start }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
     </div></PluginDisplayProvider>
   );
 }

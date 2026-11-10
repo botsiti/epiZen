@@ -512,3 +512,21 @@ it('shows full-week time, mood, sleep and plain-text reflections in the monthly 
   expect(card).toHaveTextContent('MinusToo little sleep.');
   expect(card).toHaveTextContent('NextTake a break.');
 });
+
+it('opens the CBT form on an assistant start request, retaining an unfinished form on a repeated request', () => {
+  const act = actions();
+  const base = { ...spec('day'), focusThoughtRecord: 1, startThoughtRecord: 1 };
+  const view = render(<PeriodicPage spec={base} path="d.md" text={DAY} actions={act} />);
+  expect(screen.getByRole('dialog', { name: 'Thought record' })).toBeVisible();
+  fireEvent.change(screen.getByTestId('wizard-situation'), { target: { value: 'My unfinished thought' } });
+  view.rerender(<PeriodicPage spec={{ ...base, focusThoughtRecord: 2, startThoughtRecord: 2 }} path="d.md" text={DAY} actions={act} />);
+  expect(screen.getByTestId('wizard-situation')).toHaveValue('My unfinished thought');
+  expect(act.onAddRecord).not.toHaveBeenCalled();
+});
+it('reveals saved CBT without opening an empty form and respects a disabled CBT plugin', () => {
+  const base = { ...spec('day'), focusThoughtRecord: 10 };
+  const view = render(<PeriodicPage spec={base} path="d.md" text={DAY} actions={actions()} />);
+  expect(screen.queryByTestId('thought-wizard')).not.toBeInTheDocument();
+  view.rerender(<PeriodicPage spec={{ ...base, startThoughtRecord: 11, features: { habits: true, thoughtRecords: false } }} path="d.md" text={DAY} actions={actions()} />);
+  expect(screen.queryByTestId('thought-wizard')).not.toBeInTheDocument();
+});
