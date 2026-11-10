@@ -1,5 +1,5 @@
 import { parseDay, planDone } from './day';
-import { lineEnding } from './text';
+import { lineEnding, textIdentity } from './text';
 
 // The two changes a periodic page makes besides ticking a box. Each returns the note's new text,
 // with every line it didn't mean to change byte for byte as it was, or throws and changes nothing.
@@ -46,9 +46,9 @@ const EMPTY_TASK = /^[ \t]*[-*+][ \t]+\[ \][ \t]*\r?$/;
  * ends in `[minutes::N]`.
  */
 export function addTask(text: string, categoryName: string, words: string, minutes?: number): string {
-  const category = categoryName.trim().toLowerCase();
+  const category = textIdentity(categoryName);
   const label = words.trim();
-  if (!KEY.test(category)) throw new Error('A category is one word, like code or sport.');
+  if (!/^[\p{L}\p{M}\p{N}_-]+$/u.test(category)) throw new Error('A category is one word, like code or sport.');
   if (!label) throw new Error('Say what the task is.');
   if (/[\r\n]/.test(label)) throw new Error('A task is one line.');
   const eol = lineEnding(text);

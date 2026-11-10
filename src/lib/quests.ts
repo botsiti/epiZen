@@ -1,6 +1,9 @@
 import { SPHERES } from './categories';
 import { addDays, formatDate } from './dates';
 import { lineEnding } from './text';
+import { LINEAR_QUEST_RULE, modernQuestAreaCredits, modernQuestCredit, modernQuestProgress, parseQuestMilestones, type QuestMilestone } from './questRewards';
+import { percentBasisPoints } from './rewardRules';
+import { addXp, compareXp, exactXp, xpNumber, ZERO_XP, type ExactXp } from './xp';
 
 // Quests, as the vault's Obsidian RPG scripts keep them (Templates/Scripts/rpg-shared.js):
 //
@@ -54,6 +57,14 @@ export interface Quest {
   desc?: string;
   image?: string;
   log: LogEntry[];
+  /** New quests carry a frozen scoring rule; missing means the original vault rules. */
+  rewardRule?: string;
+  rewarded?: boolean;
+  rewardProblem?: string;
+  milestones?: QuestMilestone[];
+  status?: 'active' | 'paused' | 'abandoned';
+  /** A migrated legacy balance keeps its old deadline calculation fixed at this date. */
+  legacyAsOf?: string;
 }
 
 const QUEST = /^(\s*)[-*+]\s+\[([ xX])\]\s+.*#quest\/(weekly|monthly|custom)\b/;
@@ -94,7 +105,7 @@ export function parseQuests(path: string, text: string): Quest[] {
   lines.forEach((raw, line) => {
     const match = QUEST.exec(raw);
     if (!match) return;
-    const depth = (match[1] ?? '').length;
+    const depth = (match[1] ?? '').replace(/\t/g, '    ').length;
     const f = fields(raw);
     const xp = Number(f.xp) || 0;
     const tier = (['common', 'rare', 'epic', 'legendary'] as const).find((t) => t === f.tier?.toLowerCase()) ?? (match[3] === 'custom' ? 'epic' : tierOf(xp));
@@ -110,7 +121,7 @@ export function parseQuests(path: string, text: string): Quest[] {
     for (let i = line + 1; i < lines.length; i += 1) {
       const child = lines[i] ?? '';
       if (!child.trim()) continue;
-      if ((/^\s*/.exec(child)?.[0].length ?? 0) <= depth) break;
+      if ((/^\s*/.exec(child)?.[0] ?? '').replace(/\t/g, '    ').length <= depth) break;
       const entry = LOG.exec(child);
       if (!entry) continue;
       const stamp = STAMP.exec((entry[2] ?? '').trim());
@@ -119,13 +130,33 @@ export function parseQuests(path: string, text: string): Quest[] {
     const target = f.target ? Number(f.target) || undefined : undefined;
     const current = f.current !== undefined ? Number(f.current) || 0 : undefined;
     const checked = match[2] !== ' ';
+    const rewardRule = f['xp-rule'];
+    const modern = rewardRule === LINEAR_QUEST_RULE;
+    const parsed = modern ? parseQuestMilestones(lines, line, depth) : undefined;
+    let rewardProblem = parsed?.problem;
+    if (rewardRule !== undefined) {
+      const relevant = ['xp-rule', 'rewarded', 'xp', 'spheres', 'sphere', 'target', 'current', 'status'];
+      const seen = new Set<string>();
+      for (const field of raw.matchAll(FIELD)) {
+        const key = (field[1] ?? '').toLowerCase();
+        if (relevant.includes(key) && seen.has(key)) rewardProblem = 'This quest has duplicate reward fields. Edit the note before changing its reward.';
+        seen.add(key);
+      }
+      if (f.spheres !== undefined && f.sphere !== undefined) rewardProblem = 'This quest has more than one life-area split.';
+      if (rewardRule !== LINEAR_QUEST_RULE) rewardProblem = 'This quest uses an XP rule from another version of Epizen.';
+      if (modern && (!/^\d+$/.test(f.xp ?? '') || !Number.isSafeInteger(xp) || xp > 1_000_000_000)) rewardProblem = 'This quest has an invalid XP reward.';
+      if (modern && f.rewarded !== undefined && !['true', 'false'].includes(f.rewarded.toLowerCase())) rewardProblem = 'This quest has an invalid saved reward state.';
+      if (modern && f.status !== undefined && !['active', 'paused', 'abandoned'].includes(f.status.toLowerCase())) rewardProblem = 'This quest has an invalid status.';
+      if (modern && ((f.target !== undefined && !/^\d+$/.test(f.target)) || (f.current !== undefined && !/^\d+$/.test(f.current)))) rewardProblem = 'This quest has an invalid counter.';
+      if (modern && (f.spheres ?? f.sphere ?? '').split(',').some((part) => { const at = part.lastIndexOf(':'); return at >= 0 && percentBasisPoints(part.slice(at + 1).trim()) === undefined; })) rewardProblem = 'This quest has an invalid life-area percentage.';
+    }
     quests.push({
       path,
       line,
       raw,
       scope: match[3] as Scope,
       checked,
-      done: checked || (target !== undefined && (current ?? 0) >= target),
+      done: modern ? checked && !(target !== undefined && (current ?? 0) < target) && !(parsed?.milestones.some((step) => !step.done)) : checked || (target !== undefined && (current ?? 0) >= target),
       title: titleOf(raw),
       xp,
       tier,
@@ -138,19 +169,23 @@ export function parseQuests(path: string, text: string): Quest[] {
       desc: f.desc || undefined,
       image: f.image?.replace(/^\[\[|\]\]$/g, '') || undefined,
       log,
+      ...(rewardRule !== undefined ? { rewardRule, ...(f.rewarded !== undefined ? { rewarded: f.rewarded.toLowerCase() === 'true' } : {}), ...(parsed?.milestones.length ? { milestones: parsed.milestones } : {}), ...(rewardProblem ? { rewardProblem } : {}), ...(['active', 'paused', 'abandoned'].includes(f.status?.toLowerCase() ?? '') ? { status: f.status!.toLowerCase() as 'active' | 'paused' | 'abandoned' } : {}) } : {}),
     });
   });
   return quests;
 }
 
 /** How far along a quest is, 0 to 1: a counter's share, else done or not. */
-export const progress = (quest: Quest) =>
-  quest.target ? Math.min(1, Math.max(0, (quest.current ?? 0) / quest.target)) : quest.done ? 1 : 0;
+export const progress = (quest: Quest) => {
+  if (quest.rewardRule !== undefined) { const value = modernQuestProgress(quest); return value ? xpNumber(value) : NaN; }
+  return quest.target ? Math.min(1, Math.max(0, (quest.current ?? 0) / quest.target)) : quest.done ? 1 : 0;
+};
 
 const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 
 /** ×1.25 when done a week or more before an explicit deadline, ×0.7 when done after it, else ×1. */
 export function deadlineMultiplier(quest: Quest): number {
+  if (quest.rewardRule !== undefined) return 1;
   if (!quest.deadline || !quest.done || !quest.doneOn) return 1;
   const early = days(quest.doneOn, quest.deadline);
   return early >= 7 ? 1.25 : early < 0 ? 0.7 : 1;
@@ -158,6 +193,7 @@ export function deadlineMultiplier(quest: Quest): number {
 
 /** XP earned so far: each sphere's weighted share, curved so the last steps of a counter pay most. */
 export function earned(quest: Quest): number {
+  if (quest.rewardRule !== undefined) { const value = modernQuestCredit(quest); return value ? xpNumber(value) : NaN; }
   const share = Math.pow(progress(quest), 2.5);
   const spheres = quest.spheres.length ? quest.spheres : [{ name: '', weight: 100 }];
   return Math.round(spheres.reduce((sum, sphere) => sum + Math.round((quest.xp * sphere.weight) / 100 * share), 0) * deadlineMultiplier(quest));
@@ -171,6 +207,8 @@ export function dueDate(quest: Quest, period?: { from: Date; to: Date }): string
 
 /** The XP an open quest has lost: half past its own deadline, a quarter past its week, 15% past its month, times its tier's weight. */
 export function penalty(quest: Quest, today: string, period?: { from: Date; to: Date }): number {
+  if (quest.rewardRule !== undefined) return 0;
+  today = quest.legacyAsOf ?? today;
   if (quest.done) return 0;
   const rate = quest.deadline
     ? quest.deadline < today
@@ -203,18 +241,39 @@ export function questsIn(entries: QuestEntry[], from: Date, to: Date): QuestEntr
 }
 
 /** What every quest has earned for each life sphere, by the sphere's weight. */
-export function questSphereXp(entries: QuestEntry[]): Map<string, number> {
-  const xp = new Map<string, number>();
+export function questSphereXpExact(entries: QuestEntry[]): Map<string, ExactXp> | undefined {
+  const xp = new Map<string, ExactXp>();
   for (const { quest } of entries) {
+    if (quest.rewardRule !== undefined) {
+      const areas = modernQuestAreaCredits(quest); if (!areas) return undefined;
+      for (const [name, amount] of areas) xp.set(name, addXp(xp.get(name) ?? ZERO_XP, amount));
+      continue;
+    }
     const share = Math.pow(progress(quest), 2.5) * deadlineMultiplier(quest);
-    for (const sphere of quest.spheres) xp.set(sphere.name, (xp.get(sphere.name) ?? 0) + Math.round(((quest.xp * sphere.weight) / 100) * share));
+    for (const sphere of quest.spheres) {
+      const amount = Math.round(((quest.xp * sphere.weight) / 100) * share); if (!Number.isFinite(amount)) return undefined;
+      xp.set(sphere.name, addXp(xp.get(sphere.name) ?? ZERO_XP, exactXp(amount)));
+    }
   }
   return xp;
 }
+export function questSphereXp(entries: QuestEntry[]): Map<string, number> {
+  const values = questSphereXpExact(entries);
+  return values ? new Map([...values].map(([name, amount]) => [name, xpNumber(amount)])) : new Map([['__unavailable__', NaN]]);
+}
 
 /** The XP quests add to a life: what they earned, less what open quests lost past their time. */
-export const questXp = (entries: QuestEntry[], today: string) =>
-  entries.reduce((sum, { quest, period }) => sum + earned(quest) - penalty(quest, today, period), 0);
+export function questXpExact(entries: QuestEntry[], today: string): ExactXp | undefined {
+  let total = ZERO_XP;
+  for (const { quest, period } of entries) {
+    const legacy = quest.rewardRule === undefined ? earned(quest) - penalty(quest, today, period) : undefined;
+    const amount = legacy === undefined ? modernQuestCredit(quest) : Number.isFinite(legacy) ? exactXp(legacy) : undefined;
+    if (!amount) return undefined;
+    total = addXp(total, amount);
+  }
+  return total;
+}
+export const questXp = (entries: QuestEntry[], today: string) => { const value = questXpExact(entries, today); return value ? xpNumber(value) : NaN; };
 
 /** `Career/Work` → `career-work`, the art file's name. */
 const slug = (name: string) =>
@@ -274,6 +333,20 @@ function stamp(lines: string[], quest: Quest, delta: number, today: Date) {
 /** Ticks or unticks a quest: its box, its `[done::]` date, a counter's `current`, and today's XP stamp. */
 export function toggleQuest(text: string, quest: Quest, today: Date): string {
   const { eol, lines } = open(text, quest);
+  if (quest.rewardRule !== undefined) {
+    if (quest.rewardRule !== LINEAR_QUEST_RULE || !modernQuestProgress(quest)) throw new Error(quest.rewardProblem ?? 'This quest’s reward cannot be changed safely.');
+    const done = !quest.done;
+    let line = quest.raw.replace(/\[[ xX]\]/, done ? '[x]' : '[ ]');
+    line = setField(line, 'done', done ? (quest.doneOn ?? formatDate(today, 'YYYY-MM-DD')) : undefined);
+    if (!quest.target && !quest.milestones?.length) line = setField(line, 'rewarded', 'true');
+    if (done && quest.target) line = setField(line, 'current', String(quest.target));
+    if (done) for (const step of quest.milestones ?? []) {
+      if (lines[step.line] !== step.raw) throw new Error('A quest step changed. Reopen the quest before saving.');
+      lines[step.line] = step.raw.replace(/\[[ xX]\]/, '[x]');
+    }
+    lines[quest.line] = line;
+    return lines.join(eol);
+  }
   const done = !quest.done;
   let line = quest.raw.replace(/\[[ xX]\]/, done ? '[x]' : '[ ]');
   line = setField(line, 'done', done ? (quest.doneOn ?? formatDate(today, 'YYYY-MM-DD')) : undefined);
@@ -350,16 +423,22 @@ export function questLine(quest: NewQuest): string {
  * that heading gets it at its end, with the quest under it.
  */
 export function addQuest(text: string, line: string): string {
-  if (/[\r\n]/.test(line) || !QUEST.test(line)) throw new Error("That isn't one quest line.");
+  if (/\r/.test(line)) throw new Error("That isn't a valid quest.");
+  const block = line.split('\n');
+  if (!QUEST.test(block[0] ?? '')) throw new Error("That isn't one quest line.");
+  if (block.length > 1) {
+    const first = block[0] ?? '', steps = parseQuestMilestones(block, 0, 0);
+    if (fields(first)['xp-rule'] !== LINEAR_QUEST_RULE || steps.problem || steps.milestones.length !== block.length - 1) throw new Error("That isn't one quest line or a valid quest-step block.");
+  }
   const eol = lineEnding(text);
   if (!eol) throw new Error("This note mixes line endings, so Epizen won't add to it.");
   const lines = text.split(eol);
   const heading = lines.findIndex((row) => /^###\s+Quest XP\s*$/i.test(row.trim()));
   if (heading < 0) {
-    const block = `### Quest XP${eol}${line}${eol}`;
-    if (!text) return block;
+    const addition = `### Quest XP${eol}${block.join(eol)}${eol}`;
+    if (!text) return addition;
     const last = text.endsWith(eol) ? (lines.at(-2) ?? '') : (lines.at(-1) ?? '');
-    return `${text}${text.endsWith(eol) ? '' : eol}${last.trim() ? eol : ''}${block}`;
+    return `${text}${text.endsWith(eol) ? '' : eol}${last.trim() ? eol : ''}${addition}`;
   }
   let at = heading + 1;
   for (let i = heading + 1; i < lines.length; i += 1) {
@@ -374,7 +453,7 @@ export function addQuest(text: string, line: string): string {
     if (trimmed === '') continue;
     break;
   }
-  lines.splice(at, 0, line);
+  lines.splice(at, 0, ...block);
   return lines.join(eol);
 }
 
@@ -391,7 +470,10 @@ export type QuestChange =
   | { kind: 'edit-chapter'; entry: LogEntry; words: string }
   | { kind: 'delete-chapter'; entry: LogEntry }
   /** A `YYYY-MM-DD` date, or none to take the deadline out. */
-  | { kind: 'deadline'; date?: string };
+  | { kind: 'deadline'; date?: string }
+  | { kind: 'milestone'; id: string; done: boolean }
+  | { kind: 'undo-reward' }
+  | { kind: 'status'; status: 'active' | 'paused' | 'abandoned' };
 
 const chapterWords = (words: string) => {
   const clean = words.replace(/\r?\n+/g, ' ').trim();
@@ -481,6 +563,12 @@ export function changeQuest(text: string, quest: Quest, change: QuestChange, tod
       return deleteChapter(text, quest, change.entry);
     case 'deadline':
       return setDeadline(text, quest, change.date);
+    case 'milestone':
+      return setQuestMilestone(text, quest, change.id, change.done, today);
+    case 'undo-reward':
+      return undoQuestReward(text, quest);
+    case 'status':
+      return setQuestStatus(text, quest, change.status);
   }
 }
 
@@ -492,6 +580,12 @@ export function editQuest(text: string, quest: Quest, change: Extract<QuestChang
   if (!title || /[\r\n[\]#<>]/.test(title)) throw new Error('Use a title without line breaks, tags or brackets.');
   if (/[\r\n[\]<>]/.test(description)) throw new Error('Keep the description on one line, without brackets.');
   if (!Number.isSafeInteger(change.xp) || change.xp < 0 || !Object.hasOwn(TIERS, change.tier)) throw new Error('Choose a tier and a whole XP amount of zero or more.');
+  if (quest.rewardRule !== undefined) {
+    const credit = modernQuestCredit(quest);
+    if (quest.rewardRule !== LINEAR_QUEST_RULE || !credit) throw new Error(quest.rewardProblem ?? 'This quest’s reward cannot be changed safely.');
+    if (change.xp !== quest.xp) throw new Error('The quest reward was fixed when it started.');
+    if (change.target !== quest.target && compareXp(credit, ZERO_XP) > 0) throw new Error('Undo the recorded reward before correcting its target.');
+  }
   if (change.target !== undefined && (!Number.isSafeInteger(change.target) || change.target < 1 || change.target < (quest.current ?? 0))) throw new Error('The target must be a whole number at least as large as current progress.');
   if (quest.current && change.target === undefined && quest.target !== undefined) throw new Error('Keep a target while this quest has progress.');
   let line = quest.raw;
@@ -520,13 +614,14 @@ export function deleteQuest(text: string, quest: Quest): string {
   const { eol, lines } = open(text, quest);
   const now = parseQuests(quest.path, text).find((item) => item.line === quest.line)!;
   if (JSON.stringify(now.log) !== JSON.stringify(quest.log)) throw new Error('The quest log changed. Reopen the quest before deleting it.');
+  if (JSON.stringify(now.milestones) !== JSON.stringify(quest.milestones)) throw new Error('The quest steps changed. Reopen the quest before deleting it.');
   const depth = /^\s*/.exec(quest.raw)![0].length;
   let end = quest.line + 1;
   for (let i = end; i < lines.length; i++) {
     const line = lines[i]!;
     if (!line.trim()) continue;
     if (/^\s*/.exec(line)![0].length <= depth) break;
-    if (!quest.log.some((item) => item.line === i)) throw new Error('This quest contains other nested content. Edit it in the note editor.');
+    if (!quest.log.some((item) => item.line === i) && !quest.milestones?.some((item) => item.line === i)) throw new Error('This quest contains other nested content. Edit it in the note editor.');
     end = i + 1;
   }
   lines.splice(quest.line, end - quest.line);
@@ -536,14 +631,55 @@ export function deleteQuest(text: string, quest: Quest): string {
 /** Sets a counter quest's progress, clamped to its target; reaching the target ticks it, falling below unticks it. */
 export function setQuestProgress(text: string, quest: Quest, value: number, today: Date): string {
   if (!quest.target) throw new Error('That quest has no counter.');
+  if (!Number.isFinite(value) || (quest.rewardRule !== undefined && !Number.isSafeInteger(value))) throw new Error('Quest progress must be a whole number.');
+  if (quest.rewardRule !== undefined && (quest.rewardRule !== LINEAR_QUEST_RULE || !modernQuestProgress(quest))) throw new Error(quest.rewardProblem ?? 'This quest’s reward cannot be changed safely.');
   const { eol, lines } = open(text, quest);
   const now = Math.max(0, Math.min(quest.target, Math.round(value)));
   const before = Math.min(quest.current ?? 0, quest.target);
+  if (now === before && quest.checked === (now >= quest.target)) return text;
   let line = setField(quest.raw, 'current', String(now));
   const done = now >= quest.target;
   line = line.replace(/\[[ xX]\]/, done ? '[x]' : '[ ]');
   line = setField(line, 'done', done ? (quest.doneOn ?? formatDate(today, 'YYYY-MM-DD')) : undefined);
   lines[quest.line] = line;
-  stamp(lines, quest, Math.round(((now - before) * quest.xp) / quest.target), today);
+  if (quest.rewardRule === undefined) stamp(lines, quest, Math.round(((now - before) * quest.xp) / quest.target), today);
+  return lines.join(eol);
+}
+
+/** Updates a marked step only if the parent and that exact step still match what was shown. */
+export function setQuestMilestone(text: string, quest: Quest, id: string, done: boolean, today: Date): string {
+  if (quest.rewardRule !== LINEAR_QUEST_RULE || !modernQuestProgress(quest)) throw new Error(quest.rewardProblem ?? 'This quest’s reward cannot be changed safely.');
+  const step = quest.milestones?.find((item) => item.id === id);
+  if (!step) throw new Error('That quest step is unavailable.');
+  const { eol, lines } = open(text, quest);
+  if (lines[step.line] !== step.raw) throw new Error('That quest step changed. Reopen the quest before saving.');
+  if (step.done === done) return text;
+  lines[step.line] = step.raw.replace(/\[[ xX]\]/, done ? '[x]' : '[ ]');
+  const complete = (quest.milestones ?? []).every((item) => item.id === id ? done : item.done);
+  let parent = quest.raw.replace(/\[[ xX]\]/, complete ? '[x]' : '[ ]');
+  parent = setField(parent, 'done', complete ? (quest.doneOn ?? formatDate(today, 'YYYY-MM-DD')) : undefined);
+  lines[quest.line] = parent;
+  return lines.join(eol);
+}
+
+/** An explicit correction reverses earned XP; reopening alone retains it. */
+export function undoQuestReward(text: string, quest: Quest): string {
+  if (quest.rewardRule !== LINEAR_QUEST_RULE || !modernQuestProgress(quest)) throw new Error(quest.rewardProblem ?? 'This quest’s reward cannot be changed safely.');
+  const { eol, lines } = open(text, quest);
+  let line = setField(quest.raw.replace(/\[[ xX]\]/, '[ ]'), 'done', undefined);
+  line = setField(line, 'rewarded', undefined);
+  if (quest.target) line = setField(line, 'current', '0');
+  for (const step of quest.milestones ?? []) {
+    if (lines[step.line] !== step.raw) throw new Error('A quest step changed. Reopen the quest before saving.');
+    lines[step.line] = step.raw.replace(/\[[ xX]\]/, '[ ]');
+  }
+  lines[quest.line] = line;
+  return lines.join(eol);
+}
+export function setQuestStatus(text: string, quest: Quest, status: 'active' | 'paused' | 'abandoned'): string {
+  if (quest.rewardRule !== LINEAR_QUEST_RULE || !modernQuestProgress(quest)) throw new Error(quest.rewardProblem ?? 'This quest’s reward cannot be changed safely.');
+  if (!['active', 'paused', 'abandoned'].includes(status)) throw new Error('Choose a valid quest status.');
+  const { eol, lines } = open(text, quest);
+  lines[quest.line] = setField(quest.raw, 'status', status === 'active' ? undefined : status);
   return lines.join(eol);
 }

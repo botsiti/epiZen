@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use epizen_lib::{FileKind, NoteEdit, Vault, store_image};
+use epizen_lib::{FileKind, NoteEdit, Settings, Vault, store_image};
 use tempfile::TempDir;
 
 fn copy_of_demo_vault() -> (TempDir, PathBuf) {
@@ -63,6 +63,18 @@ fn reading_every_note_and_image_changes_nothing() {
     }
 
     assert_eq!(snapshot(&copy), before, "reading the vault changed a file");
+}
+
+#[test]
+fn saving_and_retrying_xp_settings_never_changes_the_demo_vault() {
+    let (dir, copy) = copy_of_demo_vault();
+    let before = snapshot(&copy);
+    let root = copy.canonicalize().unwrap().to_string_lossy().into_owned();
+    let settings = Settings::new(dir.path().join("isolated-config"));
+    let value = serde_json::json!({"version":1,"id":"demo","policies":[{"id":"initial"}]});
+    assert_eq!(settings.save_reward_settings(&root, 0, &value).unwrap(), 1);
+    assert_eq!(settings.save_reward_settings(&root, 0, &value).unwrap(), 1);
+    assert_eq!(snapshot(&copy), before);
 }
 
 #[test]

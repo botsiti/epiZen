@@ -74,6 +74,78 @@ impl Settings {
             .map(|_| ())
     }
 
+    /// Per-vault XP settings live in the app config, never beside a user's notes.
+    fn reward_location(&self, root: &str) -> io::Result<(PathBuf, String)> {
+        if root.is_empty() || root.len() > 4096 { return Err(io::Error::other("Invalid vault identifier.")); }
+        let vault_root = Path::new(root).canonicalize()?;
+        if !vault_root.is_dir() { return Err(io::Error::other("The vault is unavailable.")); }
+        let parent = self.file.parent().unwrap_or(Path::new("."));
+        // Resolve existing ancestors before creating anything, including a missing config folder.
+        let mut existing = parent;
+        let mut missing = Vec::new();
+        while !existing.exists() {
+            missing.push(existing.file_name().ok_or_else(|| io::Error::other("Invalid settings location."))?.to_owned());
+            existing = existing.parent().ok_or_else(|| io::Error::other("Invalid settings location."))?;
+        }
+        let mut resolved = existing.canonicalize()?;
+        for component in missing.iter().rev() { resolved.push(component); }
+        if resolved.starts_with(&vault_root) { return Err(io::Error::other("Keep Epizen settings outside the vault before using XP rules.")); }
+        Ok((parent.to_path_buf(), format!("xp-rules-{:x}.md", Sha256::digest(root.as_bytes()))))
+    }
+
+    fn reward_document(&self, root: &str) -> io::Result<Option<(u64, Value, String)>> {
+        let (parent, name) = self.reward_location(root)?;
+        match fs::symlink_metadata(parent.join(&name)) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => return Err(io::Error::other("The XP settings file is not a regular file.")),
+            Ok(metadata) if metadata.len() > 20 * 1024 * 1024 => return Err(io::Error::other("The XP settings history is too large to open safely.")),
+            Ok(_) => {},
+        }
+        let vault = crate::Vault::open(&parent).map_err(io::Error::other)?;
+        let text = vault.read_note(&name).map_err(io::Error::other)?;
+        if text.len() > 20 * 1024 * 1024 { return Err(io::Error::other("The XP settings history is too large to open safely.")); }
+        let parsed: Value = serde_json::from_str(&text).map_err(|_| io::Error::other("The XP settings could not be read. The original file has not been changed."))?;
+        let revision = parsed.get("revision").and_then(Value::as_u64).filter(|number| *number > 0).ok_or_else(|| io::Error::other("The XP settings revision is invalid. The original file has not been changed."))?;
+        let state = parsed.get("state").filter(|value| value.is_object()).ok_or_else(|| io::Error::other("The XP settings are invalid. The original file has not been changed."))?.clone();
+        Ok(Some((revision, state, text)))
+    }
+
+    pub fn reward_settings(&self, root: &str) -> io::Result<Option<Value>> {
+        self.reward_document(root).map(|document| document.map(|(revision, state, _)| serde_json::json!({ "revision": revision, "state": state })))
+    }
+
+    /// Revision-checked, no-clobber creation and conditional atomic replacement. Retrying a
+    /// completed save is safe: the same state returns its existing revision without writing.
+    pub fn save_reward_settings(&self, root: &str, expected: u64, state: &Value) -> io::Result<u64> {
+        self.save_reward_settings_with(root, expected, state, || {})
+    }
+
+    fn save_reward_settings_with(&self, root: &str, expected: u64, state: &Value, before_write: impl FnOnce()) -> io::Result<u64> {
+        if !state.is_object() || state.get("version").and_then(Value::as_u64) != Some(1) { return Err(io::Error::other("These XP rules need a different version of Epizen. They have not been replaced.")); }
+        let current = self.reward_document(root)?;
+        if let Some((revision, previous, _)) = &current {
+            if previous.get("version").and_then(Value::as_u64) != Some(1) { return Err(io::Error::other("These XP rules need a different version of Epizen. They have not been replaced.")); }
+            if previous == state { return Ok(*revision); }
+        }
+        let revision = current.as_ref().map_or(0, |(revision, _, _)| *revision);
+        if revision != expected { return Err(io::Error::other("XP settings changed in another window. Your draft has been retained.")); }
+        let next = revision.checked_add(1).ok_or_else(|| io::Error::other("XP settings revision overflow."))?;
+        let text = serde_json::to_string_pretty(&serde_json::json!({ "revision": next, "state": state }))?;
+        if text.len() > 20 * 1024 * 1024 { return Err(io::Error::other("The XP settings history is too large. Export your draft before making changes.")); }
+        let (parent, name) = self.reward_location(root)?;
+        fs::create_dir_all(&parent)?;
+        // Re-check after creation so a settings folder inside the vault cannot be used.
+        self.reward_location(root)?;
+        let vault = crate::Vault::open(parent).map_err(io::Error::other)?;
+        before_write();
+        match current {
+            Some((_, _, previous)) => vault.write_note(&name, &text, &previous),
+            None => vault.create_note(&name, &text),
+        }.map_err(|error| io::Error::other(format!("XP settings were not saved: {error}")))?;
+        Ok(next)
+    }
+
     /// Assistant action receipts are kept outside the vault. Corruption must block actions,
     /// never silently erase the evidence that a write may already have happened.
     pub fn assistant_actions(&self) -> io::Result<Value> {
@@ -211,6 +283,85 @@ mod tests {
             Value::Object(map) => map,
             _ => panic!("not an object"),
         }
+    }
+
+    #[test]
+    fn reward_settings_are_scoped_revision_checked_and_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("first"); let second = dir.path().join("second");
+        fs::create_dir_all(&first).unwrap(); fs::create_dir_all(&second).unwrap();
+        let first = first.canonicalize().unwrap().to_string_lossy().into_owned();
+        let second = second.canonicalize().unwrap().to_string_lossy().into_owned();
+        let settings = Settings::new(dir.path().join("config"));
+        let initial = json!({"version":1,"id":"first","policies":[{"id":"initial"}]});
+        let changed = json!({"version":1,"id":"first","policies":[{"id":"future"}]});
+        assert!(settings.reward_settings(&first).unwrap().is_none());
+        assert_eq!(settings.save_reward_settings(&first, 0, &initial).unwrap(), 1);
+        assert_eq!(settings.save_reward_settings(&second, 0, &json!({"version":1,"id":"second"})).unwrap(), 1);
+        assert_eq!(settings.save_reward_settings(&first, 0, &initial).unwrap(), 1, "a retry must not duplicate a revision");
+        assert!(settings.save_reward_settings(&first, 0, &changed).unwrap_err().to_string().contains("draft has been retained"));
+        assert_eq!(settings.save_reward_settings(&first, 1, &changed).unwrap(), 2);
+        assert_eq!(settings.reward_settings(&first).unwrap().unwrap(), json!({"revision":2,"state":changed}));
+        assert_eq!(settings.reward_settings(&second).unwrap().unwrap()["state"]["id"], "second");
+    }
+
+    #[test]
+    fn competing_reward_saves_preserve_the_winner_and_report_the_conflict() {
+        use std::sync::{Arc, Barrier};
+        let dir = tempfile::tempdir().unwrap(); let root = dir.path().join("vault"); fs::create_dir(&root).unwrap();
+        let root = root.canonicalize().unwrap().to_string_lossy().into_owned();
+        let first = Settings::new(dir.path().join("config")); let second = Settings::new(dir.path().join("config"));
+        first.save_reward_settings(&root, 0, &json!({"version":1,"value":"original"})).unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let (a, b) = std::thread::scope(|scope| {
+            let left_barrier = barrier.clone(); let right_barrier = barrier.clone();
+            let left_settings = &first; let right_settings = &second; let root = &root;
+            let left = scope.spawn(move || left_settings.save_reward_settings_with(root, 1, &json!({"version":1,"value":"left"}), || { left_barrier.wait(); }));
+            let right = scope.spawn(move || right_settings.save_reward_settings_with(root, 1, &json!({"version":1,"value":"right"}), || { right_barrier.wait(); }));
+            (left.join().unwrap(), right.join().unwrap())
+        });
+        assert_ne!(a.is_ok(), b.is_ok());
+        let saved = first.reward_settings(&root).unwrap().unwrap();
+        assert_eq!(saved["revision"], 2);
+        assert_eq!(saved["state"]["value"], if a.is_ok() { "left" } else { "right" });
+    }
+
+    #[test]
+    fn damaged_or_newer_reward_settings_are_never_replaced_and_other_settings_still_work() {
+        let dir = tempfile::tempdir().unwrap(); let root = dir.path().join("vault"); fs::create_dir(&root).unwrap();
+        let root = root.canonicalize().unwrap().to_string_lossy().into_owned();
+        let settings = Settings::new(dir.path().join("config"));
+        settings.save_reward_settings(&root, 0, &json!({"version":1})).unwrap();
+        let (parent, name) = settings.reward_location(&root).unwrap(); let path = parent.join(name);
+        for original in ["{broken", "{\"revision\":3,\"state\":{\"version\":2,\"future\":true}}"] {
+            fs::write(&path, original).unwrap();
+            assert!(settings.save_reward_settings(&root, 3, &json!({"version":1})).is_err());
+            assert_eq!(fs::read_to_string(&path).unwrap(), original);
+            settings.update(object(json!({"theme":"dark"}))).unwrap();
+            assert_eq!(settings.load()["theme"], "dark");
+        }
+    }
+
+    #[test]
+    fn refuses_a_settings_location_inside_the_vault_without_creating_anything() {
+        let dir = tempfile::tempdir().unwrap(); let root = dir.path().join("vault"); fs::create_dir(&root).unwrap();
+        let settings = Settings::new(root.join("not-created"));
+        let error = settings.save_reward_settings(&root.canonicalize().unwrap().to_string_lossy(), 0, &json!({"version":1})).unwrap_err();
+        assert!(error.to_string().contains("outside the vault"));
+        assert!(!root.join("not-created").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_a_symlinked_reward_file_without_touching_the_target_note() {
+        let dir = tempfile::tempdir().unwrap(); let root = dir.path().join("vault"); fs::create_dir(&root).unwrap();
+        let note = root.join("Keep.md"); fs::write(&note, "Original\n").unwrap();
+        let settings = Settings::new(dir.path().join("config"));
+        let root = root.canonicalize().unwrap().to_string_lossy().into_owned();
+        let (parent, name) = settings.reward_location(&root).unwrap(); fs::create_dir_all(&parent).unwrap();
+        std::os::unix::fs::symlink(&note, parent.join(name)).unwrap();
+        assert!(settings.save_reward_settings(&root, 0, &json!({"version":1})).is_err());
+        assert_eq!(fs::read_to_string(note).unwrap(), "Original\n");
     }
 
     #[test]

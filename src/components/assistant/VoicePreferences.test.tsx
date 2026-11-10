@@ -9,8 +9,7 @@ it('stores an OpenRouter key separately and saves the chosen model without expos
   const save = vi.fn().mockResolvedValue(undefined), user = userEvent.setup();
   render(<VoicePreferences value={{ provider: 'local', model: '' }} onSave={save} />);
   await user.selectOptions(screen.getByLabelText('Voice provider'), 'openrouter');
-  await user.clear(screen.getByLabelText('Transcription model'));
-  await user.type(screen.getByLabelText('Transcription model'), 'microsoft/mai-transcribe-2');
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Transcription model' }), 'microsoft/mai-transcribe-2');
   await user.type(screen.getByLabelText('Voice API key'), 'test-only-voice-key');
   await user.click(screen.getByRole('button', { name: 'Save voice settings' }));
   expect(setVoiceKey).toHaveBeenCalledWith('openrouter', 'test-only-voice-key');
@@ -37,4 +36,29 @@ it('refuses to save an unconnected remote provider and never substitutes a diffe
   expect(await screen.findByRole('alert')).toHaveTextContent('Enter an API key');
   expect(save).not.toHaveBeenCalled();
   expect(vi.mocked(voiceConnection).mock.calls.every(([provider]) => provider === 'openrouter')).toBe(true);
+});
+
+it('preserves saved custom models and validates custom input before saving', async () => {
+  const save = vi.fn().mockResolvedValue(undefined), user = userEvent.setup();
+  render(<VoicePreferences value={{ provider: 'openrouter', model: 'other/saved-model' }} onSave={save} />);
+  expect(screen.getByLabelText('Transcription model')).toHaveValue('custom');
+  expect(screen.getByLabelText('Custom transcription model')).toHaveValue('other/saved-model');
+  await user.click(screen.getByRole('button', { name: 'Save voice settings' }));
+  expect(save).toHaveBeenLastCalledWith({ provider: 'openrouter', model: 'other/saved-model' });
+  await user.selectOptions(screen.getByLabelText('Transcription model'), 'microsoft/mai-transcribe-2');
+  expect(screen.queryByLabelText('Custom transcription model')).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByLabelText('Transcription model'), 'custom');
+  await user.type(screen.getByLabelText('Custom transcription model'), 'invalid model');
+  await user.click(screen.getByRole('button', { name: 'Save voice settings' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('valid transcription model');
+  expect(save).toHaveBeenCalledOnce();
+});
+it('shows models for the selected provider and saves its exact identifier', async () => {
+  const save = vi.fn().mockResolvedValue(undefined), user = userEvent.setup();
+  render(<VoicePreferences value={{ provider: 'openrouter', model: 'microsoft/mai-transcribe-2' }} onSave={save} />);
+  await user.selectOptions(screen.getByLabelText('Voice provider'), 'openai');
+  expect(screen.queryByRole('option', { name: 'MAI-Transcribe 2' })).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByLabelText('Transcription model'), 'gpt-4o-mini-transcribe');
+  await user.click(screen.getByRole('button', { name: 'Save voice settings' }));
+  expect(save).toHaveBeenCalledWith({ provider: 'openai', model: 'gpt-4o-mini-transcribe' });
 });

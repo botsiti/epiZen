@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "id": "fixture",
+  "startDate": "2026-01-01",
+  "categories": [{ "id": "code", "name": "Code", "tag": "code", "aliases": [], "color": "#6fa5e6", "kind": "main", "archived": false, "createdAt": "2026-01-01" }],
+  "areas": [{ "id": "career-work", "name": "Career/Work", "aliases": [], "color": "#6fa5e6", "archived": false }],
+  "policies": [{
+    "id": "initial", "effectiveFrom": "2026-01-01",
+    "profiles": {
+      "focus": { "rateHundredths": 100, "boostHundredths": 0, "boostMinutes": 0 },
+      "practice": { "rateHundredths": 100, "boostHundredths": 5000, "boostMinutes": 10 },
+      "training": { "rateHundredths": 100, "boostHundredths": 1500, "boostMinutes": 30 },
+      "leisure": { "rateHundredths": 50, "boostHundredths": 0, "boostMinutes": 0 }
+    },
+    "categories": { "code": { "profile": "focus", "shares": [{ "area": "career-work", "basisPoints": 10000 }] } }
+  }],
+  "questRewards": { "presets": { "common": 100, "rare": 500, "epic": 2000, "legendary": 6000 }, "hourlyHundredths": 10000 },
+  "seedCategoryTasks": false
+}

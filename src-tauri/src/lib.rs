@@ -15,6 +15,7 @@ mod net;
 mod photos;
 mod pet;
 mod prompt;
+mod rewards;
 mod settings;
 mod tray;
 mod vault;
@@ -543,6 +544,8 @@ pub fn run() {
             fetch_image_into_vault,
             get_settings,
             update_settings,
+            rewards::reward_settings,
+            rewards::save_reward_settings,
             guard_close,
             close_now,
             calendar_access,

@@ -50,8 +50,8 @@ function QuickEntry({ snapshot }: { snapshot: QuickSnapshot }) {
       await save();
       const id = crypto.randomUUID(); sent.current = { id, text: text.current, revision: revision.current };
       await submitQuickPrompt(root, revision.current, id);
-    } catch (error) { sent.current = undefined; setError(String(error)); }
-    finally { sending.current = false; setSubmitting(false); }
+    } catch (error) { sent.current = undefined; setSubmitting(false); setError(String(error)); }
+    finally { sending.current = false; }
   }, [root, save]);
   const receiveVoice = useCallback(async (transcript: string) => {
     text.current = [text.current.trim(), transcript.trim()].filter(Boolean).join('\n'); setDraft(text.current);

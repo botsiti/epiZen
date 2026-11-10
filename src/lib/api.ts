@@ -69,6 +69,8 @@ export const fetchImageIntoVault = (url: string, path: string) => invoke<string>
 export const getSettings = () => invoke<Settings>('get_settings');
 /** Merges by top-level key; `null` removes a key. Returns every setting. */
 export const updateSettings = (patch: Settings) => invoke<Settings>('update_settings', { patch });
+export const getRewardSettings = (root: string) => invoke<unknown>('reward_settings', { root });
+export const saveRewardSettings = (root: string, expectedRevision: number, value: unknown) => invoke<number>('save_reward_settings', { root, expectedRevision, value });
 
 // Spike's provider boundary. Credentials are stored by the backend in macOS Keychain.
 export const assistantConnection = (provider: 'openai' | 'codex' = 'openai') => invoke<{ configured: boolean }>('assistant_connection', { provider });

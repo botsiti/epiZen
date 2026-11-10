@@ -644,7 +644,7 @@ Subscription voice uses the Speech framework with on-device recognition required
 system voice for replies. It asks for Speech Recognition permission only when transcribing a
 user recording. Unsupported languages, denied permission and cancellation leave typed chat available.
 Dictation can independently use on-device recognition, OpenAI or OpenRouter. API dictation has
-an editable transcription-model identifier and a Keychain credential; OpenRouter's key is separate
+a native transcription-model picker with a Custom model option and a Keychain credential; OpenRouter's key is separate
 from OpenAI's. Only an explicit voice send uploads a recording to the selected provider. There
 is no fallback between providers. Existing assistant connections retain their prior speech route.
 Voice settings can be saved without connecting the conversation provider.

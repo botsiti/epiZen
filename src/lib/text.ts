@@ -21,3 +21,5 @@ export function noteNameProblem(name: string): string | undefined {
   if (FORBIDDEN.test(trimmed)) return 'A note name can\'t contain \\ / : * ? " < > | # ^ [ ]';
   return undefined;
 }
+/** Stable, locale-independent identity for user-visible names and Markdown tags. */
+export const textIdentity = (value: string) => value.normalize('NFC').trim().toLowerCase().normalize('NFC');

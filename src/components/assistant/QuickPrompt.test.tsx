@@ -75,3 +75,30 @@ it('keeps typed capture available before connecting and does not start the micro
   expect(screen.getByRole('button', { name: 'Send ↑' })).toBeDisabled();
   expect(voice.start).not.toHaveBeenCalled();
 });
+
+it('focuses text capture on opening and uses Enter to send while preserving Shift+Enter and composition', async () => {
+  render(<QuickPrompt />);
+  const input = await screen.findByLabelText('Quick message to Spike');
+  await waitFor(() => expect(input).toHaveFocus());
+  fireEvent.change(input, { target: { value: 'A typed thought' } });
+  fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+  fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+  expect(api.submitQuickPrompt).not.toHaveBeenCalled();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(api.submitQuickPrompt).toHaveBeenCalledOnce());
+  expect(input).toBeDisabled();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(api.submitQuickPrompt).toHaveBeenCalledOnce();
+});
+it('retains typed text and allows retry after a rejected submission', async () => {
+  vi.mocked(api.submitQuickPrompt).mockRejectedValueOnce(new Error('Workspace unavailable'));
+  render(<QuickPrompt />);
+  const input = await screen.findByLabelText('Quick message to Spike');
+  fireEvent.change(input, { target: { value: 'Keep this text' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByRole('alert')).toHaveTextContent('Workspace unavailable');
+  expect(input).toHaveValue('Keep this text');
+  expect(input).not.toBeDisabled();
+  fireEvent.keyDown(input, { key: 'Escape' });
+  await waitFor(() => expect(api.hideQuickPrompt).toHaveBeenCalledOnce());
+});
