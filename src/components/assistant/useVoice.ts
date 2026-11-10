@@ -66,6 +66,7 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
         try {
           const context = new AudioContext(), analyser = context.createAnalyser(); analyser.fftSize = 256;
           context.createMediaStreamSource(media).connect(analyser);
+          void context.resume().catch(() => undefined);
           const samples = new Uint8Array(analyser.fftSize);
           const timer = setInterval(() => { analyser.getByteTimeDomainData(samples); const energy = Math.sqrt(samples.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / samples.length); if (alive.current) setLevel(Math.min(1, energy * 5)); }, 80);
           meter.current = { context, timer };
