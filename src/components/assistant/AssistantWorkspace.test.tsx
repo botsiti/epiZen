@@ -20,17 +20,20 @@ it('retains an unsent conversation draft outside a failed view and restores it o
   vi.mocked(api.onQuickCommand).mockResolvedValue(() => undefined);
   vi.mocked(api.quickPromptState).mockResolvedValue({ root: '/copy', document: { revision: 0, draft: '', pending: null } } as Awaited<ReturnType<typeof api.quickPromptState>>);
   vi.mocked(api.enablePet).mockResolvedValue(undefined);
+  vi.mocked(api.publishPet).mockResolvedValue(undefined);
   vi.mocked(api.onPetCommand).mockResolvedValue(() => undefined);
   vi.mocked(api.onMainHidden).mockResolvedValue(() => undefined);
   vi.mocked(api.assistantConnection).mockResolvedValue({ configured: true });
   vi.mocked(api.assistantListChats).mockResolvedValue([]);
   vi.mocked(api.assistantSaveChat).mockResolvedValue(1);
-  const context = { root: '/copy', now: new Date(2026, 10, 8), periodic: DEFAULT_PERIODIC, settings: { ...DEFAULT_ASSISTANT, enabled: true }, files: [], texts: new Map<string, string>() };
+  const context = { root: '/copy', now: new Date(2026, 10, 8), periodic: DEFAULT_PERIODIC, settings: { ...DEFAULT_ASSISTANT, enabled: true, petMotion: false }, files: [], texts: new Map<string, string>() };
   const props = { context, open: true, onOpen: vi.fn(), onClose: vi.fn(), onSaved: vi.fn(), onOpenNote: vi.fn(), onRefresh: vi.fn().mockResolvedValue(undefined), onSaveSettings: vi.fn().mockResolvedValue(undefined) };
   const content = () => <><p>My note stays usable</p><AssistantWorkspace {...props} /></>;
   try {
     const user = userEvent.setup(), view = render(content());
     await waitFor(() => expect(api.assistantListChats).toHaveBeenCalled());
+    // A shortcut can summon Spike even when the startup companion preference is off.
+    expect(api.publishPet).toHaveBeenCalledWith('/copy', expect.objectContaining({ motion: false }));
     fireEvent.change(screen.getByLabelText('Retained draft'), { target: { value: 'A thought I have not sent yet.' } });
     await waitFor(() => expect(screen.getByLabelText('Retained draft')).toHaveValue('A thought I have not sent yet.'));
     state.broken = true; view.rerender(content());

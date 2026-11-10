@@ -74,10 +74,12 @@ export const saveRewardSettings = (root: string, expectedRevision: number, value
 
 // Spike's provider boundary. Credentials are stored by the backend in macOS Keychain.
 export const assistantConnection = (provider: 'openai' | 'codex' = 'openai') => invoke<{ configured: boolean }>('assistant_connection', { provider });
+export const assistantShowWorkspace = (root: string) => invoke<void>('assistant_show_workspace', { root });
 export const assistantReadNote = (root: string, path: string) => invoke<string>('assistant_read_note', { root, path });
+export const assistantPrepareCover = (action: { id: string; root: string; note: string; path: string; url: string }) => invoke<string>('assistant_prepare_cover', { action });
 export const assistantApplyNote = (action: { id: string; root: string; path: string; before: string | null; after: string }) => invoke<string>('assistant_apply_note', { action });
 export const assistantAbandonAction = (root: string, id: string) => invoke<void>('assistant_abandon_action', { root, id });
-export const assistantApplyCalendar = (action: { id: string; root: string; calendar: string; title: string; start: number; end: number; notes?: string }) => invoke<string>('assistant_apply_calendar', { action });
+export const assistantApplyCalendar = (action: { id: string; root: string; calendar: string; title: string; start: number; end: number; notes?: string; avoidConflicts?: boolean }) => invoke<string>('assistant_apply_calendar', { action });
 export const assistantHasMessage = (root: string, id: string) => invoke<boolean>('assistant_has_message', { root, id });
 export const assistantListChats = (root: string) => invoke<unknown>('assistant_list_chats', { root });
 export const assistantSearchChats = (root: string, query: string, excludeMessage?: string) => invoke<unknown>('assistant_search_chats', { root, query, excludeMessage });
@@ -119,7 +121,7 @@ export const hideQuickPrompt = (opened: number) => invoke<void>('prompt_hide', {
 export const openQuickConversation = () => invoke<void>('prompt_open_main');
 export const transcribeQuickPrompt = (root: string, audio: Uint8Array, mime: string, signal?: AbortSignal, _provider?: 'codex' | 'openai', voice?: VoiceSettings) => assistantRequest<string>('assistant_transcribe', { request: { root, audio: Array.from(audio), mime, voice } }, signal);
 
-export interface PetStatus { animation: string; label: string; motion: boolean }
+export interface PetStatus { promptOpen?: boolean; animation: string; label: string; motion: boolean }
 export const enablePet = (root: string, enabled: boolean) => invoke<void>('pet_enable', { root, enabled });
 export const publishPet = (root: string, state: PetStatus) => invoke<void>('pet_publish', { root, state });
 export const petState = () => invoke<PetStatus>('pet_state');

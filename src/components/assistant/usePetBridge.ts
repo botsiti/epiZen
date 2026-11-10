@@ -12,7 +12,7 @@ export function usePetBridge(props: Props) {
   }, [props.root, props.enabled]);
   useEffect(() => () => { void enablePet(props.root, false).catch(() => undefined); }, [props.root]);
   const { animation, label, motion } = props.status;
-  useEffect(() => { if (props.enabled) void publishPet(props.root, { animation, label, motion }).catch((error: unknown) => setError(String(error))); }, [props.root, props.enabled, animation, label, motion]);
+  useEffect(() => { void publishPet(props.root, { animation, label, motion }).catch((error: unknown) => setError(String(error))); }, [props.root, animation, label, motion]);
   useEffect(() => {
     let gone = false; const stops: (() => void)[] = [];
     const accept = (stop: () => void) => { if (gone) stop(); else stops.push(stop); };

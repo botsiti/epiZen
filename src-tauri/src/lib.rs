@@ -511,7 +511,7 @@ pub fn run() {
             assistant::assistant_read_note,
             assistant::assistant_apply_note,
             assistant::assistant_abandon_action,
-            assistant::assistant_apply_calendar,
+            assistant::assistant_apply_calendar, assistant::assistant_show_workspace, assistant::assistant_prepare_cover,
             assistant::assistant_list_chats,
             assistant::assistant_search_chats,
             assistant::assistant_export_chat,

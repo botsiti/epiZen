@@ -41,10 +41,10 @@ Built with Tauri 2, Rust, React and TypeScript.
 - **Plan and focus.** Built-in daily, weekly and monthly pages, local Apple Calendar integration,
   and a focus timer with a menu-bar panel. Logged time stays in your daily notes.
 - **Talk to Spike anywhere.** Enable the Spike plugin and click the desktop companion to open
-  a compact text or voice prompt above your other apps. Global shortcuts open typing or dictation;
+  a compact text or voice prompt directly below him. Right-click hides Spike; ⇧⌘Space shows or hides him and the prompt. A separate shortcut opens dictation;
   **⌘8** opens and closes the full conversation sidebar. Choose on-device, OpenAI or OpenRouter
   transcription with your own model and Keychain credential. Type or record a voice message to add library entries, create or edit notes, capture links, schedule
-  calendar events, or work through a thought record saved in today's note. Spike can recall
+  calendar blocks, or open today’s CBT form. Library captures keep the supplied date, rating and comments and use the catalogue’s cover. Daily tasks, quests and monthly fields use the same Markdown formats as the app’s composers. Spike can recall
   relevant past conversations and preferences you choose to keep in an editable profile note.
   Proposed changes can be reviewed or applied automatically when you enable that preference.
 
@@ -80,7 +80,7 @@ window saves and hides it while Spike is enabled; use **Quit Epizen** to exit th
 | --- | --- |
 | ⌘7 / ⌘9 | Toggle the left / right workspace sidebar |
 | ⌘8 | Toggle the Spike conversation sidebar |
-| ⇧⌘Space | Open or close Spike’s quick prompt from any app |
+| ⇧⌘Space | Show or hide Spike and his prompt from any app |
 | ⌥⇧⌘Space | Start or finish Spike dictation from any app |
 
 Spike’s global shortcuts are active while its plugin is enabled. The [feature guide](docs/FEATURES.md)

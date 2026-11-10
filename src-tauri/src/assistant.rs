@@ -37,6 +37,15 @@ impl Drop for RequestGuard<'_> {
     fn drop(&mut self) { self.assistant.requests.lock().unwrap_or_else(|p| p.into_inner()).active.remove(&self.id); }
 }
 #[tauri::command]
+pub async fn assistant_show_workspace(window: tauri::WebviewWindow, state: State<'_, std::sync::RwLock<crate::VaultState>>, root: String) -> Result<(), String> {
+    workspace_only(&window)?;
+    if state.read().unwrap_or_else(|p| p.into_inner()).vault()?.root() != root { return Err("The vault changed.".to_owned()); }
+    window.unminimize().map_err(|error| error.to_string())?;
+    crate::companion_display::show(&window)?;
+    if !cfg!(feature = "e2e") && std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_none() { window.set_focus().map_err(|error| error.to_string())?; }
+    Ok(())
+}
+#[tauri::command]
 pub async fn assistant_read_note(window: tauri::WebviewWindow, state: State<'_, std::sync::RwLock<crate::VaultState>>, root: String, path: String) -> Result<String, String> {
     workspace_only(&window)?;
     let guard = state.read().unwrap_or_else(|p| p.into_inner());
@@ -50,6 +59,19 @@ pub async fn assistant_apply_note(window: tauri::WebviewWindow, assistant: State
     let _write = assistant.writes.lock().unwrap_or_else(|p| p.into_inner());
     let guard = state.read().unwrap_or_else(|p| p.into_inner());
     crate::assistant_writes::apply_note(guard.vault()?, &settings, &action)
+}
+#[tauri::command]
+pub async fn assistant_prepare_cover(window: tauri::WebviewWindow, assistant: State<'_, Assistant>, state: State<'_, std::sync::RwLock<crate::VaultState>>, settings: State<'_, crate::Settings>, net: State<'_, Net>, action: crate::assistant_writes::CoverAction) -> Result<String, String> {
+    workspace_only(&window)?;
+    {
+        let _write = assistant.writes.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = state.read().unwrap_or_else(|p| p.into_inner());
+        if let Some(path) = crate::assistant_writes::cover_status(guard.vault()?, &settings, &action)? { return Ok(path); }
+    }
+    let bytes = net.image(&action.url).await.map_err(|error| format!("The cover could not be downloaded: {error}. Retry this save when the catalogue is available; no note was created."))?;
+    let _write = assistant.writes.lock().unwrap_or_else(|p| p.into_inner());
+    let guard = state.read().unwrap_or_else(|p| p.into_inner());
+    crate::assistant_writes::apply_cover(guard.vault()?, &settings, &action, &bytes)
 }
 #[tauri::command]
 pub async fn assistant_abandon_action(window: tauri::WebviewWindow, assistant: State<'_, Assistant>, state: State<'_, std::sync::RwLock<crate::VaultState>>, settings: State<'_, crate::Settings>, root: String, id: String) -> Result<(), String> {
@@ -325,10 +347,20 @@ mod fixtures {
         if let Some(last) = request.input.last().filter(|item| item["type"] == "function_call_output") {
             let result: Value = serde_json::from_str(last["output"].as_str().unwrap_or("{}")).unwrap_or(Value::Null);
             if result["error"].is_string() { return Ok(message(&format!("I couldn’t complete that action: {}", result["error"].as_str().unwrap_or_default()))); }
+            if result["value"]["opened"] == true { return Ok(message("Opened the requested page in Epizen.")); }
             if result["value"]["saved"] == true { return Ok(message(&format!("Saved. {}", result["value"]["description"].as_str().unwrap_or_default()))); }
+            if lower.contains("with its cover") {
+                let selected = result["value"].as_array().and_then(|items| items.iter().find(|item| item["title"] == "American Fiction")).ok_or("The fixture film was not found.")?;
+                let routing: Value = request.instructions.lines().find_map(|line| line.strip_prefix("Available routing: ")).and_then(|line| serde_json::from_str(line).ok()).ok_or("Missing local routing.")?;
+                return Ok(call("add_lookup_media", json!({ "id": selected["id"], "date": routing["yesterday"], "rating": "90", "thoughts": "I liked the cinematography. It is about identity and storytelling." })));
+            }
             if lower.contains("previous conversations") {
                 let found = result["value"].as_array().and_then(|items| items.iter().find(|item| item["role"] == "user" && item["excerpt"].as_str().is_some_and(|text| text.contains("missed a deadline"))));
                 return Ok(message(&found.map(|item| format!("In an earlier conversation, you said: {}", item["excerpt"].as_str().unwrap_or_default())).unwrap_or_else(|| "I couldn’t find that earlier conversation.".to_owned())));
+            }
+            if lower.contains("plan two hours") {
+                let calendar = result["value"].as_array().and_then(|items| items.iter().find(|item| item["writable"] == true)).and_then(|item| item["id"].as_str()).ok_or("No fixture calendar.")?;
+                return Ok(call("plan_block", json!({ "calendar": calendar, "date": "2026-12-01", "title": "code", "notes": "Feature X for Mr Suit", "minutes": 120, "start": "", "window": "morning" })));
             }
             if lower.contains("schedule") {
                 let calendar = result["value"].as_array().and_then(|items| items.iter().find(|item| item["writable"] == true)).and_then(|item| item["id"].as_str()).ok_or("No fixture calendar.")?;
@@ -336,6 +368,12 @@ mod fixtures {
             }
             return Ok(message("The requested change was declined. Your notes are unchanged."));
         }
+        if lower.contains("with its cover") { return Ok(call("lookup_media", json!({ "kind": "film", "query": "American Fiction" }))); }
+        if lower.contains("start cbt") || lower.contains("start a cbt") { return Ok(call("start_cbt", json!({}))); }
+        if lower.contains("add my three study tasks") { return Ok(call("add_tasks", json!({ "date": "", "tasks": [{ "category": "business", "title": "Research marketing on X" }, { "category": "biology", "title": "Do the CRISPR course" }, { "category": "code", "title": "Add feature X to Mr Suit" }] }))); }
+        if lower.contains("add a monthly biology quest") { return Ok(call("add_quest", json!({ "period": "month", "date": "", "title": "Finish the CRISPR course", "sphere": "Personal Growth", "tier": "common", "xp": 0, "target": 0 }))); }
+        if lower.contains("save my monthly decisions") { return Ok(call("update_period_section", json!({ "period": "month", "date": "", "section": "decisions", "text": "I chose to focus on biology." }))); }
+        if lower.contains("plan two hours") { return Ok(call("list_calendars", json!({}))); }
         if lower.contains("previous conversations") { return Ok(call("search_conversations", json!({ "query": "missed deadline" }))); }
         if lower.starts_with("create a note") { return Ok(call("create_note", fixture["ordinaryNote"].clone())); }
         if lower.contains("watched") { return Ok(call("add_media", fixture["movie"].clone())); }

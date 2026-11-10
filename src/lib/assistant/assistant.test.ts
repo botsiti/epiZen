@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseNote } from '../frontmatter';
 import { DEFAULT_PERIODIC } from '../periodic';
 import { parseRecords } from '../cbt';
-import { assistantInstructions, currentAssistantContext, routingContext, searchNotes } from './context';
+import { assistantInstructions, readAssistantGuidance, currentAssistantContext, routingContext, searchNotes } from './context';
 import { addMediaChange, captureLinkChange, replaceExcerpt, safeNotePath, thoughtRecordChange } from './changes';
 import { continueRun, parseAgentResponse, startRun, ActionNeedsReview, type AgentPorts } from './agent';
 import { DEFAULT_ASSISTANT, assistantPreferencesPatch, vaultAssistantSettings, type AgentRun, type AssistantContext, type ToolCall } from './types';
@@ -141,4 +141,24 @@ describe('resumable agent actions', () => {
   it('rejects malformed, empty and truncated provider responses', () => {
     for (const value of [null, {}, { output: [] }, { status: 'failed', output: [call] }, { status: 'incomplete', output: [] }, { output: [{ type: 'function_call', name: 'x' }] }, { output: [call, call] }]) expect(() => parseAgentResponse(value)).toThrow();
   });
+});
+
+it('reads only the root guides, refreshes their content, bounds excerpts and reports unreadable guidance', async () => {
+  const ctx = { ...context, files: ['AGENTS.md', 'SPIKE.MD', 'Nested/AGENTS.md', '.therapy/Private.md'].map((path) => ({ path, kind: 'note' as const })) };
+  const read = vi.fn<(root: string, path: string) => Promise<string>>().mockResolvedValueOnce('Standing preferences').mockResolvedValueOnce('x'.repeat(17000));
+  const guides = await readAssistantGuidance(ctx, read);
+  expect(read.mock.calls.map((call) => call[1])).toEqual(['AGENTS.md', 'SPIKE.MD']);
+  expect(guides['SPIKE.MD']).toHaveLength(16000);
+  expect(assistantInstructions(ctx, guides)).toContain('Standing preferences');
+  read.mockRejectedValue(new Error('Guide changed or unreadable'));
+  await expect(readAssistantGuidance(ctx, read)).rejects.toThrow('unreadable');
+});
+
+it('keeps multilingual and escaped guide/profile/note context within the native request byte limit', () => {
+  const text = '🧬Я\n\u0000'.repeat(16000);
+  const ctx = { ...context, currentPath: 'Current.md', settings: { ...context.settings, shareCurrentNote: true }, texts: new Map([['Current.md', text], [context.settings.profilePath, text]]) };
+  const instructions = assistantInstructions(ctx, { 'AGENTS.md': text, 'SPIKE.MD': text });
+  expect(new TextEncoder().encode(instructions).length).toBeLessThan(100000);
+  expect(instructions).toContain('🧬Я');
+  expect(instructions).toContain('Current note data');
 });

@@ -42,6 +42,41 @@ fn contains(point: (f64,f64), origin: (i32,i32), size: (u32,u32)) -> bool {
     point.0 >= origin.0 as f64 && point.1 >= origin.1 as f64
         && point.0 < origin.0 as f64 + size.0 as f64 && point.1 < origin.1 as f64 + size.1 as f64
 }
+/// AppKit can detach a borderless child when it is hidden. Reattach before every
+/// preview opening so it stays on the main preview's assigned Space.
+pub fn show(window: &WebviewWindow) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    if cfg!(feature = "e2e") || std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_some() {
+        use tauri::Manager;
+        let main = window.app_handle().get_webview_window("main").ok_or("The preview workspace is unavailable.")?;
+        let child = window.clone();
+        let (send, receive) = std::sync::mpsc::sync_channel(1);
+        window.run_on_main_thread(move || {
+            let result = (|| {
+                use objc2_app_kit::{NSWindow, NSWindowOrderingMode};
+                let parent = main.ns_window().map_err(|error| error.to_string())?;
+                let raw = child.ns_window().map_err(|error| error.to_string())?;
+                // SAFETY: both handles are live Tauri windows; this closure runs on AppKit's main thread.
+                unsafe {
+                    let parent = &*parent.cast::<NSWindow>();
+                    let native = &*raw.cast::<NSWindow>();
+                    if child.label() != "main" {
+                        if let Some(previous) = native.parentWindow() { previous.removeChildWindow(native); }
+                        parent.addChildWindow_ordered(native, NSWindowOrderingMode::Above);
+                    }
+                    // Tauri show() makes a window key, which can pull a hidden preview to the
+                    // active Space. Order it without activation or keyboard focus instead.
+                    native.orderFrontRegardless();
+                }
+                Ok::<(), String>(())
+            })();
+            let _ = send.send(result);
+        }).map_err(|error| error.to_string())?;
+        return receive.recv_timeout(std::time::Duration::from_secs(5)).map_err(|_| "The preview could not be shown without activation.".to_owned())?;
+    }
+    window.show().map_err(|error| error.to_string())
+}
+
 #[cfg(test)] mod tests {
     use super::*;
     #[test] fn display_bounds_handle_retina_negative_origins_and_edges() {

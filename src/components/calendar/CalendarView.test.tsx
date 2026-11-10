@@ -283,3 +283,17 @@ describe('the calendar', () => {
     expect(call?.[1](TEXT)).toBe(TEXT.replace('    - 12:30–13:00\n', '    - 12:30–13:00\n- [ ] #daily/book — read 30 pages\n'));
   });
 });
+
+it('reveals an assistant block date once without taking over later calendar navigation', async () => {
+  const onFocusDate = vi.fn();
+  const props = { dayOf, textOf, categories: ['code'], timer: timer(), onStartTimer: vi.fn(), onOpenDay: vi.fn(), onWrite: vi.fn().mockResolvedValue(undefined), onTaskChanged: vi.fn(), vault: 'copy', planCalendars: {}, onChooseCalendar: vi.fn(), onFocusDate };
+  const view = render(<CalendarView {...props} focusDate={{ time: new Date(2026, 11, 1, 9).getTime(), token: 1 }} />);
+  expect(screen.getByTestId('cal-view')).toHaveAttribute('data-mode', 'day');
+  expect(screen.getByTestId('cal-view')).toHaveAttribute('data-start', '2026-12-01');
+  await waitFor(() => expect(onFocusDate).toHaveBeenCalledOnce());
+  view.rerender(<CalendarView {...props} />);
+  fireEvent.click(screen.getByTestId('cal-next'));
+  expect(screen.getByTestId('cal-view')).toHaveAttribute('data-start', '2026-12-02');
+  view.rerender(<CalendarView {...props} />);
+  expect(screen.getByTestId('cal-view')).toHaveAttribute('data-start', '2026-12-02');
+});

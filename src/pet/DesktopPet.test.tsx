@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesktopPet } from './DesktopPet';
-import { movePet, openQuickPrompt, petPosition } from '../lib/api';
+import { hidePet, movePet, openQuickPrompt, petPosition } from '../lib/api';
 
 vi.mock('../components/assistant/Spike', () => ({ Spike: () => <span /> }));
 vi.mock('../lib/api', () => ({
@@ -18,6 +18,7 @@ function pointer(element: Element, type: string, x: number, y: number) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(petPosition).mockResolvedValue({ x: 1000, y: 800, scale: 2 });
+  vi.mocked(hidePet).mockResolvedValue(undefined);
   vi.mocked(movePet).mockResolvedValue(undefined);
   vi.mocked(openQuickPrompt).mockResolvedValue(undefined);
 });
@@ -98,4 +99,18 @@ it('offers separate text and dictation controls', () => {
   expect(openQuickPrompt).toHaveBeenLastCalledWith(true);
   fireEvent.click(screen.getByRole('button', { name: 'Open quick prompt' }));
   expect(openQuickPrompt).toHaveBeenLastCalledWith();
+});
+
+it('right-click hides Spike without opening a prompt or starting a drag, and reports a failure', async () => {
+  render(<DesktopPet />);
+  const dog = screen.getByRole('button', { name: 'Talk to Spike · drag to move' });
+  fireEvent.contextMenu(dog);
+  await waitFor(() => expect(hidePet).toHaveBeenCalledOnce());
+  expect(openQuickPrompt).not.toHaveBeenCalled();
+  expect(movePet).not.toHaveBeenCalled();
+  vi.mocked(hidePet).mockRejectedValueOnce(new Error('Keep the prompt open to recover your draft'));
+  fireEvent.contextMenu(dog);
+  expect(await screen.findByRole('alert')).toHaveTextContent('recover your draft');
+  fireEvent.keyDown(dog, { key: 'Enter' });
+  expect(openQuickPrompt).toHaveBeenCalledOnce();
 });

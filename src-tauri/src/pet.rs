@@ -6,13 +6,14 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewUrl, We
 pub const LABEL: &str = "spike";
 pub const COMMAND: &str = "epizen://pet-command";
 const STATE_EVENT: &str = "epizen://pet-state";
-const WIDTH: f64 = 180.0;
+pub const WIDTH: f64 = 180.0;
 const HEIGHT: f64 = 220.0;
+pub const PROMPT_ANCHOR: f64 = 156.0;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PetState { pub animation: String, pub label: String, pub motion: bool }
+pub struct PetState { pub animation: String, pub label: String, pub motion: bool, #[serde(default)] pub prompt_open: bool }
 impl Default for PetState {
-    fn default() -> Self { Self { animation: "idle".to_owned(), label: "Talk to Spike".to_owned(), motion: true } }
+    fn default() -> Self { Self { animation: "idle".to_owned(), label: "Talk to Spike".to_owned(), motion: true, prompt_open: false } }
 }
 #[derive(Default)]
 pub struct Pet { enabled: AtomicBool, state: Mutex<PetState>, owner: Mutex<Option<String>>, operation: tokio::sync::Mutex<()> }
@@ -55,8 +56,8 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, String> {
             if let Ok(raw) = panel.ns_window() {
                 // SAFETY: Tauri's live NSWindow, accessed only on the AppKit main thread.
                 let native = unsafe { &*raw.cast::<NSWindow>() };
-                let mut behavior = native.collectionBehavior() | NSWindowCollectionBehavior::Transient;
-                if all_workspaces { behavior |= NSWindowCollectionBehavior::CanJoinAllSpaces | NSWindowCollectionBehavior::FullScreenAuxiliary; }
+                let mut behavior = native.collectionBehavior();
+                if all_workspaces { behavior |= NSWindowCollectionBehavior::Transient | NSWindowCollectionBehavior::CanJoinAllSpaces | NSWindowCollectionBehavior::FullScreenAuxiliary; }
                 native.setCollectionBehavior(behavior);
                 native.setExcludedFromWindowsMenu(true);
             }
@@ -86,6 +87,28 @@ fn place(app: &AppHandle, window: &WebviewWindow) -> Result<(), String> {
     let y = area.position.y + (f64::from(area.size.height) - (HEIGHT + 24.0) * scale).max(0.0).round() as i32;
     window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string())
 }
+/// Quick capture may summon Spike without changing the user's startup preference.
+pub fn for_prompt(app: &AppHandle, root: &str) -> Result<WebviewWindow, String> {
+    *app.state::<Pet>().owner.lock().unwrap_or_else(|p| p.into_inner()) = Some(root.to_owned());
+    let existed = app.get_webview_window(LABEL).is_some();
+    let window = create(app)?;
+    if !existed { place(app, &window)?; }
+    window.set_focusable(false).map_err(|error| error.to_string())?;
+    Ok(window)
+}
+pub fn attach_prompt(app: &AppHandle, attached: bool) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(LABEL) {
+        window.set_size(tauri::LogicalSize::new(WIDTH, if attached { PROMPT_ANCHOR } else { HEIGHT })).map_err(|error| error.to_string())?;
+    }
+    let pet = app.state::<Pet>(); let mut state = pet.state.lock().unwrap_or_else(|p| p.into_inner());
+    state.prompt_open = attached;
+    app.emit_to(LABEL, STATE_EVENT, state.clone()).map_err(|error| error.to_string())
+}
+pub fn hide(app: &AppHandle) -> Result<(), String> {
+    remember_position(app);
+    if let Some(window) = app.get_webview_window(LABEL) { window.hide().map_err(|error| error.to_string())?; }
+    attach_prompt(app, false)
+}
 #[tauri::command]
 pub async fn pet_enable(app: AppHandle, window: WebviewWindow, root: String, enabled: bool) -> Result<(), String> {
     main_only(&window)?;
@@ -101,7 +124,7 @@ pub async fn pet_enable(app: AppHandle, window: WebviewWindow, root: String, ena
         place(&app, &pet)?;
         pet.set_focusable(false).map_err(|error| error.to_string())?;
         if vault.read().unwrap_or_else(|p| p.into_inner()).vault()?.root() != root { return Err("The vault changed.".to_owned()); }
-        pet.show().map_err(|error| error.to_string())?;
+        crate::companion_display::show(&pet)?;
         *state.owner.lock().unwrap_or_else(|p| p.into_inner()) = Some(root);
         app.state::<Pet>().enabled.store(true, Ordering::SeqCst);
     } else {
@@ -113,11 +136,12 @@ pub async fn pet_enable(app: AppHandle, window: WebviewWindow, root: String, ena
     Ok(())
 }
 #[tauri::command]
-pub fn pet_publish(app: AppHandle, window: WebviewWindow, root: String, state: PetState) -> Result<(), String> {
+pub fn pet_publish(app: AppHandle, window: WebviewWindow, root: String, mut state: PetState) -> Result<(), String> {
     main_only(&window)?;
     if app.state::<std::sync::RwLock<crate::VaultState>>().read().unwrap_or_else(|p| p.into_inner()).vault()?.root() != root { return Ok(()); }
     if !["idle", "left", "right", "greeting", "happy", "error", "listening", "thinking", "review"].contains(&state.animation.as_str()) || state.label.len() > 120 { return Err("Invalid companion state.".to_owned()); }
-    *app.state::<Pet>().state.lock().unwrap_or_else(|p| p.into_inner()) = state.clone();
+    let pet = app.state::<Pet>(); let mut stored = pet.state.lock().unwrap_or_else(|p| p.into_inner());
+    state.prompt_open = stored.prompt_open; *stored = state.clone(); drop(stored);
     app.emit_to(LABEL, STATE_EVENT, state).map_err(|error| error.to_string())
 }
 #[tauri::command]
@@ -131,16 +155,17 @@ pub fn pet_position(window: WebviewWindow) -> Result<PetPosition, String> {
     Ok(PetPosition { x: position.x, y: position.y, scale: window.scale_factor().map_err(|error| error.to_string())? })
 }
 #[tauri::command]
-pub fn pet_move(window: WebviewWindow, x: i32, y: i32) -> Result<(), String> {
+pub fn pet_move(app: AppHandle, window: WebviewWindow, x: i32, y: i32) -> Result<(), String> {
     pet_only(&window)?;
-    window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string())
+    window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string())?;
+    crate::prompt::follow_pet(&app)
 }
 #[tauri::command]
 pub fn pet_open_main(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     pet_only(&window)?;
     if let Some(main) = app.get_webview_window("main") {
         main.unminimize().map_err(|error| error.to_string())?;
-        main.show().map_err(|error| error.to_string())?;
+        crate::companion_display::show(&main)?;
         if !cfg!(feature = "e2e") && std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_none() { main.set_focus().map_err(|error| error.to_string())?; }
         let root = app.state::<Pet>().owner.lock().unwrap_or_else(|p| p.into_inner()).clone();
         app.emit_to("main", COMMAND, serde_json::json!({ "type": "open", "root": root })).map_err(|error| error.to_string())?;
@@ -150,12 +175,7 @@ pub fn pet_open_main(app: AppHandle, window: WebviewWindow) -> Result<(), String
 #[tauri::command]
 pub async fn pet_hide(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     pet_only(&window)?;
-    let state = app.state::<Pet>(); let _operation = state.operation.lock().await;
-    remember_position(&app);
-    window.hide().map_err(|error| error.to_string())?;
-    app.state::<Pet>().enabled.store(false, Ordering::SeqCst);
-    let root = state.owner.lock().unwrap_or_else(|p| p.into_inner()).take();
-    app.emit_to("main", COMMAND, serde_json::json!({ "type": "hide", "root": root })).map_err(|error| error.to_string())
+    crate::prompt::request_hide(&app).await
 }
 #[tauri::command]
 pub fn pet_motion(app: AppHandle, window: WebviewWindow, motion: bool) -> Result<(), String> {

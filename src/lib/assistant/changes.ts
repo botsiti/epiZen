@@ -1,7 +1,8 @@
 import { addRecord, type RecordInput } from '../cbt';
 import { formatDate } from '../dates';
 import { readDay } from '../datePicker';
-import { draftProblem, findOverview, KINDS, mediaNoteText, noteFileName, notePath, type MediaDraft, type MediaKind } from '../library';
+import { coverPath, draftProblem, findOverview, KINDS, mediaNoteText, noteFileName, notePath, type MediaDraft, type MediaKind } from '../library';
+import { allowedUrl } from '../lookup';
 import { builtInPeriodicText, periodicPath } from '../periodic';
 import { lineEnding } from '../text';
 import type { AssistantContext, NoteChange } from './types';
@@ -32,7 +33,7 @@ export function createNoteChange(context: AssistantContext, title: string, text:
   const destination = path || `${folder ? `${folder}/` : ''}${name}.md`;
   return noteChange(context, destination, null, text, `Create ${title.replace(/[\r\n]/g, ' ')}`);
 }
-export function addMediaChange(context: AssistantContext, kind: MediaKind, draft: MediaDraft, thoughts = ''): NoteChange {
+export function addMediaChange(context: AssistantContext, kind: MediaKind, draft: MediaDraft, thoughts = '', coverUrl?: string): NoteChange {
   const spec = KINDS.find((item) => item.kind === kind);
   if (!spec) throw new Error('Choose a supported library kind.');
   const problem = draftProblem(draft);
@@ -40,8 +41,12 @@ export function addMediaChange(context: AssistantContext, kind: MediaKind, draft
   const destination = notePath(spec, draft.title, context.files);
   if (destination.taken) throw new Error('This title already exists in your library. Read its note before changing it.');
   const year = draft.date ? readDay(draft.date)!.getFullYear() : context.now.getFullYear();
-  const text = mediaNoteText(spec, draft, { overview: findOverview(spec, context.files, year) });
-  return noteChange(context, destination.path, null, thoughts ? appendText(text, thoughts) : text, `Add ${draft.title} to ${spec.tab.toLowerCase()}`);
+  if (coverUrl && !allowedUrl(coverUrl)) throw new Error('The catalogue returned an unsupported cover address.');
+  const cover = coverUrl ? coverPath(spec, draft.title, context.files) : undefined;
+  const text = mediaNoteText(spec, draft, { overview: findOverview(spec, context.files, year), cover });
+  const change = noteChange(context, destination.path, null, thoughts ? appendText(text, thoughts) : text, `Add ${draft.title} to ${spec.tab.toLowerCase()}${cover ? ' with its cover' : ''}`);
+  if (cover && coverUrl) change.artwork = { url: coverUrl, path: cover, embed: `![[${cover.split('/').at(-1)}|${spec.coverWidth}]]` };
+  return change;
 }
 export function captureLinkChange(context: AssistantContext, title: string, url: string, summary: string): NoteChange {
   const parsed = new URL(url);
@@ -65,4 +70,14 @@ export function replaceExcerpt(text: string, before: string, after: string): str
   const eol = lineEnding(text);
   if (!eol) throw new Error('This note mixes line endings.');
   return text.replace(before, () => after.replace(/\r?\n/g, eol));
+}
+
+/** Only replace the generated cover embed. Preserve all supplied comments and metadata. */
+export function withSavedCover(change: NoteChange, path: string): string {
+  const artwork = change.artwork;
+  if (!artwork || change.before !== null || change.after.indexOf(artwork.embed) < 0 || change.after.indexOf(artwork.embed) !== change.after.lastIndexOf(artwork.embed)) throw new Error('This cover proposal is ambiguous. Prepare the library entry again.');
+  const width = /\|(\d+)\]\]$/.exec(artwork.embed)?.[1];
+  if (!width || !/^[^[\]\r\n|]+\.(png|jpe?g|gif|webp)$/i.test(path)) throw new Error('The saved cover path is invalid.');
+  // An explicit vault-relative path remains unambiguous if another folder later uses the same basename.
+  return change.after.replace(artwork.embed, () => `![[${path}|${width}]]`);
 }

@@ -1,3 +1,5 @@
+import { withSavedCover } from './changes';
+import { parseNote } from '../frontmatter';
 import { expect, it, vi } from 'vitest';
 import { DEFAULT_PERIODIC } from '../periodic';
 import { DEFAULT_ASSISTANT, type AssistantContext, type ToolCall } from './types';
@@ -62,4 +64,34 @@ it('ignores a slow lookup after switching vaults', async () => {
   const { execute, ports } = setup();
   ports.lookupMedia = () => { ports.context = () => ({ ...context, root: '/other' }); return Promise.resolve([]); };
   await expect(execute(call('lookup_media', { kind: 'film', query: 'A film' }), signal())).rejects.toThrow('vault changed');
+});
+
+it('uses only a selected catalogue result for a cover, preserving the supplied date, rating and comments', async () => {
+  const { execute, ports } = setup();
+  const result = { id: 'wiki:film-1', title: 'A Film', maker: 'A Director', year: '2024', genres: ['drama'], cover: 'https://upload.wikimedia.org/a-film.jpg' };
+  vi.mocked(ports.lookupMedia).mockResolvedValue([result]);
+  const args = { id: `film:${result.id}`,  date: '2026-11-07', rating: '90', thoughts: 'I liked the cinematography. It is about memory. Cost: $&.' };
+  await expect(execute(call('add_lookup_media', args), signal())).rejects.toThrow('Look up');
+  await execute(call('lookup_media', { kind: 'film', query: 'A Film' }), signal());
+  const proposal = await execute(call('add_lookup_media', args), signal());
+  if (proposal.change?.kind !== 'note') throw new Error('Expected a Library note');
+  expect(proposal.openPath).toBe(proposal.change.path);
+  expect(proposal.change.artwork).toMatchObject({ url: result.cover, path: 'Rating/kino/_attachments/a-film.jpg' });
+  const saved = withSavedCover(proposal.change, 'Rating/kino/_attachments/a-film.png');
+  expect(saved).toContain('![[Rating/kino/_attachments/a-film.png|');
+  expect(saved).toContain(args.thoughts);
+  expect(parseNote(saved).properties).toMatchObject({ Watched: '2026-11-07', Rating: 90 });
+  const change = proposal.change, embed = change.artwork!.embed;
+  expect(() => withSavedCover({ ...change, after: change.after + embed }, 'cover.png')).toThrow('ambiguous');
+  await expect(execute(call('add_lookup_media', { ...args, id: 'https://outside.invalid/arbitrary.png' }), signal())).rejects.toThrow('Look up');
+});
+it('keeps entries without a catalogue cover usable and rejects an unsafe artwork address', async () => {
+  const { execute, ports } = setup();
+  vi.mocked(ports.lookupMedia).mockResolvedValue([{ id: 'manual', title: 'Coverless Film', genres: [] }]);
+  await execute(call('lookup_media', { kind: 'film', query: 'Coverless Film' }), signal());
+  const noCover = await execute(call('add_lookup_media', { id: 'film:manual', date: '', rating: '', thoughts: '' }), signal());
+  expect(noCover.change).not.toHaveProperty('artwork');
+  vi.mocked(ports.lookupMedia).mockResolvedValue([{ id: 'unsafe', title: 'Unsafe Film', genres: [], cover: 'http://localhost/private' }]);
+  await execute(call('lookup_media', { kind: 'film', query: 'Unsafe Film' }), signal());
+  await expect(execute(call('add_lookup_media', { id: 'film:unsafe', date: '', rating: '', thoughts: '' }), signal())).rejects.toThrow('unsupported cover');
 });

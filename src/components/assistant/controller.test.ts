@@ -166,3 +166,73 @@ it('retains a quick prompt when its conversation save fails and does not run act
   expect(controller.getSnapshot().thread.messages).toHaveLength(1);
   expect(controller.getSnapshot().thread.run?.phase).toBe('ready');
 });
+
+it('opens CBT immediately without a write, and loads the current root guides on every new conversation', async () => {
+  const { controller, host, context } = await setup();
+  context.dailyPath = 'Today.md';
+  context.files = ['Today.md', 'AGENTS.md', 'SPIKE.MD'].map((path) => ({ path, kind: 'note' }));
+  let guide = 'Prefer the CBT form.';
+  vi.mocked(api.assistantReadNote).mockImplementation((_root, path) => Promise.resolve(path === 'Today.md' ? '### Tasks\n' : guide));
+  vi.mocked(api.assistantRespond).mockResolvedValueOnce({ output: [{ type: 'function_call', call_id: 'cbt-ui', name: 'start_cbt', arguments: '{}' }] }).mockResolvedValue(reply('Opened today’s CBT form.'));
+  await controller.send('Start CBT now');
+  expect(host.onOpen).toHaveBeenCalledWith('Today.md', true, true);
+  expect(api.assistantApplyNote).not.toHaveBeenCalled();
+  expect(vi.mocked(api.assistantRespond).mock.calls[0]![0].instructions).toContain(guide);
+  guide = 'Keep replies brief and open the UI.';
+  await controller.newChat(); await controller.send('Hello');
+  expect(vi.mocked(api.assistantRespond).mock.lastCall![0].instructions).toContain(guide);
+});
+it('refuses a reviewed feature action after the feature is disabled', async () => {
+  const { controller, context } = await setup();
+  vi.mocked(api.assistantRespond).mockResolvedValueOnce({ output: [action] }).mockResolvedValue(reply('Library is disabled.'));
+  await controller.send('Add the film.');
+  const proposed = controller.getSnapshot().thread.actions[0]!;
+  context.features = { library: false, cbt: true, periodic: true, quests: true, calendar: true };
+  await controller.review(proposed.id, true);
+  expect(api.assistantApplyNote).not.toHaveBeenCalled();
+  expect(controller.getSnapshot().thread.actions[0]?.status).toBe('failed');
+  context.features.library = true;
+  await controller.review(proposed.id, true);
+  expect(api.assistantApplyNote).toHaveBeenCalledOnce();
+});
+
+it('reviews a selected cover, keeps download/note failures recoverable and retries the same attachment identity', async () => {
+  const { controller, host } = await setup();
+  const lookup = { type: 'function_call', call_id: 'lookup', name: 'lookup_media', arguments: JSON.stringify({ kind: 'film', query: 'Cover Test' }) };
+  const add = { type: 'function_call', call_id: 'add-cover', name: 'add_lookup_media', arguments: JSON.stringify({ id: 'film:wikipedia:7', date: '2026-11-07', rating: '90', thoughts: 'I liked the cinematography.' }) };
+  vi.mocked(api.lookupJson).mockResolvedValue({ query: { pages: [{ pageid: 7, index: 1, title: 'Cover Test', description: '2024 film', thumbnail: { source: 'https://upload.wikimedia.org/test.jpg' } }] } });
+  vi.mocked(api.assistantRespond).mockResolvedValueOnce({ output: [lookup] }).mockResolvedValueOnce({ output: [add] }).mockResolvedValue(reply('Saved with the cover.'));
+  vi.mocked(api.assistantPrepareCover).mockRejectedValueOnce(new Error('Catalogue offline')).mockResolvedValue('Rating/kino/_attachments/cover-test.png');
+  await controller.send('Add Cover Test, 90/100, with its cover.');
+  expect(api.assistantPrepareCover).not.toHaveBeenCalled();
+  const proposed = controller.getSnapshot().thread.actions[0]!;
+  await controller.review(proposed.id, true);
+  expect(api.assistantApplyNote).not.toHaveBeenCalled();
+  expect(controller.getSnapshot().thread.actions[0]).toMatchObject({ status: 'failed', error: 'Catalogue offline' });
+  vi.mocked(api.assistantApplyNote).mockRejectedValueOnce(new Error('Disk full')).mockResolvedValue('Rating/kino/Cover Test.md');
+  await controller.review(proposed.id, true);
+  expect(controller.getSnapshot().thread.actions[0]?.error).toContain('cover is retained');
+  await controller.review(proposed.id, true);
+  const coverIds = vi.mocked(api.assistantPrepareCover).mock.calls.map(([request]) => request.id);
+  expect(new Set(coverIds).size).toBe(1);
+  expect(vi.mocked(api.assistantApplyNote).mock.lastCall![0].after).toContain('![[Rating/kino/_attachments/cover-test.png|');
+  expect(vi.mocked(api.assistantApplyNote).mock.lastCall![0].after).toContain('I liked the cinematography.');
+  expect(host.onOpen).toHaveBeenCalledWith('Rating/kino/Cover Test.md', undefined, undefined);
+  expect(controller.getSnapshot().thread.actions[0]?.status).toBe('saved');
+  const stored = controller.getSnapshot().thread.actions[0]?.change;
+  if (stored?.kind !== 'note') throw new Error('Expected a saved note');
+  expect(stored.after).toContain('cover-test.png');
+});
+
+it('opens the saved calendar block on its own date', async () => {
+  const { controller, host } = await setup(true);
+  host.onOpenCalendar = vi.fn();
+  vi.mocked(api.calendarAccess).mockResolvedValue('allowed');
+  vi.mocked(api.listCalendars).mockResolvedValue([{ id: 'work', title: 'Work', writable: true, color: '#000', default: true }]);
+  vi.mocked(api.calendarEvents).mockResolvedValue([]);
+  vi.mocked(api.assistantApplyCalendar).mockResolvedValue('event-1');
+  vi.mocked(api.assistantRespond).mockResolvedValueOnce({ output: [{ type: 'function_call', call_id: 'list', name: 'list_calendars', arguments: '{}' }] }).mockResolvedValueOnce({ output: [{ type: 'function_call', call_id: 'plan', name: 'plan_block', arguments: JSON.stringify({ calendar: 'work', date: '2026-12-01', title: 'code', notes: 'Feature X', minutes: 90, start: '09:30', window: 'morning' }) }] }).mockResolvedValue(reply('Scheduled.'));
+  await controller.send('Plan coding on December 1, 09:30–11.');
+  expect(host.onOpenCalendar).toHaveBeenCalledWith(new Date(2026, 11, 1, 9, 30).getTime());
+  expect(api.assistantApplyCalendar).toHaveBeenCalledWith(expect.objectContaining({ avoidConflicts: true }));
+});

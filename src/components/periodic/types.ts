@@ -13,6 +13,8 @@ import type { MonthlyField } from '../../lib/monthlyReview';
 export interface PeriodicSpec {
   /** A new assistant save can reveal the CBT tab without owning its local navigation state. */
   focusThoughtRecord?: number;
+  /** Explicit assistant request to open the form; a saved record only reveals the tab. */
+  startThoughtRecord?: number;
   period: Period;
   features?: PeriodicFeatures;
   habits?: Habit[];
