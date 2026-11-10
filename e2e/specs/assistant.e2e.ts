@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { vaultCopy } from '../paths';
-import { prepareWindow, screenshot, scrollIntoView, selectOption } from '../support';
+import { prepareWindow, screenshot, scrollIntoView, selectOption, clickAs } from '../support';
 const root = join(dirname(vaultCopy()), 'assistant-vault');
 async function send(text: string) {
   await $('[aria-label="Message Spike"]').waitForEnabled();
@@ -13,11 +13,12 @@ async function send(text: string) {
   await browser.waitUntil(async () => browser.execute((message) => [...document.querySelectorAll('.assistant-message.is-user')].some((item) => item.textContent?.includes(message)), text));
   await browser.waitUntil(async () => !(await $('[aria-label="Stop assistant"]').isExisting()));
 }
-async function apply() {
-  const saved = await $$('.assistant-action.is-saved').length;
+async function apply(outcome: 'saved' | 'failed' = 'saved') {
+  const selector = `.assistant-action.is-${outcome}`;
+  const previous = await $$(selector).length;
   const buttons = $$('.assistant-action-buttons button');
   await buttons[0]!.scrollIntoView(); await buttons[0]!.click();
-  await browser.waitUntil(async () => await $$('.assistant-action.is-saved').length > saved);
+  await browser.waitUntil(async () => await $$(selector).length > previous);
   await browser.waitUntil(async () => !(await $('[aria-label="Stop assistant"]').isExisting()));
 }
 describe('Spike conversations and second-brain actions', () => {
@@ -211,7 +212,7 @@ describe('Spike conversations and second-brain actions', () => {
     const path = join(root, 'Assistant/Profile.md'), original = readFileSync(path, 'utf8');
     const outside = original + '\nAn outside edit to keep.\n'; writeFileSync(path, outside);
     const before = snapshotVault(root);
-    await apply();
+    await apply('failed');
     await expect($('.assistant-action')).toHaveText(expect.stringContaining('This note changed'));
     expect(readFileSync(path, 'utf8')).toBe(outside);
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
@@ -449,7 +450,9 @@ describe('Spike conversations and second-brain actions', () => {
     expect(dog.x - prompt.x).toBeCloseTo(130 * dog.scale, 0);
     await screenshot('229-spike-attached-prompt');
     await browser.switchToWindow('spike');
-    await $('[aria-label="Talk to Spike · drag to move"]').click({ button: 'right' });
+    // The embedded driver's pointer actions do not synthesize contextmenu.
+    // Use the same right-click helper as the workspace/Library journeys.
+    await clickAs('[aria-label="Talk to Spike · drag to move"]', 'right');
     await browser.waitUntil(async () => !(await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { isVisible: () => Promise<boolean> } } } }).__TAURI__.window.getCurrentWindow().isVisible())));
     await browser.switchToWindow('main');
     await invoke('prompt_open', { dictate: false });
