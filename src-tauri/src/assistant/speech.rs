@@ -67,7 +67,12 @@ fn recognize(path: &Path, stopped: &AtomicBool) -> Result<String, String> {
     }
     let (tx, rx) = mpsc::channel();
     let callback = RcBlock::new(move |result: *mut AnyObject, error: *mut NSError| {
-        if !error.is_null() { let _ = tx.send(Err("macOS couldn’t recognize this recording. Try again or use keyboard dictation.".to_owned())); return; }
+        if !error.is_null() {
+            // Preserve the system error category/code without logging audio or recognized text.
+            let error = unsafe { &*error };
+            let _ = tx.send(Err(recognition_failure(&error.domain().to_string(), error.code(), &error.localizedDescription().to_string())));
+            return;
+        }
         if result.is_null() { return; }
         // SAFETY: The callback result is live for this invocation; returned Objective-C
         // properties are retained before copying the recognized text into Rust.
@@ -102,4 +107,20 @@ pub async fn speak(text: &str, cancel: &Notify, runtime: &Path) -> Result<Vec<u8
     let metadata = std::fs::metadata(&path).map_err(|_| "macOS returned no spoken audio.".to_owned())?;
     if metadata.len() > 8 * 1024 * 1024 { return Err("The spoken reply is too large.".to_owned()); }
     std::fs::read(path).map_err(|_| "Couldn’t read the spoken reply.".to_owned())
+}
+
+fn recognition_failure(domain: &str, code: isize, detail: &str) -> String {
+    if domain == "kAFAssistantErrorDomain" && code == 1101 {
+        return "The on-device speech service could not start. Enable Dictation in macOS System Settings → Keyboard, check that your language is installed, then retry this recording. Your audio has not been sent to a cloud provider.".into();
+    }
+    format!("On-device speech failed ({domain} {code}). {detail}")
+}
+#[cfg(test)] mod recognition_tests {
+    use super::*;
+    #[test] fn unavailable_local_service_has_actionable_setup_guidance() {
+        let message = recognition_failure("kAFAssistantErrorDomain", 1101, "Recognition failed");
+        assert!(message.contains("Enable Dictation"));
+        assert!(message.contains("retry this recording"));
+        assert!(recognition_failure("other", 9, "Unsupported format").contains("Unsupported format"));
+    }
 }

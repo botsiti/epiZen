@@ -15,6 +15,8 @@ mod net;
 mod photos;
 mod pet;
 mod prompt;
+mod companion_display;
+mod appearance;
 mod rewards;
 mod settings;
 mod tray;
@@ -501,7 +503,7 @@ pub fn run() {
             pet::pet_enable, pet::pet_publish, pet::pet_state, pet::pet_position, pet::pet_move,
             pet::pet_open_main, pet::pet_hide, pet::pet_motion,
             prompt::prompt_enable, prompt::prompt_publish, prompt::prompt_state, prompt::prompt_save,
-            prompt::prompt_submit, prompt::prompt_finish, prompt::prompt_consumed, prompt::prompt_flush, prompt::prompt_flushed, prompt::prompt_open, prompt::prompt_hide, prompt::prompt_open_main,
+            prompt::prompt_submit, prompt::prompt_finish, prompt::prompt_consumed, prompt::prompt_flush, prompt::prompt_flushed, prompt::prompt_open, prompt::prompt_hide, prompt::prompt_resize, prompt::prompt_open_main,
             assistant::assistant_has_message,
             assistant::assistant_connection,
             assistant::assistant_cancel,
@@ -542,6 +544,7 @@ pub fn run() {
             lookup_json,
             lookup_image,
             fetch_image_into_vault,
+            appearance::apply_appearance,
             get_settings,
             update_settings,
             rewards::reward_settings,

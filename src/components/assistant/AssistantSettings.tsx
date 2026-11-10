@@ -1,3 +1,4 @@
+import { ModelPreferences } from './ModelPreferences';
 import { VoicePreferences } from './VoicePreferences';
 import { useState, type FormEvent } from 'react';
 import { assistantConnection, setAssistantKey } from '../../lib/api';
@@ -47,7 +48,7 @@ export function AssistantSettings({ backLabel = 'Conversation', value, configure
       {draft.provider === 'codex' && <p className="assistant-hint">Uses your installed Codex CLI and its ChatGPT login. Subscription limits apply. If needed, run <code>codex login</code> in Terminal first. Spike keeps note changes in its review flow.</p>}
       <div className="assistant-companion-settings"><strong>Desktop companion</strong><p className="assistant-hint">Drag Spike to a comfortable spot. Click Spike or Talk to open the quick prompt.</p><button type="button" onClick={() => void companion({ desktopPet: !draft.desktopPet })}>{draft.desktopPet ? 'Hide desktop Spike' : 'Show Spike on desktop'}</button><p className="assistant-hint">⇧⌘Space opens the prompt from any app. ⌥⇧⌘Space starts or finishes dictation. ⌘8 toggles the sidebar in Epizen.</p><label className="assistant-check"><input type="checkbox" checked={draft.petMotion} onChange={(event) => void companion({ petMotion: event.target.checked })} />Animate Spike</label></div>
       {draft.provider === 'openai' && <><label>OpenAI API key<input type="password" autoComplete="off" spellCheck={false} aria-label="OpenAI API key" value={key} placeholder={configured && value.provider === 'openai' ? 'Key stored · paste to replace' : 'Paste your API key'} onChange={(event) => setKey(event.target.value)} /></label><p className="assistant-hint">Stored in macOS Keychain. API usage is billed separately from a ChatGPT subscription.</p></>}
-      <label>Model<input aria-label="Assistant model" spellCheck={false} value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} /></label>
+      <ModelPreferences value={draft} onChange={setDraft} />
       {value.enabled && <label className="assistant-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />Enable assistant connection</label>}
       <label className="assistant-check"><input type="checkbox" checked={draft.shareCurrentNote} onChange={(event) => setDraft({ ...draft, shareCurrentNote: event.target.checked })} />Include the note I’m viewing</label>
       <label className="assistant-check"><input type="checkbox" checked={draft.allowChanges} onChange={(event) => setDraft({ ...draft, allowChanges: event.target.checked })} />Apply the changes I request automatically</label>

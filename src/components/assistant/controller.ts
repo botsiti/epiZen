@@ -214,7 +214,7 @@ export class AssistantController {
         respond: async (input, signal) => {
           this.active(signal); this.update({ progress: 'Thinking' });
           const context = this.context();
-          const raw = await api.assistantRespond({ provider: context.settings.provider, model: context.settings.model, instructions: assistantInstructions(context), input, tools: [...ASSISTANT_TOOLS, { type: 'web_search' }] }, signal);
+          const raw = await api.assistantRespond({ provider: context.settings.provider, model: context.settings.model, effort: context.settings.effort, instructions: assistantInstructions(context), input, tools: [...ASSISTANT_TOOLS, { type: 'web_search' }] }, signal);
           this.active(signal); return parseAgentResponse(raw);
         },
         execute: (call, signal) => this.execute(call, signal),

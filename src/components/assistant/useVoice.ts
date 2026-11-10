@@ -8,6 +8,8 @@ export type VoicePhase = 'idle' | 'requesting' | 'recording' | 'transcribing' | 
 const LIMIT = 20 * 1024 * 1024;
 export function useVoice(onTranscript: (text: string) => Promise<void>, provider: AssistantProvider = 'openai', voice?: VoiceSettings, transcriber = assistantTranscribe) {
   const [phase, setPhase] = useState<VoicePhase>('idle'), [error, setError] = useState<string>(), [seconds, setSeconds] = useState(0), [canRetry, setCanRetry] = useState(false);
+  const [level, setLevel] = useState(0);
+  const meter = useRef<{ context: AudioContext; timer: ReturnType<typeof setInterval> } | undefined>(undefined);
   const voiceProvider = voice?.provider, voiceModel = voice?.model;
   const callback = useRef(onTranscript), alive = useRef(false), recorder = useRef<MediaRecorder | undefined>(undefined), stream = useRef<MediaStream | undefined>(undefined), saved = useRef<Blob | undefined>(undefined), request = useRef<AbortController | undefined>(undefined), playback = useRef<HTMLAudioElement | undefined>(undefined), objectUrl = useRef<string | undefined>(undefined), timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined), limitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), generation = useRef(0), recording = useRef(false), sendOnStop = useRef(true);
   useEffect(() => { callback.current = onTranscript; }, [onTranscript]);
@@ -17,6 +19,8 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
     objectUrl.current = undefined;
   }, []);
   const clearCapture = useCallback(() => {
+    if (meter.current) { clearInterval(meter.current.timer); void meter.current.context.close().catch(() => undefined); meter.current = undefined; }
+    setLevel(0);
     stream.current?.getTracks().forEach((track) => track.stop()); stream.current = undefined;
     clearInterval(timer.current); clearTimeout(limitTimer.current); recording.current = false;
   }, []);
@@ -56,6 +60,18 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!alive.current || generation.current !== token) { media.getTracks().forEach((track) => track.stop()); return; }
       stream.current = media;
+      // The meter reflects microphone energy, never an invented waveform. Recording works
+      // even when Web Audio metering is unavailable.
+      if (typeof AudioContext !== 'undefined') {
+        try {
+          const context = new AudioContext(), analyser = context.createAnalyser(); analyser.fftSize = 256;
+          context.createMediaStreamSource(media).connect(analyser);
+          void context.resume().catch(() => undefined);
+          const samples = new Uint8Array(analyser.fftSize);
+          const timer = setInterval(() => { analyser.getByteTimeDomainData(samples); const energy = Math.sqrt(samples.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / samples.length); if (alive.current) setLevel(Math.min(1, energy * 5)); }, 80);
+          meter.current = { context, timer };
+        } catch { /* The recorder remains usable without an audio meter. */ }
+      }
       const mime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find((type) => MediaRecorder.isTypeSupported(type));
       if (!mime) throw new Error('This microphone format is unsupported. You can still type to Spike.');
       const device = new MediaRecorder(media, { mimeType: mime }); recorder.current = device;
@@ -110,6 +126,6 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
   }, [clearAudio, provider]);
   const dispose = useCallback(() => { alive.current = false; generation.current++; request.current?.abort(); sendOnStop.current = false; if (recorder.current?.state === 'recording') recorder.current.stop(); clearCapture(); clearAudio(); }, [clearCapture, clearAudio]);
   useEffect(() => { alive.current = true; return dispose; }, [dispose]);
-  return { phase, error, seconds, canRetry, start, stop, pauseRecording, cancel, retry, speak };
+  return { level, phase, error, seconds, canRetry, start, stop, pauseRecording, cancel, retry, speak };
 }
 export type VoiceControls = ReturnType<typeof useVoice>;

@@ -3,6 +3,12 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.11.0 — 2026-11-10
+
+Reliable Retina prompt placement and close/reopen recovery, separate Text/Speak controls,
+model and effort pickers, audio metering and optional glass surfaces.
+[Full release notes](releases/0.11.0.md).
+
 ## 0.10.0 — 2026-11-10
 
 Native transcription model selection, safer quick text handoffs, and the pending XP/quest-rule

@@ -6,6 +6,7 @@ import { movePet, openQuickPrompt, petPosition } from '../lib/api';
 vi.mock('../components/assistant/Spike', () => ({ Spike: () => <span /> }));
 vi.mock('../lib/api', () => ({
   petState: vi.fn().mockResolvedValue({ animation: 'idle', label: 'Talk to Spike', motion: true }),
+  onPetWake: vi.fn().mockResolvedValue(() => undefined),
   onPetState: vi.fn().mockResolvedValue(() => undefined),
   petPosition: vi.fn(), movePet: vi.fn(), openQuickPrompt: vi.fn(), hidePet: vi.fn(), setPetMotion: vi.fn(),
 }));
@@ -44,7 +45,7 @@ describe('desktop companion dragging', () => {
     pointer(dog, 'pointerdown', 550, 450);
     pointer(dog, 'pointermove', 510, 410);
     pointer(dog, 'pointercancel', 510, 410);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t do that');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Window unavailable');
     fireEvent.click(screen.getByRole('button', { name: 'Open quick prompt' }));
     expect(openQuickPrompt).toHaveBeenCalledOnce();
   });
@@ -89,4 +90,12 @@ it('starts a new drag before the previous native movement settles without waitin
   complete();
   await waitFor(() => expect(movePet).toHaveBeenLastCalledWith(1060, 800));
   expect(movePet).toHaveBeenCalledTimes(2);
+});
+
+it('offers separate text and dictation controls', () => {
+  render(<DesktopPet />);
+  fireEvent.click(screen.getByRole('button', { name: 'Dictate to Spike' }));
+  expect(openQuickPrompt).toHaveBeenLastCalledWith(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Open quick prompt' }));
+  expect(openQuickPrompt).toHaveBeenLastCalledWith();
 });

@@ -1174,3 +1174,13 @@ button.dash-row:hover {
 .app-mark { width: 24px; height: 24px; border-radius: 6px; flex: none; }
 
 .main.is-preferences { padding: 0; container-type: inline-size; }
+
+/* Native macOS material sits behind the WebView. No window-sized CSS blur. */
+:root[data-appearance="glass"] { --bg: rgb(18 20 22 / var(--glass-opacity, .72)); --bg-sidebar: rgb(14 16 18 / .65); --surface: rgb(27 31 34 / .68); --border: rgb(255 255 255 / .1); }
+:root[data-appearance="glass"] body { background: transparent; }
+:root[data-appearance="glass"] .app { background: var(--bg); position: relative; isolation: isolate; }
+:root[data-appearance="glass"] .workspace, :root[data-appearance="glass"] .main, :root[data-appearance="glass"] .preferences { background: transparent; }
+:root[data-ambient="true"] .app::before { content: ''; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 10% 20%, #8fbcaa22, transparent 50%), radial-gradient(ellipse at 85% 75%, #708bba22, transparent 55%); background-size: 140% 140%; animation: epizen-ambient 24s ease-in-out infinite alternate; }
+@keyframes epizen-ambient { from { background-position: 0 0; } to { background-position: 100% 100%; } }
+@media (prefers-reduced-motion: reduce) { :root[data-ambient="true"] .app::before { animation: none; } }
+@media (prefers-reduced-transparency: reduce) { :root[data-appearance="glass"] { --bg: #121416; --bg-sidebar: #0e1012; --surface: #171a1d; } :root[data-appearance="glass"] body { background: var(--bg); } }

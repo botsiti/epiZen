@@ -80,7 +80,7 @@ fn place(app: &AppHandle, window: &WebviewWindow) -> Result<(), String> {
         && monitors.iter().any(|monitor| { let area = monitor.work_area(); within((x, y), (area.position.x, area.position.y, area.size.width, area.size.height), ((WIDTH * monitor.scale_factor()).round() as i32, (HEIGHT * monitor.scale_factor()).round() as i32)) }) {
             return window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string());
     }
-    let monitor = main.current_monitor().map_err(|error| error.to_string())?.ok_or("No display is available for Spike.")?;
+    let monitor = crate::companion_display::select(&main, cfg!(feature = "e2e") || std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_some())?;
     let area = monitor.work_area(); let scale = monitor.scale_factor();
     let x = area.position.x + (f64::from(area.size.width) - (WIDTH + 24.0) * scale).max(0.0).round() as i32;
     let y = area.position.y + (f64::from(area.size.height) - (HEIGHT + 24.0) * scale).max(0.0).round() as i32;

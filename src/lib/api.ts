@@ -93,7 +93,7 @@ async function assistantRequest<T>(command: string, args: Record<string, unknown
   try { const result = await invoke<T>(command, { ...args, requestId }); signal?.throwIfAborted(); return result; }
   finally { signal?.removeEventListener('abort', cancel); }
 }
-export const assistantRespond = (request: { provider?: 'openai' | 'codex'; model: string; instructions: string; input: Record<string, unknown>[]; tools: Record<string, unknown>[] }, signal?: AbortSignal) => assistantRequest<unknown>('assistant_respond', { request }, signal);
+export const assistantRespond = (request: { provider?: 'openai' | 'codex'; model: string; effort?: 'default' | 'low' | 'medium' | 'high' | 'xhigh'; instructions: string; input: Record<string, unknown>[]; tools: Record<string, unknown>[] }, signal?: AbortSignal) => assistantRequest<unknown>('assistant_respond', { request }, signal);
 export const assistantTranscribe = (audio: Uint8Array, mime: string, signal?: AbortSignal, provider: 'openai' | 'codex' = 'openai', voice?: VoiceSettings) => assistantRequest<string>('assistant_transcribe', { request: { audio: Array.from(audio), mime, provider, ...(voice ? { voice } : {}) } }, signal);
 export const voiceConnection = (provider: VoiceProvider) => invoke<{ configured: boolean }>('voice_connection', { provider });
 export const setVoiceKey = (provider: VoiceProvider, key: string | null) => invoke<void>('voice_set_key', { provider, key });
@@ -101,7 +101,7 @@ export const assistantSpeak = (text: string, signal?: AbortSignal, provider: 'op
 export const assistantOpenUrl = (url: string) => invoke<void>('assistant_open_url', { url });
 export interface QuickCapture { id: string; text: string; error: string | null }
 export interface QuickDocument { revision: number; draft: string; pending: QuickCapture | null }
-export interface QuickStatus { connected: boolean; busy: boolean; review: boolean; label: string; reply: string; voice: VoiceSettings }
+export interface QuickStatus { glass?: boolean; connected: boolean; busy: boolean; review: boolean; label: string; reply: string; voice: VoiceSettings }
 export interface QuickSnapshot { shortcuts: { typing: boolean; dictation: boolean }; root: string; visible: boolean; opened: number; dictate: boolean; status: QuickStatus; document: QuickDocument }
 export const enableQuickPrompt = (root: string, enabled: boolean) => invoke<void>('prompt_enable', { root, enabled });
 export const publishQuickPrompt = (root: string, status: QuickStatus) => invoke<void>('prompt_publish', { root, status });
@@ -115,7 +115,7 @@ export const openQuickPrompt = (dictate = false) => invoke<void>('prompt_open', 
 export const flushQuickPrompt = () => invoke<void>('prompt_flush');
 export const quickPromptFlushed = (error: string | null = null) => invoke<void>('prompt_flushed', { error });
 export const consumeQuickOpen = (opened: number) => invoke<void>('prompt_consumed', { opened });
-export const hideQuickPrompt = () => invoke<void>('prompt_hide');
+export const hideQuickPrompt = (opened: number) => invoke<void>('prompt_hide', { opened });
 export const openQuickConversation = () => invoke<void>('prompt_open_main');
 export const transcribeQuickPrompt = (root: string, audio: Uint8Array, mime: string, signal?: AbortSignal, _provider?: 'codex' | 'openai', voice?: VoiceSettings) => assistantRequest<string>('assistant_transcribe', { request: { root, audio: Array.from(audio), mime, voice } }, signal);
 
@@ -232,3 +232,9 @@ export const updateEvent = (at: Occurrence, change: { start?: number; end?: numb
 export const deleteEvent = (at: Occurrence) => invoke<void>('calendar_delete', { at: { id: at.id, start: at.start } });
 /** System Settings, at Privacy & Security, Calendars. */
 export const openCalendarSettings = () => invoke<void>('calendar_open_settings');
+
+export const onPetWake = (handler: () => void) => listen('epizen://pet-wake', handler);
+
+export const resizeQuickPrompt = (height: number) => invoke<void>('prompt_resize', { height });
+
+export const applyAppearance = (glass: boolean) => invoke<void>('apply_appearance', { glass });

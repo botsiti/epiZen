@@ -32,7 +32,7 @@ export function VoicePreferences({ value, onSave, onBusy }: { value: VoiceSettin
         const provider = event.target.value as VoiceProvider;
         setDraft({ provider, model: VOICE_MODELS[provider] }); setCustomModel(false); setKey(''); setConfigured(false); setError(undefined); setSaved(false);
       }}><option value="local">On this Mac · on-device</option><option value="openai">OpenAI API</option><option value="openrouter">OpenRouter</option></select></label>
-      {draft.provider === 'local' ? <p className="assistant-hint">Audio stays on your Mac. Requires macOS Speech Recognition permission and a supported installed language.</p> : <>
+      {draft.provider === 'local' ? <p className="assistant-hint">Audio stays on your Mac. Requires Dictation enabled in macOS System Settings → Keyboard, Speech Recognition permission, and an installed language.</p> : <>
         <label>Transcription model<select aria-label="Transcription model" value={customModel ? 'custom' : draft.model} onChange={(event) => {
           const model = event.target.value;
           setCustomModel(model === 'custom'); setDraft({ ...draft, model: model === 'custom' ? '' : model }); setSaved(false);

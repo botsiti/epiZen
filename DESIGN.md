@@ -707,3 +707,25 @@ the main conversation has saved it, so retrying a handoff cannot repeat a reques
 Unsent sidebar drafts remain separate. Proposed changes still require the normal review unless
 the user enabled automatic actions; the pill links directly to the conversation for review.
 Only the main conversation executes tools. The pill has scoped dictation and capture commands.
+
+### Spike capture and appearance
+
+Spike's edge companion offers Speak and Text buttons; hiding stays in its settings. Global capture
+uses CoreGraphics screen coordinates to locate the cursor's display on Retina Macs, with a fallback
+for hidden workspace windows. A stale close never hides a later opening. Capture remains on the
+preview's verified display/Space during tests. The prompt appears near the right edge above Spike,
+with a brief entrance and a small companion hop; Reduce Motion disables both.
+
+The microphone meter reflects measured audio energy. Listening, transcription, failure and retry
+remain explicit states. Model and reasoning effort use labelled native dropdowns, with a custom
+model escape hatch. Explicit effort reaches both Codex and the API adapter; Connection default preserves legacy routing. App-wide Appearance settings offer Liquid glass, opacity, and optional ambient motion for every vault.
+Native macOS material sits behind the transparent workspace and the compact prompt; it does not apply a
+window-sized WebKit blur. Ambient movement is opt-in and respects Reduce Motion.
+
+
+The default text prompt is a 440px-wide single-row pill, approximately 56px high. It grows with
+multiline text (up to 96px) and actionable feedback rather than reserving a large empty window.
+Old replies stay hidden on a fresh opening. Native bounds follow measured content and remain within
+the display work area. Appearance is one global app preference, independent of Spike and vaults.
+When local speech reports service failure, guide the user to macOS Keyboard → Dictation and retain
+the recording for retry. Never silently route on-device recordings to a cloud provider.

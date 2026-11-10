@@ -217,23 +217,29 @@ pub struct AgentRequest {
     #[serde(default)]
     provider: Provider,
     model: String,
+    #[serde(default = "default_effort")]
+    effort: String,
     instructions: String,
     input: Vec<Value>,
     tools: Vec<Value>,
 }
+fn default_effort() -> String { "default".into() }
 impl AgentRequest {
     fn body(&self) -> Result<Vec<u8>, String> {
+        if !matches!(self.effort.as_str(), "default" | "low" | "medium" | "high" | "xhigh") { return Err("Choose a supported reasoning effort.".into()); }
         if self.model.is_empty() || self.model.len() > 128 || !self.model.bytes().all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b)) {
             return Err("Choose a valid model identifier.".to_owned());
         }
         if self.instructions.len() > 100_000 || self.input.is_empty() || self.input.len() > 400 || self.tools.len() > 40 {
             return Err("This conversation is too large. Start a new conversation.".to_owned());
         }
-        let bytes = serde_json::to_vec(&json!({
+        let mut body = json!({
             "model": self.model, "instructions": self.instructions, "input": self.input,
             "tools": self.tools, "store": false, "parallel_tool_calls": false, "max_output_tokens": 5000,
             "include": ["reasoning.encrypted_content"],
-        })).map_err(|_| "Couldn’t prepare this conversation.".to_owned())?;
+        });
+        if self.effort != "default" { body["reasoning"] = json!({"effort": self.effort}); }
+        let bytes = serde_json::to_vec(&body).map_err(|_| "Couldn’t prepare this conversation.".to_owned())?;
         if bytes.len() > 1_000_000 { return Err("This conversation is too large. Start a new conversation.".to_owned()); }
         Ok(bytes)
     }
@@ -287,8 +293,11 @@ pub async fn assistant_transcribe(window: tauri::WebviewWindow, assistant: State
     if audio.starts_with(b"EPIZEN_VOICE_FIXTURE") { return Ok("Remember that I prefer voice notes.".to_owned()); }
     if voice.provider == voice::VoiceProvider::Local {
         #[cfg(any(test, feature = "e2e"))]
-        { let _ = settings; return Err("No local speech fixture was provided.".to_owned()); }
-        #[cfg(not(any(test, feature = "e2e")))]
+        if std::env::var("EPIZEN_LOCAL_SPEECH_CHECK").as_deref() != Ok("1") {
+            return Err("No local speech fixture was provided.".to_owned());
+        }
+        // Explicit local-only native verification can exercise Speech with generated audio.
+        // Normal unit/CI runs stay fake; remote-provider I/O remains disabled in all test builds.
         return speech::transcribe(audio, mime, &pending.cancel, &settings.assistant_runtime_dir()).await;
     }
     let endpoint = if voice.provider == voice::VoiceProvider::Openrouter { "openrouter/transcriptions" } else { "audio/transcriptions" };
@@ -374,7 +383,7 @@ mod tests {
     }
     #[test]
     fn requests_disable_remote_storage_and_bound_conversation_size() {
-        let mut request = AgentRequest { provider: Provider::Openai, model: "gpt-6.1-sol".to_owned(), instructions: "Help with notes".to_owned(), input: vec![json!({"role":"user","content":"Hello"})], tools: vec![] };
+        let mut request = AgentRequest { effort: "low".into(), provider: Provider::Openai, model: "gpt-6.1-sol".to_owned(), instructions: "Help with notes".to_owned(), input: vec![json!({"role":"user","content":"Hello"})], tools: vec![] };
         let parsed: Value = serde_json::from_slice(&request.body().unwrap()).unwrap();
         assert_eq!(parsed["store"], false); assert_eq!(parsed["parallel_tool_calls"], false);
         request.model = "bad\nmodel".to_owned(); assert!(request.body().is_err());
