@@ -1,3 +1,5 @@
+import { addXp, exactXp, sumXp, xpNumber, ZERO_XP, type ExactXp } from './xp';
+import { rewardArea, type RewardSettings } from './rewardRules';
 import { metricColor } from './metricStatus';
 import { category, METRICS, SPHERES, type Category, type Sphere } from './categories';
 import { addDays, day, parseDate, startOfMonth, startOfWeek } from './dates';
@@ -65,7 +67,12 @@ export const rankOf = (level: number) => RANKS.find(([from]) => level >= from)?.
  * Life XP: every daily task's XP, ticked or not, since the vault counts time when it is logged,
  * plus `extra` from elsewhere (quests, less their penalties), never below 0.
  */
-export const lifeXp = (days: DayEntry[], extra = 0) => Math.max(0, days.reduce((sum, entry) => sum + (entry.day?.totals.xp ?? 0), extra));
+export function lifeXp(days: DayEntry[], extra = 0): number {
+  const legacy = days.reduce((total, { day }) => total + (day && !day.exactReward ? day.totals.xp : 0), extra);
+  if (!Number.isFinite(legacy)) return legacy;
+  const awarded = sumXp(days.flatMap(({ day }) => day?.exactReward ? [day.exactReward] : []));
+  return Math.max(0, xpNumber(addXp(exactXp(legacy), awarded)));
+}
 
 /** A day keeps the streak when it has a ticked task or any time logged. */
 const kept = (entry: DayEntry) => Boolean(entry.day && (entry.day.totals.tasksDone > 0 || entry.day.totals.logged > 0));
@@ -163,23 +170,37 @@ export function splitXp(xp: number, spheres: Category['spheres']): [Sphere, numb
 }
 
 export interface SphereState extends Progress {
-  name: Sphere;
+  name: string;
   color: string;
 }
 
 /** XP per life sphere from every daily task, each on the same level curve as the character. */
-export function sphereXp(days: DayEntry[], extra: ReadonlyMap<string, number> = new Map()): SphereState[] {
-  const xp = new Map<Sphere, number>(SPHERES.map((sphere) => [sphere.name, extra.get(sphere.name) ?? 0]));
+export function sphereXp(days: DayEntry[], extra: ReadonlyMap<string, number> = new Map(), settings?: RewardSettings): SphereState[] {
+  const xp = new Map<string, number>();
+  const dated = new Map<string, ExactXp>();
+  function credit(name: string, amount: number) {
+    const label = (settings && rewardArea(settings, name)?.name) ?? name;
+    xp.set(label, (xp.get(label) ?? 0) + amount);
+  }
+  for (const [name, amount] of extra) credit(name, amount);
   for (const { day } of days) {
+    if (day?.areaCredits) {
+      for (const [name, amount] of day.areaCredits) dated.set(name, addXp(dated.get(name) ?? ZERO_XP, amount));
+      continue;
+    }
     for (const task of day?.tasks ?? []) {
       const minutes = task.minutes ?? 0;
       if (!minutes) continue;
       // The same XP as the day's own total: a task without a category counts as `other`.
       const meta = task.category ?? category('other');
-      for (const [sphere, part] of splitXp(Math.round(minutes * meta.multiplier), meta.spheres)) xp.set(sphere, (xp.get(sphere) ?? 0) + part);
+      for (const [sphere, part] of splitXp(Math.round(minutes * meta.multiplier), meta.spheres)) credit(sphere, part);
     }
   }
-  return SPHERES.map(({ name, color }) => ({ name, color, ...progress(xp.get(name) ?? 0) }));
+  for (const [name, amount] of dated) credit(name, xpNumber(amount));
+  const catalog = settings?.areas.filter((area) => !area.archived || xp.get(area.name)) ?? SPHERES;
+  const rows = new Map<string, string>(catalog.map(({ name, color }) => [name, color]));
+  for (const [name, amount] of xp) if (amount && !rows.has(name)) rows.set(name, 'var(--accent)');
+  return [...rows].map(([name, color]) => ({ name, color, ...progress(xp.get(name) ?? 0) }));
 }
 
 /** The sphere with the most XP, the first of them on a tie; none while no sphere has any. */
@@ -200,10 +221,9 @@ export const weekDays = (dayOf: (date: Date) => DayEntry, today: Date) => Array.
 /** How much of the week's sport is done: the floor is 150 minutes, as health guidelines put it. */
 export const SPORT_FLOOR = 150;
 
-/** How old the memento mori counts to. */
-export const TARGET_AGE = 30;
-/** The weeks grid: a row per year of life up to the target age, 52 to a row. */
-export const WEEK_COLUMNS = 52;
+export const DEFAULT_LIFETIME_YEARS = 80;
+export const validLifetimeYears = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && Number.isFinite(day(9999 + value, 11, 31).getTime());
 
 export interface Span {
   label: string;
@@ -218,22 +238,15 @@ function span(label: string, start: Date, end: Date, today: Date): Span {
   return { label, share: total > 0 ? elapsed / total : 0, daysLeft: Math.max(0, daysBetween(today, end)) };
 }
 
-/**
- * How much of the year, the month and (with a birth date) life up to 30 has passed. The weeks
- * are a personal year's 52 parts, birthday to birthday, so a cell is about 7.02 days, not exactly 7.
- */
-export function memento(today: Date, birth?: Date) {
+/** Local calendar days elapsed in the current year, month and chosen lifetime. */
+export function memento(today: Date, birth?: Date, years = DEFAULT_LIFETIME_YEARS) {
   const year = span('Year', day(today.getFullYear(), 0, 1), day(today.getFullYear() + 1, 0, 1), today);
   const month = span('Month', startOfMonth(today), day(today.getFullYear(), today.getMonth() + 1, 1), today);
-  if (!birth) return { spans: [year, month] };
-  const target = day(birth.getFullYear() + TARGET_AGE, birth.getMonth(), birth.getDate());
-  const life = span(`Till ${TARGET_AGE}`, birth, target, today);
-  const cells = WEEK_COLUMNS * TARGET_AGE;
-  const total = target.getTime() - birth.getTime();
-  const elapsed = Math.min(Math.max(today.getTime() - birth.getTime(), 0), total);
-  // Cells fully lived; the one after them is the week being lived now.
-  const lived = Math.floor((elapsed / total) * cells);
-  return { spans: [year, month, life], life, weeks: { cells, lived, current: Math.min(lived, cells - 1) } };
+  if (!birth || !validLifetimeYears(years)) return { spans: [year, month] };
+  const endYear = birth.getFullYear() + years;
+  const anniversary = Math.min(birth.getDate(), day(endYear, birth.getMonth() + 1, 0).getDate());
+  const life = span('Lifetime', birth, day(endYear, birth.getMonth(), anniversary), today);
+  return { spans: [year, month, life], life };
 }
 
 /** A birth date as Settings keeps it, `YYYY-MM-DD`, or `undefined` when it isn't one. */

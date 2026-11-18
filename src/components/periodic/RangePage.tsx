@@ -95,7 +95,7 @@ export function WeekPage({ spec, path, text, actions }: Props) {
         {tab === 'Days' && <DayRows days={days} actions={actions} scales={spec.scales} />}
         {tab === 'Quests' && (
           <>
-            <QuestComposer scope="weekly" onAdd={actions.onAddQuest} />
+            <QuestComposer presets={spec.questPresets} areas={spec.questAreas} scope="weekly" onAdd={actions.onAddQuest} />
             <QuestBoard
               quests={questsIn(spec.quests, monday, addDays(monday, 7))}
               art={spec.art}
@@ -178,7 +178,7 @@ export function MonthPage({ spec, path, text, actions, files }: Props) {
         {tab === 'Weeks' && <Weeks spec={spec} actions={actions} />}
         {tab === 'Quests' && (
           <>
-            <QuestComposer scope="monthly" onAdd={actions.onAddQuest} />
+            <QuestComposer presets={spec.questPresets} areas={spec.questAreas} scope="monthly" onAdd={actions.onAddQuest} />
             <QuestBoard
               quests={questsIn(spec.quests, first, next)}
               art={spec.art}

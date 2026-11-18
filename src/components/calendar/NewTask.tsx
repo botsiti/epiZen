@@ -53,7 +53,7 @@ export function NewTask({ days, initial, categories, onCancel, onSave }: Props) 
           )}
           {days.length === 1 && <p className="new-task-one">{formatDate(day, 'dddd, D MMMM')}</p>}
           <div className="composer-categories" role="radiogroup" aria-label="Category">
-            {categories.slice(0, 10).map((name) => (
+            {categories.map((name) => (
               <button
                 key={name}
                 type="button"

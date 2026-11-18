@@ -112,7 +112,7 @@ describe('the demo vault', () => {
     // by today's date, so it moves with the clock; src/lib/home.test.ts and quests.test.ts pin the sums.
     await expect($('[data-testid="hero-title"]')).toHaveText(expect.stringMatching(/^Level \d+$/));
     await expect($('[data-testid="hero-stats"]')).toHaveText(expect.stringContaining('Life XP'));
-    await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Add your birth date in Settings'));
+    await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Add your birth date in Homepage settings'));
     await screenshot('03-home');
     await scrollIntoView('[data-testid="spheres"]');
     await expect($('[data-testid="lead-sphere"]')).toHaveText(expect.stringContaining('Personal Growth'));
@@ -1475,7 +1475,7 @@ describe('the demo vault', () => {
     const before = snapshotVault(vaultCopy());
     const settings = join(dirname(vaultCopy()), 'config', 'settings.json');
     const kept = () => (JSON.parse(readFileSync(settings, 'utf8')) as { podcasts?: { artwork?: string } }).podcasts?.artwork;
-    await $('[data-testid="settings-nav-home"]').click();
+    await $('[data-testid="settings-nav-library"]').click();
     const artwork = () => $('[data-testid="settings-podcast-artwork"]');
     // The WebDriver's native option click does nothing in a non-focused macOS window.
     // Dispatch the select's normal events; the assertions below still verify the UI and persisted setting.
@@ -1496,7 +1496,7 @@ describe('the demo vault', () => {
     await browser.waitUntil(() => kept() === 'episode', { timeoutMsg: 'the podcast preference was not saved' });
     await $('[data-testid="sidebar-vault"]').click();
     await $('[data-testid="open-settings"]').click();
-    await $('[data-testid="settings-nav-home"]').click();
+    await $('[data-testid="settings-nav-library"]').click();
     await expect(artwork()).toHaveValue('episode');
     await selectArtwork('show');
     await $('[data-testid="settings-save"]').click();
@@ -1506,21 +1506,20 @@ describe('the demo vault', () => {
     expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
   });
 
-  it('counts the weeks till 30 on the home screen from the birth date in Settings', async () => {
-    // Settings live next to the vault copy, never in it: this changes no note.
+  it('shows the chosen lifetime on Home and Summaries', async () => {
+    await $('[data-testid="settings-nav-home"]').click();
     await $('[data-testid="settings-birth-date"]').setValue('1998-03-21');
+    await $('[data-testid="settings-lifetime-years"]').setValue('95');
     await $('[data-testid="settings-save"]').click();
     await $('[data-testid="settings"] .save-state').waitForDisplayed();
-    await scrollIntoView('[data-testid="settings-home"]');
-    await screenshot('37-settings-birth-date');
+    await screenshot('37-settings-lifetime');
     await $('[data-testid="sidebar-vault"]').click();
-    await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Till 30'));
-    await $('[data-testid="weeks-toggle"]').click();
-    const grid = $('[data-testid="weeks-grid"]');
-    await grid.waitForDisplayed();
-    expect(await browser.execute(() => document.querySelectorAll('[data-testid="weeks-grid"] rect').length)).toBe(1560);
-    await scrollIntoView('[data-testid="weeks-grid"]');
-    await screenshot('35-home-weeks');
+    await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('95-year lifetime'));
+    const percent = await $('[data-span="Lifetime"] .memento-share').getText();
+    await screenshot('35-home-lifetime');
+    await $('[data-testid="open-summaries"]').click();
+    await expect($('.summaries-progress-card:last-child')).toHaveText(expect.stringContaining(percent));
+    await expect($('.summaries-progress-card:last-child')).toHaveText(expect.stringContaining('95-year lifetime'));
   });
 
   it("creates today's note from the home screen", async () => {

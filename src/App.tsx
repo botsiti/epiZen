@@ -25,6 +25,9 @@ import { PluginDisplayProvider, PluginSurface } from './components/workspace/Plu
 import { PLUGINS, pluginSettings, effectivePlugins, pluginPreferencesPatch, savedHomeSections, requiredPlugin, savedCheckIns } from './lib/plugins';
 import { MarkdownHome, PluginUnavailable } from './components/workspace/MarkdownHome';
 import { Home } from './components/home/Home';
+import { rewardArea } from './lib/rewardRules';
+import { questActivity, taskTags } from './lib/questActivity';
+import { useQuestRules } from './components/settings/useQuestRules';
 import { QuestPage, StatisticsPage } from './components/insights/Insights';
 import { Summaries } from './components/home/Summaries';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -73,14 +76,14 @@ import {
 } from './lib/api';
 import type { LinkTarget } from './lib/completion';
 import { METRICS } from './lib/categories';
-import { addDays, addMonths, parseDate, startOfMonth, today } from './lib/dates';
+import { addDays, addMonths, formatDate, parseDate, startOfMonth, today } from './lib/dates';
 import { parseDay, type Day } from './lib/day';
 import { addTask } from './lib/edits';
 import { planText } from './lib/plans';
 import { addBlock, addTaskWithBlock, findTask, focusIdOf, hasTask, newTaskLabel } from './lib/timeblocks';
 import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
-import { parseBirthDate } from './lib/home';
+import { DEFAULT_LIFETIME_YEARS, parseBirthDate, validLifetimeYears } from './lib/home';
 import { buildLinkIndex } from './lib/linkIndex';
 import { renameLinkEdits } from './lib/rename';
 import { collectLibrary, DEFAULT_FILTERS, genreCounts, hiddenColumns, isLibraryLayout, kindOfPath, type LibraryLayout, type LibraryTab, type ListColumn } from './lib/library';
@@ -242,6 +245,10 @@ export function App() {
   const pluginDisplay = useMemo(() => savedPluginDisplays(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
   const configuredPlugins = useMemo(() => pluginSettings(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
   const plugins = useMemo(() => effectivePlugins(configuredPlugins), [configuredPlugins]);
+  const { document: rewardDocument, error: rewardError, retry: retryRewards, save: saveRewards } = useQuestRules(status?.state === 'open' ? status.root : undefined);
+  const rewards = rewardDocument?.value;
+  const questPresets = rewards?.questRewards.presets;
+  const questAreas = useMemo(() => rewards?.areas.filter((area) => !area.archived), [rewards]);
   const assistantOpen = plugins.spike && assistantRequested;
   const assistantSettings = useMemo(() => vaultAssistantSettings(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
   const saveAssistantSettings = useCallback(async (assistant: typeof assistantSettings) => {
@@ -288,16 +295,23 @@ export function App() {
     [now, periodic, periodicNotes],
   );
   const habitCatalog = useMemo(() => collectHabits(plugins.habits ? texts : new Map()), [texts, plugins.habits]);
+  const recordedDays = useMemo(() => [...periodicNotes].flatMap(([key, path]) => {
+    const date = key.startsWith('day:') ? parseDate(key.slice(4), 'YYYY-MM-DD') : undefined;
+    const text = texts.get(path);
+    return date && text !== undefined ? [{ date, path, day: dayFrom(path, text) }] : [];
+  }), [periodicNotes, texts]);
+  const scoredDays = useMemo(() => rewards && questActivity(recordedDays.map(({ date, path, day }) => ({ date: formatDate(date, 'YYYY-MM-DD'), path, day })), rewards), [recordedDays, rewards]);
+  const scoringIssue = useMemo(() => scoredDays && [...scoredDays].find(([, day]) => day.rewardProblem), [scoredDays]);
   // Everything a daily, weekly or monthly note's page reads from the rest of the vault.
   const dayOf = useCallback(
     (date: Date): DayEntry => {
       const path = periodicNotes.get(periodKey('day', date));
       const text = path === undefined ? undefined : texts.get(path);
-      const recorded = path === undefined || text === undefined ? undefined : dayFrom(path, text);
+      const recorded = path === undefined || text === undefined ? undefined : scoredDays?.get(path) ?? dayFrom(path, text);
       const scheduled = date <= now && habitCatalog.habits.some((h) => habitActive(h, date));
       return { date, path, scheduledOnly: !recorded && scheduled, day: recorded || scheduled ? withHabits(recorded ?? parseDay(''), habitCatalog.habits, date, now) : undefined };
     },
-    [periodicNotes, texts, habitCatalog.habits, now],
+    [periodicNotes, texts, habitCatalog.habits, now, scoredDays],
   );
   // Every daily note, for the homepage's life XP, streak and spheres.
   const dailyNotes = useMemo(
@@ -308,12 +322,8 @@ export function App() {
       }),
     [periodicNotes, dayOf],
   );
-  const recordedHabitDays = useMemo(() => [...periodicNotes].flatMap(([key, path]) => {
-    const date = key.startsWith('day:') ? parseDate(key.slice(4), 'YYYY-MM-DD') : undefined;
-    const text = texts.get(path);
-    return date && text !== undefined ? [{ date, path, day: dayFrom(path, text) }] : [];
-  }), [periodicNotes, texts]);
-  const habitSummaries = useMemo(() => Object.fromEntries(habitCatalog.habits.map((h) => [h.id, habitStats(habitHistory(h, recordedHabitDays, now), now)])), [habitCatalog.habits, recordedHabitDays, now]);
+  const habitSummaries = useMemo(() => Object.fromEntries(habitCatalog.habits.map((h) => [h.id, habitStats(habitHistory(h, recordedDays, now), now)])), [habitCatalog.habits, recordedDays, now]);
+  const lifetimeYears = validLifetimeYears(settings.lifetimeYears) ? settings.lifetimeYears : DEFAULT_LIFETIME_YEARS;
   const birthDate = useMemo(() => parseBirthDate(settings.birthDate), [settings]);
   const dailyFacts = useMemo(() => {
     const values = new Map<string, number[]>();
@@ -329,6 +339,7 @@ export function App() {
     for (const key of ['done', 'sleep', ...METRICS.map((metric) => metric.key)]) scales[key] = metricScale(key, values.get(key) ?? []);
     return { scales, categories: [...categories].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name) };
   }, [periodicNotes, texts]);
+  const categories = useMemo(() => taskTags(dailyFacts.categories, rewards), [dailyFacts, rewards]);
   const mediaByTitle = useMemo(() => new Map(shelves.flatMap((shelf) => shelf.items.map((item) => [item.title, item] as const))), [shelves]);
   const weekOf = useCallback(
     (monday: Date) => {
@@ -359,16 +370,24 @@ export function App() {
       if (file.kind !== 'note' || noteTitle(file.path) !== 'Custom Quests') continue;
       for (const quest of parseQuests(file.path, texts.get(file.path) ?? '')) list.push({ quest });
     }
+    if (rewards) for (const { quest } of list) {
+      for (const sphere of quest.spheres) {
+        const area = rewardArea(rewards, sphere.name);
+        if (area) { sphere.displayName = area.name; sphere.color = area.color; }
+      }
+    }
     return list;
-  }, [periodicNotes, texts, files, plugins.quests]);
+  }, [periodicNotes, texts, files, plugins.quests, rewards]);
   const images = useMemo(() => new Set(files.filter((file) => file.kind === 'image').map((file) => file.path)), [files]);
   const art = useCallback((quest: Quest) => artPaths(quest).find((path) => images.has(path)), [images]);
   const periodicPage = useMemo((): PeriodicSpec | undefined => {
-    const found = view.kind === 'note' ? catalog.byPath.get(view.path) : undefined;
+    if (view.kind !== 'note') return undefined;
+    const found = catalog.byPath.get(view.path);
     if (!found) return undefined;
-    const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
-    return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, categories, quests, art, features, habits: habitCatalog.habits, habitStats: habitSummaries };
-  }, [view, catalog, dayOf, weekOf, exists, dailyFacts, mediaByTitle, quests, art, features, habitCatalog.habits, habitSummaries]);
+    const data = scoredDays?.get(view.path);
+    const scoredDay = data && { text: texts.get(view.path)!, day: data };
+    return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, scoredDay, questPresets, questAreas, categories, quests, art, features, habits: habitCatalog.habits, habitStats: habitSummaries };
+  }, [view, catalog, dayOf, weekOf, exists, dailyFacts, texts, scoredDays, categories, questPresets, questAreas, mediaByTitle, quests, art, features, habitCatalog.habits, habitSummaries]);
   const linkTargets = useMemo(() => {
     const titles = new Map<string, number>();
     for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
@@ -604,12 +623,13 @@ export function App() {
         if (unsaved.length) throw new Error(`Save or recover ${unsaved.join(', ')} before disabling Spike.`);
         setAssistantOpen(false);
       }
+      if (next.rewards) await saveRewards(next.rewards.revision, next.rewards.value);
       const latest = await getSettings();
       const patch = vaultPreferencesPatch(latest, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition, next.fileDefaults);
       const pluginPatch = next.plugins ? pluginPreferencesPatch({ ...latest, ...patch }, status.root, next.plugins, next.homeSections ?? homeSections, next.features.checkIns, next.pluginDisplay) : {};
-      setSettings(await updateSettings({ ...patch, ...pluginPatch, ...(!preferences.complete && settings.libraryFilters === undefined ? { libraryFilters: DEFAULT_FILTERS } : {}), librarySources: next.sources, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
+      setSettings(await updateSettings({ ...patch, ...pluginPatch, ...(!preferences.complete && settings.libraryFilters === undefined ? { libraryFilters: DEFAULT_FILTERS } : {}), librarySources: next.sources, lifetimeYears: next.lifetimeYears, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
     },
-    [settings, status, periodic, recognition, homeSections, plugins.timer, plugins.spike, preferences.complete],
+    [settings, status, periodic, recognition, homeSections, plugins.timer, plugins.spike, preferences.complete, saveRewards],
   );
   const finishSetup = useCallback(async (next: PeriodicSettings, reading: PeriodicRecognition, create = false) => {
     if (status?.state !== 'open') throw new Error('No vault is open.');
@@ -820,6 +840,8 @@ export function App() {
   // The menu bar item and its panel: the timer and today's tasks, published as they change; the
   // panel's buttons start, pause and stop this same timer.
   const todayEntry = useMemo(() => dayOf(now), [dayOf, now]);
+  const hasLoggedToday = todayEntry.day?.tasks.some((task) => task.minutes || task.blocks.length);
+  const rewardDate = formatDate(hasLoggedToday ? addDays(now, 1) : now, 'YYYY-MM-DD');
   const unwritten = timer.state.pending.filter((block) => timer.failures.has(block.id)).length;
   const trayView = useMemo(
     () =>
@@ -843,7 +865,6 @@ export function App() {
   const frontNote = notePath(view);
   // Laid out only while it can be seen.
   const local = useLocalGraph(graph, frontNote, plugins.graph && right.open && !right.closed.includes('graph'));
-  const categories = dailyFacts.categories.length ? dailyFacts.categories : ['code', 'study', 'sport', 'business', 'book', 'kaizen'];
 
   if (!status) return null;
   if (status.state !== 'open') {
@@ -918,11 +939,13 @@ export function App() {
         <main className={view.kind === 'graph' ? 'main is-graph' : view.kind === 'settings' ? 'main is-preferences' : 'main'} ref={main} onScroll={onScroll}>
           {/* Only the tab in front is drawn, afresh for each tab: an editor leaving saves as it goes. */}
           <Fragment key={tab.id}>
+            {plugins.quests && ['home', 'quests', 'statistics', 'summaries', 'note'].includes(view.kind) && (rewardError || scoringIssue) && <p className="note-warning" role="status">{rewardError ? 'Custom XP settings are unavailable. Check Settings → Quests.' : `XP excluded for ${scoringIssue?.[0]} · ${scoringIssue?.[1].rewardProblem}`}</p>}
             {view.kind === 'home' && !plugins.home && <MarkdownHome name={status.name} files={files} onOpen={openNote} onNew={newNote} onPlugins={() => go({ kind: 'settings' })} />}
             {view.kind !== 'home' && requiredPlugin(view.kind) && !plugins[requiredPlugin(view.kind)!] && <PluginUnavailable name={PLUGINS.find((item) => item.id === requiredPlugin(view.kind))!.name} onSettings={() => go({ kind: 'settings' })} />}
             {view.kind === 'home' && plugins.home && (
               <PluginSurface id="home"><Home
-                sections={{ ...homeSections, profile: homeSections.profile && plugins.periodic, averages: homeSections.averages && plugins.periodic, focus: homeSections.focus && plugins.periodic, today: homeSections.today && plugins.periodic, spheres: homeSections.spheres && plugins.periodic, quests: homeSections.quests && plugins.quests, library: homeSections.library && plugins.library }}
+                rewards={rewards}
+                sections={{ ...homeSections, profile: homeSections.profile && plugins.periodic, averages: homeSections.averages && plugins.periodic, focus: homeSections.focus && plugins.periodic, today: homeSections.today && plugins.periodic, spheres: homeSections.spheres && plugins.quests, quests: homeSections.quests && plugins.quests, library: homeSections.library && plugins.library }}
                 statisticsEnabled={plugins.statistics}
                 vaultName={status.name}
                 stats={{
@@ -937,7 +960,7 @@ export function App() {
                 exists={exists}
                 scales={dailyFacts.scales}
                 library={[...library.values()].flat()}
-                birthDate={birthDate}
+                lifetimeYears={lifetimeYears} birthDate={birthDate}
                 onOpenNote={openNote}
                 onOpenPeriod={openPeriodicOrSay}
                 quests={quests}
@@ -951,10 +974,10 @@ export function App() {
                 onSeeSummaries={() => go({ kind: 'summaries' })}
               /></PluginSurface>
             )}
-            {view.kind === 'quests' && plugins.quests && <PluginSurface id="quests"><QuestPage quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} /></PluginSurface>}
-            {view.kind === 'habits' && plugins.habits && <PluginSurface id="habits"><HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedHabitDays} today={todayNote.date} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} /></PluginSurface>}
-            {view.kind === 'statistics' && plugins.statistics && <PluginSurface id="statistics"><StatisticsPage days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} /></PluginSurface>}
-            {view.kind === 'summaries' && plugins.statistics && <PluginSurface id="statistics"><Summaries scales={dailyFacts.scales} today={todayNote.date} days={dailyNotes} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} /></PluginSurface>}
+            {view.kind === 'quests' && plugins.quests && <PluginSurface id="quests"><QuestPage days={dailyNotes} rewards={rewards} quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} /></PluginSurface>}
+            {view.kind === 'habits' && plugins.habits && <PluginSurface id="habits"><HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} /></PluginSurface>}
+            {view.kind === 'statistics' && plugins.statistics && <PluginSurface id="statistics"><StatisticsPage showQuestXp={plugins.quests} rewards={rewards} days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} /></PluginSurface>}
+            {view.kind === 'summaries' && plugins.statistics && <PluginSurface id="statistics"><Summaries scales={dailyFacts.scales} today={todayNote.date} days={dailyNotes} lifetimeYears={lifetimeYears} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} /></PluginSurface>}
             {fileActionError && <p className="note-warning" role="alert">{fileActionError}</p>}
             {editError && (
               <p className="note-warning" data-testid="edit-warning">
@@ -1042,7 +1065,7 @@ export function App() {
             {view.kind === 'new' && view.item === 'base' && <NewBase root={status.root} folder={view.folder} folders={folders} onCreated={async (path) => { await refresh(); openNote(path); }} />}
             {view.kind === 'new' && view.item !== 'base' && <NewNote key={`${tab.index}-${view.item ?? 'note'}`} kind={view.item ?? 'note'} folders={folders} folder={view.folder} onNewNote={(folder) => go({ kind: 'new', folder })} onCreate={view.item === 'folder' ? async (path) => { await createFolder(path); setFolders((previous) => [...new Set([...previous, path])]); } : create} />}
             {view.kind === 'graph' && plugins.graph && <PluginSurface id="graph"><GraphView graph={graph} onOpen={openNote} /></PluginSurface>}
-            {view.kind === 'settings' && <SettingsScreen appearance={appearance} onSaveAppearance={saveAppearance} appearanceError={appearanceError} spikeSettings={(onBack) => <AssistantConfiguration value={assistantSettings} pluginEnabled={plugins.spike} profileExists={files.some((file) => file.path === assistantSettings.profilePath)} onSave={saveAssistantSettings} onOpenProfile={() => openNote(assistantSettings.profilePath)} onBack={onBack} />} pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
+            {view.kind === 'settings' && <SettingsScreen key={status.root} rewardDocument={rewardDocument} rewardError={rewardError} retryRewards={retryRewards} rewardDate={rewardDate} observedTags={dailyFacts.categories} appearance={appearance} onSaveAppearance={saveAppearance} appearanceError={appearanceError} spikeSettings={(onBack) => <AssistantConfiguration value={assistantSettings} pluginEnabled={plugins.spike} profileExists={files.some((file) => file.path === assistantSettings.profilePath)} onSave={saveAssistantSettings} onOpenProfile={() => openNote(assistantSettings.profilePath)} onBack={onBack} />} pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} lifetimeYears={lifetimeYears} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
             {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
           </Fragment>
         </main>
@@ -1060,7 +1083,7 @@ export function App() {
           onOpen={openNote}
         />
       )}
-      {plugins.spike && <AssistantWorkspace glass={appearance.surface === 'glass'} key={status.root} context={{ root: status.root, now, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, features: { periodic: plugins.periodic, cbt: plugins.cbt, quests: plugins.quests, library: plugins.library, calendar: plugins.calendar }, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenCalendar={(time) => { setAssistantCalendar({ time, token: Date.now() }); go({ kind: 'calendar' }); }} onOpenNote={(path, cbt, start) => { if (cbt) setAssistantCbt({ path, token: Date.now(), start }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
+      {plugins.spike && <AssistantWorkspace glass={appearance.surface === 'glass'} key={status.root} context={{ root: status.root, now, questAreas, questPresets, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, features: { periodic: plugins.periodic, cbt: plugins.cbt, quests: plugins.quests, library: plugins.library, calendar: plugins.calendar }, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenCalendar={(time) => { setAssistantCalendar({ time, token: Date.now() }); go({ kind: 'calendar' }); }} onOpenNote={(path, cbt, start) => { if (cbt) setAssistantCbt({ path, token: Date.now(), start }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
     </div></PluginDisplayProvider>
   );
 }

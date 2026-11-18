@@ -202,28 +202,22 @@ describe('splitting XP across spheres', () => {
 
 describe('memento mori', () => {
   it('counts the year and the month without a birth date', () => {
-    const { spans, life, weeks } = memento(day(2026, 9, 27));
+    const { spans, life } = memento(day(2026, 9, 27));
     expect(spans.map((span) => [span.label, Math.round(span.share * 1000) / 10, span.daysLeft])).toEqual([
       ['Year', 81.9, 66],
       ['Month', 83.9, 5],
     ]);
     expect(life).toBeUndefined();
-    expect(weeks).toBeUndefined();
   });
 
-  it('counts life up to 30 from a birth date, and the weeks spent of 1,560', () => {
-    const birth = parseBirthDate('1998-03-21');
-    expect(birth).toEqual(day(1998, 2, 21));
-    const { life, weeks } = memento(day(2026, 9, 27), birth);
-    // 21 March 2028 is 511 days after 27 October 2026, of the 10,958 from birth to 30.
-    expect(life).toMatchObject({ label: 'Till 30', daysLeft: 511 });
-    expect(life?.share).toBeCloseTo(10447 / 10958, 3);
-    expect(weeks).toEqual({ cells: 1560, lived: 1487, current: 1487 });
-  });
-
-  it('stops at the ends: nothing left after 30, nothing spent before birth', () => {
-    expect(memento(day(2029, 0, 1), day(1998, 2, 21))).toMatchObject({ life: { share: 1, daysLeft: 0 }, weeks: { lived: 1560, current: 1559 } });
-    expect(memento(day(1998, 0, 1), day(1998, 2, 21))).toMatchObject({ life: { share: 0 }, weeks: { lived: 0, current: 0 } });
+  it('counts the chosen lifetime in calendar days, including leap years', () => {
+    const birth = day(1980, 0, 1), now = day(2020, 0, 1);
+    expect(memento(now, birth, 80).life?.share).toBe(0.5);
+    expect(memento(now, birth, 40).life).toEqual({ label: 'Lifetime', share: 1, daysLeft: 0 });
+    expect(memento(now, birth, 100).life?.share).toBeCloseTo(0.4);
+    expect(memento(now, birth, 0).life).toBeUndefined();
+    expect(memento(day(2030, 1, 28), day(2000, 1, 29), 30).life?.share).toBe(1);
+    expect(memento(day(1979, 0, 1), birth).life?.share).toBe(0);
   });
 
   it('takes a birth date only as a real YYYY-MM-DD day', () => {

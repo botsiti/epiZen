@@ -21,8 +21,7 @@ export function EditTask({ task, categories, onCancel, onSave }: { task: DayTask
   useEscape(onCancel);
   const number = minutesOf(minutes);
   // The task's own category stays on offer when it isn't among the vault's most used.
-  const shown = categories.slice(0, 10);
-  const options = chosen && !shown.includes(chosen) ? [chosen, ...shown] : shown;
+  const options = chosen && !categories.includes(chosen) ? [chosen, ...categories] : categories;
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (words.trim() && number !== undefined) onSave({ words, category: chosen, minutes: number });

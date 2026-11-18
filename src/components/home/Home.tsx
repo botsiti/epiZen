@@ -37,6 +37,8 @@ export interface HomeProps {
   library: MediaEntry[];
   /** From the app's settings; the vault doesn't hold it. */
   birthDate?: Date;
+  lifetimeYears?: number;
+  rewards?: import('../../lib/rewardRules').RewardSettings;
   onOpenNote: (path: string) => void;
   /** Opens the note of that day, week or month, or creates it with built-in starting text. */
   onOpenPeriod: (period: Period, date: Date) => void;
@@ -65,14 +67,14 @@ export function Home(props: HomeProps) {
   const sections = props.sections ?? DEFAULT_HOME_SECTIONS;
   const xp = useMemo(() => lifeXp(days, questXp(props.quests, formatDate(today, 'YYYY-MM-DD'))), [days, props.quests, today]);
   const run = useMemo(() => streak(days, today), [days, today]);
-  const spheres = useMemo(() => sphereXp(days, questSphereXp(props.quests)), [days, props.quests]);
+  const spheres = useMemo(() => sphereXp(days, questSphereXp(props.quests), props.rewards), [days, props.quests, props.rewards]);
   const month = startOfMonth(today);
   const thisMonth = useMemo(() => questsIn(props.quests, month, addMonths(month, 1)), [props.quests, month]);
   const todayEntry = dayOf(today);
   return (
     <div className="periodic-frame home-frame" data-testid="home" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
       {sections.profile ? <Hero {...props} xp={xp} streak={run} todayEntry={todayEntry} /> : <header className="insights-header"><p className="kicker">{props.vaultName}</p><h1>Home</h1></header>}
-      {sections.memento && <Memento today={today} birth={props.birthDate} i={1} />}
+      {sections.memento && <Memento today={today} birth={props.birthDate} years={props.lifetimeYears} i={1} />}
       {props.statisticsEnabled !== false && <div className="home-shortcuts"><button className="shelf-all" onClick={props.onSeeSummaries} data-testid="open-summaries">Summaries →</button><button className="shelf-all" onClick={props.onSeeStatistics}>Statistics →</button></div>}
       <div className="home-row">
         {sections.averages && <Averages dayOf={dayOf} today={today} scales={props.scales} i={2} />}

@@ -36,8 +36,9 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
   const { quest, period } = entry;
   const mythic = quest.scope === 'custom';
   const tier = TIERS[quest.tier];
-  const sphere = quest.spheres[0]?.name;
-  const tone = sphere ? sphereColor(sphere) : tier.color;
+  const mainSphere = quest.spheres[0];
+  const sphere = mainSphere?.displayName ?? mainSphere?.name;
+  const tone = mainSphere?.color ?? (sphere ? sphereColor(sphere) : tier.color);
   const iso = formatDate(today, 'YYYY-MM-DD');
   const due = dueDate(quest, period);
   const lost = penalty(quest, iso, period);
@@ -135,9 +136,9 @@ export function QuestDetail({ entry, art, today, onToggle, onProgress, onChange,
           <div hidden={Boolean(edit)}>
           {quest.spheres.length > 1 && (
             <p className="quest-dialog-bonus">
-              {quest.spheres.slice(1).map(({ name, weight }) => (
-                <span key={name} className="chip" style={{ '--tone': sphereColor(name) } as CSSProperties} title={`+${sphereXp(quest.xp, weight)} XP once done`}>
-                  {name} +{weight}%
+              {quest.spheres.slice(1).map(({ name, weight, displayName, color }) => (
+                <span key={name} className="chip" style={{ '--tone': color ?? sphereColor(name) } as CSSProperties} title={`+${sphereXp(quest.xp, weight)} XP once done`}>
+                  {displayName ?? name} +{weight}%
                 </span>
               ))}
             </p>

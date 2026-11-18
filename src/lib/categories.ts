@@ -41,11 +41,14 @@ const KNOWN: Record<string, Omit<Category, 'name'>> = {
   cinema: { color: '#dcbc72', kind: 'recovery', multiplier: 0.5, spheres: { 'Fun/Recreation': 100 } },
 };
 
+export const DEFAULT_TASK_TAGS = Object.keys(KNOWN);
+
 // Any other category takes one of these, the same one every time.
 const PALETTE = ['#6fa5e6', '#63bd92', '#e06681', '#b48ede', '#dcbc72', '#dfa163', '#52bfc4', '#dd8fc0'];
 
 export function category(name: string): Category {
-  const known = KNOWN[name.toLowerCase()];
+  const key = name.toLowerCase();
+  const known = Object.hasOwn(KNOWN, key) ? KNOWN[key] : undefined;
   if (known) return { name, ...known };
   let hash = 0;
   for (const char of name.toLowerCase()) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;

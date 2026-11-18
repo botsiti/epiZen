@@ -23,14 +23,16 @@ Built with Tauri 2, Rust, React and TypeScript.
   Configure tables, cards and lists with properties, nested filters, sorting, grouping, formulas
   and summaries. Edits remain ordinary YAML and Markdown with conflict-checked saves.
 - **Make the workspace your own.** Dedicated settings pages for periodic notes, Homepage,
-  files and Hotkeys. Preview existing daily notes before connecting them, choose library lookup
+  Library, Quests, files and Hotkeys. Preview existing daily notes before connecting them, choose library lookup
   sources, and set default locations for new notes and folders.
 - **Keep Home focused.** A compact overview of your day, life spheres, eight quests at a time and
-  ten recent library entries, with dedicated views for the full collections.
+  ten recent library entries, with dedicated views for the full collections. Choose which sections
+  to display and set a lifetime horizon for Home and Summaries.
 - **Review your year.** Open Summaries from Home to see each month's reflection and daily averages.
   Monthly pages include money notes, optional local photos, life-area ratings and weekly reflections.
 - **Review quests and statistics.** Browse quests by month, track progress and XP, inspect daily
   focus by task and category, and see habit completion as proportionally filled monthly bars.
+  Configure XP per logged minute and split task rewards across your own life spheres.
 - **Bring your own notes.** Open a vault directly. When you enable Periodic notes, its settings
   connect existing folders, recognize older names and resolve duplicate dates without renaming notes.
 - **Choose your check-ins.** Enable or hide mood, energy, focus, social and sleep. Averages count

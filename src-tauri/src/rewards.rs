@@ -103,6 +103,7 @@ fn validate_state(value: &Value) -> Result<(), String> {
         for (id, created) in &category_ids { if created.as_str() <= effective && !rules.contains_key(id) { return Err(invalid()); } }
         for (id, rule) in rules {
             if !category_ids.contains_key(id) || !matches!(text(rule, "profile"), Some("focus" | "practice" | "training" | "leisure")) { return Err(invalid()); }
+            if rule.get("rateHundredths").is_some() && !number(rule, "rateHundredths", 1_000_000) { return Err(invalid()); }
             let shares = rule.get("shares").and_then(Value::as_array).filter(|shares| !shares.is_empty() && shares.len() <= 101).ok_or_else(invalid)?;
             let mut used = HashSet::new(); let mut total = 0u64;
             for share in shares {
@@ -155,6 +156,11 @@ mod tests {
         assert!(validate_state(&fixture).is_ok());
         #[cfg(target_os = "macos")]
         assert_eq!(identity("Écriture"), identity("e\u{301}criture"));
+        let mut custom = fixture.clone();
+        custom["policies"][0]["categories"]["code"]["rateHundredths"] = json!(275);
+        assert!(validate_state(&custom).is_ok());
+        custom["policies"][0]["categories"]["code"]["rateHundredths"] = json!(-1);
+        assert!(validate_state(&custom).is_err());
         let mut duplicate = fixture.clone();
         let mut second = duplicate["categories"][0].clone(); second["id"] = json!("other"); second["tag"] = json!("CODE");
         duplicate["categories"].as_array_mut().unwrap().push(second);

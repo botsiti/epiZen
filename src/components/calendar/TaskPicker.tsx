@@ -74,7 +74,7 @@ export function TaskPicker({ tasks, categories, value, onChange, onSubmit, autoF
       />
       {(words.trim() || !tasks.length) && (
         <div className="composer-categories" role="radiogroup" aria-label="Category">
-          {categories.slice(0, 10).map((name) => (
+          {categories.map((name) => (
             <button
               key={name}
               type="button"

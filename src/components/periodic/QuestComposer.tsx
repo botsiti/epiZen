@@ -11,17 +11,19 @@ const TIER_ORDER: Tier[] = ['common', 'rare', 'epic', 'legendary'];
 
 interface Props {
   scope: 'weekly' | 'monthly';
+  presets?: Record<Tier, number>;
+  areas?: readonly { name: string; color: string }[];
   /** Settles with why the quest wasn't added, if it wasn't. */
   onAdd: (line: string) => Promise<string | undefined>;
 }
 
-export function QuestComposer({ scope, onAdd }: Props) {
+export function QuestComposer({ scope, presets, areas = SPHERES, onAdd }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [spheres, setSpheres] = useState<NewQuest['spheres']>([]);
   const [tier, setTier] = useState<Tier>('rare');
   // The dashboards start a week's quest at 300 XP and a month's at 500.
-  const [xp, setXp] = useState(scope === 'weekly' ? '300' : '500');
+  const [xp, setXp] = useState(String(presets?.rare ?? (scope === 'weekly' ? 300 : 500)));
   const [target, setTarget] = useState('0');
   const [status, setStatus] = useState<{ text: string; problem?: boolean }>();
   const [busy, setBusy] = useState(false);
@@ -33,7 +35,7 @@ export function QuestComposer({ scope, onAdd }: Props) {
     if (!spheres.length) return setStatus({ text: 'Pick a life sphere', problem: true });
     let line: string;
     try {
-      line = questLine({ scope, title, xp: points, tier, spheres, target: Number(target) || 0 });
+      line = questLine({ scope, title, xp: points, tier, spheres, target: Number(target) || 0 }, areas);
     } catch (err) {
       return setStatus({ text: err instanceof Error ? err.message : String(err), problem: true });
     }
@@ -90,7 +92,7 @@ export function QuestComposer({ scope, onAdd }: Props) {
           <span className="faint">First pick is the main sphere · add more for bonus XP</span>
         </span>
         <div className="quest-spheres" role="group" aria-label="Life spheres">
-          {SPHERES.map(({ name, color }) => {
+          {areas.map(({ name, color }) => {
             const at = spheres.findIndex((sphere) => sphere.name === name);
             return (
               <button
@@ -113,7 +115,7 @@ export function QuestComposer({ scope, onAdd }: Props) {
         {spheres.length > 1 && (
           <ul className="quest-split">
             {spheres.slice(1).map(({ name, weight }) => (
-              <li key={name} style={{ '--tone': SPHERES.find((sphere) => sphere.name === name)?.color } as CSSProperties}>
+              <li key={name} style={{ '--tone': areas.find((sphere) => sphere.name === name)?.color } as CSSProperties}>
                 <span className="chip-dot" style={{ background: 'var(--tone)' }} />
                 <span className="quest-split-name">{name}</span>
                 <span className="quest-stepper">
@@ -152,13 +154,13 @@ export function QuestComposer({ scope, onAdd }: Props) {
                 style={{ '--tier': TIERS[key].color } as CSSProperties}
                 onClick={() => {
                   setTier(key);
-                  setXp(String(TIERS[key].xp));
+                  setXp(String(presets?.[key] ?? TIERS[key].xp));
                 }}
                 data-testid="quest-tier"
                 data-tier={key}
               >
                 <span aria-hidden="true">{TIERS[key].glyph}</span> {key}
-                <span className="quest-tier-xp">{TIERS[key].xp}</span>
+                <span className="quest-tier-xp">{presets?.[key] ?? TIERS[key].xp}</span>
               </button>
             ))}
           </div>
@@ -168,12 +170,12 @@ export function QuestComposer({ scope, onAdd }: Props) {
           <input
             type="number"
             min={0}
-            step={50}
+            step={1}
             value={xp}
             onChange={(event) => {
               setXp(event.target.value);
               // Typed XP lights the tier it falls in, as on the dashboards.
-              if (Number(event.target.value) > 0) setTier(tierOf(Number(event.target.value)));
+              if (!presets && Number(event.target.value) > 0) setTier(tierOf(Number(event.target.value)));
             }}
             aria-label="Quest XP"
             data-testid="quest-xp"

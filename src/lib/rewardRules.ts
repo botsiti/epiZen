@@ -9,7 +9,7 @@ export type RewardProfile = typeof PROFILE_IDS[number];
 export type RewardTier = 'common' | 'rare' | 'epic' | 'legendary';
 export interface RewardProfileRule { rateHundredths: number; boostHundredths: number; boostMinutes: number }
 export interface RewardShare { area: string; basisPoints: number }
-export interface CategoryReward { profile: RewardProfile; shares: RewardShare[] }
+export interface CategoryReward { rateHundredths?: number; profile: RewardProfile; shares: RewardShare[] }
 export interface RewardCategory { id: string; name: string; tag: string; aliases: string[]; color: string; kind: 'main' | 'recovery'; archived: boolean; createdAt: string }
 export interface RewardArea { id: string; name: string; aliases: string[]; color: string; archived: boolean }
 export interface DailyRewardPolicy {
@@ -74,7 +74,11 @@ export function rewardPolicy(settings: RewardSettings, date: string): DailyRewar
   return settings.policies.findLast((policy) => policy.effectiveFrom <= date);
 }
 export const rewardCategory = (settings: RewardSettings, tag: string): RewardCategory | undefined => settings.categories.find((item) => [item.tag, ...item.aliases].some((alias) => rewardIdentity(alias) === rewardIdentity(tag)));
-export const rewardArea = (settings: RewardSettings, name: string): RewardArea | undefined => settings.areas.find((item) => item.id === name || [item.name, ...item.aliases].some((alias) => rewardIdentity(alias) === rewardIdentity(name)));
+export function rewardArea(settings: RewardSettings, name: string): RewardArea | undefined {
+  const label = rewardIdentity(name);
+  return settings.areas.find((item) => [item.name, ...item.aliases].some((alias) => rewardIdentity(alias) === label))
+    ?? settings.areas.find((item) => item.id === name);
+}
 
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const integer = (value: unknown, max: number) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= max;
@@ -145,6 +149,7 @@ export function validateRewardSettings(value: unknown): asserts value is RewardS
     for (const [id, item] of Object.entries(rules)) {
       requireValue(categoryIds.has(id), 'A reward rule refers to a missing category.');
       const rule = object(item); requireValue(PROFILE_IDS.includes(rule.profile as RewardProfile), 'Choose a valid reward type.');
+      requireValue(rule.rateHundredths === undefined || integer(rule.rateHundredths, 1_000_000), 'Enter a valid XP rate from 0 to 10,000.');
       validateShares(rule.shares, areaIds);
     }
     for (const item of raw.categories) {

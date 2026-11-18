@@ -1,5 +1,7 @@
 import { usePluginDisplay } from '../workspace/PluginDisplay';
 import { useMemo, useState } from 'react';
+import { sphereXp } from '../../lib/home';
+import type { RewardSettings } from '../../lib/rewardRules';
 import { habitColor } from '../../lib/categories';
 import { formatMinutes } from '../../lib/day';
 import { addDays, addMonths, day, formatDate, startOfMonth, startOfWeek } from '../../lib/dates';
@@ -12,6 +14,8 @@ import '../periodic/periodic.css';
 import './insights.css';
 
 interface QuestProps {
+  days?: DayEntry[];
+  rewards?: RewardSettings;
   quests: QuestEntry[];
   art: (quest: Quest) => string | undefined;
   today: Date;
@@ -20,10 +24,11 @@ interface QuestProps {
   onChange: (quest: Quest, change: QuestChange) => Promise<string | undefined>;
 }
 
-export function QuestPage({ quests, art, today, onToggle, onProgress, onChange }: QuestProps) {
+export function QuestPage({ days, rewards, quests, art, today, onToggle, onProgress, onChange }: QuestProps) {
   const display = usePluginDisplay('quests');
   const [month, setMonth] = useState(() => startOfMonth(today));
   const entries = useMemo(() => questsIn(quests, month, addMonths(month, 1)), [quests, month]);
+  const monthDays = days?.filter(({ date }) => date >= month && date < addMonths(month, 1));
   const done = entries.filter(({ quest }) => quest.done).length;
   const xp = entries.reduce((sum, { quest }) => sum + earned(quest), 0);
   const iso = formatDate(today, 'YYYY-MM-DD');
@@ -35,9 +40,17 @@ export function QuestPage({ quests, art, today, onToggle, onProgress, onChange }
     {display.sections.progress && <section className="quest-xp-summary glass" aria-labelledby="quest-xp-heading" data-testid="quest-xp-summary">
       <div className="quest-xp-heading"><div><p className="kicker">Your progress</p><h2 id="quest-xp-heading">Quest XP</h2><p>Current progress on quests active in {formatDate(month, 'MMMM YYYY')}.</p></div><span>{done} of {entries.length} complete</span></div>
       <div className="quest-xp-totals"><div><span>Earned</span><strong>{xp ? '+' : ''}{xp.toLocaleString('en-US')} <small>XP</small></strong></div><div><span>Overdue penalty</span><strong>{lost ? '−' : ''}{lost.toLocaleString('en-US')} <small>XP</small></strong></div><div><span>Net</span><strong>{(xp - lost).toLocaleString('en-US')} <small>XP</small></strong></div><div><span>Lifetime net</span><strong>{questXp(quests, iso).toLocaleString('en-US')} <small>XP</small></strong></div></div>
+      {monthDays && <TaskSphereCredits days={monthDays} rewards={rewards} />}
       {overdue.length > 0 && <div className="quest-xp-overdue"><h3>Overdue <span>{overdue.length}</span></h3><ul>{overdue.map(({ quest, lost: amount }) => <li key={`${quest.path}:${quest.line}`}><span>{quest.title}</span><strong>−{amount.toLocaleString('en-US')} XP</strong></li>)}</ul></div>}
     </section>}
     <QuestBoard key={formatDate(month, 'YYYY-MM')} quests={entries} art={art} today={today} onToggle={onToggle} onProgress={onProgress} onChange={onChange} pageSize={8} groups={{ weekly: 'Weekly quests', monthly: 'Monthly quests' }} />
+  </div>;
+}
+
+function TaskSphereCredits({ days, rewards }: { days: DayEntry[]; rewards?: RewardSettings }) {
+  const rows = sphereXp(days, undefined, rewards).filter((row) => row.xp > 0);
+  return <div className="quest-xp-overdue" data-testid="task-sphere-credits"><h3>Life sphere XP from tasks</h3>
+    {rows.length ? <ul>{rows.map((row) => <li key={row.name}><span>{row.name}</span><strong>{row.xp.toLocaleString(undefined, { maximumFractionDigits: 2 })} XP</strong></li>)}</ul> : <p className="empty-line">Log time on a task to earn sphere XP.</p>}
   </div>;
 }
 
@@ -46,7 +59,7 @@ function MonthNavigation({ month, onChange, today }: { month: Date; onChange: (d
 }
 
 type Range = 'Weekly' | 'Monthly' | 'Yearly';
-export function StatisticsPage({ days, dayOf, today, showHabits }: { days: DayEntry[]; dayOf: (date: Date) => DayEntry; today: Date; showHabits: boolean }) {
+export function StatisticsPage({ days, dayOf, today, showHabits, showQuestXp, rewards }: { showQuestXp?: boolean; rewards?: RewardSettings; days: DayEntry[]; dayOf: (date: Date) => DayEntry; today: Date; showHabits: boolean }) {
   const display = usePluginDisplay('statistics');
   const [period, setPeriod] = useState(today);
   const [range, setRange] = useState<Range>(display.defaultView as Range);
@@ -64,6 +77,7 @@ export function StatisticsPage({ days, dayOf, today, showHabits }: { days: DayEn
       <div className="insight-period"><button className="shelf-all" onClick={() => changePeriod(-1)} aria-label="Previous focus period">←</button><strong>{periodLabel}</strong><button className="shelf-all" onClick={() => changePeriod(1)} aria-label="Next focus period">→</button></div>
       <div className="focus-analysis"><Donut parts={summary.byCategory.map(([meta, value]) => ({ color: meta.color, value, label: `${meta.name}: ${formatMinutes(value)}` }))} center={<><strong>{formatMinutes(summary.totals.logged)}</strong><span>Focus time</span></>} /><div className="focus-breakdown">{summary.byCategory.length === 0 ? <p className="empty-line">No time logged in this period.</p> : summary.byCategory.map(([meta, value]) => <div className="focus-category" key={meta.name}><span style={{ color: meta.color }}>{meta.name}</span><span className="focus-track"><i style={{ width: `${summary.totals.logged ? value / summary.totals.logged * 100 : 0}%`, background: meta.color }} /></span><small>{Math.round(value / summary.totals.logged * 100)}% · {formatMinutes(value)}</small></div>)}</div></div>
       <div className="insight-totals"><div><span>Hours</span><strong>{(summary.totals.logged / 60).toFixed(1)}</strong></div><div><span>Tasks</span><strong>{summary.totals.tasks}</strong></div><div><span>Top category</span><strong>{summary.byCategory[0]?.[0].name ?? '—'}</strong></div></div>
+      {showQuestXp && <TaskSphereCredits days={summary.days} rewards={rewards} />}
     </section>
     {showHabits && display.sections.habits && <section className="card glass insight-card"><h2>Habits</h2><p className="insight-subtitle">Completed days out of calendar days · last 12 months</p>{habitNames.length === 0 ? <p className="empty-line">No habits recorded yet.</p> : <div className="habits-scroll"><div className="habit-months"><span />{months.map((month) => <span key={month.getTime()} title={formatDate(month, 'MMMM YYYY')}>{formatDate(month, 'MMM')}</span>)}{habitNames.map((name, i) => <HabitRow key={name} name={name} color={habitColor(i)} months={months} days={days} />)}</div></div>}</section>}
   </div>;

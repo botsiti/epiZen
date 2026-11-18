@@ -37,7 +37,7 @@ interface Props {
 
 /** A daily note as a page: how the day went, from the note's own text. */
 export function DayPage({ spec, path, text, actions }: Props) {
-  const day = useMemo(() => withHabits(parseDay(text), spec.habits ?? [], spec.date, today()), [text, spec.habits, spec.date]);
+  const day = useMemo(() => withHabits(spec.scoredDay?.text === text ? spec.scoredDay.day : parseDay(text), spec.habits ?? [], spec.date, today()), [text, spec.scoredDay, spec.habits, spec.date]);
   const display = usePluginDisplay('periodic');
   const [tab, setTab] = useState<Tab>(display.defaultView === 'Remember last tab' ? lastTab : display.defaultView as Tab);
   const [seenThoughtRecord, setSeenThoughtRecord] = useState<number>();
@@ -500,7 +500,7 @@ function TaskCard({
   onMenu: (event: MouseEvent) => void;
 }) {
   const color = task.category?.color ?? 'var(--accent)';
-  const xp = task.minutes ? Math.round(task.minutes * (task.category?.multiplier ?? 1)) : 0;
+  const xp = Math.round(task.earnedXp ?? (task.minutes ?? 0) * (task.category?.multiplier ?? 1));
   return (
     <div
       className={task.done ? 'task-card glass rise is-done' : 'task-card glass rise'}

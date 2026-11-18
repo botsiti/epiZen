@@ -32,6 +32,9 @@ export interface PeriodicSpec {
   media: ReadonlyMap<string, MediaItem>;
   /** The task categories the vault uses, most used first. */
   categories: string[];
+  questPresets?: Record<import('../../lib/quests').Tier, number>;
+  questAreas?: readonly { name: string; color: string }[];
+  scoredDay?: { text: string; day: import('../../lib/day').Day };
   /** Every weekly, monthly and mythic quest in the vault. */
   quests: QuestEntry[];
   /** The art file for a quest, if the vault has one. */

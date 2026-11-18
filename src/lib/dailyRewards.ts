@@ -90,8 +90,10 @@ function scoreDay(tasks: readonly DayTask[], date: string, settings: RewardSetti
     const rule = category && Object.hasOwn(policy.categories, category.id) ? policy.categories[category.id]! : unassignedReward();
     const previous = minutesByProfile.get(rule.profile) ?? ZERO_XP;
     const next = addXp(previous, exactXp(minutes));
-    const xp = subtractXp(profileXp(policy, rule.profile, next), profileXp(policy, rule.profile, previous));
-    minutesByProfile.set(rule.profile, next);
+    const xp = rule.rateHundredths === undefined
+      ? subtractXp(profileXp(policy, rule.profile, next), profileXp(policy, rule.profile, previous))
+      : scaleXp(exactXp(minutes), rule.rateHundredths, 100);
+    if (rule.rateHundredths === undefined) minutesByProfile.set(rule.profile, next);
     const shares = new Map<string, ExactXp>();
     for (const { area, basisPoints } of rule.shares) {
       const amount = scaleXp(xp, basisPoints, 10000);
@@ -108,7 +110,7 @@ function scoreDay(tasks: readonly DayTask[], date: string, settings: RewardSetti
 
 export interface DatedRewardTasks { path: string; date: string; tasks: readonly DayTask[] }
 /** Score in date order so a block crossing midnight cannot be paid twice on the next note. */
-export function scoreDailyHistory(days: readonly DatedRewardTasks[], settings: RewardSettings): Map<string, DailyRewards> {
+export function scoreDailyHistory(days: readonly DatedRewardTasks[], settings: RewardSettings, onInvalid?: (path: string, message: string) => void): Map<string, DailyRewards> {
   const results = new Map<string, DailyRewards>(), covered: Interval[] = [], seen = new Set<string>();
   for (const day of days.toSorted((a, b) => a.date.localeCompare(b.date) || a.path.localeCompare(b.path))) {
     if (!validRewardDate(day.date)) throw new Error('A daily note has an invalid date.');
@@ -116,8 +118,15 @@ export function scoreDailyHistory(days: readonly DatedRewardTasks[], settings: R
     seen.add(day.path);
     const start = Date.parse(`${day.date}T00:00:00Z`) / 60_000;
     for (let i = covered.length - 1; i >= 0; i--) if (covered[i]!.end <= start) covered.splice(i, 1);
-    const result = scoreDay(day.tasks, day.date, settings, covered, start);
-    if (result) results.set(day.path, result);
+    const next = covered.map((interval) => ({ ...interval }));
+    try {
+      const result = scoreDay(day.tasks, day.date, settings, next, start);
+      if (result) results.set(day.path, result);
+      covered.splice(0, covered.length, ...next);
+    } catch (error) {
+      if (!onInvalid) throw error;
+      onInvalid(day.path, error instanceof Error ? error.message : String(error));
+    }
   }
   return results;
 }

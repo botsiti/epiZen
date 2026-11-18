@@ -48,3 +48,10 @@ it('offers to choose between duplicate monthly notes instead of creating another
   await user.click(within(september).getByRole('button', { name: 'Choose month note' }));
   expect(onOpenPeriod).toHaveBeenCalledWith('month', day(2026, 8, 1));
 });
+
+it('uses the selected lifetime and shows the lived percentage once', () => {
+  render(<Summaries today={day(2020, 0, 1)} birthDate={day(1980, 0, 1)} lifetimeYears={100} days={[]} monthOf={() => ({})} onOpenPeriod={vi.fn()} />);
+  const cards = screen.getByLabelText('Time in perspective');
+  expect(cards.children).toHaveLength(3);
+  expect(cards.lastElementChild).toHaveTextContent('Lifetime40.0%100-year lifetime');
+});

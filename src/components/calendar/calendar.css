@@ -1288,6 +1288,12 @@
   animation: rise var(--motion-enter) var(--settle) both;
 }
 
+.new-task .composer-categories,
+.task-picker .composer-categories {
+  max-height: min(180px, 28vh);
+  overflow-y: auto;
+}
+
 .new-task .kicker {
   margin-bottom: 2px;
 }
