@@ -3,6 +3,12 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.13.0 — 2026-11-18
+
+Set a personal lifetime horizon, choose which sections appear on Home, and configure Library and
+Quests on their own settings pages. Task tags and focus-timer minutes can earn configurable XP
+across life spheres while preserving historical credit. [Full release notes](releases/0.13.0.md).
+
 ## 0.12.0 — 2026-11-10
 
 Spike's prompt follows directly below him, with right-click hiding and a shared global toggle.

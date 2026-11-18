@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { day, formatDate, startOfMonth, addMonths } from '../../lib/dates';
 import { formatMinutes } from '../../lib/day';
 import { readMonthlySection, spendingLabel } from '../../lib/monthlyReview';
-import { memento } from '../../lib/home';
+import { DEFAULT_LIFETIME_YEARS, memento } from '../../lib/home';
 import { rollup, type DayEntry } from '../../lib/rollup';
 import type { Period } from '../../lib/periodic';
 import './summaries.css';
@@ -12,13 +12,14 @@ export interface SummariesProps {
   today: Date;
   days: DayEntry[];
   birthDate?: Date;
+  lifetimeYears?: number;
   monthOf: (date: Date) => { path?: string; text?: string; ambiguous?: boolean };
   scales?: Record<string, number>;
   onOpenPeriod: (period: Period, date: Date) => void;
 }
 
 /** Each month has its own note and a rollup of its daily notes; nothing here writes to the vault. */
-export function Summaries({ today, days, birthDate, monthOf, onOpenPeriod, scales = {} }: SummariesProps) {
+export function Summaries({ today, days, birthDate, lifetimeYears = DEFAULT_LIFETIME_YEARS, monthOf, onOpenPeriod, scales = {} }: SummariesProps) {
   const [year, setYear] = useState(today.getFullYear());
   const rows = useMemo(() => Array.from({ length: 12 }, (_, index) => {
     const month = day(year, index, 1);
@@ -30,16 +31,13 @@ export function Summaries({ today, days, birthDate, monthOf, onOpenPeriod, scale
     const spending = note.text === undefined ? undefined : readMonthlySection(note.text, 'spending');
     return { month, total, note, summary, decisions, spending };
   }), [year, days, monthOf]);
-  const spans = memento(today, birthDate).spans;
-  const lifeEnd = birthDate && day(birthDate.getFullYear() + 80, birthDate.getMonth(), birthDate.getDate());
-  const lifeShare = birthDate && lifeEnd ? Math.max(0, Math.min(1, (today.getTime() - birthDate.getTime()) / (lifeEnd.getTime() - birthDate.getTime()))) : undefined;
+  const { spans, life } = memento(today, birthDate, lifetimeYears);
 
   return <div className="periodic-frame summaries" data-testid="summaries-page">
     <header className="summaries-header"><p className="kicker">Your year, in perspective</p><h1>Summaries</h1><p>Monthly reflections and averages from your daily notes.</p></header>
     <div className="summaries-progress" aria-label="Time in perspective">
       {spans.slice(0, 2).map((span) => <ProgressCard key={span.label} label={span.label} share={span.share} detail={`${span.daysLeft} days left`} />)}
-      <ProgressCard label="Life" share={lifeShare} detail={birthDate ? '80-year frame' : 'Add a birth date in Settings'} />
-      <ProgressCard label="Until 30" share={spans[2]?.share} detail={spans[2] ? `${spans[2].daysLeft} days left` : 'Add a birth date in Settings'} />
+      <ProgressCard label="Lifetime" share={life?.share} detail={life ? `${lifetimeYears}-year lifetime · ${life.daysLeft.toLocaleString()} days left` : 'Add a birth date in Homepage settings'} />
     </div>
     <div className="summaries-toolbar"><div><span className="summaries-eyebrow">Year in review</span><h2>{year}</h2></div><div className="summaries-year" aria-label="Summary year">
       <button type="button" className="shelf-all" aria-label="Previous summary year" onClick={() => setYear((value) => value - 1)}>←</button>

@@ -48,7 +48,7 @@ export interface Quest {
   title: string;
   xp: number;
   tier: Tier;
-  spheres: { name: string; weight: number }[];
+  spheres: { name: string; weight: number; displayName?: string; color?: string }[];
   start?: string;
   deadline?: string;
   doneOn?: string;
@@ -404,11 +404,11 @@ export const sphereXp = (xp: number, weight: number) => Math.round((Math.max(0, 
 const fieldText = (value: string) => value.replace(/\]/g, ')').replace(/\r?\n/g, ' ').trim();
 
 /** The new quest's line, as the dashboards' composers write it. */
-export function questLine(quest: NewQuest): string {
+export function questLine(quest: NewQuest, areas: readonly { name: string }[] = SPHERES): string {
   const title = fieldText(quest.title);
   if (!title) throw new Error('Say what counts as done.');
   if (!quest.spheres.length) throw new Error('Pick a life sphere.');
-  for (const { name } of quest.spheres) if (!SPHERES.some((sphere) => sphere.name === name)) throw new Error(`“${name}” isn't one of the life spheres.`);
+  for (const { name } of quest.spheres) if (!areas.some((sphere) => sphere.name === name)) throw new Error(`“${name}” isn't one of the life spheres.`);
   if (new Set(quest.spheres.map(({ name }) => name)).size !== quest.spheres.length) throw new Error('A sphere is picked once.');
   if (!(quest.tier in TIERS)) throw new Error(`“${String(quest.tier)}” isn't a tier.`);
   const xp = Math.max(0, Math.round(Number(quest.xp) || 0));

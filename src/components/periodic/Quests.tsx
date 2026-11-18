@@ -112,8 +112,9 @@ export function QuestCard({ entry, i, art, today, onToggle, onProgress, onOpen }
   const { quest, period } = entry;
   const mythic = quest.scope === 'custom';
   const tier = TIERS[quest.tier];
-  const sphere = quest.spheres[0]?.name;
-  const tone = sphere ? sphereColor(sphere) : tier.color;
+  const mainSphere = quest.spheres[0];
+  const sphere = mainSphere?.displayName ?? mainSphere?.name;
+  const tone = mainSphere?.color ?? (sphere ? sphereColor(sphere) : tier.color);
   const iso = formatDate(today, 'YYYY-MM-DD');
   const lost = penalty(quest, iso, period);
   const chip = timeChip(quest, dueDate(quest, period), iso);

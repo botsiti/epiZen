@@ -20,7 +20,7 @@ async function save() { await scrollIntoView('[data-testid="settings-save"]'); a
 
 describe('focused preferences and file creation', () => {
   before(prepareWindow);
-  it('connects existing daily notes and persists homepage sources without changing Markdown', async () => {
+  it('connects existing daily notes and persists library sources without changing Markdown', async () => {
     const before = snapshotVault(root);
     await $('[data-testid="open-settings"]').click();
     await section('periodic');
@@ -41,12 +41,14 @@ describe('focused preferences and file creation', () => {
     await screenshot('171-settings-monthly');
     await section('home');
     await $('[data-testid="settings-birth-date"]').setValue('1995-01-02');
+    await screenshot('162-settings-home');
+    await section('library');
     await select('[data-testid="settings-source-book"]', 'wikipedia-book');
     await select('[data-testid="settings-source-podcast"]', 'wikipedia-podcast');
     await select('[data-testid="settings-source-album"]', 'wikipedia-album');
     await save();
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
-    await screenshot('162-settings-home');
+    await screenshot('162-settings-library');
     await section('hotkeys');
     await $('[aria-label="Search settings"]').setValue('keyboard');
     await expect($('[data-testid="settings-nav-hotkeys"]')).toBeDisplayed();
@@ -58,6 +60,7 @@ describe('focused preferences and file creation', () => {
     await browser.refresh(); await prepareWindow();
     await $('[data-testid="open-settings"]').click(); await section('home');
     await expect($('[data-testid="settings-birth-date"]')).toHaveValue('1995-01-02');
+    await section('library');
     await expect($('[data-testid="settings-source-book"]')).toHaveValue('wikipedia-book');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await browser.setWindowSize(880, 760);
@@ -76,6 +79,19 @@ describe('focused preferences and file creation', () => {
     expect(await $$('[data-testid="add-result"][data-from="openlibrary"]').length).toBe(0);
     await screenshot('165-selected-source');
     await browser.keys(['Escape']);
+  });
+  it('keeps customized task rewards after reopening the vault', async () => {
+    const before = snapshotVault(root);
+    await $('[data-testid="open-settings"]').click(); await section('quests');
+    await select('[aria-label="Task category"]', 'meditation');
+    await $('[aria-label="XP per minute"]').setValue('7');
+    await save();
+    await screenshot('174-settings-quest-rewards');
+    await browser.refresh(); await prepareWindow();
+    await $('[data-testid="open-settings"]').click(); await section('quests');
+    await select('[aria-label="Task category"]', 'meditation');
+    await expect($('[aria-label="XP per minute"]')).toHaveValue('7');
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
   });
   it('creates a visible folder, uses the saved note location, and refuses collisions', async () => {
     const before = snapshotVault(root);

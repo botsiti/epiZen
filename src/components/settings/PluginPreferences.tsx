@@ -4,7 +4,7 @@ import { PreferenceIcon } from './icons';
 import './plugins.css';
 import { DISPLAY_OPTIONS, type PluginDisplays } from '../../lib/pluginDisplay';
 
-interface Props { value: PluginConfiguration; onChange: (next: PluginConfiguration) => void; onSetup?: (section: 'periodic' | 'home' | 'spike') => void }
+interface Props { value: PluginConfiguration; onChange: (next: PluginConfiguration) => void; onSetup?: (section: 'periodic' | 'home' | 'spike' | 'library' | 'quests') => void }
 export function PluginPreferences({ value: configuration, onChange: update, onSetup }: Props) {
   const { enabled: value, checks, home, display } = configuration;
   const onChange = (enabled: PluginSettings) => update({ ...configuration, enabled });
@@ -29,7 +29,7 @@ export function PluginPreferences({ value: configuration, onChange: update, onSe
           <label>Layout<select aria-label={`${plugin.name} layout`} value={display[plugin.id].density} onChange={(event) => onDisplay({ ...display, [plugin.id]: { ...display[plugin.id], density: event.target.value as 'comfortable' | 'compact' } })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
           {DISPLAY_OPTIONS[plugin.id].views && <label>{DISPLAY_OPTIONS[plugin.id].viewLabel}<select aria-label={`${plugin.name} default view`} value={display[plugin.id].defaultView} onChange={(event) => onDisplay({ ...display, [plugin.id]: { ...display[plugin.id], defaultView: event.target.value } })}>{DISPLAY_OPTIONS[plugin.id].views!.map((view) => <option key={view}>{view}</option>)}</select></label>}
           <div className="plugin-checks">{DISPLAY_OPTIONS[plugin.id].sections?.map(({ key, label }) => <label key={key}><input type="checkbox" checked={display[plugin.id].sections[key]} onChange={(event) => onDisplay({ ...display, [plugin.id]: { ...display[plugin.id], sections: { ...display[plugin.id].sections, [key]: event.target.checked } } })} />{label}</label>)}</div>
-          {DISPLAY_OPTIONS[plugin.id].setup && onSetup && <button type="button" className="quiet-button" onClick={() => onSetup(DISPLAY_OPTIONS[plugin.id].setup!)}>{DISPLAY_OPTIONS[plugin.id].setup === 'periodic' ? 'Folders, dates & templates' : plugin.id === 'library' ? 'Sources & artwork' : 'Homepage details'}</button>}
+          {DISPLAY_OPTIONS[plugin.id].setup && onSetup && <button type="button" className="quiet-button" onClick={() => onSetup(DISPLAY_OPTIONS[plugin.id].setup!)}>{DISPLAY_OPTIONS[plugin.id].setup === 'periodic' ? 'Folders, dates & templates' : plugin.id === 'library' ? 'Sources & artwork' : plugin.id === 'quests' ? 'Life spheres & XP' : 'Homepage details'}</button>}
           <p className="preferences-footnote">Display choices are saved for this vault. Your notes stay unchanged.</p>
         </div>}
         {expanded === 'spike' && plugin.id === 'spike' && <div className="plugin-options"><p>Set up your connection, desktop companion and voice.</p><button type="button" className="quiet-button" onClick={() => onSetup?.('spike')}>Set up Spike</button><p className="preferences-footnote">⌘8 opens and closes the Spike sidebar. Disabling the plugin keeps your conversations and preferences.</p></div>}

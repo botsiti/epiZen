@@ -30,6 +30,8 @@ export interface AssistantContext {
   currentPath?: string;
   dailyPath?: string;
   dailyAmbiguous?: boolean;
+  questPresets?: Record<import('../quests').Tier, number>;
+  questAreas?: readonly { name: string }[];
   features?: { periodic: boolean; cbt: boolean; quests: boolean; library: boolean; calendar: boolean };
   periodic: PeriodicSettings;
   recognition?: PeriodicRecognition;

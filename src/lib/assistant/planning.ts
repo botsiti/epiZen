@@ -48,7 +48,7 @@ export function tasksChange(context: AssistantContext, path: string, date: Date,
 export function questChange(context: AssistantContext, path: string, date: Date, before: string | null, quest: NewQuest): ToolResult {
   const text = before ?? builtInPeriodicText(quest.scope === 'weekly' ? 'week' : 'month', date);
   if (parseQuests(path, text).some((existing) => existing.title === quest.title.trim())) throw new Error('A quest with this title already exists. Open it to update its progress.');
-  return { change: noteChange(context, path, before, addQuest(text, questLine(quest)), `Add ${quest.scope} quest: ${quest.title}`), openPath: path };
+  return { change: noteChange(context, path, before, addQuest(text, questLine(quest, context.questAreas)), `Add ${quest.scope} quest: ${quest.title}`), openPath: path };
 }
 export function questTier(value: string): NewQuest['tier'] {
   if (!Object.hasOwn(TIERS, value)) throw new Error('Choose common, rare, epic or legendary.');

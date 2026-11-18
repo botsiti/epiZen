@@ -1,3 +1,4 @@
+import type { ExactXp } from './xp';
 import { category, type Category } from './categories';
 import { parseRecords, type ThoughtRecord } from './cbt';
 import { parseTasks, type Task } from './dashboard';
@@ -14,6 +15,7 @@ export interface TimeBlock {
 export interface DayTask extends Omit<Task, 'category'> {
   /** The task as it reads: no tag, fields or comments. */
   label: string;
+  earnedXp?: number;
   category?: Category;
   blocks: TimeBlock[];
 }
@@ -34,6 +36,9 @@ export interface DayTotals {
 }
 
 export interface Day {
+  exactReward?: ExactXp;
+  areaCredits?: ReadonlyMap<string, ExactXp>;
+  rewardProblem?: string;
   tasks: DayTask[];
   habits: DayTask[];
   /** Every numeric property, by name. */

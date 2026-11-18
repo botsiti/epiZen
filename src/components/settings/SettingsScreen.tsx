@@ -1,8 +1,12 @@
+import { QuestRuleFields } from './QuestRuleFields';
+import { editQuestPreferences, saveQuestPreferences, type QuestPreferences } from '../../lib/questPreferences';
+import type { QuestRulesDocument } from './useQuestRules';
+import type { RewardSettings } from '../../lib/rewardRules';
 import { AppearancePreferences } from './AppearancePreferences';
 import type { Appearance } from '../../lib/appearance';
-import { useId, useRef, useState, type ReactNode, type FormEvent } from 'react';
+import { useId, useMemo, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { today } from '../../lib/dates';
-import { parseBirthDate } from '../../lib/home';
+import { DEFAULT_LIFETIME_YEARS, parseBirthDate, validLifetimeYears } from '../../lib/home';
 import { DEFAULT_RECOGNITION, periodicNamingError, type Period, type PeriodicRecognition, type PeriodicSettings, type PeriodicFeatures } from '../../lib/periodic';
 import type { VaultFile } from '../../lib/api';
 import { PeriodicFolders, PeriodicRecognitionFields } from '../periodic/PeriodicPreferences';
@@ -14,24 +18,31 @@ import { DEFAULT_FILE_PREFERENCES, folderProblem, type FilePreferences } from '.
 import { SettingRow } from './SettingRow';
 import { DailyImport } from './DailyImport';
 import { PreferenceIcon } from './icons';
-import { ALL_PLUGINS, DEFAULT_HOME_SECTIONS, checkInSettings, type PluginConfiguration, type PluginSettings, type HomeSections } from '../../lib/plugins';
+import { ALL_PLUGINS, DEFAULT_HOME_SECTIONS, checkInSettings, setPlugin, HOME_SECTIONS, type PluginConfiguration, type PluginSettings, type HomeSections } from '../../lib/plugins';
 import { PluginPreferences } from './PluginPreferences';
 import { pluginDisplays, type PluginDisplays } from '../../lib/pluginDisplay';
 import './settings.css';
 
 export interface SettingsDraft {
+  rewards?: { revision: number; value: RewardSettings };
   pluginDisplay?: PluginDisplays;
   plugins?: PluginSettings;
   homeSections?: HomeSections;
   recognition?: PeriodicRecognition;
   periodic: PeriodicSettings;
   birthDate: string;
+  lifetimeYears: number;
   podcasts: PodcastSettings;
   features: PeriodicFeatures;
   sources: LibrarySources;
   fileDefaults: FilePreferences;
 }
 interface Props {
+  rewardDocument?: QuestRulesDocument;
+  rewardError?: string;
+  retryRewards?: () => void;
+  rewardDate?: string;
+  observedTags?: string[];
   appearance?: Appearance; onSaveAppearance?: (value: Appearance) => Promise<void>; appearanceError?: string;
   spikeSettings?: (onBack: () => void) => ReactNode;
   pluginDisplay?: PluginDisplays;
@@ -40,6 +51,7 @@ interface Props {
   homeSections?: HomeSections;
   periodic: PeriodicSettings;
   birthDate: string;
+  lifetimeYears?: number;
   podcasts: PodcastSettings;
   folders: string[];
   features: PeriodicFeatures;
@@ -54,14 +66,16 @@ const SECTIONS = [
   { id: 'plugins', title: 'Plugins', group: 'Your vault', hint: 'Start with Markdown. Add only what you use.', words: 'enable disable epiBase bases home library habits cbt check-ins mood energy focus social sleep calendar graph timer spike assistant companion' },
   { id: 'periodic', title: 'Periodic notes', group: 'Your vault', hint: 'A place for your days, weeks and months.', words: 'daily weekly monthly import dates calendar habits thought records format folder' },
   { id: 'files', title: 'Files & folders', group: 'Your vault', hint: 'Choose where new ideas begin.', words: 'new note create folder location' },
-  { id: 'home', title: 'Homepage', group: 'Personal', hint: 'A home for your days and the things you love.', words: 'birth birthday memento books podcasts movies films music albums library sources artwork' },
+  { id: 'home', title: 'Homepage', group: 'Personal', hint: 'A home for your days and the things you love.', words: 'birth birthday memento lifetime years sections dashboard' },
   { id: 'appearance', title: 'Appearance', group: 'Personal', hint: 'A surface for your whole workspace.', words: 'glass transparent opacity animation background theme' },
   { id: 'spike', title: 'Spike', group: 'Personal', hint: 'Your companion, on your terms.', words: 'assistant voice connection api companion desktop microphone' },
+  { id: 'library', title: 'Library', group: 'Personal', hint: 'Choose how to collect and display your media.', words: 'books podcasts movies films music albums library sources artwork' },
+  { id: 'quests', title: 'Quests', group: 'Personal', hint: 'Choose which activities earn XP and where the points go.', words: 'task categories life spheres rewards points productivity focus timer' },
   { id: 'hotkeys', title: 'Hotkeys', group: 'Personal', hint: 'Move through Epizen without leaving the keyboard.', words: 'keyboard shortcuts commands' },
 ] as const;
 type Section = typeof SECTIONS[number]['id'];
 
-export function SettingsScreen({ appearance, onSaveAppearance, appearanceError, spikeSettings, periodic, birthDate, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
+export function SettingsScreen({ rewardDocument, rewardError, retryRewards, rewardDate, observedTags = [], appearance, onSaveAppearance, appearanceError, spikeSettings, periodic, birthDate, lifetimeYears = DEFAULT_LIFETIME_YEARS, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
   const id = useId();
   const heading = useRef<HTMLElement>(null);
   const [section, setSection] = useState<Section>(initialSection ?? (plugins ? 'plugins' : 'periodic'));
@@ -72,6 +86,7 @@ export function SettingsScreen({ appearance, onSaveAppearance, appearanceError, 
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState(periodic);
   const [recognitionDraft, setRecognitionDraft] = useState(recognition ?? DEFAULT_RECOGNITION);
+  const [years, setYears] = useState(String(lifetimeYears));
   const [birth, setBirth] = useState(birthDate);
   const [featureDraft, setFeatureDraft] = useState(features);
   const [podcastDraft, setPodcastDraft] = useState(podcasts);
@@ -79,6 +94,9 @@ export function SettingsScreen({ appearance, onSaveAppearance, appearanceError, 
   const [fileDraft, setFileDraft] = useState(fileDefaults);
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState<{ saved?: boolean; error?: string }>({});
+  const initialRules = useMemo(() => rewardDocument && rewardDate ? editQuestPreferences(rewardDocument.value, rewardDocument.revision, rewardDate) : undefined, [rewardDocument, rewardDate]);
+  const [rulesDraft, setRulesDraft] = useState<QuestPreferences>();
+  const rules = rulesDraft ?? initialRules;
   const [dirty, setDirty] = useState(false);
   const changed = () => { setState({}); setDirty(true); };
   const save = async (event?: FormEvent) => {
@@ -88,13 +106,24 @@ export function SettingsScreen({ appearance, onSaveAppearance, appearanceError, 
     if (broken) { setSection('periodic'); setState({ error: broken }); return; }
     const born = parseBirthDate(birth);
     if (birth.trim() && (!born || born > today())) { setSection('home'); setState({ error: 'Enter a birth date in the past, such as 1990-04-21.' }); return; }
+    if (!validLifetimeYears(Number(years))) { setSection('home'); setState({ error: 'Enter a positive whole number of years within the calendar range.' }); return; }
     const invalidFolder = folderProblem(fileDraft.noteFolder) ?? folderProblem(fileDraft.folderParent);
     if (invalidFolder) { setSection('files'); setState({ error: invalidFolder }); return; }
+    let rewards: SettingsDraft['rewards'];
+    if (rulesDraft) {
+      try {
+        if (rewardDate && rulesDraft.effectiveFrom < rewardDate) throw new Error(`The next available date for XP changes is ${rewardDate}. Save again to apply the rules from that day.`);
+        rewards = { revision: rulesDraft.revision, value: saveQuestPreferences(rulesDraft, observedTags) };
+      } catch (error) {
+        if (rewardDate && rulesDraft.effectiveFrom < rewardDate) setRulesDraft({ ...rulesDraft, effectiveFrom: rewardDate });
+        setSection('quests'); setState({ error: String(error) }); return;
+      }
+    }
     setSaving(true); setState({});
     try {
       const nextFeatures = plugins ? { ...featureDraft, habits: pluginDraft.enabled.habits, thoughtRecords: pluginDraft.enabled.cbt, checkIns: { ...pluginDraft.checks, enabled: pluginDraft.enabled.checkins } } : featureDraft;
-      await onSave({ ...(plugins ? { plugins: pluginDraft.enabled, homeSections: pluginDraft.home, pluginDisplay: pluginDraft.display } : {}), ...(recognition ? { recognition: recognitionDraft } : {}), periodic: draft, birthDate: birth.trim(), podcasts: podcastDraft, features: nextFeatures, sources: sourceDraft, fileDefaults: fileDraft });
-      setDirty(false); setState({ saved: true });
+      await onSave({ ...(rewards ? { rewards } : {}), ...(plugins ? { plugins: pluginDraft.enabled, homeSections: pluginDraft.home, pluginDisplay: pluginDraft.display } : {}), ...(recognition ? { recognition: recognitionDraft } : {}), periodic: draft, birthDate: birth.trim(), lifetimeYears: Number(years), podcasts: podcastDraft, features: nextFeatures, sources: sourceDraft, fileDefaults: fileDraft });
+      setRulesDraft(undefined); setDirty(false); setState({ saved: true });
     } catch (error) { setState({ error: String(error) }); }
     finally { setSaving(false); }
   };
@@ -128,7 +157,12 @@ export function SettingsScreen({ appearance, onSaveAppearance, appearanceError, 
             ] as const).map(([key, label, description]) => <SettingRow key={key} title={label} description={description}><input className="preference-switch" type="checkbox" aria-label={label} data-testid={`settings-feature-${key}`} checked={featureDraft[key]} onChange={(event) => { setFeatureDraft({ ...featureDraft, [key]: event.target.checked }); changed(); }} /></SettingRow>)}</div></section>}
           </>}
           {section === 'home' && <>
-            <section className="preferences-section" data-testid="settings-home"><h3>Time in perspective</h3><div className="preferences-card"><SettingRow title="Birth date" description="Personalize the life and weeks view on your homepage."><input aria-label="Birth date" value={birth} onChange={(event) => { setBirth(event.target.value); changed(); }} placeholder="YYYY-MM-DD" inputMode="numeric" data-testid="settings-birth-date" /></SettingRow></div></section>
+            <section className="preferences-section" data-testid="settings-home"><h3>Time in perspective</h3><div className="preferences-card"><SettingRow title="Birth date" description="Used to calculate how much of your chosen lifetime has passed."><input aria-label="Birth date" value={birth} onChange={(event) => { setBirth(event.target.value); changed(); }} placeholder="YYYY-MM-DD" inputMode="numeric" data-testid="settings-birth-date" /></SettingRow><SettingRow title="Expected years to live" description="The age you want to use for your lifetime progress."><input aria-label="Expected years to live" data-testid="settings-lifetime-years" type="number" min="1" step="1" value={years} onChange={(event) => { setYears(event.target.value); changed(); }} /></SettingRow></div></section>
+            {plugins && <section className="preferences-section"><h3>Homepage sections</h3><div className="preferences-card">{HOME_SECTIONS.map(({ key, label }) => <SettingRow key={key} title={label}><input className="preference-switch" type="checkbox" aria-label={label} checked={pluginDraft.home[key]} onChange={(event) => { setPluginDraft({ ...pluginDraft, home: { ...pluginDraft.home, [key]: event.target.checked } }); changed(); }} /></SettingRow>)}</div></section>}
+          </>}
+          {(section === 'library' || section === 'quests') && plugins && <div className="preferences-card preferences-section"><SettingRow title={`Enable ${active.title}`} description={section === 'quests' ? 'Uses periodic notes for tasks and quests.' : 'Show the library in this vault.'}><input type="checkbox" role="switch" className="preference-switch" aria-label={`Enable ${active.title}`} checked={pluginDraft.enabled[section]} onChange={(event) => { setPluginDraft({ ...pluginDraft, enabled: setPlugin(pluginDraft.enabled, section, event.target.checked) }); changed(); }} /></SettingRow></div>}
+          {section === 'quests' && (rules ? <QuestRuleFields draft={rules} observed={observedTags} onChange={(next) => { setRulesDraft(next); changed(); }} /> : rewardError ? <p role="alert">{rewardError} <button type="button" className="quiet-button" onClick={retryRewards}>Retry XP settings</button></p> : <p role="status">Loading XP settings…</p>)}
+          {section === 'library' && <>
             <section className="preferences-section"><h3>Library sources</h3><p className="preferences-description">Choose where to find titles, details and cover artwork when adding to your library.</p><div className="preferences-card">{([['album', 'Music albums', 'Album and artist information.'], ['film', 'Movies & series', 'Film, director and release information.'], ['book', 'Books', 'Titles, authors and cover artwork.'], ['podcast', 'Podcasts', 'Find a show, then keep your favorite episodes.']] as const).map(([kind, label, description]) => <SettingRow key={kind} title={label} description={description}><select aria-label={`${label} source`} data-testid={`settings-source-${kind}`} value={sourceDraft[kind]} onChange={(event) => { setSourceDraft({ ...sourceDraft, [kind]: event.target.value as Source }); changed(); }}>{SOURCE_OPTIONS[kind].map((source) => <option key={source} value={source}>{SOURCE_NAMES[source]}</option>)}</select></SettingRow>)}</div><p className="preferences-footnote">Search starts when you type in Add. Wikipedia provides podcast show details; enter the episode title yourself. iTunes also lists episodes.</p></section>
             <section className="preferences-section" data-testid="settings-podcasts"><h3>Podcast artwork</h3><div className="preferences-card"><SettingRow title="Artwork for new episodes" description="If your choice is unavailable, use the other artwork."><select aria-label="Artwork for new episodes" data-testid="settings-podcast-artwork" value={podcastDraft.artwork} onChange={(event) => { setPodcastDraft({ artwork: event.target.value === 'episode' ? 'episode' : 'show' }); changed(); }}><option value="show">Show thumbnail</option><option value="episode">Episode artwork</option></select></SettingRow></div></section>
           </>}

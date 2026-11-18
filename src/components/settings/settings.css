@@ -103,3 +103,12 @@
 .appearance-form .appearance-preview { margin-bottom: 0; }
 .appearance-form label:not(.assistant-check) { display: grid; gap: 8px; }
 .appearance-form input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+.quest-settings-heading, .quest-settings-share { display: flex; align-items: center; gap: 8px; }
+.quest-settings-heading { justify-content: space-between; margin-bottom: 12px; }
+.quest-settings-heading h3 { margin: 0; }
+.quest-settings-split { display: grid; gap: 8px; justify-items: start; padding: 16px 0; }
+.quest-settings-split strong { font-size: 13px; font-weight: 500; }
+.quest-settings-share { width: 100%; flex-wrap: wrap; }
+.quest-settings-share select { flex: 1 1 130px; min-width: 0; }
+.quest-settings-share input { width: 70px; }

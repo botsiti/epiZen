@@ -3,7 +3,7 @@ import { ActionNeedsReview, continueRun, parseAgentResponse, startRun } from '..
 import { withSavedCover } from '../../lib/assistant/changes';
 import { assistantInstructions, readAssistantGuidance } from '../../lib/assistant/context';
 import { conversationMarkdown, newConversation, parseConversation, parseConversationList, recentContext, stoppedRun, type Conversation, type ConversationAction, type ConversationSummary } from '../../lib/assistant/conversation';
-import { ASSISTANT_TOOLS, assertToolAvailable, createToolHandler } from '../../lib/assistant/tools';
+import { assistantTools, assertToolAvailable, createToolHandler } from '../../lib/assistant/tools';
 import type { AgentRun, AssistantContext, AssistantProvider, ToolCall, ToolResult } from '../../lib/assistant/types';
 import { KINDS, noteFileName } from '../../lib/library';
 import { parseSearch, readDetails, searchRequests, type Service } from '../../lib/lookup';
@@ -218,7 +218,7 @@ export class AssistantController {
           const context = this.context();
           const guidance = await readAssistantGuidance(context, api.assistantReadNote);
           this.active(signal);
-          const raw = await api.assistantRespond({ provider: context.settings.provider, model: context.settings.model, effort: context.settings.effort, instructions: assistantInstructions(context, guidance), input, tools: [...ASSISTANT_TOOLS, { type: 'web_search' }] }, signal);
+          const raw = await api.assistantRespond({ provider: context.settings.provider, model: context.settings.model, effort: context.settings.effort, instructions: assistantInstructions(context, guidance), input, tools: [...assistantTools(context.questAreas), { type: 'web_search' }] }, signal);
           this.active(signal); return parseAgentResponse(raw);
         },
         execute: (call, signal) => this.execute(call, signal),

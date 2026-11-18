@@ -3,15 +3,15 @@ import { PLUGINS, type PluginId } from './plugins';
 
 export interface PluginDisplay { density: 'comfortable' | 'compact'; defaultView: string; sections: Record<string, boolean> }
 export type PluginDisplays = Record<PluginId, PluginDisplay>;
-interface DisplayOptions { views?: readonly string[]; viewLabel?: string; sections?: readonly { key: string; label: string }[]; setup?: 'periodic' | 'home' }
+interface DisplayOptions { views?: readonly string[]; viewLabel?: string; sections?: readonly { key: string; label: string }[]; setup?: 'periodic' | 'home' | 'library' | 'quests' }
 /** The plugin catalog's presentation contract. Every option is consumed by its owning screen. */
 export const DISPLAY_OPTIONS: Record<PluginId, DisplayOptions> = {
-  home: { setup: 'home' }, bases: {}, library: { setup: 'home' }, graph: {}, spike: {},
+  home: { setup: 'home' }, bases: {}, library: { setup: 'library' }, graph: {}, spike: {},
   periodic: { views: ['Remember last tab', 'Overview', 'Tasks', 'Habits', 'Quests', 'CBT'], viewLabel: 'Open daily notes on', setup: 'periodic' },
   checkins: {},
   habits: { views: ['Active', 'Archived', 'History'], viewLabel: 'Initial collection', sections: [{ key: 'today', label: 'Today’s progress' }] },
   cbt: { sections: [{ key: 'emotions', label: 'Emotion tags on thought records' }] },
-  quests: { sections: [{ key: 'progress', label: 'Quest XP and progress summary' }] },
+  quests: { setup: 'quests', sections: [{ key: 'progress', label: 'Quest XP and progress summary' }] },
   statistics: { views: ['Monthly', 'Weekly', 'Yearly'], viewLabel: 'Initial analysis range', sections: [{ key: 'activity', label: 'Focus activity map' }, { key: 'habits', label: 'Habit history' }] },
   calendar: { views: ['Remember last view', 'Week', 'Day'], viewLabel: 'Initial calendar view' },
   timer: {},

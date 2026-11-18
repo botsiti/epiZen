@@ -92,23 +92,19 @@ describe('the homepage', () => {
     expect(screen.getByTestId('home')).toHaveTextContent('106 notes · 10 folders · 27 images');
   });
 
-  it('counts the year and month, and asks for a birth date before counting the weeks', () => {
+  it('shows year and month before a birth date is supplied', () => {
     render(<Home {...props()} />);
-    const memento = screen.getByTestId('memento');
-    expect(memento).toHaveTextContent('Add your birth date in Settings to count the weeks.');
-    expect(memento).not.toHaveTextContent('Till 30');
+    expect(screen.getByTestId('memento')).toHaveTextContent('Add your birth date');
+    expect(screen.getByTestId('memento').querySelectorAll('li')).toHaveLength(2);
   });
 
-  it('counts life till 30 from the birth date, and opens the weeks on a click', async () => {
-    const user = userEvent.setup();
-    render(<Home {...props({ birthDate: day(1998, 2, 21) })} />);
+  it('shows a single lifetime row with the chosen horizon and percentage', () => {
+    render(<Home {...props({ birthDate: day(1986, 8, 29), lifetimeYears: 100 })} />);
     const memento = screen.getByTestId('memento');
-    expect(memento).toHaveTextContent('Till 30');
-    expect(memento).toHaveTextContent('539 days · 1.48 y left');
-    expect(screen.queryByTestId('weeks-grid')).toBeNull();
-    await user.click(screen.getByTestId('weeks-toggle'));
-    expect(screen.getByTestId('weeks-grid').querySelectorAll('rect')).toHaveLength(1560);
-    expect(screen.getByTestId('weeks-grid').querySelectorAll('rect.is-now')).toHaveLength(1);
+    expect(memento).toHaveTextContent('100-year lifetime');
+    expect(memento.querySelector('[data-span="Lifetime"]')).toHaveTextContent('40.0%');
+    expect(memento.querySelectorAll('li')).toHaveLength(3);
+    expect(within(memento).queryByRole('button')).toBeNull();
   });
 
   it("lists today's tasks and opens today's, this week's and this month's notes", async () => {

@@ -69,3 +69,34 @@ it('opens Spike setup from its plugin while retaining other unsaved preferences'
   await user.click(screen.getByTestId('settings-save'));
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ plugins: { ...NO_PLUGINS, spike: true, library: true } }));
 });
+
+it('edits life spheres and task rules from the quest plugin and keeps the draft across pages and a failed save', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockRejectedValueOnce(new Error('XP settings are busy')).mockResolvedValue(undefined);
+  render(<SettingsScreen rewardDocument={{ revision: 0 }} rewardDate="2026-11-18" plugins={NO_PLUGINS} periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} birthDate="" podcasts={{ artwork: 'show' }} folders={[]} onSave={save} />);
+  await user.click(screen.getByRole('button', { name: 'Configure Quests' }));
+  await user.click(screen.getByRole('button', { name: 'Life spheres & XP' }));
+  await user.click(screen.getByRole('switch', { name: 'Enable Quests' }));
+  await user.click(screen.getByRole('button', { name: 'Add sphere' }));
+  await user.type(screen.getByLabelText('Sphere name'), 'Music');
+  await user.click(screen.getByRole('button', { name: 'Add category' }));
+  await user.type(screen.getByLabelText('Task tag'), 'piano');
+  await user.clear(screen.getByLabelText('XP per minute'));
+  await user.type(screen.getByLabelText('XP per minute'), '3');
+  await user.selectOptions(screen.getByLabelText('Reward sphere 1'), within(screen.getByLabelText('Reward sphere 1')).getByRole('option', { name: 'Music' }));
+  await user.clear(screen.getByLabelText('rare quest XP'));
+  await user.type(screen.getByLabelText('rare quest XP'), '375');
+  await user.click(screen.getByTestId('settings-nav-library'));
+  await user.click(screen.getByRole('switch', { name: 'Enable Library' }));
+  await user.click(screen.getByTestId('settings-nav-home'));
+  expect(screen.queryByText('Library sources')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('checkbox', { name: 'Recent library' }));
+  await user.click(screen.getByTestId('settings-save'));
+  expect(screen.getByRole('alert')).toHaveTextContent('XP settings are busy');
+  await user.click(screen.getByTestId('settings-save'));
+  const saved = save.mock.calls[1]![0] as SettingsDraft;
+  expect(saved.plugins).toMatchObject({ quests: true, periodic: true, library: true });
+  expect(saved.homeSections?.library).toBe(false);
+  const prefs = saved.rewards!.value, piano = prefs.categories.find((entry) => entry.tag === 'piano')!, music = prefs.areas.find((entry) => entry.name === 'Music')!;
+  expect(prefs.questRewards.presets.rare).toBe(375);
+  expect(prefs.policies[0]!.categories[piano.id]).toMatchObject({ rateHundredths: 300, shares: [{ area: music.id, basisPoints: 10000 }] });
+});

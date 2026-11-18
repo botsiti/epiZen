@@ -88,7 +88,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   the Obsidian homepage, "Kaizen cockpit". The hero: the level's title and "Kaizen profile" as the
   kicker, `Level N` in the serif, one line, and a 2×2 block of Level (a thin bar to the next),
   Streak, Life XP and Today; the vault's name and counts faint at its foot. Then the memento mori
-  (the year, the month and, with a birth date from Settings, life till 30, its weeks behind a click);
+  (the year, the month and, with a birth date from Settings, the percentage of a chosen lifetime already lived);
   a row of three cards: the last seven days' averages, their focus as bars (pointing at a day shows
   its categories), and today's tasks with Today, Week and Month; the life spheres, a segment per
   level, beside the lead sphere and the week's sport floor; and one glass shelf with the ten most recently dated library entries, the rating in accent on a
@@ -126,7 +126,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   in accent, the note's folder faint.
 - **Forms**: a label above each field in the label style. Fields are surface fills with a hairline
   that turns accent on focus.
-- **Settings**: a quiet, readable preferences page with built-in periodic features, future note locations and naming, homepage and podcast preferences. Naming patterns apply only to new files. Existing notes are recognized from their dates and known older names; ambiguous numeric dates have an explicit day/month order, and unusual names can be linked to a date without changing Markdown. Duplicate dates require choosing the calendar note. These choices belong to the individual vault. Habits and thought records can be hidden without changing notes.
+- **Settings**: a quiet, readable preferences page with built-in periodic features, future note locations and naming, homepage, library and quest preferences. Naming patterns apply only to new files. Existing notes are recognized from their dates and known older names; ambiguous numeric dates have an explicit day/month order, and unusual names can be linked to a date without changing Markdown. Duplicate dates require choosing the calendar note. These choices belong to the individual vault. Habits and thought records can be hidden without changing notes.
 - **Vault setup**: a short, skippable questionnaire asks whether daily notes already exist and lets the user choose their folders. A new vault previews its calendar (year, days, weeks, months) and five library shelves before creating ordinary Markdown notes. Attachments are created lazily in `_attachments` beside library notes. No imported note is converted or renamed.
 - **Podcast settings**: one artwork preference for newly added episodes, defaulting to the show's
   thumbnail. Episode artwork can be chosen instead; either falls back to the other when missing.

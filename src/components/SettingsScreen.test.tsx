@@ -52,28 +52,28 @@ describe('podcast settings', () => {
     const onSave = vi.fn(() => Promise.resolve());
     const props = { periodic: DEFAULT_PERIODIC, birthDate: '1998-03-21', podcasts: podcastSettings(undefined), folders: [], features: DEFAULT_PERIODIC_FEATURES, onSave };
     const view = render(<SettingsScreen {...props} />);
-    await user.click(screen.getByTestId('settings-nav-home'));
+    await user.click(screen.getByTestId('settings-nav-library'));
     expect(screen.getByRole('combobox', { name: 'Artwork for new episodes' })).toHaveValue('show');
     await user.selectOptions(screen.getByTestId('settings-podcast-artwork'), 'episode');
     await user.click(screen.getByTestId('settings-save'));
     await screen.findByText('Saved');
-    expect(onSave).toHaveBeenCalledWith({ periodic: DEFAULT_PERIODIC, birthDate: '1998-03-21', podcasts: { artwork: 'episode' }, features: DEFAULT_PERIODIC_FEATURES, sources: DEFAULT_SOURCES, fileDefaults: DEFAULT_FILE_PREFERENCES });
+    expect(onSave).toHaveBeenCalledWith({ periodic: DEFAULT_PERIODIC, lifetimeYears: 80, birthDate: '1998-03-21', podcasts: { artwork: 'episode' }, features: DEFAULT_PERIODIC_FEATURES, sources: DEFAULT_SOURCES, fileDefaults: DEFAULT_FILE_PREFERENCES });
     view.unmount();
     render(<SettingsScreen {...props} podcasts={podcastSettings({ artwork: 'episode' })} />);
-    await user.click(screen.getByTestId('settings-nav-home'));
+    await user.click(screen.getByTestId('settings-nav-library'));
     expect(screen.getByTestId('settings-podcast-artwork')).toHaveValue('episode');
-    await user.click(screen.getByTestId('settings-nav-home'));
+    await user.click(screen.getByTestId('settings-nav-library'));
     await user.selectOptions(screen.getByTestId('settings-podcast-artwork'), 'show');
     await user.click(screen.getByTestId('settings-save'));
     await screen.findByText('Saved');
-    expect(onSave).toHaveBeenLastCalledWith({ periodic: DEFAULT_PERIODIC, birthDate: '1998-03-21', podcasts: { artwork: 'show' }, features: DEFAULT_PERIODIC_FEATURES, sources: DEFAULT_SOURCES, fileDefaults: DEFAULT_FILE_PREFERENCES });
+    expect(onSave).toHaveBeenLastCalledWith({ periodic: DEFAULT_PERIODIC, lifetimeYears: 80, birthDate: '1998-03-21', podcasts: { artwork: 'show' }, features: DEFAULT_PERIODIC_FEATURES, sources: DEFAULT_SOURCES, fileDefaults: DEFAULT_FILE_PREFERENCES });
   });
 
   it('keeps the chosen artwork after a failed save and lets the user retry', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockRejectedValueOnce(new Error('Settings could not be written')).mockResolvedValueOnce(undefined);
     render(<SettingsScreen periodic={DEFAULT_PERIODIC} birthDate="" podcasts={{ artwork: 'episode' }} folders={[]} features={DEFAULT_PERIODIC_FEATURES} onSave={onSave} />);
-    await user.click(screen.getByTestId('settings-nav-home'));
+    await user.click(screen.getByTestId('settings-nav-library'));
     await user.selectOptions(screen.getByTestId('settings-podcast-artwork'), 'show');
     await user.click(screen.getByTestId('settings-save'));
     await screen.findByText('Error: Settings could not be written');
@@ -106,11 +106,12 @@ it('keeps drafts across sections and saves the selected sources and creation loc
   render(<SettingsScreen periodic={DEFAULT_PERIODIC} birthDate="" podcasts={{ artwork: 'show' }} folders={['Inbox']} features={DEFAULT_PERIODIC_FEATURES} onSave={onSave} />);
   expect(screen.queryByLabelText('Birth date')).not.toBeInTheDocument();
   await user.type(screen.getByLabelText('Search settings'), 'music');
-  expect(screen.getByTestId('settings-nav-home')).toBeVisible();
+  expect(screen.getByTestId('settings-nav-library')).toBeVisible();
   expect(screen.queryByTestId('settings-nav-periodic')).not.toBeInTheDocument();
   await user.clear(screen.getByLabelText('Search settings'));
   await user.click(screen.getByTestId('settings-nav-home'));
   await user.type(screen.getByLabelText('Birth date'), '1995-01-02');
+  await user.click(screen.getByTestId('settings-nav-library'));
   await user.selectOptions(screen.getByLabelText('Books source'), 'wikipedia-book');
   await user.selectOptions(screen.getByLabelText('Podcasts source'), 'wikipedia-podcast');
   await user.click(screen.getByTestId('settings-nav-files'));
