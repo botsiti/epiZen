@@ -2205,15 +2205,15 @@ describe('the demo vault', () => {
     const prior = formatDate(yesterday, 'YYYY-MM-DD');
     if (yesterday.getMonth() !== localToday().getMonth()) await $('[aria-label="Previous habit month"]').click();
     await $('.habits-calendar-day[data-date="' + prior + '"]').click();
-    await $('button=Mark ' + label + ' complete').click();
+    await $('button*=Mark ' + label + ' complete').click();
     await expect(detail).toHaveText(expect.stringContaining('10 XP earned'));
     await expect($('.habits-calendar-day[data-date="' + prior + '"]')).toHaveAttribute('data-state', 'Completed');
     await screenshot('151-habit-backfilled-calendar');
     await $('.habits-today').$('button=Today').click();
-    await $('button=Mark today complete').click();
+    await $('button*=Mark today complete').click();
     await expect(detail).toHaveText(expect.stringContaining('15 XP earned'));
     await $('.habit-week-chart button[data-date="' + prior + '"]').click();
-    await $('button=Completed ' + label).click();
+    await $('button*=Completed ' + label).click();
     await $('.habits-today').$('button=Today').click();
     await expect(detail).toHaveText(expect.stringContaining('10 XP earned'));
     await detail.$('button=Open daily note').click();
