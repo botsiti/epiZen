@@ -45,6 +45,8 @@ Daily records use Obsidian-compatible callouts and inline fields:
 
 Older habit records without IDs are matched by their names and aliases. Do not create another
 habit for a return to an old routine: reactivate the existing definition to keep one history.
+
+Choose **Delete** on an active habit to remove its check-ins from the daily notes and move its definition to the vault trash. Confirm the selected habit in the dialog. XP from those check-ins is removed when totals refresh. Use **Archive** to stop a routine and keep its history.
 Conflicting IDs, names, malformed schedules and duplicate daily records are reported, rather
 than silently edited. If you rename a definition by hand, keep the former name in `aliases`.
 
@@ -64,7 +66,7 @@ Habit XP counts in daily, weekly, monthly, and life totals. Assign a life area t
 
 ## Check-ins, targets and measurements
 
-Choose **Track by** when creating a habit. A daily check-in records completion with one click. A daily target records progress in your chosen unit, with a +1 shortcut and an editable value. Reaching the target completes the day. A measured habit records a value, including zero. Its trend connects consecutive recorded days. Open **Color and icon** during creation, or choose **Personalize** on an existing routine.
+Choose **Track by** when creating a habit. A daily check-in records completion with one click. A daily target records progress in your chosen unit, with a +1 shortcut and an editable value. Reaching the target completes the day. A measured habit records a value, including zero. Its trend connects consecutive recorded days. Open **Color and icon** during creation, or choose **Personalize** in Habits or its settings. Search by an object or an activity, such as “bicycle”, “hydration”, or “morning”.
 
 The seven-day strip shows completion rings across routines. Calendar shows each day’s check-in and Overview shows twenty weeks of activity. The fourteen-day goal chart shows progress against the target, while the measured-value chart shows change over time. Recorded values are also available as a text list.
 
@@ -75,6 +77,9 @@ Choose **Export journal** to save or copy a Markdown report. The report includes
 
 ## Icon artwork
 
-The nine illustrated icons in `src/components/habits/icons/` were generated with built-in ImageGen from this prompt, then split into 96px transparent assets.
+The first nine illustrated icons in `src/components/habits/icons/` were generated with built-in ImageGen from this prompt, then split into 96px transparent assets.
 
 > Use case: stylized-concept. Create a single square sprite sheet for the Epizen desktop habit journal: exactly 3 columns by 3 rows of isolated small habit emblems, equal cell dimensions, icons centered at 1/6, 1/2, 5/6 of each axis with generous transparent gutters. Reading order: sunrise behind a fir tree, crescent moon, teacup with leaf, candle flame, hourglass, open book, simple dumbbell, lotus, new sprout. Refined softly lit enamel pins with subtle bronze rims, distinct muted peach, gold, sage, lavender, and teal colors. Bold readable silhouettes at 32 pixels on dark navy or ivory UI. No circular background tiles, no words, no frames, no grid lines, actual transparent canvas.
+
+
+Two additional sheets used the built-in ImageGen tool. Each prompt asked for a precise 4 × 4 grid with transparent gutters and sixteen small enamel pins in muted peach, gold, sage, lavender and teal. The wellbeing sheet used a glass of water, running shoe, apple, toothbrush, alarm clock, stretching figure, bicycle, hiking boots, capsule, soup, sugar shield, jump rope, pillow, sunrise, goggles and orange. The second sheet used headphones, paintbrush, guitar, camera, piano, cactus, laundry, broom, notebook, laptop, coins, envelope, chess knight, paw print, linked hearts and compass. The crops are in the same icon folder as the original set.

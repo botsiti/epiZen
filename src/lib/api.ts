@@ -56,6 +56,8 @@ export interface NoteEdit { path: string; expected: string; text: string }
 export const renameNote = (path: string, destination: string, expected: string, edits: NoteEdit[]) => invoke<void>('rename_note', { path, destination, expected, edits });
 export const revealNote = (path: string) => invoke<void>('reveal_note', { path });
 export const trashNote = (path: string, expected: string) => invoke<string>('trash_note', { path, expected });
+export const trashNoteWithEdits = (root: string, path: string, expected: string, edits: NoteEdit[]) =>
+  invoke<string>('trash_note_with_edits', { root, path, expected, edits });
 export const writeNote = (path: string, text: string, expected: string) =>
   invoke<void>('write_note', { path, text, expected });
 

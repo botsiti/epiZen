@@ -545,11 +545,6 @@
   grid-template-columns: minmax(0, 1fr) 340px;
 }
 
-.library-hero .hero-summary {
-  max-width: 420px;
-  font-size: 17px;
-}
-
 /* Add, for every kind on every tab: the tab's own kind in the primary button, the rest quiet beside it. */
 .library-adds {
   display: flex;
@@ -1141,11 +1136,6 @@
 
 .media-main {
   min-width: 0;
-}
-
-.media-kicker-date {
-  color: var(--text-faint);
-  letter-spacing: 0.08em;
 }
 
 .media-title {

@@ -144,3 +144,40 @@ it('keeps a chosen life area and custom league after a failed save', async () =>
   expect(reward).toMatchObject({ base: 10, area: 'personal-growth' });
   expect(reward.leagues).toContainEqual({ days: 21, percent: 200 });
 });
+
+it('finds generated icons by keyword and saves a selection through the appearance dialog', async () => {
+  const user = userEvent.setup();
+  const save = vi.fn<NonNullable<HabitsPageProps['onPersonalize']>>().mockResolvedValue(undefined);
+  render(<HabitsPage {...props()} onPersonalize={save} />);
+  await user.click(screen.getByRole('button', { name: 'Personalize' }));
+  const search = screen.getByRole('searchbox', { name: 'Search icons' });
+  await user.type(search, 'unmatched phrase');
+  expect(screen.getByText('No matching icons.')).toBeVisible();
+  await user.clear(search);
+  await user.type(search, 'walk steps');
+  expect(screen.queryByRole('button', { name: 'Open book' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Running shoe' }));
+  expect(screen.getByRole('button', { name: 'Running shoe' })).toHaveAttribute('aria-pressed', 'true');
+  await user.click(screen.getByRole('button', { name: 'Save appearance' }));
+  expect(save.mock.lastCall?.[1]).toEqual({ color: undefined, icon: 'running-shoe' });
+});
+
+it('confirms a specific habit, preserves it on cancellation and handles conflicts', async () => {
+  const user = userEvent.setup();
+  const remove = vi.fn<NonNullable<HabitsPageProps['onDelete']>>().mockRejectedValueOnce(new Error('A daily note changed.'));
+  const p = props();
+  const view = render(<HabitsPage {...p} onDelete={remove} />);
+  await user.click(screen.getByRole('button', { name: 'Delete No sweets' }));
+  await user.click(within(screen.getByRole('dialog', { name: 'Delete No sweets?' })).getByRole('button', { name: 'Cancel' }));
+  expect(remove).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Delete No sweets' }));
+  await user.click(screen.getByRole('button', { name: 'Delete habit' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('A daily note changed.');
+  expect(remove).toHaveBeenCalledWith(p.habits[0]);
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  const habit = p.habits[0]!;
+  const archived = readHabit(habit.path!, changeHabit(habit.source!, habit, { kind: 'archive', date: '2026-11-02' }))!;
+  view.rerender(<HabitsPage {...p} habits={[archived]} onDelete={remove} />);
+  await user.click(screen.getByRole('button', { name: 'Archived1' }));
+  expect(screen.queryByRole('button', { name: 'Delete No sweets' })).toBeNull();
+});

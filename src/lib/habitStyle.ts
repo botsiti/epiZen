@@ -1,14 +1,10 @@
 import { isScalar, parseDocument } from 'yaml';
+import { habitIconOptions } from './habitIcons';
 import { habitColor } from './categories';
 import { lineEnding } from './text';
 
 export interface HabitStyle { color?: string; icon?: string }
 export const habitColors = { Sage: '#8fbcaa', Blue: '#6fa5e6', Teal: '#52bfc4', Amber: '#dcbc72', Peach: '#dfa163', Rose: '#e06681', Violet: '#b48ede' };
-export const illustratedHabitIcons = {
-  Sunrise: 'sunrise', Crescent: 'moon', Tea: 'tea', Candle: 'candle', Hourglass: 'hourglass',
-  'Open book': 'book', Dumbbell: 'strength', Lotus: 'lotus', Sprout: 'sprout',
-};
-export const habitIcons = { Leaf: '🌿', Water: '💧', Book: '📖', Walk: '👟', Mind: '🧠', Moon: '🌙', Sun: '☀️', Strength: '💪', Music: '🎵', Pen: '✍️', Heart: '❤️', Mountain: '🏔️' };
 export function habitTone(id: string, color?: string) {
   const hash = Array.from(id).reduce((value, c) => (value * 31 + c.codePointAt(0)!) >>> 0, 0);
   return color ?? habitColor(hash);
@@ -17,7 +13,7 @@ export function habitTone(id: string, color?: string) {
 export function readHabitStyle(source: { color?: unknown; icon?: unknown }): HabitStyle {
   const style: HabitStyle = {};
   if (typeof source.color === 'string' && /^#[\da-f]{6}$/i.test(source.color)) style.color = source.color;
-  if (typeof source.icon === 'string' && [...Object.values(habitIcons), ...Object.values(illustratedHabitIcons)].includes(source.icon)) style.icon = source.icon;
+  if (typeof source.icon === 'string' && habitIconOptions.some(([id]) => id === source.icon)) style.icon = source.icon;
   return style;
 }
 

@@ -37,7 +37,7 @@ export function MonthlyReview({ path, text, tab, files = [], onSave, onRecover, 
     </div>
     <div hidden={tab !== 'Wheel of Life'}>
       <section className="card glass monthly-areas">
-        <div><p className="kicker">A monthly check-in</p><h2>Wheel of Life</h2><p className="monthly-hint">Rate each area from 0 to 10 and capture what shaped it this month.</p></div>
+        <div><h2>Wheel of Life</h2><p className="monthly-hint">Rate each area from 0 to 10 and capture what shaped it this month.</p></div>
         <div className="monthly-area-layout"><div><WheelOfLife ratings={ratings} selected={sphere} onSelect={setSphere} /><div className="monthly-area-list" aria-label="Choose a life area">
           {SPHERES.map((item) => {
             const field = `sphere:${item.name}` as MonthlyField;
@@ -194,7 +194,7 @@ function ReviewField({ field, path, text, onSave, onRecover, title, hint, sphere
   const label = sphere ? `${title} reflection` : field === 'expenses' ? 'Money reflection' : title;
   const hasImages = field === 'expenses' && active && expensePhotos(draft).length > 0;
   return <div className={sphere ? 'monthly-field is-area' : field === 'expenses' ? 'card glass monthly-field money-field' : 'card glass monthly-field'} data-testid="monthly-field" data-field={field}>
-    <div className="monthly-field-head"><div>{field === 'expenses' && <p className="kicker">Monthly finances</p>}<h2>{title}</h2><p className="monthly-hint">{hint}</p></div><span role="status" className={status.failed ? 'monthly-status is-error' : 'monthly-status'}>{status.message}</span></div>
+    <div className="monthly-field-head"><div><h2>{title}</h2><p className="monthly-hint">{hint}</p></div><span role="status" className={status.failed ? 'monthly-status is-error' : 'monthly-status'}>{status.message}</span></div>
     {sphere && <div className="wheel-rating"><div className="wheel-rating-heading"><span>How fulfilled do you feel?</span><strong>{current?.rating || '—'}<small> / 10</small></strong></div>
       <div className="wheel-rating-steps" role="group" aria-label={`${title} rating`}>{Array.from({ length: 11 }, (_, i) => <button type="button" key={i} aria-label={`Rate ${title} ${i} out of 10`} aria-pressed={current?.rating === String(i)} onClick={() => update(sphereValue(String(i), current?.notes ?? ''))}>{i}</button>)}</div>
       <div className="wheel-rating-captions"><span>Needs attention</span><button type="button" onClick={() => update(sphereValue('', current?.notes ?? ''))}>Clear rating</button><span>Fulfilled</span></div>

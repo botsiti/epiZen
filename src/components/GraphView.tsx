@@ -324,7 +324,7 @@ export function GraphView({ graph, onOpen, local }: Props) {
           </button>
         )}
       </form>
-      <p className="graph-hint">Scroll to zoom · drag to move · click a note to open it</p>
+      <p className="graph-hint">Scroll to zoom. Drag to pan. Click a note to open it.</p>
     </div>
   );
 }

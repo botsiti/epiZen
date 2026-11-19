@@ -217,3 +217,24 @@ fn renaming_and_duplicating_a_note_changes_only_the_requested_paths() {
     expected.insert(PathBuf::from(duplicate), bytes);
     assert_eq!(snapshot(&copy), expected);
 }
+
+#[test]
+fn deleting_a_habit_changes_only_its_checkins_and_moves_its_definition() {
+    let (_dir, copy) = copy_of_demo_vault();
+    let vault = Vault::open(&copy).unwrap();
+    let definition = "Habits/Walk.md";
+    let source = "---\ntype: habit\nhabit_id: habit-walk-001\n---\n# Walk\n";
+    vault.create_note(definition, source).unwrap();
+    let day = "Calendar/2026/days 2026/19.09.2026.md";
+    let before = vault.read_note(day).unwrap();
+    let checkin = "> - [x] Walk [habit::habit-walk-001]\n";
+    let recorded = format!("{before}\n\n> [!habits]\n{checkin}");
+    vault.write_note(day, &recorded, &before).unwrap();
+    let mut expected = snapshot(&copy);
+    let edit = NoteEdit { path: day.into(), expected: recorded.clone(), text: recorded.replace(checkin, "") };
+    let trashed = vault.trash_note_with_edits(definition, source, std::slice::from_ref(&edit)).unwrap();
+    expected.remove(Path::new(definition));
+    expected.insert(PathBuf::from(trashed), source.as_bytes().to_vec());
+    expected.insert(PathBuf::from(day), edit.text.into_bytes());
+    assert_eq!(snapshot(&copy), expected);
+}

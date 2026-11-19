@@ -53,7 +53,7 @@ pub struct NoteText {
     pub text: String,
 }
 
-/// One source-preserving link update, conditional on the text the frontend parsed.
+/// One note edit, conditional on the text the frontend parsed.
 #[derive(Debug, Deserialize)]
 pub struct NoteEdit {
     pub path: String,
@@ -351,7 +351,7 @@ impl Vault {
         self.rename_note_and_links_with(path, destination, expected, edits, |_| {})
     }
 
-    fn rename_note_and_links_with(&self, path: &str, destination: &str, expected: &str, edits: &[NoteEdit], mut before_step: impl FnMut(usize)) -> Result<(), VaultError> {
+    fn rename_note_and_links_with(&self, path: &str, destination: &str, expected: &str, edits: &[NoteEdit], before_step: impl FnMut(usize)) -> Result<(), VaultError> {
         let source = self.resolve(path, FileKind::Note)?;
         if path == destination || plain_path(path, FileKind::Note)?.parent() != plain_path(destination, FileKind::Note)?.parent() {
             return Err(VaultError::InvalidPath(destination.to_owned()));
@@ -362,11 +362,38 @@ impl Vault {
         {
             return Err(VaultError::Exists(destination.to_owned()));
         }
-        if fs::read(&source)? != expected.as_bytes() { return Err(VaultError::Changed(path.to_owned())); }
+        let renamed_text = edits.iter().find(|edit| edit.path == path).map_or(expected, |edit| edit.text.as_str());
+        self.edit_before_move(&source, Some(path), expected, edits, before_step, || {
+            self.rename_note(path, destination, renamed_text)
+        })
+    }
+
+    /// Move a definition to trash only after all its companion edits succeed.
+    pub fn trash_note_with_edits(&self, path: &str, expected: &str, edits: &[NoteEdit]) -> Result<String, VaultError> {
+        self.trash_note_with_edits_at(path, expected, edits, |_| {})
+    }
+
+    fn trash_note_with_edits_at(&self, path: &str, expected: &str, edits: &[NoteEdit], before_step: impl FnMut(usize)) -> Result<String, VaultError> {
+        let source = self.resolve(path, FileKind::Note)?;
+        self.edit_before_move(&source, None, expected, edits, before_step, || self.trash_note(path, expected))
+    }
+
+    fn edit_before_move<T>(
+        &self,
+        source: &Path,
+        allowed_source_edit: Option<&str>,
+        expected: &str,
+        edits: &[NoteEdit],
+        mut before_step: impl FnMut(usize),
+        move_source: impl FnOnce() -> Result<T, VaultError>,
+    ) -> Result<T, VaultError> {
+        if fs::read(source)? != expected.as_bytes() {
+            return Err(VaultError::Changed(self.relative(source).unwrap_or_default()));
+        }
         let mut seen = std::collections::HashSet::new();
         for edit in edits {
             let real = self.resolve(&edit.path, FileKind::Note)?;
-            if !seen.insert(real.clone()) || (real == source && (edit.path != path || edit.expected != expected)) {
+            if !seen.insert(real.clone()) || (real == source && (Some(edit.path.as_str()) != allowed_source_edit || edit.expected != expected)) {
                 return Err(VaultError::InvalidPath(edit.path.clone()));
             }
             let mut checked = self.root.clone();
@@ -380,19 +407,15 @@ impl Vault {
         for (index, edit) in edits.iter().enumerate() {
             before_step(index);
             if let Err(error) = self.write_note(&edit.path, &edit.text, &edit.expected) {
-                return Err(self.rollback_link_edits(&applied, error));
+                return Err(self.rollback_note_edits(&applied, error));
             }
             applied.push(edit);
         }
         before_step(edits.len());
-        let renamed_text = edits.iter().find(|edit| edit.path == path).map_or(expected, |edit| edit.text.as_str());
-        if let Err(error) = self.rename_note(path, destination, renamed_text) {
-            return Err(self.rollback_link_edits(&applied, error));
-        }
-        Ok(())
+        move_source().map_err(|error| self.rollback_note_edits(&applied, error))
     }
 
-    fn rollback_link_edits(&self, applied: &[&NoteEdit], cause: VaultError) -> VaultError {
+    fn rollback_note_edits(&self, applied: &[&NoteEdit], cause: VaultError) -> VaultError {
         let mut conflicts = Vec::new();
         for edit in applied.iter().rev() {
             if self.write_note(&edit.path, &edit.expected, &edit.text).is_err() { conflicts.push(edit.path.as_str()); }
@@ -1529,4 +1552,25 @@ mod tests {
         assert_eq!(twin.name(), vault.name());
         assert_ne!(twin.root(), vault.root());
     }
+    #[test]
+    fn trash_with_edits_restores_prior_days_after_a_conflict() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = Vault::open(dir.path()).unwrap();
+        vault.create_note("habit.md", "definition").unwrap();
+        vault.create_note("day-1.md", "keep 1 and check-in").unwrap();
+        vault.create_note("day-2.md", "keep 2 and check-in").unwrap();
+        let edits = [
+            NoteEdit { path: "day-1.md".into(), expected: "keep 1 and check-in".into(), text: "keep 1".into() },
+            NoteEdit { path: "day-2.md".into(), expected: "keep 2 and check-in".into(), text: "keep 2".into() },
+        ];
+        let result = vault.trash_note_with_edits_at("habit.md", "definition", &edits, |step| {
+            if step == 1 { fs::write(dir.path().join("day-2.md"), "outside edit").unwrap(); }
+        });
+        assert!(matches!(result, Err(VaultError::Changed(path)) if path == "day-2.md"));
+        assert_eq!(vault.read_note("day-1.md").unwrap(), "keep 1 and check-in");
+        assert_eq!(vault.read_note("day-2.md").unwrap(), "outside edit");
+        assert_eq!(vault.read_note("habit.md").unwrap(), "definition");
+        assert!(!dir.path().join(".trash").exists());
+    }
+
 }

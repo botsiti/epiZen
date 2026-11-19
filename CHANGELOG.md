@@ -3,6 +3,12 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.17.0 — 2026-11-19
+
+Search 41 illustrated habit icons by name or activity. Delete an active habit and its check-ins
+after confirmation, or archive it to keep its history. Home, Library, Calendar and Settings use
+shorter copy and quieter surfaces. [Full release notes](releases/0.17.0.md).
+
 ## 0.16.0 — 2026-11-19
 
 Browse past habit check-ins in the calendar, see simpler streak details, and choose illustrated

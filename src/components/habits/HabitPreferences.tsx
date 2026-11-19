@@ -1,5 +1,8 @@
+import { HabitDelete, type HabitDeleteActions } from './HabitDelete';
 import { HabitRewardSettings, type HabitRewardActions } from './HabitRewardSettings';
 import { HabitIcon } from './HabitIcon';
+import { HabitPersonalize } from './HabitPersonalize';
+import type { HabitStyle } from '../../lib/habits';
 import { useMemo, useState } from 'react';
 import { formatDate } from '../../lib/dates';
 import { discoveredHabits, type Habit, type HabitProblem } from '../../lib/habits';
@@ -7,14 +10,15 @@ import type { DayEntry } from '../../lib/rollup';
 import { PreferenceIcon } from '../settings/icons';
 import { HabitScheduleDialog, type HabitScheduleActions, type HabitScheduleRequest } from './HabitScheduleDialog';
 
-export interface HabitPreferencesProps extends HabitScheduleActions, HabitRewardActions {
+export interface HabitPreferencesProps extends HabitScheduleActions, HabitRewardActions, HabitDeleteActions {
   habits: Habit[];
   problems: HabitProblem[];
   days: DayEntry[];
   today: Date;
+  onPersonalize?: (habit: Habit, style: HabitStyle) => Promise<void>;
   onOpenNote: (path: string) => void;
 }
-export function HabitPreferences({ habits, problems, days, today, onOpenNote, areas, onSaveReward, ...actions }: HabitPreferencesProps) {
+export function HabitPreferences({ habits, problems, days, today, onOpenNote, areas, onSaveReward, onDelete, onPersonalize, ...actions }: HabitPreferencesProps) {
   const [request, setRequest] = useState<HabitScheduleRequest>();
   const [notice, setNotice] = useState('');
   const day = formatDate(today, 'YYYY-MM-DD');
@@ -29,8 +33,9 @@ export function HabitPreferences({ habits, problems, days, today, onOpenNote, ar
       const schedule = archived ? `Archived from ${last.until}` : last.from > day ? `Starts ${last.from}` : last.until ? `Archives ${last.until}` : 'Every day';
       return <li key={habit.id}><span className="habit-setting-mark" data-active={!archived}><HabitIcon name={habit.name} icon={habit.icon} kind={habit.tracking?.kind} /></span>
         <span className="habit-setting-copy"><strong>{habit.name}</strong><small>{schedule}</small></span>
+        {onPersonalize && <HabitPersonalize habit={habit} onSave={onPersonalize} />}
         <HabitRewardSettings {...{ habit, areas, onSaveReward }} />
-        <button type="button" className="quiet-button" aria-label={`${action} ${habit.name}`} onClick={() => track(last.until ? 'resume' : 'archive', habit)}>{action}</button></li>;
+        <button type="button" className="quiet-button" aria-label={`${action} ${habit.name}`} onClick={() => track(last.until ? 'resume' : 'archive', habit)}>{action}</button><HabitDelete habit={habit} today={today} onDelete={onDelete} /></li>;
     })}</ul> : <p>Add your first habit to start tracking it in daily notes.</p>}
     {!!history.length && <details><summary>From your daily notes · {history.length}</summary><ul>{history.map((habit) => <li key={habit.id}><strong className="habit-setting-copy">{habit.name}</strong><button type="button" className="quiet-button" aria-label={`Continue ${habit.name}`} onClick={() => track('continue', habit)}>Continue tracking</button></li>)}</ul></details>}
     {problems.map(({ path, message }) => <p key={path + message} role="alert">{message} <button type="button" className="quiet-button" onClick={() => onOpenNote(path)}>Open habit note</button></p>)}

@@ -7,7 +7,7 @@ import type { MediaEntry } from '../../lib/library';
 import type { Period } from '../../lib/periodic';
 import type { DayEntry } from '../../lib/rollup';
 import { followPointer, order } from '../periodic/effects';
-import { BlurText, CountUp } from '../periodic/motion';
+import { CountUp } from '../periodic/motion';
 import { Bar, Section } from '../periodic/parts';
 import { QuestBoard } from '../periodic/Quests';
 import { Memento } from './Memento';
@@ -95,29 +95,27 @@ export function Home(props: HomeProps) {
   );
 }
 
-function Hero({ vaultName, stats, days, xp, streak: run, todayEntry }: HomeProps & { xp: number; streak: { current: number; best: number }; todayEntry: DayEntry }) {
+function Hero({ vaultName, stats, xp, streak: run, todayEntry }: HomeProps & { xp: number; streak: { current: number; best: number }; todayEntry: DayEntry }) {
   const level = progress(xp);
   const totals = todayEntry.day?.totals;
   return (
     <header className="hero glass home-hero rise" style={order(0)} data-testid="home-hero">
-      <div className="hero-aurora" aria-hidden="true" />
       <div className="hero-main">
         <p className="kicker" data-testid="rank">
-          {rankOf(level.level)} · Kaizen profile
+          {rankOf(level.level)}
         </p>
         <h1 className="hero-title" data-testid="hero-title">
           Level {level.level}
         </h1>
-        <BlurText text="The character being upgraded: every logged minute feeds the build, and the sphere of life it went to." className="hero-summary" />
       </div>
       <dl className="hero-stats" data-testid="hero-stats">
-        <Stat label="Level" meta={<LevelMeta share={level.share} left={level.left} next={level.level + 1} />}>
-          <CountUp value={level.level} />
+        <Stat label="XP to next level" meta={<Bar share={level.share} />}>
+          <CountUp value={level.left} format={thousands} />
         </Stat>
         <Stat label="Streak" meta={`best ${run.best}d`}>
           <CountUp value={run.current} format={(n) => `${Math.round(n)}d`} />
         </Stat>
-        <Stat label="Life XP" meta={`${days.filter((entry) => entry.day).length} days and the quests`} accent>
+        <Stat label="Life XP" accent>
           <CountUp value={xp} format={thousands} />
         </Stat>
         <Stat label="Today" meta={totals ? `tasks done · ${formatMinutes(totals.logged)} logged` : 'no note yet'}>
@@ -141,23 +139,12 @@ function Hero({ vaultName, stats, days, xp, streak: run, todayEntry }: HomeProps
   );
 }
 
-function Stat({ label, meta, accent, children }: { label: string; meta: ReactNode; accent?: boolean; children: ReactNode }) {
+function Stat({ label, meta, accent, children }: { label: string; meta?: ReactNode; accent?: boolean; children: ReactNode }) {
   return (
     <div className="hero-stat">
       <dt className="tile-label">{label}</dt>
       <dd className={accent ? 'hero-stat-value is-accent' : 'hero-stat-value'}>{children}</dd>
-      <dd className="hero-stat-meta">{meta}</dd>
+      {meta && <dd className="hero-stat-meta">{meta}</dd>}
     </div>
-  );
-}
-
-function LevelMeta({ share, left, next }: { share: number; left: number; next: number }) {
-  return (
-    <span className="level-meta" title={`${thousands(left)} XP to level ${next}`}>
-      <Bar share={share} />
-      <span>
-        {Math.floor(share * 100)}% · {thousands(left)} to Lv {next}
-      </span>
-    </span>
   );
 }

@@ -9,7 +9,6 @@ import { order } from './effects';
 export function Hero({ name, kicker, title, children, aside, nav }: { name: string; kicker: string; title: string; children?: ReactNode; aside?: ReactNode; nav: ReactNode }) {
   return (
     <header className="hero glass" data-testid="hero">
-      <div className="hero-aurora" aria-hidden="true" />
       <div className="hero-main">
         <p className="kicker">
           {kicker}

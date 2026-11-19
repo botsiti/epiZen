@@ -277,6 +277,22 @@ async fn trash_note(state: Shared<'_>, path: String, expected: String) -> Result
 }
 
 #[tauri::command]
+async fn trash_note_with_edits(
+    window: tauri::WebviewWindow,
+    state: Shared<'_>,
+    root: String,
+    path: String,
+    expected: String,
+    edits: Vec<NoteEdit>,
+) -> Result<String, String> {
+    if window.label() != tray::MAIN {
+        return Err("Delete habits from the main workspace.".to_owned());
+    }
+    let guard = state.write().unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.vault_for_note(Some(&root))?.trash_note_with_edits(&path, &expected, &edits).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn rename_note(
     state: Shared<'_>,
     path: String,
@@ -553,6 +569,7 @@ pub fn run() {
             create_folder,
             list_folders,
             trash_note,
+            trash_note_with_edits,
             rename_note,
             reveal_note,
             write_note,

@@ -216,7 +216,6 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
       )}
       <div className="cal-top">
         <header className="hero glass cal-hero" data-testid="hero">
-          <div className="hero-aurora" aria-hidden="true" />
           <div className="hero-main">
             <div className="cal-hero-heading"><p className="kicker">{kicker}</p>
               {onSaveTimeZone && <CalendarZonePicker value={timeZone} instant={shown ? clock : calendarDayStart(first, zone)} onSave={async (next) => {

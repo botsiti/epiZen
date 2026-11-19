@@ -37,7 +37,7 @@ export function HabitRewardSettings({ habit, areas, onSaveReward }: HabitRewardA
     }}>XP settings</button>
     {draft && <HabitDialog title={`XP settings for ${habit.name}`} busy={busy} onCancel={() => setDraft(undefined)}>
       <form className="habits-form card glass" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-        <div><p className="kicker">Habit XP</p><h2>{habit.name}</h2></div>
+        <h2>XP settings · {habit.name}</h2>
         <fieldset className="habit-reward-fields" disabled={busy}>
           <label>Life area<select value={draft.area ?? ''} onChange={(event) => setDraft({ ...draft, area: event.target.value || undefined })}>
             <option value="">None</option>

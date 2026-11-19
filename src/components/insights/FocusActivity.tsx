@@ -18,7 +18,7 @@ export function FocusActivity({ dayOf, today }: { dayOf: (date: Date) => DayEntr
 
   return <section className="card glass insight-card focus-activity" aria-labelledby="focus-activity-title">
     <h2 id="focus-activity-title">Focus activity</h2>
-    <p className="insight-subtitle">Last 52 weeks · point to or select a day</p>
+    <p className="insight-subtitle">Last 52 weeks</p>
     <div className="activity-detail" data-testid="activity-detail">
       <div className="activity-detail-heading">
         <strong>{formatDate(selected, 'dddd, MMM D, YYYY')}</strong>

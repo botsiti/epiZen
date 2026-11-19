@@ -361,7 +361,7 @@ mod tests {
     use super::*;
     #[test]
     fn companion_windows_cannot_bypass_the_workspace_write_and_execution_boundary() {
-        for command in ["write_note", "write_note_scoped", "create_note", "create_folder", "trash_note", "rename_note", "create_base", "write_base", "save_expense_photo", "fetch_image_into_vault", "calendar_create", "calendar_update", "calendar_delete", "assistant_respond", "assistant_show_workspace", "assistant_prepare_cover", "assistant_apply_note", "assistant_set_key", "voice_set_key", "update_settings", "get_settings", "apply_appearance", "read_all_notes", "prompt_finish"] {
+        for command in ["write_note", "write_note_scoped", "create_note", "create_folder", "trash_note", "trash_note_with_edits", "rename_note", "create_base", "write_base", "save_expense_photo", "fetch_image_into_vault", "calendar_create", "calendar_update", "calendar_delete", "assistant_respond", "assistant_show_workspace", "assistant_prepare_cover", "assistant_apply_note", "assistant_set_key", "voice_set_key", "update_settings", "get_settings", "apply_appearance", "read_all_notes", "prompt_finish"] {
             assert!(!command_allowed(LABEL, command), "{command}");
             assert!(!command_allowed(crate::pet::LABEL, command), "{command}");
             assert!(command_allowed("main", command));

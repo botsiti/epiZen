@@ -36,9 +36,8 @@ export function VaultSetup({ name, create: initialCreate, periodic, recognition,
     finally { setBusy(false); }
   };
   return <main className="vault-setup settings-screen" data-testid="vault-setup">
-    <p className="eyebrow">Welcome to {name}</p>
-    <h1>{create ? 'A place for your second brain' : 'Bring your days with you'}</h1>
-    <p className="muted">{create ? 'A small, ready-to-use library and calendar. Everything stays in ordinary Markdown files.' : 'Keep your notes, your words and your history. A short setup helps Epizen find its way around.'}</p>
+    <h1>{create ? 'Create starter vault' : 'Set up vault'}</h1>
+    <p className="muted">{name}</p>
     <form className="form" onSubmit={(event) => { event.preventDefault(); void run(); }}>
       <fieldset disabled={busy} className="vault-setup-fields">
         {create && <button type="button" className="quiet-button" onClick={() => setCreate(false)}>Connect existing notes instead</button>}
