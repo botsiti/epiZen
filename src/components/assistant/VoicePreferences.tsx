@@ -26,7 +26,7 @@ export function VoicePreferences({ value, onSave, onBusy }: { value: VoiceSettin
   };
   return <section className="assistant-voice-preferences" aria-label="Voice settings">
     <h3>Dictation</h3>
-    <p className="assistant-hint">Choose how your recordings become text. This works with either assistant connection.</p>
+    <p className="assistant-hint">Dictation works with either assistant connection.</p>
     <fieldset disabled={busy}>
       <label>Voice provider<select aria-label="Voice provider" value={draft.provider} onChange={(event) => {
         const provider = event.target.value as VoiceProvider;

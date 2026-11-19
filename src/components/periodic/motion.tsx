@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { still } from './effects';
 
 // Small moves for the periodic pages, written here without dependencies after ideas from
-// react-bits (CountUp, BlurText, ClickSpark, SpotlightCard). Each does nothing but its end state
+// react-bits (CountUp). Each does nothing but its end state
 // when the system asks for reduced motion, or when the e2e run turns motion off.
 
 
@@ -31,23 +31,4 @@ export function CountUp({ value, format = (n) => String(Math.round(n)), ms = 420
     return () => cancelAnimationFrame(frame);
   }, [value, ms]);
   return <span className="count">{format(still() ? value : shown)}</span>;
-}
-
-/** A sentence kept accessible as one label while its words stay individually styleable. */
-export function BlurText({ text, className }: { text: string; className?: string }) {
-  const words = text.split(/(\s+)/);
-  let index = 0;
-  return (
-    <span className={className ? `blur-text ${className}` : 'blur-text'} aria-label={text}>
-      {words.map((word, i) =>
-        /^\s+$/.test(word) ? (
-          word
-        ) : (
-          <span key={i} className="blur-word" aria-hidden="true" style={{ '--i': index++ } as CSSProperties}>
-            {word}
-          </span>
-        ),
-      )}
-    </span>
-  );
 }

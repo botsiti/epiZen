@@ -89,12 +89,10 @@ export function MediaPage(props: Props) {
         </p>
       )}
       <header className={`media-hero glass rise is-${spec.kind}`} style={order(0)} data-testid="hero">
-        {image.url ? (
+        {image.url && (
           <div className="media-backdrop" aria-hidden="true">
             <img src={image.url} alt="" />
           </div>
-        ) : (
-          <div className="hero-aurora" aria-hidden="true" />
         )}
         <div className="media-veil" aria-hidden="true" />
 
@@ -121,10 +119,6 @@ export function MediaPage(props: Props) {
           )}
 
         <div className="media-main">
-          <p className="kicker">
-            {spec.one}
-            {entry.date && <span className="media-kicker-date"> · {spec.dateLabel.toLowerCase()} {entry.date}</span>}
-          </p>
           <NoteTitle className="hero-title media-title" title={entry.title} onRename={props.onRename} />
           {facts.length > 0 && (
             <p className="media-byline">

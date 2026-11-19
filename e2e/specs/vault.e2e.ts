@@ -814,10 +814,16 @@ describe('the demo vault', () => {
   });
 
   it('explains a link to a note that does not exist, and creates nothing', async () => {
+    const before = snapshotVault(vaultCopy());
     await followLink('Someday maybe');
-    await expect($('[data-testid="missing-note"]')).toHaveText(expect.stringContaining('Nothing was created'));
-    await screenshot('17-missing-note');
-    await $('[data-testid="missing-note"] button').click();
+    const missing = $('[data-testid="missing-note"]');
+    try {
+      await expect(missing.$('p')).toHaveText('No note has this name.');
+      expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+      await screenshot('17-missing-note');
+    } finally {
+      await missing.$('button').click();
+    }
   });
 
   it('lists the notes that link to a note in the right sidebar, not under the note', async () => {
@@ -865,7 +871,7 @@ describe('the demo vault', () => {
     await pressCommand('1', { alt: true });
     await waitForNote(ALBUM);
     await pressCommand('n');
-    await expect($('h1')).toHaveText('A new thought');
+    await expect($('h1')).toHaveText('New note');
     // Opening the form alone does not create a note.
     await pressCommand('h', { shift: true });
     await $('[data-testid="home"]').waitForDisplayed();
@@ -2227,5 +2233,43 @@ describe('the demo vault', () => {
     await expect(tooltip.$('span:last-child')).toHaveText('Record streak 1d');
     await screenshot('152-daily-habit-streaks');
   });
+
+  it('searches habit artwork and deletes one confirmed routine without changing other notes', async () => {
+    await $('[data-testid="open-habits"]').click();
+    await $('button*=New habit').click();
+    await $('[aria-label="Habit name"]').setValue('Delete habit journey');
+    await $('button=Save habit').click();
+    const detail = $('[data-testid="habit-detail"]');
+    await expect(detail.$('h2')).toHaveText('Delete habit journey');
+    await detail.$('button=Personalize').click();
+    const picker = $('[role="dialog"][aria-label="Personalize habit"]');
+    await picker.$('input[type="search"]').setValue('walk steps');
+    await picker.$('[aria-label="Running shoe"]').waitForDisplayed();
+    await screenshot('153-habit-icon-search');
+    await picker.$('[aria-label="Running shoe"]').click();
+    await picker.$('button=Save appearance').click();
+    await expect(picker).not.toBeExisting();
+    const before = snapshotVault(vaultCopy());
+    const definition = [...before.keys()].find((path) => path.startsWith('Habits/Delete habit journey-'))!;
+    const day = `${DAYS}/${TODAY}.md`;
+    const dailyText = readFileSync(join(vaultCopy(), day), 'utf8');
+    expect(readFileSync(join(vaultCopy(), definition), 'utf8')).toContain('running-shoe');
+    await $('button*=Mark today complete').click();
+    await expect($('button*=Completed today')).toBeDisplayed();
+    await $('[aria-label="Delete Delete habit journey"]').click();
+    await screenshot('154-habit-delete-confirmation');
+    await $('button=Cancel').click();
+    expect(existsSync(join(vaultCopy(), definition))).toBe(true);
+    await $('[aria-label="Delete Delete habit journey"]').click();
+    await $('button=Delete habit').click();
+    await expect($('[aria-label="Delete Delete habit journey"]')).not.toBeExisting();
+    const after = snapshotVault(vaultCopy());
+    expect(readFileSync(join(vaultCopy(), day), 'utf8')).toBe(dailyText);
+    const trash = [...after.keys()].find((path) => path.startsWith('.trash/') && path.endsWith(definition.split('/').at(-1)!))!;
+    expect(after.get(trash)).toBe(before.get(definition));
+    expect(diffSnapshots(before, after)).toEqual([`added: ${trash}`, `removed: ${definition}`]);
+    await expect($('[data-testid="habits-page"]')).toHaveText(expect.stringContaining('Morning Forest journey'));
+  });
+
 
 });

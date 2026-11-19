@@ -34,7 +34,6 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!error) return this.props.children;
     const message = (
       <section className="screen crashed" role="alert" data-testid="crashed">
-        <p className="eyebrow">Something broke</p>
         <h1>{this.props.label} couldn’t be shown</h1>
         <p className="muted">{error.message}</p>
         {where && <pre className="crashed-where">{where}</pre>}

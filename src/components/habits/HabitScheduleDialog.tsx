@@ -47,7 +47,7 @@ export function HabitScheduleDialog({ request, today, onCreate, onLifecycle, onC
     }
   };
   return <HabitDialog busy={busy} onCancel={onClose} title={form.kind === 'archive' ? 'Archive habit' : form.kind === 'resume' ? 'Reactivate habit' : 'New habit'}><form className="habits-form card glass" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <div><p className="kicker">{form.habit?.name ?? 'A new daily routine'}</p><h2>{form.kind === 'archive' ? 'Make room for a break' : form.kind === 'resume' ? 'Bring this habit back' : form.kind === 'continue' ? 'Continue your history' : 'What would you like to practice?'}</h2></div>
+      <h2>{form.kind === 'archive' ? 'Archive habit' : form.kind === 'resume' ? 'Reactivate habit' : form.kind === 'continue' ? 'Continue tracking' : 'New habit'}{form.habit && ` · ${form.habit.name}`}</h2>
       {form.kind === 'new' && <label className="field"><span>Habit name</span><input maxLength={100} aria-label="Habit name" placeholder="No sweets, read a chapter, take a walk…" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} disabled={busy} /></label>}
       {form.kind === 'new' && <label className="field"><span>Track by</span>
         <select value={kind} disabled={busy} onChange={(event) => setKind(event.target.value as typeof kind)}>

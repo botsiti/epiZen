@@ -84,7 +84,7 @@ describe('the homepage', () => {
     render(<Home {...props()} />);
     // 41 + 42 + 24 + 60 minutes, all at 1 XP a minute.
     expect(screen.getByTestId('hero-title')).toHaveTextContent('Level 1');
-    expect(screen.getByTestId('rank')).toHaveTextContent('Novice · Kaizen profile');
+    expect(screen.getByTestId('rank')).toHaveTextContent(/^Novice$/);
     const stats = screen.getByTestId('hero-stats');
     expect(stats).toHaveTextContent('Life XP167');
     expect(stats).toHaveTextContent('Streak2dbest 2d');

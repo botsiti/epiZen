@@ -160,7 +160,7 @@ export function SettingsScreen({ menuBarNotice, habitSettings, timerSettings, wa
       status={saving ? 'Saving…' : state.saved ? 'Saved' : dirty ? 'Unsaved changes' : ''} error={state.error} />
     <div className="preferences-main">
       <header className="preferences-heading" ref={heading}>
-        <div className="preferences-heading-copy"><h2>{active.title}</h2><p>{active.hint}</p></div>
+        <div className="preferences-heading-copy"><h2>{active.title}</h2></div>
         {section === 'plugins' && <div className="preferences-plugin-count"><strong>{Object.values(pluginDraft.enabled).filter(Boolean).length}</strong>
           <span>of {Object.keys(pluginDraft.enabled).length} enabled</span></div>}
         {owner && plugins && <label className="preferences-plugin-toggle">

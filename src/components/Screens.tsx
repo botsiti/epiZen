@@ -16,7 +16,6 @@ export function Unsaved({ path, text, message }: { path: string; text: string; m
 export function Problem({ title, message, onBack }: { title: string; message: string; onBack?: () => void }) {
   return (
     <section className="screen" data-testid="problem">
-      <p className="eyebrow">Something went wrong</p>
       <h1>{title}</h1>
       <p className="muted">{message}</p>
       {onBack && (
@@ -31,9 +30,8 @@ export function Problem({ title, message, onBack }: { title: string; message: st
 export function MissingNote({ target, onBack }: { target: string; onBack?: () => void }) {
   return (
     <section className="screen" data-testid="missing-note">
-      <p className="eyebrow">Not in this vault</p>
       <h1>{target}</h1>
-      <p className="muted">No note has this name yet. Nothing was created.</p>
+      <p className="muted">No note has this name.</p>
       {onBack && (
         <button type="button" className="quiet-button" onClick={onBack}>
           Back
@@ -54,7 +52,6 @@ interface NoVaultProps {
 export function NoVault({ message, onOpenFolder, onCreateVault, folderError }: NoVaultProps) {
   return (
     <main className="screen screen-full" data-testid={message ? 'vault-error' : 'no-vault'}>
-      <p className="eyebrow">Epizen</p>
       <h1>{message ? "Couldn't open the vault" : 'No vault open'}</h1>
       {message && <p className="muted">{message}</p>}
       <button type="button" className="quiet-button" onClick={onOpenFolder} data-testid="open-folder">
@@ -62,9 +59,6 @@ export function NoVault({ message, onOpenFolder, onCreateVault, folderError }: N
       </button>
       {onCreateVault && <button type="button" className="quiet-button" onClick={onCreateVault} data-testid="create-vault">Start a new vault…</button>}
       {folderError && <p className="muted">{folderError}</p>}
-      <p className="hint">
-        Choose an existing folder, or create an empty folder in the picker for a new vault. Epizen opens it again next time.
-      </p>
     </main>
   );
 }

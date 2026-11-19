@@ -1,5 +1,3 @@
-import { illustratedHabitIcons } from '../../lib/habitStyle';
-
 const artwork = import.meta.glob<string>('./icons/*.png', { eager: true, query: '?url', import: 'default' });
 
 function automaticIcon(name: string, kind?: string) {
@@ -16,8 +14,9 @@ function automaticIcon(name: string, kind?: string) {
 
 export function HabitIcon({ name, icon, kind }: { name: string; icon?: string; kind?: string }) {
   const key = icon ?? automaticIcon(name, kind);
+  const art = artwork[`./icons/${key}.png`];
   return <span className="habit-symbol" aria-hidden="true">
-    {Object.values(illustratedHabitIcons).some((id) => id === key)
-      ? <img src={artwork[`./icons/${key}.png`]} alt="" width="32" height="32" draggable={false} /> : key}
+    {art
+      ? <img src={art} alt="" width="32" height="32" draggable={false} /> : key}
   </span>;
 }

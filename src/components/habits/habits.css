@@ -64,7 +64,7 @@
 .habit-summary-copy small, .habit-summary-foot { display: block; color: var(--text-muted); font-size: 11px; margin-top: 2px; }
 .habit-quick-check { position: absolute; right: 12px; top: 50%; translate: 0 -50%; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid color-mix(in srgb, var(--habit-tone) 55%, transparent); border-radius: 50%; font: 16px/1 var(--numbers); color: var(--habit-tone); }
 .habit-quick-check:hover, .habit-quick-check[aria-pressed=true] { color: var(--bg-sidebar); background: var(--habit-tone); }
-.habits-detail { padding: 24px; min-width: 0; border: 1px solid var(--habit-line); border-radius: 17px; background: radial-gradient(ellipse 65% 19% at 0 0, color-mix(in srgb, var(--habit-tone) 10%, transparent), transparent), var(--surface); }
+.habits-detail { padding: 24px; min-width: 0; border: 1px solid var(--habit-line); border-radius: 17px; background: var(--surface); }
 .habits-detail-head { align-items: start; }
 .habit-detail-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .habits-detail h2 { margin: 0; font: 30px/1.08 var(--display); letter-spacing: -.035em; overflow-wrap: anywhere; }
@@ -153,6 +153,7 @@
   .habits-detail-head, .habits-recent, .habits-form-actions { flex-wrap: wrap; }
 }
 
+.habits-detail > .habit-delete { margin-top: 16px; }
 .habit-detail-actions { display: flex; justify-content: end; gap: 6px; flex-wrap: wrap; }
 .habit-month-count { text-align: center; font-size: 11px; margin: 4px 0 0; color: var(--text-muted); }
 

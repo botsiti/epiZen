@@ -9,4 +9,3 @@
 .markdown-home li button { width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 24px; padding: 16px 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .markdown-home li button:hover { color: var(--accent); }
 .markdown-home li small { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
-.markdown-home-foot { margin-top: 40px; color: var(--text-muted); font-size: 12px; }

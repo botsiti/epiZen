@@ -85,9 +85,8 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Menu bar item and panel**: see "Menu bar item and panel" below.
 - **Library and media pages**: see "Library and media pages" below.
 - **Home**: a periodic page in all but name (the frame, glass, hero and motion below), shaped like
-  the Obsidian homepage, "Kaizen cockpit". The hero: the level's title and "Kaizen profile" as the
-  kicker, `Level N` in the serif, one line, and a 2×2 block of Level (a thin bar to the next),
-  Streak, Life XP and Today; the vault's name and counts faint at its foot. Then the memento mori
+  the Obsidian homepage, "Kaizen cockpit". The hero shows the rank, `Level N` in the serif, and a 2×2 block
+  with XP to the next level, Streak, Life XP and Today; the vault's name and counts faint at its foot. Then the memento mori
   (the year, the month and, with a birth date from Settings, the percentage of a chosen lifetime already lived);
   a row of three cards: the last seven days' averages, their focus as bars (pointing at a day shows
   its categories), and today's tasks with Today, Week and Month; the life spheres, a segment per
@@ -150,8 +149,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   and a soft drop shadow, radius 18px (24px for the hero). A soft light follows the pointer across
   a card and lights its nearest edge in sage.
 - **Hero**: the period's name in the system serif (New York) at 58px, a kicker above it (weekday,
-  ISO week, year) and the note's file name faint beside it. A static wash of sage, blue and rose
-  sits behind it under fine grain. The day's summary is readable immediately.
+  ISO week, year) and the note's file name faint beside it. A quiet neutral surface keeps the day's summary readable immediately.
   A ring on the right shows the plan done. Below, chips to the day, week or month before and after
   and up a level; a chip whose note doesn't exist yet is dashed, and opening it creates the note
   with built-in starting text, as the calendar does.

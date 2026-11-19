@@ -32,12 +32,10 @@ export function NewNote({ folders, folder, kind = 'note', onCreate, onNewNote }:
     finally { setBusy(false); }
   };
   return <section className="screen creation-screen" data-testid={kind === 'note' ? 'new-note' : 'new-folder'}>
-    <div className="creation-mark"><PreferenceIcon name={kind} /></div>
-    <p className="eyebrow">Your vault</p><h1>{kind === 'note' ? 'A new thought' : 'A little more room'}</h1>
-    <p className="muted">{kind === 'note' ? 'Give your note a name and a place to call home.' : 'Bring related notes together in a folder.'}</p>
+    <h1>{kind === 'note' ? 'New note' : 'New folder'}</h1>
     <form className="form creation-form" onSubmit={(event) => void submit(event)}>
       <fieldset disabled={busy || Boolean(created)}>
-        <label className="field"><span>{kind === 'note' ? 'Note name' : 'Folder name'}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === 'note' ? 'An idea worth keeping' : 'Projects'} autoFocus data-testid={`new-${kind}-name`} /></label>
+        <label className="field"><span>{kind === 'note' ? 'Note name' : 'Folder name'}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus data-testid={`new-${kind}-name`} /></label>
         <label className="field"><span>{kind === 'note' ? 'Location' : 'Inside'}</span><select value={where} onChange={(event) => setWhere(event.target.value)} data-testid={`new-${kind}-folder`}><option value="">Top of the vault</option>{[...new Set([...folders, folder])].filter(Boolean).map((path) => <option key={path}>{path}</option>)}</select></label>
       </fieldset>
       <div className="creation-preview"><PreferenceIcon name={kind} /><span>{path}</span></div>

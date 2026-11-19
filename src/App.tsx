@@ -69,6 +69,7 @@ import {
   createFolder,
   listFolders,
   trashNote,
+  type NoteEdit,
   renameNote,
   revealNote,
   getSettings,
@@ -872,7 +873,20 @@ export function App() {
     },
     [changeDay, timer, vault, plugins.timer],
   );
-  const habitActions = useHabitActions({ root: plugins.habits ? vault : undefined, habits: habitCatalog.habits, onSaved: noteSaved, refresh, changeDay });
+  const habitDailyPaths = useMemo(() => new Set(recordedDays.map(({ path }) => path)), [recordedDays]);
+  const habitDeleted = useCallback((path: string, changed: NoteEdit[]) => {
+    update((previous) => previous.tabs.filter((item) => notePath(currentView(item)) === path).reduce((next, item) => closeTab(next, item.id), previous));
+    const changedPaths = new Map(changed.map((edit) => [edit.path, edit.text]));
+    setFiles((previous) => previous.filter((file) => file.path !== path).map((file) => changedPaths.has(file.path)
+      ? { ...file, modified: Date.now(), size: new TextEncoder().encode(changedPaths.get(file.path)).length } : file));
+    setTexts((previous) => {
+      const next = new Map(previous);
+      next.delete(path);
+      for (const { path, text } of changed) next.set(path, text);
+      return next;
+    });
+  }, [update]);
+  const habitActions = useHabitActions({ root: plugins.habits ? vault : undefined, habits: habitCatalog.habits, dailyPaths: habitDailyPaths, onDeleted: habitDeleted, onSaved: noteSaved, refresh, changeDay });
   // The menu bar item and its panel: the timer and today's tasks, published as they change; the
   // panel's buttons start, pause and stop this same timer.
   const todayEntry = useMemo(() => dayOf(now), [dayOf, now]);

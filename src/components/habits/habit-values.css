@@ -9,7 +9,16 @@
 .habit-measure-fields { display: flex; gap: 12px; }
 .habit-measure-fields > * { flex: 1; min-width: 0; }
 .habit-style-fields { display: grid; gap: 8px; margin-top: 10px; }
-.habits-form .habit-style-fields fieldset { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
+.habits-form .habit-style-fields .habit-color-options { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
 .habit-style-fields button { padding: 4px 6px; min-width: 30px; min-height: 30px; border: 1px solid transparent; border-radius: 6px; color: var(--text-muted); }
 .habit-style-fields button[aria-pressed="true"] { border-color: var(--accent); color: var(--text); }
 .habit-style-fields button i { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; }
+
+
+.habit-icon-search { display: grid; gap: 6px; }
+.habit-icon-search input { width: 100%; min-width: 0; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.habit-icon-selection, .habit-icon-selection span { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; }
+.habit-icon-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; max-height: 152px; overflow: auto; padding: 4px; }
+.habit-icon-results button { display: grid; place-items: center; min-height: 42px; }
+.habit-icon-results button:hover { background: var(--glass-line); }
+.habit-icon-results p { grid-column: 1 / -1; }

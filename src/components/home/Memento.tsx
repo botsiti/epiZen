@@ -6,14 +6,11 @@ const thousands = (n: number) => n.toLocaleString('en-US');
 
 export function Memento({ today, birth, years, i }: { today: Date; birth?: Date; years?: number; i: number }) {
   const { spans, life } = memento(today, birth, years);
-  const year = spans[0];
   return (
     <section className="card glass rise memento" style={order(i)} data-testid="memento">
       <div className="card-head">
         <p className="tile-label">Memento mori</p>
-        <span className="card-note">
-          {life ? `${years ?? DEFAULT_LIFETIME_YEARS}-year lifetime` : year && `${year.daysLeft} days left this year`}
-        </span>
+        {life && <span className="card-note">{years ?? DEFAULT_LIFETIME_YEARS}-year lifetime</span>}
       </div>
       <ul className="memento-bars">
         {spans.map((span) => (

@@ -1,22 +1,27 @@
+import { today } from '../../lib/dates';
+import { canDeleteHabit, habitDeletionEdits } from '../../lib/habitDeletion';
+import { flushAll, trackSave } from '../../lib/saving';
 import type { HabitReward } from '../../lib/habitRewards';
 import { useCallback, useLayoutEffect, useRef } from 'react';
-import { createNote, readNote, vaultStatus, writeNoteScoped } from '../../lib/api';
+import { createNote, readAllNotes, readNote, trashNoteWithEdits, vaultStatus, writeNoteScoped, type NoteEdit } from '../../lib/api';
 import { readHabitStyle, writeHabitStyle, type HabitStyle } from '../../lib/habitStyle';
 import { changeHabit, changeHabitReward, habitActive, habitNameKey, newHabit, readHabit, setHabitCompletion, setHabitValue, type HabitTracking, type Habit, type HabitLifecycle } from '../../lib/habits';
 
 interface Options {
   root?: string;
   habits: Habit[];
+  dailyPaths?: ReadonlySet<string>;
+  onDeleted?: (path: string, edits: NoteEdit[]) => void;
   onSaved: (path: string, text: string) => void;
   refresh: () => Promise<void>;
   changeDay: (date: Date, edit: (text: string) => string | undefined) => Promise<{ path: string; text: string }>;
 }
 
 /** I/O stays here: definitions and completions use the existing conditional vault writes. */
-export function useHabitActions({ root, habits, onSaved, refresh, changeDay }: Options) {
-  const current = useRef({ root, habits });
+export function useHabitActions({ root, habits, dailyPaths, onDeleted, onSaved, refresh, changeDay }: Options) {
+  const current = useRef({ root, habits, dailyPaths });
   const queue = useRef(Promise.resolve());
-  useLayoutEffect(() => { current.current = { root, habits }; }, [root, habits]);
+  useLayoutEffect(() => { current.current = { root, habits, dailyPaths }; }, [root, habits, dailyPaths]);
   const checkRoot = useCallback(async () => {
     const status = await vaultStatus();
     if (!root || current.current.root !== root || status.state !== 'open' || status.root !== root) throw new Error('The open vault changed. Reopen Habits before saving.');
@@ -61,6 +66,27 @@ export function useHabitActions({ root, habits, onSaved, refresh, changeDay }: O
     await writeNoteScoped(openRoot, habit.path, next, habit.source);
     if (current.current.root === root) onSaved(habit.path, next);
   }), [serialize, checkRoot, root, onSaved]);
+  const onDelete = useCallback((habit: Habit) => serialize(async () => {
+    await checkRoot();
+    if (!habit.path || habit.source === undefined || !canDeleteHabit(habit, today())) {
+      throw new Error('Only active habits can be deleted.');
+    }
+    const unsaved = await flushAll();
+    if (unsaved.length) throw new Error('Save or recover unsaved notes before deleting a habit.');
+    const notes = await readAllNotes();
+    const updates = habitDeletionEdits(habit, notes, current.current.dailyPaths ?? new Set());
+    const openRoot = await checkRoot();
+    const job = trashNoteWithEdits(openRoot, habit.path, habit.source, updates);
+    void trackSave(job.then(() => undefined, () => undefined));
+    try {
+      await job;
+    } catch (error) {
+      // A second outside edit can prevent rollback. Refresh the displayed notes in that case.
+      if (current.current.root === root) await refresh().catch(() => undefined);
+      throw error;
+    }
+    if (current.current.root === root) onDeleted?.(habit.path, updates);
+  }), [serialize, checkRoot, root, onDeleted, refresh]);
   const editDay = useCallback((date: Date, habit: Habit, edit: (text: string, fresh: Habit) => string) => serialize(async () => {
     await checkRoot();
     if (!habit.path) throw new Error('Continue this historical habit to track it.');
@@ -74,5 +100,5 @@ export function useHabitActions({ root, habits, onSaved, refresh, changeDay }: O
     editDay(date, habit, (text, fresh) => setHabitCompletion(text, fresh, expected, done));
   const onMeasure = (date: Date, habit: Habit, expected: number | undefined, value: number) =>
     editDay(date, habit, (text, fresh) => setHabitValue(text, fresh, expected, value));
-  return { onCreate, onLifecycle, onComplete, onMeasure, onPersonalize, onSaveReward };
+  return { onCreate, onLifecycle, onComplete, onMeasure, onPersonalize, onSaveReward, onDelete };
 }

@@ -1,3 +1,4 @@
+import { HabitDelete, type HabitDeleteActions } from './HabitDelete';
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { usePluginDisplay } from '../workspace/PluginDisplay';
 import { addDays, formatDate, parseDate } from '../../lib/dates';
@@ -16,7 +17,7 @@ import { HabitPersonalize } from './HabitPersonalize';
 import { HabitValueControl } from './HabitValueControl';
 import './habits.css';
 
-export interface HabitsPageProps extends HabitScheduleActions, HabitRewardActions {
+export interface HabitsPageProps extends HabitScheduleActions, HabitRewardActions, HabitDeleteActions {
   habits: Habit[];
   problems: HabitProblem[];
   days: DayEntry[];
@@ -35,7 +36,7 @@ type Filter = 'Active' | 'Archived' | 'History';
 const live = (habit: Habit, key: string) => habit.periods.some((p) => !p.until || p.until > key);
 const tone = (habit: Habit) => ({ '--habit-tone': habitTone(habit.id, habit.color) }) as CSSProperties;
 
-export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycle, onComplete, onMeasure, onPersonalize, areas, onSaveReward, onOpenDay, onOpenNote, enabled = true, onOpenSettings }: HabitsPageProps) {
+export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycle, onComplete, onMeasure, onPersonalize, areas, onSaveReward, onDelete, onOpenDay, onOpenNote, enabled = true, onOpenSettings }: HabitsPageProps) {
   const display = usePluginDisplay('habits');
   const key = dayKey(today);
   const [selection, setSelection] = useState<Date>();
@@ -106,7 +107,7 @@ export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycl
     setNotice('Your recent routine is active again.');
   };
   return <div className="periodic-frame habits-page" data-testid="habits-page">
-    <header className="habits-head"><div><p className="kicker">{formatDate(today, 'dddd, D MMMM')}</p><h1>Habits</h1></div>
+    <header className="habits-head"><h1>Habits</h1>
       <div className="habit-head-actions"><button type="button" className="quiet-chip" disabled={busy} onClick={() => setExporting(true)}>Export journal</button>
         <button type="button" className="primary-button" disabled={busy} onClick={() => startForm('new')}>＋ New habit</button></div>
     </header>
@@ -168,6 +169,7 @@ export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycl
           <HabitHistory key={chosen.habit.id} habit={chosen.habit} marks={chosen.marks} today={today} selected={selectedDate} onSelect={selectDate} />
           <details className="habits-periods"><summary>Tracking periods · {chosen.habit.periods.length}</summary>{chosen.habit.periods.map((p) => <p key={p.from + (p.until ?? '')}>
             {formatDate(parseDate(p.from, 'YYYY-MM-DD')!, 'D MMM YYYY')}{p.from === p.until ? ' · archived before tracking began' : p.until ? ` — ${formatDate(addDays(parseDate(p.until, 'YYYY-MM-DD')!, -1), 'D MMM YYYY')}` : ' — ongoing'}{p.reset && ' · new streak'}</p>)}</details>
+          <HabitDelete key={`delete-${chosen.habit.id}`} habit={chosen.habit} today={today} onDelete={onDelete} />
         </section>}
       </div>}
   </div>;

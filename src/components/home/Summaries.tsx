@@ -34,12 +34,12 @@ export function Summaries({ today, days, birthDate, lifetimeYears = DEFAULT_LIFE
   const { spans, life } = memento(today, birthDate, lifetimeYears);
 
   return <div className="periodic-frame summaries" data-testid="summaries-page">
-    <header className="summaries-header"><p className="kicker">Your year, in perspective</p><h1>Summaries</h1><p>Monthly reflections and averages from your daily notes.</p></header>
+    <header className="summaries-header"><h1>Summaries</h1><p>Monthly reflections and averages from your daily notes.</p></header>
     <div className="summaries-progress" aria-label="Time in perspective">
       {spans.slice(0, 2).map((span) => <ProgressCard key={span.label} label={span.label} share={span.share} detail={`${span.daysLeft} days left`} />)}
       <ProgressCard label="Lifetime" share={life?.share} detail={life ? `${lifetimeYears}-year lifetime · ${life.daysLeft.toLocaleString()} days left` : 'Add a birth date in Homepage settings'} />
     </div>
-    <div className="summaries-toolbar"><div><span className="summaries-eyebrow">Year in review</span><h2>{year}</h2></div><div className="summaries-year" aria-label="Summary year">
+    <div className="summaries-toolbar"><div><h2>{year}</h2></div><div className="summaries-year" aria-label="Summary year">
       <button type="button" className="shelf-all" aria-label="Previous summary year" onClick={() => setYear((value) => value - 1)}>←</button>
       <button type="button" className="shelf-all" onClick={() => setYear(today.getFullYear())}>This year</button>
       <button type="button" className="shelf-all" aria-label="Next summary year" onClick={() => setYear((value) => value + 1)}>→</button>

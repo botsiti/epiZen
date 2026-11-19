@@ -115,27 +115,6 @@
   border-radius: 24px;
 }
 
-.hero-aurora {
-  position: absolute;
-  inset: -30% -10%;
-  z-index: -1;
-  background:
-    radial-gradient(38% 55% at 14% 18%, rgb(var(--accent-rgb) / 20%), transparent 70%),
-    radial-gradient(32% 50% at 88% 6%, rgb(111 165 230 / 14%), transparent 70%),
-    radial-gradient(40% 50% at 62% 115%, rgb(224 112 127 / 10%), transparent 70%);
-}
-
-/* Fine grain over the light, so the gradients don't band. */
-.hero-aurora::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  opacity: 0.06;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay;
-}
-
-
 .hero-main {
   min-width: 0;
 }
@@ -1678,12 +1657,6 @@ button.heatmap-cell:hover {
 .note-tab {
   max-width: var(--reading-width);
   margin: 0 auto;
-}
-
-/* Keep summary text immediately readable. */
-
-.blur-word {
-  display: inline-block;
 }
 
 /* A tick's spark (after react-bits' ClickSpark). Lives on <body>, outside the page. */

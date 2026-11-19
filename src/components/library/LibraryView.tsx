@@ -28,9 +28,8 @@ import {
   type SortOrder,
 } from '../../lib/library';
 import { DEFAULT_SOURCES, type LibrarySources } from '../../lib/librarySources';
-import { SOURCE_NAMES } from '../../lib/lookup';
 import { followPointer, order } from '../periodic/effects';
-import { BlurText, CountUp } from '../periodic/motion';
+import { CountUp } from '../periodic/motion';
 import { Section, Tabs } from '../periodic/parts';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { VaultImage } from '../VaultImage';
@@ -72,15 +71,6 @@ interface Props {
   onChanged: () => Promise<void>;
   onDelete?: (path: string) => Promise<string>;
 }
-
-const SUMMARY: Record<LibraryTab, string> = {
-  all: 'Everything rated, together: the albums, films, books and podcasts, and the days they filled.',
-  album: 'Every album listened to, with its cover and its rating.',
-  film: 'The films watched, and what each was worth.',
-  book: 'Books finished, from first page to last.',
-  podcast: 'Conversations listened to, and the ones worth keeping.',
-  video: 'Videos watched, rated.',
-};
 
 const NONE: MediaEntry[] = [];
 const ALL = 'All';
@@ -196,13 +186,10 @@ export function LibraryView({ library, files, tab, onTab, layout, onLayout, hidd
       setSelection({ entry, x: event.clientX || rect?.left || 0, y: event.clientY || rect?.bottom || 0 });
     }}>
       <header className="hero glass library-hero rise" style={order(0)} data-testid="library-hero">
-        <div className="hero-aurora" aria-hidden="true" />
         <div className="hero-main">
-          <p className="kicker">Library · Rating{spec ? `/${spec.folder}` : ''}</p>
           <h1 className="hero-title" data-testid="hero-title">
             {spec ? spec.tab : 'Library'}
           </h1>
-          <BlurText key={shownTab} text={SUMMARY[shownTab]} className="hero-summary" />
           <div className="library-adds" role="group" aria-label="Add">
             {/* The tab's own kind first, in the primary button; the rest quiet beside it. */}
             {kinds.toSorted((x, y) => Number(y.kind === spec?.kind) - Number(x.kind === spec?.kind)).map((kind) => (
@@ -397,13 +384,8 @@ function Card({ entry, mixed, onOpen }: { entry: MediaEntry; mixed?: boolean; on
 function Empty({ spec, onAdd }: { spec: KindSpec; onAdd?: () => void }) {
   return (
     <section className="card glass rise library-empty" style={order(1)} data-testid="library-empty">
-      <p className="kicker">Nothing in Rating/{spec.folder} yet</p>
-      <h2 className="library-empty-title">Your first {spec.one}</h2>
-      <p className="muted">
-        {spec.source
-          ? `Search ${SOURCE_NAMES[spec.source]}, pick it, rate it. Epizen writes its note the way your vault's ${spec.tab.toLowerCase()} are written, with the cover beside it.`
-          : `${spec.tab} are read from Rating/${spec.folder}; add them in Obsidian.`}
-      </p>
+      <h2 className="library-empty-title">No {spec.tab.toLowerCase()} yet</h2>
+      {!spec.source && <p className="muted">Add notes to Rating/{spec.folder}.</p>}
       {onAdd && spec.source && (
         <button type="button" className="primary-button" onClick={onAdd} data-testid="library-empty-add">
           + Add {spec.kind === 'podcast' ? 'episode' : spec.one}
@@ -416,9 +398,7 @@ function Empty({ spec, onAdd }: { spec: KindSpec; onAdd?: () => void }) {
 function EmptyAll({ onAdd }: { onAdd: (kind: MediaKind) => void }) {
   return (
     <section className="card glass rise library-empty" style={order(1)} data-testid="library-empty">
-      <p className="kicker">Nothing rated yet</p>
-      <h2 className="library-empty-title">Your first one</h2>
-      <p className="muted">Pick an album, a film, a book or a podcast episode, rate it, and it lands here with its cover, on the day it filled.</p>
+      <h2 className="library-empty-title">No ratings yet</h2>
       <div className="library-adds">
         {SHELVED_KINDS.map((kind) => (
           <button key={kind} type="button" className="nav-chip library-add is-quiet" onClick={() => onAdd(kind)} data-testid="library-empty-add" data-kind={kind}>
