@@ -10,7 +10,7 @@
 //! behind others. When a round or a rest runs out, the window is told to look (`DUE_EVENT`), so it
 //! doesn't wait for its own held-back tick to write the round and start the rest.
 
-use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
@@ -44,8 +44,6 @@ const PANEL_GAP: f64 = 6.0;
 const ICON_SIZE: u32 = 36;
 /// A click on the item this soon after the panel hid on losing focus is the click that hid it.
 const REOPEN_GUARD: Duration = Duration::from_millis(400);
-/// How long the title's thread sleeps when the title can't change before the next publish.
-const IDLE_WAIT: Duration = Duration::from_secs(60);
 
 /// What the item's title is made from: the main window's timer, as `trayClock` in
 /// `src/lib/tray.ts` publishes it. Times are milliseconds since the epoch.
@@ -201,6 +199,7 @@ fn now_ms() -> i64 {
 #[derive(Default)]
 struct Published {
     visible: bool,
+    clock_worker: bool,
     /// Counts publishes, so the title's thread knows when to look again.
     version: u64,
     clock: Clock,
@@ -212,14 +211,12 @@ struct Published {
 #[derive(Default)]
 pub struct Tray {
     published: Arc<(Mutex<Published>, Condvar)>,
-    icon: OnceLock<TrayIcon>,
     /// When the panel last hid, for `toggle`.
     hidden_at: Mutex<Option<Instant>>,
 }
 
-/// Makes the item and starts its title's thread. The `Tray` state must already be managed.
-/// An error leaves the app without the item, never without the app: the caller only reports it.
-pub fn install(app: &AppHandle) -> tauri::Result<()> {
+/// Register the macOS item only for a vault that enables Menu bar.
+fn install_item(app: &AppHandle) -> tauri::Result<TrayIcon> {
     let icon = TrayIconBuilder::with_id("epizen")
         .icon(Image::new_owned(clock_icon(ICON_SIZE), ICON_SIZE, ICON_SIZE))
         .icon_as_template(true)
@@ -231,43 +228,59 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
-    icon.set_visible(false)?;
     #[cfg(target_os = "macos")]
     mac::steady_digits(&icon);
-    let tray = app.state::<Tray>();
-    let published = Arc::clone(&tray.published);
-    let _ = tray.icon.set(icon.clone());
-    let app = app.clone();
-    std::thread::Builder::new().name("epizen-tray".into()).spawn(move || keep_time(&app, &icon, &published))?;
-    Ok(())
+    Ok(icon)
 }
 
-/// The title's thread: sets the title whenever it changes, and tells the main window once when
-/// what it published runs out. It sleeps to the next second the title turns over, or until the
-/// next publish.
-fn keep_time(app: &AppHandle, icon: &TrayIcon, published: &(Mutex<Published>, Condvar)) {
-    let (lock, publish) = published;
-    let mut shown: Option<String> = None;
-    let mut told: Option<u64> = None;
+impl Published {
+    /// A title change or a deadline needs one worker. Panel-only updates never start one.
+    fn change_clock(&mut self, clock: Clock, visible: bool) -> bool {
+        if self.clock == clock && (self.visible == visible || clock == Clock::Idle) {
+            self.visible = visible;
+            return false;
+        }
+        self.version += 1;
+        self.clock = clock;
+        self.visible = visible;
+        !std::mem::replace(&mut self.clock_worker, true)
+    }
+}
+
+fn next_wake(clock: &Clock, now: i64, visible: bool) -> Option<Duration> {
+    if visible { return next_change(clock, now); }
+    let remaining = match clock {
+        Clock::Rest { ends_at } => ends_at.saturating_sub(now),
+        Clock::Focus { accumulated, since, paused: false, planned: Some(seconds) } =>
+            seconds.saturating_mul(1000).saturating_sub(focused(*accumulated, *since, false, now)),
+        _ => return None,
+    };
+    (remaining > 0).then(|| Duration::from_millis(remaining as u64))
+}
+
+/// Runs until the title and deadline can change only through a new workspace publication.
+/// An idle or paused timer leaves no polling thread behind.
+fn keep_time(app: &AppHandle, published: &(Mutex<Published>, Condvar)) {
+    let (lock, changed) = published;
     let mut guard = lock.lock().unwrap_or_else(PoisonError::into_inner);
     loop {
-        let (version, clock) = (guard.version, guard.clock.clone());
+        let (version, clock, visible) = (guard.version, guard.clock.clone(), guard.visible);
         drop(guard);
         let now = now_ms();
-        let next = title(&clock, now);
-        if next != shown {
-            // A space separates the time from the clock face.
-            let _ = icon.set_title(Some(next.as_deref().map(|text| format!(" {text}")).unwrap_or_default()));
-            shown = next;
+        if visible && let Some(icon) = app.tray_by_id("epizen") {
+            let text = title(&clock, now).map(|time| format!(" {time}")).unwrap_or_default();
+            let _ = icon.set_title(Some(text));
         }
-        if due(&clock, now) && told != Some(version) {
-            told = Some(version);
+        if due(&clock, now) {
             let _ = app.emit_to(MAIN, DUE_EVENT, ());
         }
-        // A few milliseconds past the turn, so the clock reads the new second.
-        let wait = next_change(&clock, now).map_or(IDLE_WAIT, |wait| wait + Duration::from_millis(5));
         guard = lock.lock().unwrap_or_else(PoisonError::into_inner);
-        guard = match publish.wait_timeout_while(guard, wait, |published| published.version == version) {
+        if guard.version != version { continue; }
+        let Some(wait) = next_wake(&clock, now, visible) else {
+            guard.clock_worker = false;
+            return;
+        };
+        guard = match changed.wait_timeout_while(guard, wait + Duration::from_millis(5), |state| state.version == version) {
             Ok((guard, _)) => guard,
             Err(poisoned) => poisoned.into_inner().0,
         };
@@ -368,31 +381,35 @@ pub struct Publish {
 /// The main window's timer, for the item's title and the panel.
 #[tauri::command]
 pub fn tray_publish(app: AppHandle, tray: State<'_, Tray>, status: Publish) -> Result<(), String> {
-    let (lock, publish) = &*tray.published;
-    let (retitled, visibility_changed) = {
-        let mut published = lock.lock().unwrap_or_else(PoisonError::into_inner);
-        let visibility_changed = status.visible != published.visible;
-        if visibility_changed {
-            let icon = tray.icon.get().ok_or("The macOS status item is unavailable. Reopen Epizen to try again.")?;
-            icon.set_visible(status.visible).map_err(|error| error.to_string())?;
+    let visible = status.visible;
+    let item = if visible {
+        app.tray_by_id("epizen").map_or_else(|| install_item(&app), Ok).map(Some)
+    } else {
+        if app.remove_tray_by_id("epizen").is_some() {
+            close(&app);
         }
-        published.visible = status.visible;
-        published.version += 1;
-        published.clock = status.clock;
-        published.panel = status.panel.clone();
-        let retitled = published.tooltip != status.tooltip;
-        published.tooltip = status.tooltip.clone();
-        (retitled, visibility_changed)
+        Ok(None)
     };
-    publish.notify_all();
-    if retitled && let Some(icon) = tray.icon.get() {
-        let _ = icon.set_tooltip(Some(&status.tooltip));
+    let (lock, changed) = &*tray.published;
+    let mut published = lock.lock().unwrap_or_else(PoisonError::into_inner);
+    let retitled = published.tooltip != status.tooltip || published.visible != visible;
+    published.tooltip.clone_from(&status.tooltip);
+    published.panel = status.panel.clone();
+    // The focus deadline is independent of whether macOS could create a status item.
+    if published.change_clock(status.clock, visible && item.is_ok()) {
+        let app = app.clone();
+        let state = Arc::clone(&tray.published);
+        if let Err(error) = std::thread::Builder::new().name("epizen-tray".into()).spawn(move || keep_time(&app, &state)) {
+            published.clock_worker = false;
+            published.clock = Clock::Idle;
+            return Err(error.to_string());
+        }
     }
-    if status.visible {
+    drop(published);
+    changed.notify_all();
+    if let Some(icon) = item.map_err(|error| error.to_string())? {
+        if retitled { let _ = icon.set_tooltip(Some(&status.tooltip)); }
         let _ = app.emit_to(PANEL, STATE_EVENT, status.panel);
-    } else if visibility_changed {
-        // Destroying the panel also stops its audio. The timer clock belongs to the workspace.
-        close(&app);
     }
     Ok(())
 }
@@ -549,6 +566,22 @@ mod tests {
 
     fn pomodoro(minutes: i64, since: i64) -> Clock {
         Clock::Focus { accumulated: 0, since, paused: false, planned: Some(minutes * 60) }
+    }
+
+    #[test]
+    fn an_idle_vault_or_menu_only_never_starts_a_clock_worker() {
+        let mut state = Published::default();
+        assert!(!state.change_clock(Clock::Idle, false));
+        assert!(!state.change_clock(Clock::Idle, true));
+        assert!(!state.change_clock(Clock::Idle, false));
+        assert!(!state.clock_worker);
+        assert!(state.change_clock(pomodoro(25, AT), false));
+        assert!(!state.change_clock(pomodoro(25, AT), true));
+        assert!(!state.change_clock(pomodoro(25, AT), false));
+        assert!(state.clock_worker);
+        assert!(due(&state.clock, AT + 25 * 60_000));
+        assert_eq!(next_wake(&state.clock, AT, false), Some(Duration::from_secs(25 * 60)));
+        assert_eq!(next_wake(&stopwatch(0, AT, false), AT, false), None);
     }
 
     #[test]

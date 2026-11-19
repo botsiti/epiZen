@@ -504,10 +504,6 @@ pub fn run() {
             app.manage(RwLock::new(state));
             app.manage(settings);
             prompt::install(app.handle())?;
-            // The menu bar item is a convenience: without it the app still runs.
-            if let Err(err) = tray::install(app.handle()) {
-                eprintln!("Epizen couldn't put its item in the menu bar: {err}");
-            }
             Ok(())
         })
         .invoke_handler({
