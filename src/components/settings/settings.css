@@ -40,7 +40,7 @@
   --pref-pad: clamp(18px, 4cqi, 56px);
   container: settings / inline-size; min-height: 100%; min-width: 0; font: 14px/1.5 var(--font-ui); color: var(--text);
 }
-.settings-toolbar { position: sticky; top: 0; z-index: 4; background: color-mix(in srgb, #171a1c 97%, var(--accent)); border-bottom: 1px solid var(--pref-edge); }
+.settings-toolbar { position: sticky; top: 0; z-index: 4; background: color-mix(in srgb, var(--palette-surface) 97%, var(--accent)); border-bottom: 1px solid var(--pref-edge); }
 .settings-toolbar-line, .settings-section-strip, .preferences-main { width: min(100%, calc(var(--pref-width) + 2 * var(--pref-pad))); margin-inline: auto; box-sizing: border-box; padding-inline: var(--pref-pad); }
 .settings-toolbar-line { min-height: 58px; display: flex; align-items: center; gap: 14px; }
 .settings-wordmark { display: flex; align-items: center; gap: 9px; margin-right: auto; }

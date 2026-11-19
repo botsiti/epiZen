@@ -13,3 +13,15 @@ it('restores a library wallpaper and still-mode preference, rejecting external l
     expect(appearanceSettings({ wallpaper:invalid }).wallpaper).toBeUndefined();
   }
 });
+
+it('restores valid custom palettes and falls back for malformed and obsolete entries', () => {
+  const palette = { name: 'Midnight', background:'#141526', surface:'#20253a', text:'#eceeff', accent:'#a2bcff' };
+  const saved = appearanceSettings({ theme: 'Midnight', customThemes: [{}, { ...palette, name: 'Gruvbox' }, palette, palette] });
+  expect(saved.customThemes).toEqual([palette]);
+  expect(saved.theme).toBe('Midnight');
+  expect(appearanceSettings({ theme: 'Removed' }).theme).toBeUndefined();
+  expect(appearanceSettings({ theme: 'Gruvbox' }).theme).toBe('Gruvbox');
+  for (const accent of ['red', 'url(https://example.invalid)', '#aabbcc99', '#1a1a1a']) {
+    expect(appearanceSettings({ customThemes: [{ ...palette, accent }] }).customThemes).toBeUndefined();
+  }
+});

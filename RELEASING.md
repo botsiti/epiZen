@@ -10,6 +10,9 @@ or migration explicitly. Once the product and its compatibility promises are sta
 
 ## Prepare a version
 
+The macOS build uses the macOS 26 SDK and Swift 6.2 or later for the bundled on-device speech helper.
+The main application retains its existing deployment target.
+
 1. Run `npm run version:bump -- patch`, `minor`, or an explicit version such as `0.3.0`.
    This keeps npm, both lockfiles, Cargo and Tauri aligned. `npm run version:check` is part of the gate.
 2. Write `releases/VERSION.md`: user-visible changes, compatibility, validation actually completed,

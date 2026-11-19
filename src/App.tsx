@@ -2,6 +2,8 @@ import { checkWallpaper } from './components/settings/checkWallpaper';
 import { LiveWallpaper } from './components/settings/WallpaperMedia';
 import { useWallpapers } from './components/settings/useWallpapers';
 import { appearanceSettings, type Appearance } from './lib/appearance';
+import { applyColorTheme } from './components/settings/windowTheme';
+import { selectedTheme, themeRgb } from './lib/colorThemes';
 import { applyAppearance } from './lib/api';
 import { collectHabits, withHabits, habitActive, habitHistory, habitStats } from './lib/habits';
 import { HabitsPage } from './components/habits/HabitsPage';
@@ -180,7 +182,9 @@ export function App() {
     const root = document.documentElement;
     root.dataset.appearance = appearance.surface; root.dataset.ambient = String(appearance.motion);
     root.style.setProperty('--glass-opacity', String(appearance.opacity));
-    void applyAppearance(appearance.surface === 'glass').then(() => { if (!gone) setAppearanceError(undefined); }).catch((error: unknown) => { if (!gone) { root.dataset.appearance = 'solid'; setAppearanceError(String(error)); } });
+    const theme = selectedTheme(appearance.theme, appearance.customThemes);
+    applyColorTheme(theme);
+    void applyAppearance(themeRgb(theme.background)).then(() => { if (!gone) setAppearanceError(undefined); }).catch((error: unknown) => { if (!gone) { setAppearanceError(String(error)); } });
     return () => { gone = true; };
   }, [appearance]);
   const saveAppearance = async (value: Appearance) => {
@@ -1038,6 +1042,7 @@ export function App() {
                 media={mediaPage}
                 genreSuggestions={mediaPage ? genreCounts(library.get(mediaPage.spec.kind) ?? []).map(([name]) => name) : []}
                 onManageHabits={() => go({ kind: 'habits' })}
+                onMeasureHabit={habitActions.onMeasure}
                 onHabitToggle={async (date, id, expected) => {
                   const habit = habitCatalog.habits.find((h) => h.id === id);
                   if (!habit) throw new Error('This habit is no longer available. Reopen Habits.');

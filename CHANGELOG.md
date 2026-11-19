@@ -3,6 +3,10 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.15.0 — 2026-11-19
+
+Track checkboxes, numeric targets and measurements in the redesigned Habits workspace. Personalize routines, explore streaks and export their history. Choose or paste a global color theme, enjoy an opaque title bar, and move or dictate to Spike. [Full release notes](releases/0.15.0.md).
+
 ## 0.14.0 — 2026-11-19
 
 Configure tracked habits, daily task categories and life-sphere rewards from the rebuilt Settings.

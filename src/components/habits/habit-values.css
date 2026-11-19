@@ -1,0 +1,15 @@
+.habit-value-control, .habit-value-control form, .habit-value-control label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.habit-value-control { font-size: 13px; }
+.habit-value-control button, .habit-value-control input, .habits-form select {
+  color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font: inherit;
+}
+.habit-value-control .habit-increment, .habit-value-control button[type="submit"] { color: var(--accent); }
+.habit-value-control input { width: 78px; }
+.habit-value-control [role="alert"] { flex-basis: 100%; }
+.habit-measure-fields { display: flex; gap: 12px; }
+.habit-measure-fields > * { flex: 1; min-width: 0; }
+.habit-style-fields { display: grid; gap: 8px; margin-top: 10px; }
+.habits-form .habit-style-fields fieldset { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
+.habit-style-fields button { padding: 4px 6px; min-width: 30px; min-height: 30px; border: 1px solid transparent; border-radius: 6px; color: var(--text-muted); }
+.habit-style-fields button[aria-pressed="true"] { border-color: var(--accent); color: var(--text); }
+.habit-style-fields button i { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; }

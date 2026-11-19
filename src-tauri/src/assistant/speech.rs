@@ -10,6 +10,11 @@ pub async fn transcribe(audio: Vec<u8>, mime: String, cancel: &Notify, runtime: 
     let extension = match mime.split(';').next().unwrap_or("") { "audio/mp4" | "video/mp4" => "m4a", "audio/webm" | "video/webm" => "webm", "audio/ogg" => "ogg", "audio/wav" | "audio/x-wav" => "wav", _ => return Err("This audio format is unsupported.".to_owned()) };
     let path = scratch.path().join(format!("recording.{extension}"));
     std::fs::write(&path, audio).map_err(|_| "Couldn’t prepare the recording.".to_owned())?;
+    #[cfg(target_os = "macos")]
+    if objc2::available!(macos = 26.0)
+        && let Some(transcript) = analyze_recording(&path, cancel).await? {
+        return Ok(transcript);
+    }
     let stopped = Arc::new(AtomicBool::new(false));
     let _stop = StopOnDrop(stopped.clone());
     let job = tauri::async_runtime::spawn_blocking(move || { let _scratch = scratch; recognize(&path, &stopped) });
@@ -18,6 +23,31 @@ pub async fn transcribe(audio: Vec<u8>, mime: String, cancel: &Notify, runtime: 
         _ = cancel.notified() => Err("Stopped.".to_owned()),
         result = job => result.map_err(|_| "Local speech stopped unexpectedly.".to_owned())?,
     }
+}
+
+#[cfg(target_os = "macos")]
+async fn analyze_recording(path: &Path, cancel: &Notify) -> Result<Option<String>, String> {
+    use std::process::Stdio;
+    use tokio::process::Command;
+    let helper = std::env::current_exe().map_err(|_| "Couldn’t find Epizen’s local speech helper.")?
+        .with_file_name("epizen-local-speech");
+    let mut command = Command::new(helper);
+    command.arg(path).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .process_group(0).kill_on_drop(true);
+    let (success, output, _) = super::process::run(command, &[], cancel, Duration::from_secs(300)).await
+        .map_err(|error| if error == "Stopped." { error } else { "Local transcription could not finish. Check the language download and retry your recording.".to_owned() })?;
+    decode_local_transcript(success, &output)
+}
+
+#[cfg(target_os = "macos")]
+fn decode_local_transcript(success: bool, output: &[u8]) -> Result<Option<String>, String> {
+    if success && let Ok(result) = std::str::from_utf8(output) {
+        if result.trim() == "legacy" { return Ok(None); }
+        if let Some(transcript) = result.strip_prefix("transcript\n") {
+            return Ok(Some(transcript.trim().to_owned()));
+        }
+    }
+    Err("macOS couldn’t prepare local transcription. Check your connection for the first language download, then retry this recording.".to_owned())
 }
 
 #[cfg(target_os = "macos")]
@@ -110,13 +140,25 @@ pub async fn speak(text: &str, cancel: &Notify, runtime: &Path) -> Result<Vec<u8
 }
 
 fn recognition_failure(domain: &str, code: isize, detail: &str) -> String {
-    if domain == "kAFAssistantErrorDomain" && code == 1101 {
-        return "The on-device speech service could not start. Enable Dictation in macOS System Settings → Keyboard, check that your language is installed, then retry this recording. Your audio has not been sent to a cloud provider.".into();
+    if (domain == "kLSRErrorDomain" && code == 201) || (domain == "kAFAssistantErrorDomain" && code == 1101) {
+        return "Enable Dictation in System Settings → Keyboard and select your language, then retry this recording.".into();
     }
     format!("On-device speech failed ({domain} {code}). {detail}")
 }
 #[cfg(test)] mod recognition_tests {
     use super::*;
+    #[cfg(target_os = "macos")]
+    #[test] fn native_helper_distinguishes_transcripts_from_legacy_and_failure() {
+        assert_eq!(decode_local_transcript(true, b"transcript\nlegacy\n").unwrap(), Some("legacy".into()));
+        assert_eq!(decode_local_transcript(true, b"legacy\n").unwrap(), None);
+        assert!(decode_local_transcript(false, b"transcript\npartial").is_err());
+        assert!(decode_local_transcript(true, b"oops").is_err());
+    }
+    #[test] fn disabled_dictation_offers_recovery_without_exposing_framework_errors() {
+        let message = recognition_failure("kLSRErrorDomain", 201, "Siri and Dictation are disabled");
+        assert!(message.contains("System Settings → Keyboard"));
+        assert!(!message.contains("kLSRErrorDomain"));
+    }
     #[test] fn unavailable_local_service_has_actionable_setup_guidance() {
         let message = recognition_failure("kAFAssistantErrorDomain", 1101, "Recognition failed");
         assert!(message.contains("Enable Dictation"));

@@ -1,6 +1,6 @@
 import { $, $$, browser, expect } from '@wdio/globals';
 import { dirname, join } from 'node:path';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { vaultCopy } from '../paths';
 import { prepareWindow, screenshot, scrollIntoView, selectOption, clickAs } from '../support';
@@ -427,11 +427,12 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.switchToWindow('main');
     await $('[aria-label="Message Spike"]').setValue('Keep this unsent thought while Spike stays on my desktop.');
     const before = snapshotVault(root);
+    const folder = join(dirname(vaultCopy()), 'config', 'exports');
+    const existing = new Set(existsSync(folder) ? readdirSync(folder) : []);
     await $('[aria-label="Conversation history"]').click();
     await $('button=Export conversation…').click();
     await expect($('.assistant-notice')).toHaveText(expect.stringContaining('Conversation exported'));
-    const folder = join(dirname(vaultCopy()), 'config', 'assistant-exports');
-    const files = readdirSync(folder).filter((file) => file.endsWith('.md'));
+    const files = readdirSync(folder).filter((file) => !existing.has(file));
     expect(files).toHaveLength(1);
     const exported = readFileSync(join(folder, files[0]!), 'utf8');
     expect(exported).toContain('Keep this unsent thought while Spike stays on my desktop.');
@@ -452,12 +453,22 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.waitUntil(async () => (await $('.desktop-pet').getAttribute('class'))?.includes('has-prompt') === true);
     await expect($('.pet-tools')).not.toBeDisplayed();
     const position = await invoke('pet_position') as { x: number; y: number; scale: number };
-    await invoke('pet_move', { x: position.x - 100, y: position.y - 100 });
+    const delta = Math.round(128 * position.scale);
+    await invoke('pet_move', { x: position.x - delta, y: position.y - delta });
     const dog = await invoke('pet_position') as typeof position;
+    expect(dog.x).toBe(position.x - delta);
+    expect(dog.y).toBe(position.y - delta);
     await browser.switchToWindow('spike-prompt');
-    const prompt = await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { outerPosition: () => Promise<{ x: number; y: number }> } } } }).__TAURI__.window.getCurrentWindow().outerPosition());
+    const promptPosition = () => browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { outerPosition: () => Promise<{ x: number; y: number }> } } } }).__TAURI__.window.getCurrentWindow().outerPosition());
+    const prompt = await promptPosition();
     expect(prompt.y - dog.y).toBeCloseTo(144 * dog.scale, 0);
     expect(dog.x - prompt.x).toBeCloseTo(94 * dog.scale, 0);
+    // Another move must be reflected by both windows when the command resolves.
+    await browser.switchToWindow('spike');
+    const step = Math.round(16 * dog.scale);
+    await invoke('pet_move', { x: dog.x - step, y: dog.y - step });
+    await browser.switchToWindow('spike-prompt');
+    expect(await promptPosition()).toMatchObject({ x: prompt.x - step, y: prompt.y - step });
     await screenshot('229-spike-attached-prompt');
     await browser.switchToWindow('spike');
     // The embedded driver's pointer actions do not synthesize contextmenu.

@@ -1,7 +1,8 @@
 //! A small, transparent companion. The main window remains the only conversation/action owner.
+pub mod drag;
 use std::sync::{Mutex, atomic::{AtomicBool, Ordering}};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub const LABEL: &str = "spike";
 pub const COMMAND: &str = "epizen://pet-command";
@@ -16,7 +17,7 @@ impl Default for PetState {
     fn default() -> Self { Self { animation: "idle".to_owned(), label: "Talk to Spike".to_owned(), motion: true, prompt_open: false } }
 }
 #[derive(Default)]
-pub struct Pet { enabled: AtomicBool, state: Mutex<PetState>, owner: Mutex<Option<String>>, operation: tokio::sync::Mutex<()> }
+pub struct Pet { enabled: AtomicBool, dragging: AtomicBool, state: Mutex<PetState>, owner: Mutex<Option<String>>, operation: tokio::sync::Mutex<()> }
 impl Pet { pub fn enabled(&self) -> bool { self.enabled.load(Ordering::SeqCst) } }
 fn main_only(window: &WebviewWindow) -> Result<(), String> {
     if window.label() == "main" { Ok(()) } else { Err("Only the main workspace controls the companion.".to_owned()) }
@@ -71,34 +72,46 @@ fn within(position: (i32, i32), area: (i32, i32, u32, u32), size: (i32, i32)) ->
         && i64::from(x) + i64::from(size.0) <= i64::from(left) + i64::from(width)
         && i64::from(y) + i64::from(size.1) <= i64::from(top) + i64::from(height)
 }
-fn place(app: &AppHandle, window: &WebviewWindow) -> Result<(), String> {
+fn restore_origin(position: (i32, i32), area: (i32, i32, u32, u32), scale: f64, height: f64) -> Option<(i32, i32)> {
+    let sprite = ((WIDTH * scale).round() as i32, (PROMPT_ANCHOR * scale).round() as i32);
+    if !within(position, area, sprite) { return None; }
+    let lowest = i64::from(area.1) + i64::from(area.3) - (height * scale).round() as i64;
+    let y = i64::from(position.1).min(lowest).max(i64::from(area.1));
+    Some((position.0, y as i32))
+}
+
+fn place(app: &AppHandle, window: &WebviewWindow, height: f64) -> Result<(), String> {
     let main = app.get_webview_window("main").ok_or("The workspace is unavailable.")?;
     let monitors = main.available_monitors().map_err(|error| error.to_string())?;
     let settings = app.state::<crate::Settings>().load();
     let saved = settings.get("desktopPetPosition");
     if !cfg!(feature = "e2e") && std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_none()
         && let Some((x, y)) = saved.and_then(|value| Some((i32::try_from(value["x"].as_i64()?).ok()?, i32::try_from(value["y"].as_i64()?).ok()?)))
-        && monitors.iter().any(|monitor| { let area = monitor.work_area(); within((x, y), (area.position.x, area.position.y, area.size.width, area.size.height), ((WIDTH * monitor.scale_factor()).round() as i32, (HEIGHT * monitor.scale_factor()).round() as i32)) }) {
-            return window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string());
+        && let Some(((x, y), scale)) = monitors.iter().find_map(|monitor| {
+            let area = monitor.work_area();
+            restore_origin((x, y), (area.position.x, area.position.y, area.size.width, area.size.height), monitor.scale_factor(), height)
+                .map(|origin| (origin, monitor.scale_factor()))
+        }) {
+        return crate::companion_display::move_to(window, x, y, scale);
     }
     let monitor = crate::companion_display::select(&main, cfg!(feature = "e2e") || std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_some())?;
     let area = monitor.work_area(); let scale = monitor.scale_factor();
     let x = area.position.x + (f64::from(area.size.width) - (WIDTH + 24.0) * scale).max(0.0).round() as i32;
-    let y = area.position.y + (f64::from(area.size.height) - (HEIGHT + 24.0) * scale).max(0.0).round() as i32;
-    window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string())
+    let y = area.position.y + (f64::from(area.size.height) - (height + 24.0) * scale).max(0.0).round() as i32;
+    crate::companion_display::move_to(window, x, y, scale)
 }
 /// Quick capture may summon Spike without changing the user's startup preference.
 pub fn for_prompt(app: &AppHandle, root: &str) -> Result<WebviewWindow, String> {
     *app.state::<Pet>().owner.lock().unwrap_or_else(|p| p.into_inner()) = Some(root.to_owned());
     let existed = app.get_webview_window(LABEL).is_some();
     let window = create(app)?;
-    if !existed { place(app, &window)?; }
+    if !existed { place(app, &window, PROMPT_ANCHOR)?; }
     window.set_focusable(false).map_err(|error| error.to_string())?;
     Ok(window)
 }
 pub fn attach_prompt(app: &AppHandle, attached: bool) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(LABEL) {
-        window.set_size(tauri::LogicalSize::new(WIDTH, if attached { PROMPT_ANCHOR } else { HEIGHT })).map_err(|error| error.to_string())?;
+        crate::companion_display::resize(&window, WIDTH, if attached { PROMPT_ANCHOR } else { HEIGHT })?;
     }
     let pet = app.state::<Pet>(); let mut state = pet.state.lock().unwrap_or_else(|p| p.into_inner());
     state.prompt_open = attached;
@@ -121,7 +134,7 @@ pub async fn pet_enable(app: AppHandle, window: WebviewWindow, root: String, ena
     drop(guard);
     if enabled {
         let pet = create(&app)?;
-        place(&app, &pet)?;
+        place(&app, &pet, HEIGHT)?;
         pet.set_focusable(false).map_err(|error| error.to_string())?;
         if vault.read().unwrap_or_else(|p| p.into_inner()).vault()?.root() != root { return Err("The vault changed.".to_owned()); }
         crate::companion_display::show(&pet)?;
@@ -157,7 +170,8 @@ pub fn pet_position(window: WebviewWindow) -> Result<PetPosition, String> {
 #[tauri::command]
 pub fn pet_move(app: AppHandle, window: WebviewWindow, x: i32, y: i32) -> Result<(), String> {
     pet_only(&window)?;
-    window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string())?;
+    let scale = window.scale_factor().map_err(|err| err.to_string())?;
+    crate::companion_display::move_to(&window, x, y, scale)?;
     crate::prompt::follow_pet(&app)
 }
 #[tauri::command]
@@ -188,6 +202,14 @@ pub fn pet_motion(app: AppHandle, window: WebviewWindow, motion: bool) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bottom_edge_drop_restores_with_or_without_the_taller_dock() {
+        let area = (-1920, 0, 1920, 1080);
+        let bottom = (-1100, 792);
+        assert_eq!(restore_origin(bottom, area, 2.0, PROMPT_ANCHOR), Some(bottom));
+        assert_eq!(restore_origin(bottom, area, 2.0, HEIGHT), Some((-1100, 670)));
+        assert_eq!(restore_origin((130, 500), area, 2.0, HEIGHT), None);
+    }
     #[test]
     fn restored_positions_must_fit_the_display_without_changing_its_arrangement() {
         assert!(within((-1200, 100), (-1728, 0, 1728, 1080), (180, 220)));

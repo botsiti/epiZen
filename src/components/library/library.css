@@ -109,7 +109,7 @@
   min-width: 18px;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgb(143 188 170 / 16%);
+  background: rgb(var(--accent-rgb) / 16%);
   color: var(--accent);
   font: 600 11px/1.4 var(--numbers);
   font-variant-numeric: tabular-nums;
@@ -238,7 +238,7 @@
 }
 
 .tool-search:focus-within {
-  border-color: rgb(143 188 170 / 55%);
+  border-color: rgb(var(--accent-rgb) / 55%);
 }
 
 .tool-search .kind-mark {
@@ -317,7 +317,7 @@
 
 .library-frame .filter-pill:hover,
 .library-frame .filter-pill:focus-within {
-  border-color: rgb(143 188 170 / 40%);
+  border-color: rgb(var(--accent-rgb) / 40%);
 }
 
 .library-frame .filter-pill-button {
@@ -383,7 +383,7 @@
 
 .library-frame .filter-add:hover,
 .library-frame .filter-add[aria-expanded='true'] {
-  border-color: rgb(143 188 170 / 45%);
+  border-color: rgb(var(--accent-rgb) / 45%);
   color: var(--text);
 }
 
@@ -426,7 +426,7 @@
 }
 
 .library-frame .filter-find:focus-within {
-  border-color: rgb(143 188 170 / 55%);
+  border-color: rgb(var(--accent-rgb) / 55%);
 }
 
 .library-frame .filter-find .kind-mark {
@@ -499,7 +499,7 @@
 }
 
 .library-frame .filter-between input:focus {
-  border-color: rgb(143 188 170 / 55%);
+  border-color: rgb(var(--accent-rgb) / 55%);
 }
 
 /* Under the covers: fifteen more, or all of them in the list. */
@@ -564,7 +564,7 @@
 }
 
 .library-add.is-quiet:hover {
-  border-color: rgb(143 188 170 / 40%);
+  border-color: rgb(var(--accent-rgb) / 40%);
   color: var(--accent);
 }
 
@@ -635,7 +635,7 @@
 .histogram-bar {
   height: calc(4px + var(--h) * 48px);
   border-radius: 3px 3px 1px 1px;
-  background: linear-gradient(180deg, rgb(143 188 170 / 85%), rgb(143 188 170 / 35%));
+  background: linear-gradient(180deg, rgb(var(--accent-rgb) / 85%), rgb(var(--accent-rgb) / 35%));
   transform-origin: bottom;
   animation: rise-bar var(--motion-data) var(--settle) both;
   animation-delay: calc(min(var(--i, 0), 5) * 24ms);
@@ -708,7 +708,7 @@
 .library-card:hover .library-cover {
   transform: translateY(-4px) scale(1.02);
   box-shadow:
-    0 0 0 1px rgb(143 188 170 / 35%),
+    0 0 0 1px rgb(var(--accent-rgb) / 35%),
     0 24px 40px -20px rgb(0 0 0 / 95%);
 }
 
@@ -865,7 +865,7 @@
 
 .year-month.is-on .year-month-bar {
   background: var(--accent);
-  box-shadow: 0 0 10px rgb(143 188 170 / 55%);
+  box-shadow: 0 0 10px rgb(var(--accent-rgb) / 55%);
 }
 
 .year-month.is-on .year-month-letter {
@@ -1395,13 +1395,13 @@
   fill: none;
   stroke: var(--accent);
   stroke-linecap: round;
-  filter: drop-shadow(0 0 7px rgb(143 188 170 / 55%));
+  filter: drop-shadow(0 0 7px rgb(var(--accent-rgb) / 55%));
   animation: sweep var(--motion-data) var(--settle) both;
 }
 
 .rating-dot {
   fill: #eaf4ef;
-  filter: drop-shadow(0 0 6px rgb(143 188 170 / 95%));
+  filter: drop-shadow(0 0 6px rgb(var(--accent-rgb) / 95%));
 }
 
 .rating-tick {
@@ -1491,7 +1491,7 @@
 .add-search:focus {
   border-color: var(--accent);
   outline: none;
-  box-shadow: 0 0 0 4px rgb(143 188 170 / 12%);
+  box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / 12%);
 }
 
 .add-search::placeholder {
@@ -1671,7 +1671,7 @@
 }
 
 .add-episode:hover .add-episode-leaf {
-  border-color: rgb(143 188 170 / 40%);
+  border-color: rgb(var(--accent-rgb) / 40%);
 }
 
 .add-episode-month {
@@ -1887,7 +1887,7 @@
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
-  box-shadow: 0 0 10px rgb(143 188 170 / 45%);
+  box-shadow: 0 0 10px rgb(var(--accent-rgb) / 45%);
   transition: width 400ms var(--settle);
 }
 
@@ -2116,8 +2116,8 @@
 }
 
 .cover-choice[aria-pressed='true'] {
-  border-color: rgb(143 188 170 / 55%);
-  background: rgb(143 188 170 / 8%);
+  border-color: rgb(var(--accent-rgb) / 55%);
+  background: rgb(var(--accent-rgb) / 8%);
 }
 
 .cover-choice:disabled {
@@ -2322,7 +2322,7 @@
 }
 
 .library-row:focus-within {
-  background: rgb(143 188 170 / 8%);
+  background: rgb(var(--accent-rgb) / 8%);
 }
 
 .library-row > [role='cell'] {
@@ -2447,7 +2447,7 @@
   width: calc(var(--r) * 100%);
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgb(143 188 170 / 35%), rgb(143 188 170 / 90%));
+  background: linear-gradient(90deg, rgb(var(--accent-rgb) / 35%), rgb(var(--accent-rgb) / 90%));
 }
 
 .row-rating-number {

@@ -61,6 +61,7 @@ interface ViewProps extends NoteProps {
   /** The note's text as the app knows it, which the timer, the calendar or a quest may have just written. */
   known?: string;
   onManageHabits?: () => void;
+  onMeasureHabit?: PeriodicActions['onMeasureHabit'];
   onHabitToggle?: (date: Date, id: string, expectedDone: boolean) => Promise<void>;
   onQuestToggle: PeriodicActions['onQuestToggle'];
   onQuestProgress: PeriodicActions['onQuestProgress'];
@@ -73,7 +74,7 @@ interface ViewProps extends NoteProps {
 
 /** Loads a note from the vault and shows it, or edits it. */
 export function NoteView(props: ViewProps) {
-  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, vaultRoot, onImageAdded, onManageHabits, onHabitToggle } = props;
+  const { path, files, onOpenLink, editing, onEditingChange, onSaved, onUnsaved, linkTargets, periodic, media, onOpenNote, onOpenPeriod, known, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, vaultRoot, onImageAdded, onManageHabits, onMeasureHabit, onHabitToggle } = props;
   const [note, setNote] = useState<{ path: string; text?: string; error?: string }>({ path });
   // When the app learns a new text for this note (the timer wrote a block into it while it is
   // open), show that one and build the next change on it.
@@ -140,6 +141,7 @@ export function NoteView(props: ViewProps) {
       onEdit: () => onEditingChange(true),
       // The task is found again in the text as it is now: the same line, still ticked or not as it was shown.
       onManageHabits,
+      onMeasureHabit,
       onToggle: (task) => {
         if (task.habitId && onHabitToggle && periodic) {
           void trackSave(onHabitToggle(periodic.date, task.habitId, task.done).then(() => { setChangeError(undefined); return undefined; }).catch((err: unknown) => { setChangeError(`Habit wasn't changed: ${String(err)}`); return path; }));
@@ -206,7 +208,7 @@ export function NoteView(props: ViewProps) {
         return saved;
       },
     }),
-    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, onUnsaved, path, periodic, seenLine, vaultRoot, onImageAdded, onManageHabits, onHabitToggle],
+    [change, onEditingChange, onOpenNote, onOpenPeriod, onQuestToggle, onQuestProgress, onQuestChange, onStartTimer, onTaskChanged, onUnsaved, path, periodic, seenLine, vaultRoot, onImageAdded, onManageHabits, onMeasureHabit, onHabitToggle],
   );
 
   // Read once the saves under way have landed: the editor this note was last open in (here, or in

@@ -84,7 +84,7 @@ export const assistantApplyCalendar = (action: { id: string; root: string; calen
 export const assistantHasMessage = (root: string, id: string) => invoke<boolean>('assistant_has_message', { root, id });
 export const assistantListChats = (root: string) => invoke<unknown>('assistant_list_chats', { root });
 export const assistantSearchChats = (root: string, query: string, excludeMessage?: string) => invoke<unknown>('assistant_search_chats', { root, query, excludeMessage });
-export const assistantExportChat = (name: string, text: string) => invoke<string | null>('assistant_export_chat', { name, text });
+export const exportMarkdown = (name: string, text: string) => invoke<string | null>('export_markdown', { name, text });
 export const assistantLoadChat = (root: string, id: string) => invoke<unknown>('assistant_load_chat', { root, id });
 export const assistantSaveChat = (root: string, id: string, state: unknown, expectedRevision: number) => invoke<number>('assistant_save_chat', { root, id, state, expectedRevision });
 export const setAssistantKey = (key: string | null) => invoke<{ configured: boolean }>('assistant_set_key', { key });
@@ -129,9 +129,7 @@ export const petState = () => invoke<PetStatus>('pet_state');
 export const onPetState = (handler: (state: PetStatus) => void) => listen<PetStatus>('epizen://pet-state', (event) => handler(event.payload));
 export const onPetCommand = (handler: (command: unknown) => void) => listen<unknown>('epizen://pet-command', (event) => handler(event.payload));
 export const onMainHidden = (handler: () => void) => listen('epizen://main-hidden', handler);
-export interface PetPosition { x: number; y: number; scale: number }
-export const petPosition = () => invoke<PetPosition>('pet_position');
-export const movePet = (x: number, y: number) => invoke<void>('pet_move', { x, y });
+export const dragPet = (x: number, y: number) => invoke<boolean>('pet_drag', { x, y });
 export const openPetConversation = () => invoke<void>('pet_open_main');
 export const hidePet = () => invoke<void>('pet_hide');
 export const setPetMotion = (motion: boolean) => invoke<void>('pet_motion', { motion });
@@ -241,7 +239,9 @@ export const onPetWake = (handler: () => void) => listen('epizen://pet-wake', ha
 
 export const resizeQuickPrompt = (height: number) => invoke<void>('prompt_resize', { height });
 
-export const applyAppearance = (glass: boolean) => invoke<void>('apply_appearance', { glass });
+export const applyAppearance = (background: [number, number, number]) => invoke<void>('apply_appearance', { background });
+export const getAppearance = () => invoke<unknown>('get_appearance');
+export const onAppearanceChanged = (handler: (value: unknown) => void) => listen<unknown>('epizen://appearance', ({ payload }) => handler(payload));
 
 export interface Wallpaper { id: string; name: string; kind: 'gif' | 'video' | 'image'; url: string }
 type StoredWallpaper = Omit<Wallpaper, 'url'> & { path: string };

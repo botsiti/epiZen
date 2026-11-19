@@ -265,7 +265,7 @@
 }
 
 .preset.is-chosen {
-  border-color: rgb(143 188 170 / 45%);
+  border-color: rgb(var(--accent-rgb) / 45%);
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -493,7 +493,7 @@
 }
 
 .cal-col.is-today {
-  background: linear-gradient(180deg, rgb(143 188 170 / 5%), rgb(143 188 170 / 1.5%));
+  background: linear-gradient(180deg, rgb(var(--accent-rgb) / 5%), rgb(var(--accent-rgb) / 1.5%));
 }
 
 /* A block: a soft fill in its task's colour, a solid rail down its left edge. */
@@ -748,10 +748,10 @@
 }
 
 .cal-block.is-draft {
-  background: rgb(143 188 170 / 13%);
+  background: rgb(var(--accent-rgb) / 13%);
   box-shadow:
-    inset 0 0 0 1px rgb(143 188 170 / 75%),
-    0 0 24px -8px rgb(143 188 170 / 65%);
+    inset 0 0 0 1px rgb(var(--accent-rgb) / 75%),
+    0 0 24px -8px rgb(var(--accent-rgb) / 65%);
   animation: draft-in 240ms var(--snap) both;
 }
 
@@ -777,7 +777,7 @@
   margin-top: -1px;
   border-radius: 2px;
   background: var(--accent);
-  box-shadow: 0 0 10px 1px rgb(143 188 170 / 60%);
+  box-shadow: 0 0 10px 1px rgb(var(--accent-rgb) / 60%);
   pointer-events: none;
 }
 
@@ -790,7 +790,7 @@
   height: 10px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 14px 2px rgb(143 188 170 / 75%);
+  box-shadow: 0 0 14px 2px rgb(var(--accent-rgb) / 75%);
 }
 
 /* The night, folded into a thin band above and below the day */
@@ -1255,7 +1255,7 @@
 .focus-menu button:hover,
 .focus-menu button:focus-visible {
   outline: none;
-  background: rgb(143 188 170 / 14%);
+  background: rgb(var(--accent-rgb) / 14%);
 }
 
 .focus-menu hr {
@@ -1328,8 +1328,8 @@
 }
 
 .new-task-day.is-chosen {
-  border-color: rgb(143 188 170 / 50%);
-  background: rgb(143 188 170 / 14%);
+  border-color: rgb(var(--accent-rgb) / 50%);
+  background: rgb(var(--accent-rgb) / 14%);
   color: var(--accent);
 }
 

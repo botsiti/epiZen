@@ -188,7 +188,7 @@ export class AssistantController {
     const state = structuredClone(this.snapshot.thread);
     try {
       const name = `${noteFileName(state.title).slice(0, 80) || 'Spike conversation'}-${state.id.slice(0, 8)}.md`;
-      const destination = await api.assistantExportChat(name, conversationMarkdown(state));
+      const destination = await api.exportMarkdown(name, conversationMarkdown(state));
       if (destination) { this.exported = JSON.stringify(state); this.update({ notice: 'Conversation exported, including your unsent draft and any unresolved changes.' }); }
     } catch (error) { this.update({ error: reason(error) }); }
     finally { this.update({ switching: false }); }

@@ -33,7 +33,7 @@ stay sage.
 The app mark is the aqua glass brain in `assets/branding/epizen.png`, shared by the macOS app,
 sidebar, browser icon and repository. The menu-bar timer keeps its functional monochrome dial.
 
-The accent is sage everywhere else. No red for errors, no green for success, no
+Sage is the default accent. Settings → Appearance offers a whole-app color theme with a live note preview. Pasted palettes use a name and four opaque sRGB hex colors for background, surface, text and accent. The theme supplies the accent throughout the workspace, capture controls and tray. No red for errors, no green for success, no
 colour per callout type. A link to a missing note is muted with a dotted underline, not red.
 Covers and other images bring their own colour; the interface doesn't.
 
@@ -508,8 +508,11 @@ still identify their respective data; status colours describe the recorded check
 
 The sidebar's **Habits** screen owns a daily routine across changing months. Active, Archived
 and History collections lead to a selected habit's calendar, current streak, best streak, total
-completions and consistency. Cards carry small recent-day marks; the selected card has a sage
-edge. Empty states offer creating a habit or continuing the most recent set found in daily notes.
+completions and consistency. The selected card, history and milestone bar share the habit's
+color. Each card shows its icon and seven recent days. The inspector shows twenty weeks of
+activity, daily target bars or a measured-value trend, and a navigable monthly calendar.
+When only historical routines exist, the initial Active view opens History and offers to
+continue the most recent set. Export journal saves or copies a portable Markdown report.
 
 Definitions are ordinary Markdown notes under `Habits/`, with `type: habit`, a stable `habit_id`,
 a name, aliases and dated tracking periods. Completions stay as normal daily checkboxes inside
@@ -713,8 +716,7 @@ with a brief entrance and a small companion hop; Reduce Motion disables both.
 The microphone meter reflects measured audio energy. Listening, transcription, failure and retry
 remain explicit states. Model and reasoning effort use labelled native dropdowns, with a custom
 model escape hatch. Explicit effort reaches both Codex and the API adapter; Connection default preserves legacy routing. App-wide Appearance settings offer Liquid glass, opacity, and optional ambient motion for every vault.
-Native macOS material sits behind the transparent workspace and the compact prompt; it does not apply a
-window-sized WebKit blur. Ambient movement is opt-in and respects Reduce Motion.
+The workspace and native title bar always have an opaque backing. Glass composites the selected local wallpaper inside the workspace. The compact prompt can use native macOS material. Ambient movement is opt-in and respects Reduce Motion.
 
 
 The default text prompt is a 352px-wide single-row pill, approximately 50px high. It grows with

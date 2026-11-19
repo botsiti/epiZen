@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { day, parseDate } from './dates';
 import { parseDay } from './day';
-import { changeHabit, collectHabits, discoveredHabits, habitActive, habitHistory, habitStats, newHabit, readHabit, setHabitCompletion, withHabits, type Habit } from './habits';
+import { changeHabit, collectHabits, discoveredHabits, habitActive, habitHistory, habitStats, newHabit, readHabit, setHabitCompletion, setHabitValue, withHabits, type Habit } from './habits';
 
 const make = (name = 'No sweets', from = '2026-11-01', id = 'habit-sweets-001') => {
   const created = newHabit(name, from, id); return readHabit(created.path, created.text)!;
@@ -109,4 +109,38 @@ it('keeps a task moved outside the habits callout an ordinary task, even with an
   expect(parsed.habits).toEqual([]);
   expect(parsed.tasks[0]).toMatchObject({ label: 'Ordinary task', habit: false });
   expect(parsed.tasks[0]?.habitId).toBeUndefined();
+});
+
+describe('measured habits', () => {
+  const definition = (tracking: import('./habits').HabitTracking) => {
+    const created = newHabit('Water', '2026-11-01', 'water-00001', undefined, tracking);
+    return readHabit(created.path, created.text)!;
+  };
+  const goal = definition({ kind: 'goal', unit: 'glasses', target: 8 });
+  it.each(['\n', '\r\n'])('keeps all other Markdown intact while a goal crosses its target (%j)', (eol) => {
+    const source = ['Before.', '> [!habits]', '> - [ ] Water [habit::water-00001] [habit_value:: 3.5 ] <!-- keep 3.5 --> ^water', '> - [x] Run', 'After.'].join(eol);
+    const full = setHabitValue(source, goal, 3.5, 8);
+    expect(full).toBe(source.replace('[ ] Water', '[x] Water').replace(':: 3.5 ]', ':: 8 ]'));
+    expect(setHabitValue(full, goal, 8, 8)).toBe(full);
+    expect(setHabitValue(full, goal, 8, 3.5)).toBe(source);
+    expect(() => setHabitValue(full, goal, 3.5, 5)).toThrow('changed outside');
+    expect(() => setHabitCompletion(full, goal, true, false)).toThrow('Log a value');
+  });
+  it('distinguishes a zero measurement from a missing day and keeps partial goals unchecked', () => {
+    const measure = definition({ kind: 'measure', unit: 'cups' });
+    const text = setHabitValue('Daily note.\n', measure, undefined, 0);
+    const days = [{ date: date('2026-11-01'), day: parseDay(text), path: 'Day.md' }];
+    expect(habitHistory(measure, days, date('2026-11-02'))).toMatchObject([{ value: 0, done: true }, { value: undefined, done: false }]);
+    expect(parseDay(setHabitValue('Daily note.\n', goal, undefined, 0)).habits[0]).toMatchObject({ done: false, habitValue: 0 });
+    expect(parseDay(setHabitValue(text, measure, 0, -1.2)).habits[0]?.habitValue).toBe(-1.2);
+  });
+  it('refuses ambiguous fields, invalid targets and non-finite values', () => {
+    const row = '> [!habits]\n> - [ ] Water [habit::water-00001] ';
+    for (const fields of ['[habit_value::nan]', '[habit_value::1] [habit_value::2]', '[habit_value::1']) {
+      expect(() => setHabitValue(row + fields, goal, undefined, 2)).toThrow('unreadable');
+    }
+    expect(() => setHabitValue(row, goal, undefined, -1)).toThrow('valid value');
+    expect(() => setHabitValue(row, goal, undefined, Infinity)).toThrow('valid value');
+    expect(() => definition({ kind: 'goal', unit: 'cups', target: 0 })).toThrow('positive daily target');
+  });
 });

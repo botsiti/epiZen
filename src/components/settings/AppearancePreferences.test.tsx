@@ -45,3 +45,27 @@ it('imports a local animated wallpaper, saves its playback choice, and can retur
   await user.click(screen.getByRole('button', {name:'Save appearance'}));
   expect(save.mock.calls.at(-1)?.[0]).toMatchObject({wallpaper:undefined});
 });
+
+it('previews a preset, recovers from invalid JSON and saves a reusable custom palette', async () => {
+  const save = vi.fn().mockResolvedValue(undefined), user = userEvent.setup();
+  const palette = { name: 'Vesper', background: '#141526', surface: '#20253a', text: '#eceeff', accent: '#a2bcff' };
+  function Example() {
+    const [draft, setDraft] = useState<Appearance>({ surface: 'solid', opacity: .72, motion: false });
+    return <AppearancePreferences value={draft} onChange={setDraft} onSave={save} />;
+  }
+  render(<Example />);
+  await user.click(screen.getByRole('radio', { name: 'Gruvbox' }));
+  expect(screen.getByRole('radio', { name: 'Gruvbox' })).toBeChecked();
+  await user.click(screen.getByRole('button', { name: 'Paste theme…' }));
+  const source = screen.getByRole('textbox', { name: 'Palette JSON' });
+  await user.click(source); await user.paste('bad json');
+  await user.click(screen.getByRole('button', { name: 'Add theme' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('valid JSON');
+  await user.clear(source); await user.click(source); await user.paste(JSON.stringify(palette));
+  await user.click(screen.getByRole('button', { name: 'Add theme' }));
+  expect(screen.getByRole('radio', { name: 'Vesper' })).toBeChecked();
+  await user.click(screen.getByRole('button', { name: 'Save appearance' }));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ theme: 'Vesper', customThemes: [palette] }));
+  await user.click(screen.getByRole('button', { name: 'Remove Vesper' }));
+  expect(screen.getByRole('radio', { name: 'Epizen' })).toBeChecked();
+});

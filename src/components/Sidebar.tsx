@@ -60,7 +60,7 @@ export function Sidebar(props: Props) {
         {props.onNewBase && <button type="button" className="icon-button" onClick={props.onNewBase} title="New base or import an Obsidian Base" aria-label="New base" data-testid="new-base-button"><PreferenceIcon name="bases" /></button>}
 {props.onNewFolder && <button type="button" className="icon-button" onClick={props.onNewFolder} title="New folder" aria-label="New folder" data-testid="new-folder-button"><PreferenceIcon name="folder" /></button>}</div>
       <ul className="tree" role="tree">
-        <TreeItems nodes={tree} depth={0} selected={selected} isOpen={isFolderOpen} toggle={onToggleFolder} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} />
+        <TreeItems nodes={tree.filter((node) => node.kind !== 'folder' || (node.path !== 'Habits' && node.path !== 'Templates'))} depth={0} selected={selected} isOpen={isFolderOpen} toggle={onToggleFolder} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} />
       </ul>
       <div className="sidebar-foot">
         {props.plugins?.calendar !== false && <button type="button" className="sidebar-action" {...openClicks(onCalendar)} data-testid="open-calendar">

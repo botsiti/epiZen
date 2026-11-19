@@ -72,7 +72,7 @@
 .glass::after {
   inset: -1px;
   padding: 1px;
-  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), rgb(143 188 170 / 55%), transparent 70%);
+  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), rgb(var(--accent-rgb) / 55%), transparent 70%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -120,7 +120,7 @@
   inset: -30% -10%;
   z-index: -1;
   background:
-    radial-gradient(38% 55% at 14% 18%, rgb(143 188 170 / 20%), transparent 70%),
+    radial-gradient(38% 55% at 14% 18%, rgb(var(--accent-rgb) / 20%), transparent 70%),
     radial-gradient(32% 50% at 88% 6%, rgb(111 165 230 / 14%), transparent 70%),
     radial-gradient(40% 50% at 62% 115%, rgb(224 112 127 / 10%), transparent 70%);
 }
@@ -191,7 +191,7 @@
   max-width: 600px;
   margin: 0 -10px;
   padding: 6px 10px;
-  border: 1px solid rgb(143 188 170 / 35%);
+  border: 1px solid rgb(var(--accent-rgb) / 35%);
   border-radius: 12px;
   outline: none;
   background: rgb(0 0 0 / 18%);
@@ -256,7 +256,7 @@
 }
 
 .nav-chip.is-action {
-  border-color: rgb(143 188 170 / 35%);
+  border-color: rgb(var(--accent-rgb) / 35%);
   color: var(--accent);
 }
 
@@ -314,7 +314,7 @@
   height: 2px;
   border-radius: 2px;
   background: var(--accent);
-  box-shadow: 0 0 14px rgb(143 188 170 / 70%);
+  box-shadow: 0 0 14px rgb(var(--accent-rgb) / 70%);
   transition:
     transform var(--motion-state) var(--snap),
     width var(--motion-state) var(--snap);
@@ -616,7 +616,7 @@ button.segment:hover {
 }
 
 .ring .donut-arc {
-  filter: drop-shadow(0 0 6px rgb(143 188 170 / 45%));
+  filter: drop-shadow(0 0 6px rgb(var(--accent-rgb) / 45%));
 }
 
 .donut-center,
@@ -1191,7 +1191,7 @@ button.segment:hover {
 }
 
 .day-card.is-today {
-  border-color: rgb(143 188 170 / 50%);
+  border-color: rgb(var(--accent-rgb) / 50%);
 }
 
 .day-card-name {
@@ -1450,7 +1450,7 @@ button.day-row:hover {
   padding: 8px 10px;
   border: 1px solid var(--glass-line);
   border-radius: 12px;
-  background: rgb(143 188 170 / calc(var(--heat, 0) * 0.5));
+  background: rgb(var(--accent-rgb) / calc(var(--heat, 0) * 0.5));
   text-align: left;
   transition: transform var(--motion-state) var(--snap);
 }
@@ -1795,7 +1795,7 @@ button.heatmap-cell:hover {
   z-index: -1;
   height: 70%;
   background:
-    radial-gradient(40% 60% at 25% 40%, rgb(143 188 170 / 14%), transparent 70%),
+    radial-gradient(40% 60% at 25% 40%, rgb(var(--accent-rgb) / 14%), transparent 70%),
     radial-gradient(35% 55% at 80% 30%, rgb(111 165 230 / 9%), transparent 70%);
   pointer-events: none;
 }
@@ -1848,7 +1848,7 @@ button.heatmap-cell:hover {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #6f9d8b, var(--accent));
-  box-shadow: 0 0 14px rgb(143 188 170 / 60%);
+  box-shadow: 0 0 14px rgb(var(--accent-rgb) / 60%);
   transition: width 520ms var(--settle);
 }
 
@@ -1905,7 +1905,7 @@ button.heatmap-cell:hover {
 }
 
 .wizard textarea:focus {
-  border-color: rgb(143 188 170 / 55%);
+  border-color: rgb(var(--accent-rgb) / 55%);
 }
 
 .wizard-hint {
@@ -1922,7 +1922,7 @@ button.heatmap-cell:hover {
 .wizard-quote {
   margin: 0 0 var(--space-4);
   padding: 4px 0 4px 16px;
-  border-left: 2px solid rgb(143 188 170 / 45%);
+  border-left: 2px solid rgb(var(--accent-rgb) / 45%);
   color: var(--text-muted);
   font: italic 18px/1.5 var(--display);
 }
@@ -1952,7 +1952,7 @@ button.heatmap-cell:hover {
   font-weight: 600;
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 30%),
-    0 0 24px -6px rgb(143 188 170 / 55%);
+    0 0 24px -6px rgb(var(--accent-rgb) / 55%);
   transition:
     opacity 160ms ease-out,
     transform var(--motion-state) var(--snap);
@@ -2171,9 +2171,9 @@ button.heatmap-cell:hover {
 }
 
 .trap.is-on {
-  border-color: rgb(143 188 170 / 45%);
+  border-color: rgb(var(--accent-rgb) / 45%);
   background:
-    linear-gradient(110deg, rgb(143 188 170 / 10%), transparent 60%),
+    linear-gradient(110deg, rgb(var(--accent-rgb) / 10%), transparent 60%),
     var(--glass-face),
     var(--bg);
 }
@@ -2190,7 +2190,7 @@ button.heatmap-cell:hover {
   width: 22px;
   height: 22px;
   margin-top: 1px;
-  border: 1.5px solid rgb(143 188 170 / 55%);
+  border: 1.5px solid rgb(var(--accent-rgb) / 55%);
   border-radius: 50%;
   transition:
     background 200ms ease-out,
@@ -2261,7 +2261,7 @@ button.heatmap-cell:hover {
 .trap-reframe {
   margin: 0;
   padding-left: 12px;
-  border-left: 2px solid rgb(143 188 170 / 45%);
+  border-left: 2px solid rgb(var(--accent-rgb) / 45%);
   color: var(--text-muted);
   font-size: 13.5px;
   line-height: 1.5;
@@ -2288,7 +2288,7 @@ button.heatmap-cell:hover {
   background: var(--accent);
   color: #0e1012;
   font-size: 24px;
-  box-shadow: 0 0 34px -4px rgb(143 188 170 / 70%);
+  box-shadow: 0 0 34px -4px rgb(var(--accent-rgb) / 70%);
   animation: pop 520ms var(--snap) both;
 }
 
@@ -2753,7 +2753,7 @@ button.heatmap-cell:hover {
 .minutes-edit input {
   width: 60px;
   padding: 3px 8px;
-  border: 1px solid rgb(143 188 170 / 45%);
+  border: 1px solid rgb(var(--accent-rgb) / 45%);
   border-radius: 8px;
   outline: none;
   background: rgb(0 0 0 / 22%);
@@ -2885,7 +2885,7 @@ button.quest-art:focus-visible,
 }
 
 .quest-field input:focus {
-  border-color: rgb(143 188 170 / 55%);
+  border-color: rgb(var(--accent-rgb) / 55%);
 }
 
 .quest-field input[data-testid='quest-title'] {
@@ -3183,7 +3183,7 @@ button.quest-art:focus-visible,
 
 .quest-deadline-edit input {
   padding: 5px 10px;
-  border: 1px solid rgb(143 188 170 / 45%);
+  border: 1px solid rgb(var(--accent-rgb) / 45%);
   border-radius: 10px;
   outline: none;
   background: rgb(0 0 0 / 22%);

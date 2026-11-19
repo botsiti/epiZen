@@ -149,3 +149,19 @@ it('uses the selected transcription model independently of the assistant subscri
   act(() => hook.result.current.stop());
   await waitFor(() => expect(assistantTranscribe).toHaveBeenCalledWith(expect.any(Uint8Array), 'audio/mp4', expect.any(AbortSignal), 'codex', voice));
 });
+
+it('clears stale errors on close, retains audio for retry, and discards it on dismissal', async () => {
+  vi.mocked(assistantTranscribe).mockRejectedValue(new Error('Dictation disabled'));
+  const hook = renderHook(() => useVoice(vi.fn()));
+  await act(() => hook.result.current.start());
+  act(() => hook.result.current.stop());
+  await waitFor(() => expect(hook.result.current.error).toContain('Dictation disabled'));
+  act(() => hook.result.current.pauseRecording());
+  expect(hook.result.current.error).toBeUndefined();
+  expect(hook.result.current.canRetry).toBe(true);
+  act(() => hook.result.current.retry());
+  await waitFor(() => expect(hook.result.current.error).toContain('Dictation disabled'));
+  act(() => hook.result.current.cancel());
+  expect(hook.result.current.error).toBeUndefined();
+  expect(hook.result.current.canRetry).toBe(false);
+});

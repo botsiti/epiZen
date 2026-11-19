@@ -62,7 +62,7 @@ export function parseTasks(text: string): Task[] {
 }
 
 /** The note with that one task ticked or unticked: one character changes, nothing else. */
-export function toggleTask(text: string, task: Task): string {
+export function toggleTask(text: string, task: Pick<Task, 'offset' | 'done'>): string {
   const mark = text[task.offset];
   if (mark === undefined || !/[ xX]/.test(mark) || (mark !== ' ') !== task.done) throw new Error('That task has changed in the note.');
   return text.slice(0, task.offset) + (task.done ? ' ' : 'x') + text.slice(task.offset + 1);

@@ -38,7 +38,7 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
     } finally { if (alive.current && generation.current === token) setPhase('idle'); }
   }, [provider, voiceProvider, voiceModel, transcriber]);
   const pauseRecording = useCallback(() => {
-    sendOnStop.current = false;
+    setError(undefined); sendOnStop.current = false;
     if (recorder.current?.state === 'recording') recorder.current.stop();
     else { generation.current++; request.current?.abort(); clearAudio(); setPhase('idle'); setCanRetry(Boolean(saved.current)); }
     clearCapture();
@@ -47,7 +47,7 @@ export function useVoice(onTranscript: (text: string) => Promise<void>, provider
   const previousProvider = useRef(connection);
   useEffect(() => { if (previousProvider.current !== connection) { previousProvider.current = connection; pauseRecording(); } }, [connection, pauseRecording]);
   const cancel = useCallback(() => {
-    generation.current++; request.current?.abort(); sendOnStop.current = false;
+    generation.current++; request.current?.abort(); sendOnStop.current = false; setError(undefined);
     if (recorder.current?.state === 'recording') recorder.current.stop();
     if (phase !== 'speaking') { saved.current = undefined; setCanRetry(false); }
     clearCapture(); clearAudio(); setPhase('idle');

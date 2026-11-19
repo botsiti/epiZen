@@ -141,11 +141,14 @@ function QuickEntry({ snapshot }: { snapshot: QuickSnapshot }) {
       </form>
       {menuOpen && <div className="quick-actions" role="group" aria-label="Prompt actions">
         <button type="button" aria-label="Open conversation" onClick={openConversation}><CaptureIcon name="conversation" />Conversation</button>
+        {voice.canRetry && !voice.error && <button type="button" disabled={!canSpeak} onClick={() => { setMenuOpening(undefined); voice.retry(); }}>Send saved recording</button>}
         <button type="button" disabled={!canSpeak} onClick={beginVoice}><CaptureIcon name="voice" />Dictate</button>
         <button type="button" aria-label="Close quick prompt" onClick={() => void close()}><CaptureIcon name="close" />Close</button>
       </div>}
-      {(error || voice.error || doc.pending?.error) && <div className="quick-feedback" role="alert"><p>{error ?? voice.error ?? doc.pending?.error}</p>{doc.pending?.error && <button type="button" onClick={retry}>Retry prompt</button>}{voice.canRetry && <button type="button" onClick={voice.retry}>Retry recording</button>}</div>}
-      {voice.canRetry && !voice.error && <div className="quick-feedback"><button type="button" onClick={voice.retry}>Send saved recording</button></div>}
+      {(error || voice.error || doc.pending?.error) && <div className="quick-feedback" role="alert"><p>{error ?? voice.error ?? doc.pending?.error}</p>{doc.pending?.error && <button type="button" onClick={retry}>Retry prompt</button>}{voice.error && <>
+        {voice.canRetry && <button type="button" disabled={!canSpeak} onClick={voice.retry}>Retry recording</button>}
+        <button type="button" onClick={() => { voice.cancel(); input.current?.focus(); }}>{voice.canRetry ? 'Discard recording' : 'Dismiss'}</button>
+      </>}</div>}
       {waiting && <div className="quick-progress" role="status">{status.busy ? status.label || 'Thinking…' : 'Sending…'}</div>}
       {(!status.connected || status.review || reply) && <div className="quick-response">
         {reply && <div className="quick-reply"><p className={expandedReply === snapshot.opened ? 'is-expanded' : undefined}>{reply}</p>

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { hidePet, movePet, onPetWake, onPetState, openQuickPrompt, petPosition, petState, setPetMotion, type PetPosition, type PetStatus } from '../lib/api';
+import { useEffect, useRef, useState } from 'react';
+import { dragPet, hidePet, onPetWake, onPetState, openQuickPrompt, petState, setPetMotion, type PetStatus } from '../lib/api';
 import { CompanionDock, CaptureIcon } from '../components/companion/CompanionDock';
 import { Spike } from '../components/assistant/Spike';
 import { SPIKE_FRAMES, type SpikeState } from '../lib/assistant/spike';
@@ -12,34 +12,8 @@ export function DesktopPet() {
     return () => { gone = true; stop?.(); clearTimeout(timer); };
   }, []);
   const [status, setStatus] = useState<PetStatus>({ animation: 'idle', label: 'Talk to Spike', motion: true });
-  const [dragging, setDragging] = useState<SpikeState>(), [error, setError] = useState<string>();
-  const drag = useRef<{ id: number; x: number; y: number; origin: Promise<PetPosition>; moved: boolean; token: number } | undefined>(undefined);
-  const movement = useRef(Promise.resolve());
-  const epoch = useRef(0);
-  const nextMove = useRef<{ origin: Promise<PetPosition>; dx: number; dy: number; token: number } | undefined>(undefined);
-  const moving = useRef(false);
-  const move = (event: PointerEvent<HTMLDivElement>) => {
-    const active = drag.current;
-    if (!active || active.id !== event.pointerId) return;
-    const dx = event.screenX - active.x, dy = event.screenY - active.y;
-    if (!active.moved && Math.hypot(dx, dy) < 4) return;
-    active.moved = true; setDragging(dx < 0 ? 'left' : 'right');
-    nextMove.current = { origin: active.origin, dx, dy, token: active.token };
-    if (moving.current) return;
-    moving.current = true;
-    void (async () => {
-      while (nextMove.current) {
-        const latest = nextMove.current; nextMove.current = undefined;
-        const origin = await latest.origin;
-        if (latest.token !== epoch.current) continue;
-        // Track only the native move, never the drain loop: a new gesture may wait for
-        // this command while that same loop is about to process the new gesture.
-        movement.current = movePet(Math.round(origin.x + latest.dx * origin.scale), Math.round(origin.y + latest.dy * origin.scale));
-        await movement.current;
-      }
-    })().catch((error: unknown) => { nextMove.current = undefined; setError(String(error)); }).finally(() => { moving.current = false; });
-  };
-  const endDrag = () => { drag.current = undefined; setDragging(undefined); };
+  const [error, setError] = useState<string>();
+  const gesture = useRef(false);
   useEffect(() => {
     let gone = false, stop: (() => void) | undefined;
     const accept = (next: PetStatus) => { if (!gone && next && Object.hasOwn(SPIKE_FRAMES, next.animation) && typeof next.label === 'string' && typeof next.motion === 'boolean') setStatus(next); };
@@ -49,18 +23,17 @@ export function DesktopPet() {
   }, []);
   const perform = (action: () => Promise<void>) => { setError(undefined); void action().catch((error: unknown) => setError(String(error))); };
   return <main className={`desktop-pet${status.promptOpen ? ' has-prompt' : ''}`} data-testid="desktop-pet">
-    <div className={`pet-body${wake && status.motion ? ' is-waking' : ''}`} role="button" tabIndex={0} aria-label="Talk to Spike · drag to move" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); perform(() => openQuickPrompt()); } }} onContextMenu={(event) => { event.preventDefault(); endDrag(); perform(hidePet); }} title={`${status.label} · Drag to move · Right-click to hide · ⇧⌘Space to show`} onPointerDown={(event) => {
-      if (event.button !== 0) return;
-      event.preventDefault(); setError(undefined);
-      // Pointer capture survives leaving the transparent window. Track the active
-      // pointer rather than `buttons`, which WebKit can report as zero on macOS.
-      event.currentTarget.setPointerCapture(event.pointerId);
-      const token = ++epoch.current; nextMove.current = undefined;
-      const origin = movement.current.catch(() => undefined).then(petPosition);
-      void origin.catch((error: unknown) => { endDrag(); setError(String(error)); });
-      drag.current = { id: event.pointerId, x: event.screenX, y: event.screenY, origin, moved: false, token };
-    }} onPointerMove={move} onPointerUp={(event) => { move(event); const active = drag.current; endDrag(); if (active && !active.moved) perform(() => openQuickPrompt()); }} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
-      <Spike size={132} state={dragging ?? status.animation as SpikeState} motion={status.motion} followPointer />
+    <div className={`pet-body${wake && status.motion ? ' is-waking' : ''}`} role="button" tabIndex={0} aria-label="Talk to Spike · drag to move" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); perform(() => openQuickPrompt()); } }} onContextMenu={(event) => { event.preventDefault(); perform(hidePet); }} title={`${status.label} · Drag to move · Right-click to hide · ⇧⌘Space to show`} onPointerDown={(event) => {
+      if (event.button !== 0 || gesture.current) return;
+      event.preventDefault();
+      gesture.current = true;
+      perform(async () => {
+        try {
+          if (!await dragPet(event.clientX, event.clientY)) await openQuickPrompt();
+        } finally { gesture.current = false; }
+      });
+    }}>
+      <Spike size={132} state={status.animation as SpikeState} motion={status.motion} followPointer />
     </div>
     <div className="pet-tools">
       <CompanionDock onWrite={() => perform(() => openQuickPrompt())} onVoice={() => perform(() => openQuickPrompt(true))} />

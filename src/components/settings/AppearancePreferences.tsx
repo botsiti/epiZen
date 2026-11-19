@@ -1,3 +1,4 @@
+import { ColorThemePicker } from './ColorThemePicker';
 import { WallpaperPreferences } from './WallpaperPreferences';
 import { LiveWallpaper } from './WallpaperMedia';
 import type { WallpaperLibrary } from './useWallpapers';
@@ -21,6 +22,7 @@ export function AppearancePreferences({ library, value: draft, onChange, onSave,
   };
   return <form className="preferences-form appearance-form" onSubmit={(event) => void save(event)}>
     <fieldset className="preferences-fields" disabled={busy}>
+      <ColorThemePicker value={draft} change={change} />
       <fieldset className="appearance-surfaces"><legend>Window surface</legend>
         <div className="surface-options">{(['solid', 'glass'] as const).map((surface) => {
           const name = surface === 'glass' ? 'Liquid glass' : 'Solid';

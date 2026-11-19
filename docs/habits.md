@@ -1,5 +1,7 @@
 # Habits
 
+![The Habits workspace showing four routines and a daily water target](images/habits.png)
+
 Open **Habits** from the sidebar. Add a daily habit with **New habit**, or use **Continue recent
 routine** to carry forward the latest habit set found in your daily notes. The History collection
 also lets you continue an older habit individually. No existing daily note is rewritten by this step.
@@ -50,7 +52,7 @@ than silently edited. If you rename a definition by hand, keep the former name i
 
 The Today strip shows how much of the routine is complete. Each active habit has its own direct
 check-in button; selecting the habit opens its history without changing its completion. Overview
-shows the current and best streaks and twelve weeks of check-ins. Calendar opens the detailed
+shows the current and best streaks and twenty weeks of check-ins. Calendar opens the detailed
 monthly view, where a date leads to its daily note. Creation and schedule edits open in a compact
 dialog so the current place in the routine stays put.
 
@@ -59,3 +61,13 @@ The visual references studied through Appllama were Productive's dark Today dash
 `6443918070/oth_pcexw`), and (Not Boring) Habits' statistics and monthly summary
 (`1593891243/oth_8fgk9`, `1593891243/oth_osxyx`). The adopted patterns are direct daily actions,
 compact history grids and clear numerical hierarchy, expressed in Epizen's own palette and type.
+
+## Check-ins, targets and measurements
+
+Choose **Track by** when creating a habit. A daily check-in records completion with one click. A daily target records progress in your chosen unit, with a +1 shortcut and an editable value. Reaching the target completes the day. A measured habit records a value, including zero. Its trend connects consecutive recorded days. Open **Color and icon** during creation, or choose **Personalize** on an existing routine.
+
+The weekly chart counts completions across routines. Each habit has its own 20-week activity grid, monthly calendar, current and best streaks, completion count and consistency. Active routines show the next streak milestone. The fourteen-day goal chart shows progress against the target, while the measured-value chart shows change over time. Recorded values are also available as a text list.
+
+## Export and share
+
+Choose **Export journal** to save or copy a Markdown report. The report includes active, archived and historical routines, tracking periods, recorded values, and dated check-ins. Its source archive includes the original definition notes and the daily habit task fields. Other daily-note sections stay in the vault. Saving creates a new file at the chosen destination.
