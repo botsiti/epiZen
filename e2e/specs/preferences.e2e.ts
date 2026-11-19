@@ -141,7 +141,7 @@ describe('focused preferences and file creation', () => {
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await $('[data-testid="open-settings"]').click(); await section('files');
     await select('[aria-label="Location for new notes"]', 'folder');
-    await $('[aria-label="Notes folder"]').setValue('Fresh ideas');
+    await $('label=Notes folder').$('input').setValue('Fresh ideas');
     await save();
     await screenshot('167-settings-files');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);

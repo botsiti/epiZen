@@ -106,6 +106,8 @@ export const config: WebdriverIO.Config = {
   // floating level without activating it, so earlier windows or another Space cannot occlude
   // its WebKit renderer and suspend animation frames.
   async beforeTest() {
+    // A failed secondary-window journey can leave WebDriver targeting the prompt or tray.
+    if (await browser.getWindowHandle() !== 'main') await browser.switchToWindow('main');
     await browser.execute(async () => {
       const tauri = (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { setAlwaysOnTop: (value: boolean) => Promise<void> } } } }).__TAURI__;
       const current = tauri.window.getCurrentWindow();
@@ -115,6 +117,7 @@ export const config: WebdriverIO.Config = {
   },
   // The next worker gets the floating slot; leave the keyboard focus with the user.
   async after() {
+    if (await browser.getWindowHandle() !== 'main') await browser.switchToWindow('main');
     await browser.execute(async () => {
       const tauri = (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { setAlwaysOnTop: (value: boolean) => Promise<void> } } } }).__TAURI__;
       await tauri.window.getCurrentWindow().setAlwaysOnTop(false);

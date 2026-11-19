@@ -1577,8 +1577,13 @@ describe('the demo vault', () => {
     await openTray();
     await $('button=Sound').click();
     const volume = $('[aria-label="Sound volume"]');
-    await volume.click();
-    await browser.keys('Home');
+    // The embedded driver synthesizes key events and cannot apply a range input's Home key.
+    await browser.execute(() => {
+      const slider = document.querySelector<HTMLInputElement>('[aria-label="Sound volume"]')!;
+      slider.stepDown(100);
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await expect(volume).toHaveValue('0');
     await $('button=White noise').click();
     await expect($('button=White noise')).toHaveAttribute('aria-pressed', 'true');

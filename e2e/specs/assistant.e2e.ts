@@ -334,8 +334,8 @@ describe('Spike conversations and second-brain actions', () => {
       Object.defineProperty(window, 'AudioContext', { configurable: true, value: undefined });
       Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: () => Promise.resolve({ getTracks: () => [{ stop: () => undefined }] }) } });
     });
-    await $('[aria-label="Dictate to Spike"]').waitForEnabled();
-    await $('[aria-label="Dictate to Spike"]').click();
+    await $('[aria-label="Dictate quick message"]').waitForEnabled();
+    await $('[aria-label="Dictate quick message"]').click();
     await expect($('.quick-recording')).toHaveText(expect.stringContaining('Listening'));
     await screenshot('227-spike-quick-dictation');
     await $('[aria-label="Send quick voice message"]').click();
