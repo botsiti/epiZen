@@ -2223,7 +2223,8 @@ describe('the demo vault', () => {
     const description = await checkIn.getAttribute('aria-describedby');
     await browser.execute((id) => document.querySelector<HTMLElement>('[aria-describedby="' + id + '"]')?.focus(), description);
     const tooltip = $('[id="' + description + '"]');
-    await expect(tooltip).toHaveText(expect.stringMatching(/Current streak\s+1d\s+Record streak\s+1d/));
+    await expect(tooltip.$('span:first-child')).toHaveText('Current streak 1d');
+    await expect(tooltip.$('span:last-child')).toHaveText('Record streak 1d');
     await screenshot('152-daily-habit-streaks');
   });
 
