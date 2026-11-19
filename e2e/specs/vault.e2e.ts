@@ -24,6 +24,7 @@ import {
   pressCommand,
   screenshot,
   scrollIntoView,
+  selectOption,
   setRightSidebar,
   showLibraryAs,
   showMonth,
@@ -2155,7 +2156,7 @@ describe('the demo vault', () => {
     await $('button*=New habit').click();
     const dialog = $('[role="dialog"]');
     await dialog.$('[aria-label="Habit name"]').setValue('Hydration journey');
-    await dialog.$('select').selectByAttribute('value', 'goal');
+    await selectOption('[role="dialog"] .habits-form select', 'goal');
     await dialog.$('input[placeholder="e.g. glasses"]').setValue('glasses');
     await dialog.$('input[type="number"]').setValue('2');
     await $('button=Save habit').click();

@@ -1,6 +1,6 @@
 import { $, $$, browser, expect } from '@wdio/globals';
 import { dirname, join } from 'node:path';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { vaultCopy } from '../paths';
 import { prepareWindow, screenshot, scrollIntoView, selectOption, clickAs } from '../support';
@@ -427,11 +427,12 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.switchToWindow('main');
     await $('[aria-label="Message Spike"]').setValue('Keep this unsent thought while Spike stays on my desktop.');
     const before = snapshotVault(root);
+    const folder = join(dirname(vaultCopy()), 'config', 'exports');
+    const existing = new Set(existsSync(folder) ? readdirSync(folder) : []);
     await $('[aria-label="Conversation history"]').click();
     await $('button=Export conversation…').click();
     await expect($('.assistant-notice')).toHaveText(expect.stringContaining('Conversation exported'));
-    const folder = join(dirname(vaultCopy()), 'config', 'exports');
-    const files = readdirSync(folder).filter((file) => file.endsWith('.md'));
+    const files = readdirSync(folder).filter((file) => !existing.has(file));
     expect(files).toHaveLength(1);
     const exported = readFileSync(join(folder, files[0]!), 'utf8');
     expect(exported).toContain('Keep this unsent thought while Spike stays on my desktop.');
