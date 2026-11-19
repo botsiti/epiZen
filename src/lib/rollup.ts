@@ -103,7 +103,7 @@ export function missingFromDay(day: Day): string[] {
   ]
     .filter(([key = '']) => day.keys.includes(key) && !logged(key, day.numbers[key]))
     .map(([, label]) => label ?? '');
-  if (day.habits.length && !day.habits.some((habit) => habit.done)) missing.push('habits');
+  if (day.habits.length && !day.habits.some((habit) => habit.done || habit.habitValue !== undefined)) missing.push('habits');
   return missing;
 }
 

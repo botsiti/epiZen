@@ -39,8 +39,8 @@ impl Prompt { pub fn enabled(&self) -> bool { self.state.lock().unwrap_or_else(|
 /// Tauri's plugin ACL covers plugin commands; app commands need this explicit window boundary.
 pub fn command_allowed(label: &str, command: &str) -> bool {
     match label {
-        LABEL => matches!(command, "prompt_state" | "prompt_save" | "prompt_submit" | "prompt_open" | "prompt_hide" | "prompt_resize" | "prompt_open_main" | "prompt_consumed" | "prompt_flushed" | "assistant_transcribe" | "assistant_cancel"),
-        crate::pet::LABEL => matches!(command, "pet_state" | "pet_position" | "pet_move" | "pet_open_main" | "pet_hide" | "pet_motion" | "prompt_open"),
+        LABEL => matches!(command, "get_appearance" | "prompt_state" | "prompt_save" | "prompt_submit" | "prompt_open" | "prompt_hide" | "prompt_resize" | "prompt_open_main" | "prompt_consumed" | "prompt_flushed" | "assistant_transcribe" | "assistant_cancel"),
+        crate::pet::LABEL => matches!(command, "get_appearance" | "pet_state" | "pet_position" | "pet_move" | "pet_drag" | "pet_open_main" | "pet_hide" | "pet_motion" | "prompt_open"),
         _ => true,
     }
 }
@@ -243,15 +243,18 @@ fn pair_positions(pet: (f64, f64), area: (f64, f64, f64, f64), scale: f64, promp
     let offset = (WIDTH - crate::pet::WIDTH) * scale / 2.0;
     let anchor = crate::pet::PROMPT_ANCHOR * scale;
     let x = (pet.0 - offset).clamp(left, left + (width - WIDTH * scale).max(0.0));
-    let y = pet.1.clamp(top, top + (height - anchor - prompt_height * scale).max(0.0));
-    (((x + offset).round() as i32, y.round() as i32), (x.round() as i32, (y + anchor).round() as i32))
+    let bottom = top + height;
+    let panel_height = prompt_height * scale;
+    let below = pet.1 + anchor;
+    let y = if below + panel_height <= bottom { below } else { pet.1 - panel_height };
+    let y = y.clamp(top, (bottom - panel_height).max(top));
+    ((pet.0.round() as i32, pet.1.round() as i32), (x.round() as i32, y.round() as i32))
 }
 fn position_pair(pet: &WebviewWindow, prompt: &WebviewWindow, monitor: &tauri::Monitor) -> Result<(), String> {
     let position = pet.outer_position().map_err(|error| error.to_string())?;
     let area = monitor.work_area(); let scale = monitor.scale_factor();
     let height = prompt.inner_size().map_err(|error| error.to_string())?.height as f64 / prompt.scale_factor().map_err(|error| error.to_string())?;
-    let (dog, input) = pair_positions((position.x as f64, position.y as f64), (area.position.x as f64, area.position.y as f64, area.size.width as f64, area.size.height as f64), scale, height);
-    pet.set_position(PhysicalPosition::new(dog.0, dog.1)).map_err(|error| error.to_string())?;
+    let (_, input) = pair_positions((position.x as f64, position.y as f64), (area.position.x as f64, area.position.y as f64, area.size.width as f64, area.size.height as f64), scale, height);
     prompt.set_position(PhysicalPosition::new(input.0, input.1)).map_err(|error| error.to_string())
 }
 pub fn follow_pet(app: &AppHandle) -> Result<(), String> {
@@ -342,6 +345,7 @@ mod tests {
             assert!(!command_allowed(crate::pet::LABEL, command), "{command}");
             assert!(command_allowed("main", command));
         }
+        for window in [LABEL, crate::pet::LABEL, "tray"] { assert!(command_allowed(window, "get_appearance")); }
         assert!(command_allowed(LABEL, "assistant_transcribe"));
         assert!(command_allowed(LABEL, "prompt_submit"));
         assert!(command_allowed(crate::pet::LABEL, "prompt_open"));
@@ -356,16 +360,16 @@ mod tests {
         assert_eq!(dog, (-1500, 100)); assert_eq!(input, (-1594, 244));
     }
     #[test]
-    fn pair_fits_edges_and_growing_feedback_without_separating() {
+    fn prompt_stays_visible_without_pushing_the_pet_away_from_edges() {
         for scale in [1.0, 2.0] {
             for height in [50.0, 96.0, 320.0] {
                 for position in [(0.0, 0.0), (3400.0, 2100.0), (-10000.0, -10000.0)] {
                     let (dog, input) = pair_positions(position, (0.0, 50.0, 3456.0, 2100.0), scale, height);
-                    assert!(dog.1 >= 50);
+                    assert_eq!(dog, (position.0 as i32, position.1 as i32));
+                    assert!(input.1 >= 50);
                     assert!(input.0 >= 0 && input.0 as f64 + WIDTH * scale <= 3456.0);
                     assert!(input.1 as f64 + height * scale <= 2150.0);
-                    assert_eq!(input.1 - dog.1, (crate::pet::PROMPT_ANCHOR * scale) as i32);
-                    assert_eq!(dog.0 - input.0, ((WIDTH - crate::pet::WIDTH) * scale / 2.0) as i32);
+                    if position.1 == 2100.0 { assert_eq!(input.1 as f64 + height * scale, position.1); }
                 }
             }
         }

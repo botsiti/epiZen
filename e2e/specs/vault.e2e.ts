@@ -113,6 +113,7 @@ describe('the demo vault', () => {
     await expect($('[data-testid="hero-title"]')).toHaveText(expect.stringMatching(/^Level \d+$/));
     await expect($('[data-testid="hero-stats"]')).toHaveText(expect.stringContaining('Life XP'));
     await expect($('[data-testid="memento"]')).toHaveText(expect.stringContaining('Add your birth date in Homepage settings'));
+    await expect($('[data-testid="tree-folder"][data-path="Templates"]')).not.toBeExisting();
     await screenshot('03-home');
     await scrollIntoView('[data-testid="spheres"]');
     await expect($('[data-testid="lead-sphere"]')).toHaveText(expect.stringContaining('Personal Growth'));
@@ -2080,6 +2081,7 @@ describe('the demo vault', () => {
     await $('[data-testid="habit-detail"]').waitForDisplayed();
     const names = [...snapshotVault(vaultCopy()).keys()].filter((path) => path.startsWith('Habits/') && !before.has(path));
     expect(names).toHaveLength(1);
+    await expect($('[data-testid="tree-folder"][data-path="Habits"]')).not.toBeExisting();
     const definition = names[0]!;
     const source = () => readFileSync(join(vaultCopy(), definition), 'utf8');
     const id = /^habit_id: (.+)$/m.exec(source())![1]!;
@@ -2146,6 +2148,38 @@ describe('the demo vault', () => {
     await $('button*=no sweet').click();
     await scrollIntoView('[data-testid="habit-detail"]');
     await screenshot('146-habits-history-design');
+  });
+
+  it('logs a daily target, reviews its chart and exports a portable journal', async () => {
+    await $('[data-testid="open-habits"]').click();
+    await $('button*=New habit').click();
+    const dialog = $('[role="dialog"]');
+    await dialog.$('[aria-label="Habit name"]').setValue('Hydration journey');
+    await dialog.$('select').selectByAttribute('value', 'goal');
+    await dialog.$('input[placeholder="e.g. glasses"]').setValue('glasses');
+    await dialog.$('input[type="number"]').setValue('2');
+    await $('button=Save habit').click();
+    await $('[aria-label="Log Hydration journey value"]').click();
+    await $('[aria-label="Hydration journey value"]').setValue('0');
+    await $('.habit-value-control button[type="submit"]').click();
+    const log = () => readFileSync(join(vaultCopy(), DAYS, TODAY + '.md'), 'utf8');
+    await browser.waitUntil(() => log().includes('[habit_value::0]'));
+    await $('[aria-label="Add one to Hydration journey"]').click();
+    await browser.waitUntil(() => log().includes('[habit_value::1]'));
+    await $('[aria-label="Add one to Hydration journey"]').click();
+    await browser.waitUntil(() => /\[x\] Hydration journey.*\[habit_value::2\]/.test(log()));
+    await expect($('[aria-label="Daily progress, last 14 days in glasses"]')).toBeDisplayed();
+    await scrollIntoView('[data-testid="habit-detail"]');
+    await screenshot('149-habit-target-history');
+    await $('button=Export journal').click();
+    await $('button*=Save Markdown').click();
+    await expect($('[role="status"].habits-notice')).toHaveText('Habit journal exported.');
+    const now = new Date();
+    const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+    const exported = readFileSync(join(dirname(vaultCopy()), 'config', 'exports', `Habit journal - ${date}.md`), 'utf8');
+    expect(exported).toContain('Daily goal of 2 glasses');
+    expect(exported).toContain('Hydration journey · 2');
+    expect(exported).toContain('[habit_value::2]');
   });
 
 });

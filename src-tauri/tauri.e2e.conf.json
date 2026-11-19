@@ -14,6 +14,7 @@
         "minHeight": 480,
         "visibleOnAllWorkspaces": false,
         "theme": "Dark",
+        "titleBarStyle": "Transparent",
         "backgroundColor": "#121416",
         "focus": false,
         "visible": false

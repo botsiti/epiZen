@@ -128,9 +128,9 @@ it('allows a new conversation after a full thread has been exported, preserving 
   const save = vi.mocked(api.assistantSaveChat).getMockImplementation()!;
   vi.mocked(api.assistantSaveChat).mockImplementation((root, chatId, state, expected) => chatId === id ? Promise.reject(new Error('This conversation is full.')) : save(root, chatId, state, expected));
   await controller.newChat(); expect(controller.getSnapshot().thread.id).toBe(id);
-  vi.mocked(api.assistantExportChat).mockResolvedValue('/chosen/export.md');
+  vi.mocked(api.exportMarkdown).mockResolvedValue('/chosen/export.md');
   await controller.exportConversation();
-  expect(vi.mocked(api.assistantExportChat).mock.calls[0]![1]).toContain('An unsent thought to preserve.');
+  expect(vi.mocked(api.exportMarkdown).mock.calls[0]![1]).toContain('An unsent thought to preserve.');
   await controller.newChat(); expect(controller.getSnapshot().thread.id).not.toBe(id);
 });
 

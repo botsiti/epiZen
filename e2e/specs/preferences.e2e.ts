@@ -80,6 +80,21 @@ describe('focused preferences and file creation', () => {
     await screenshot('165-selected-source');
     await browser.keys(['Escape']);
   });
+  it('applies a color theme across the workspace and restores it after reopening', async () => {
+    await $('[data-testid="open-settings"]').click();
+    await section('appearance');
+    await $('label*=Gruvbox').click();
+    await $('button=Save appearance').click();
+    await expect($('html')).toHaveAttribute('data-color-theme', 'Gruvbox');
+    await browser.refresh(); await prepareWindow();
+    await expect($('html')).toHaveAttribute('data-color-theme', 'Gruvbox');
+    await $('[data-testid="open-settings"]').click(); await section('appearance');
+    await $('.theme-preview').scrollIntoView();
+    await screenshot('178-settings-color-themes');
+    await $('[aria-label="Epizen"][name="color-theme"]').parentElement().click();
+    await $('button=Save appearance').click();
+    await expect($('html')).toHaveAttribute('data-color-theme', 'Epizen');
+  });
   it('uses daily categories for rewards and shows newly saved life spheres on Home', async () => {
     const before = snapshotVault(root);
     await $('[data-testid="open-settings"]').click(); await section('quests');

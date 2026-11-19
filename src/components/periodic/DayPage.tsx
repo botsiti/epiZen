@@ -1,5 +1,6 @@
 import { PluginAppearance, usePluginDisplay } from '../workspace/PluginDisplay';
 import { useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
+import { HabitValueControl } from '../habits/HabitValueControl';
 import { withHabits } from '../../lib/habits';
 import { metricColor, metricStatus } from '../../lib/metricStatus';
 import { category, habitColor, METRICS } from '../../lib/categories';
@@ -665,9 +666,17 @@ function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actio
   return (
     <><div className="daily-habit-header"><p>{day.habits.filter((h) => h.done).length} of {day.habits.length} completed</p>{actions.onManageHabits && <button type="button" className="quiet-chip" onClick={actions.onManageHabits}>Manage habits</button>}</div><div className="habit-pills">
       {day.habits.map((habit, i) => {
-        const color = habitColor(i);
+        const definition = spec.habits?.find((h) => h.id === habit.habitId);
+        const color = definition?.color ?? habitColor(i);
         const stats = habit.habitId ? spec.habitStats?.[habit.habitId] : undefined;
         const days = stats?.current ?? streak(spec, habit.label, habit.done);
+        if (definition?.tracking && actions.onMeasureHabit) {
+          const save = actions.onMeasureHabit;
+          return <div key={definition.id} className="habit-pill glass" data-habit-id={definition.id} style={{ '--tone': color } as CSSProperties}>
+            <span className="habit-label">{definition?.icon && <span aria-hidden="true">{definition.icon} </span>}{habit.label}</span>
+            <HabitValueControl habit={definition} value={habit.habitValue} onSave={(value) => save(spec.date, definition, habit.habitValue, value)} />
+          </div>;
+        }
         return (
           <button
             key={habit.habitId ?? habit.line}
@@ -681,7 +690,7 @@ function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actio
             data-line={habit.line}
           >
             <span className="habit-check" aria-hidden="true" />
-            <span className="habit-label">{habit.label}</span>
+            <span className="habit-label">{definition?.icon && <span aria-hidden="true">{definition.icon} </span>}{habit.label}</span>
             <span className="habit-streak">{days ? `${days} day${days === 1 ? '' : 's'}` : 'no streak'}{stats ? ` · best ${stats.best}` : ''}</span>
           </button>
         );

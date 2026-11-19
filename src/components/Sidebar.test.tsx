@@ -7,7 +7,7 @@ import { useExplorer } from './workspace/useExplorer';
 import { useShortcuts } from './workspace/useShortcuts';
 
 vi.mock('../lib/api', () => ({ onMenu: () => Promise.resolve(() => {}) }));
-const tree = buildTree(['Notes/Projects/Selected.md', 'Notes/Elsewhere.md', 'Reading/Book.md'].map((path) => ({ kind: 'note', path })));
+const tree = buildTree(['Notes/Projects/Selected.md', 'Notes/Elsewhere.md', 'Reading/Book.md', 'Habits/Walk.md', 'Templates/Daily.md', 'Notes/Templates/Example.md'].map((path) => ({ kind: 'note', path })));
 const noop = () => {};
 function Explorer() {
   const [visible, setVisible] = useState(true);
@@ -35,4 +35,12 @@ it('collapses selected-note ancestors and nested folders, and retains state acro
   expect(screen.getByRole('button', { name: 'Selected' }).closest('li')).toHaveAttribute('aria-selected', 'true');
   fireEvent.click(screen.getByRole('button', { name: 'Collapse all folders' }));
   expect(screen.queryByRole('button', { name: 'Selected' })).not.toBeInTheDocument();
+});
+
+it('hides only the root habit and template folders from Files', () => {
+  render(<Explorer />);
+  const visible = screen.getAllByTestId('tree-folder').map((node) => node.dataset.path);
+  expect(visible).not.toContain('Habits');
+  expect(visible).not.toContain('Templates');
+  expect(visible).toContain('Notes/Templates');
 });

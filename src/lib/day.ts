@@ -1,3 +1,4 @@
+import { habitValueField } from './habitMeasurements';
 import type { ExactXp } from './xp';
 import { category, type Category } from './categories';
 import { parseRecords, type ThoughtRecord } from './cbt';
@@ -16,6 +17,7 @@ export interface DayTask extends Omit<Task, 'category'> {
   /** The task as it reads: no tag, fields or comments. */
   label: string;
   earnedXp?: number;
+  habitValue?: number;
   category?: Category;
   blocks: TimeBlock[];
 }
@@ -144,6 +146,7 @@ export function parseDay(text: string): Day {
   const all = parseTasks(text).map(
     (task): DayTask => ({
       ...task,
+      habitValue: task.habit ? habitValueField(task.text)?.value : undefined,
       label: taskLabel(task.text),
       category: task.category === undefined ? undefined : category(task.category),
       blocks: blocksUnder(lines, task.line),

@@ -1,0 +1,5 @@
+{
+  "bundle": {
+    "externalBin": ["target/speech-helper/epizen-local-speech"]
+  }
+}

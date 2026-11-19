@@ -22,7 +22,10 @@ Built with Tauri 2, Rust, React and TypeScript.
 - **Use your Obsidian Bases with epiBase.** Open or import `.base` files and embed named views in notes.
   Configure tables, cards and lists with properties, nested filters, sorting, grouping, formulas
   and summaries. Edits remain ordinary YAML and Markdown with conflict-checked saves.
-- **Make the workspace your own.** Dedicated settings pages for periodic notes, Homepage,
+- **Track your routines.** Use a daily checkbox, set a target with a unit, or log a measurement.
+  See streak milestones, consistency, and charts for each habit. Export their definitions and history as Markdown.
+- **Make the workspace your own.** Preview 24 color themes or paste your own in Settings → Appearance.
+  Dedicated settings pages for periodic notes, Homepage,
   Library, Quests, files and Hotkeys. Preview existing daily notes before connecting them, choose library lookup
   sources, and set default locations for new notes and folders.
 - **Keep Home focused.** A compact overview of your day, life spheres, eight quests at a time and
@@ -44,7 +47,7 @@ Built with Tauri 2, Rust, React and TypeScript.
   and a focus timer. Calendar can use a different time zone from the Mac. The optional menu-bar
   panel opens your daily note or calendar and plays white or brown noise. Logged time stays in your daily notes.
 - **Talk to Spike anywhere.** Enable the Spike plugin and click the desktop companion to open
-  a compact text or voice prompt directly below him. Right-click hides Spike; ⇧⌘Space shows or hides him and the prompt. A separate shortcut opens dictation;
+  a compact text or voice prompt. Drag Spike to move him. The prompt follows and fits above him near the bottom edge. Right-click hides Spike; ⇧⌘Space shows or hides him and the prompt. A separate shortcut opens dictation;
   **⌘8** opens and closes the full conversation sidebar. Choose on-device, OpenAI or OpenRouter
   transcription with your own model and Keychain credential. Type or record a voice message to add library entries, create or edit notes, capture links, schedule
   calendar blocks, or open today’s CBT form. Library captures keep the supplied date, rating and comments and use the catalogue’s cover. Daily tasks, quests and monthly fields use the same Markdown formats as the app’s composers. Spike can recall
@@ -67,7 +70,7 @@ limits apply. Messages and relevant context are sent through the selected provid
 Codex owns its login; Epizen does not read or copy its tokens. Dictation is configured separately
 from the assistant connection: use on-device recognition or send recordings to your chosen OpenAI
 or OpenRouter transcription model. API usage is billed by that provider. On-device recognition
-requires permission and a supported installed language. Subscription spoken replies use the macOS
+uses Apple’s local speech model on supported macOS 26+ systems. macOS can download the language on first use. Older systems use Keyboard Dictation with Speech Recognition permission. Subscription spoken replies use the macOS
 system voice; API spoken replies are AI-generated.
 
 Enable **Settings → Plugins → Spike**, then choose **Configure → Set up Spike** to connect the

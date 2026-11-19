@@ -18,7 +18,7 @@
 .monthly-area-layout { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr); gap: 32px; margin-top: 24px; }
 .monthly-area-list { display: grid; gap: 4px; align-content: start; }
 .monthly-area { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-muted); text-align: left; transition: background var(--motion-fast) ease-out, color var(--motion-fast) ease-out; }
-.monthly-area:hover, .monthly-area.is-selected { background: rgb(143 188 170 / 10%); color: var(--text); }
+.monthly-area:hover, .monthly-area.is-selected { background: rgb(var(--accent-rgb) / 10%); color: var(--text); }
 .monthly-area-dot { width: 8px; height: 8px; border-radius: 50%; }
 .monthly-area strong { color: var(--text); font-variant-numeric: tabular-nums; }
 .monthly-area small { color: var(--text-faint); font-weight: 400; }
@@ -62,7 +62,7 @@
 .life-wheel svg { display: block; width: 100%; max-width: 520px; margin: auto; overflow: visible; }
 .life-wheel-grid, .life-wheel-axis { fill: none; stroke: var(--glass-line-strong); stroke-width: 1; }
 .life-wheel-axis { opacity: .6; }
-.life-wheel-shape { fill: rgb(143 188 170 / 15%); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.life-wheel-shape { fill: rgb(var(--accent-rgb) / 15%); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
 .life-wheel-label { font: 12px var(--font-ui); }
 .life-wheel-score { fill: var(--text-muted); font: 11px var(--numbers); }
 .life-wheel-scale { fill: var(--text-faint); font-size: 8px; pointer-events: none; }

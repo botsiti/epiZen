@@ -238,9 +238,9 @@
 .focus-column > span {
   width: 100%;
   min-height: 4px;
-  border: 1px solid rgb(143 188 170 / 22%);
+  border: 1px solid rgb(var(--accent-rgb) / 22%);
   border-radius: 6px;
-  background: linear-gradient(180deg, rgb(143 188 170 / 32%), rgb(143 188 170 / 8%));
+  background: linear-gradient(180deg, rgb(var(--accent-rgb) / 32%), rgb(var(--accent-rgb) / 8%));
   transform-origin: bottom;
   animation: rise-up var(--motion-data) var(--settle) both;
   animation-delay: calc(min(var(--i, 0), 5) * 24ms);
@@ -248,12 +248,12 @@
 }
 
 .focus-day.is-high .focus-column > span {
-  background: linear-gradient(180deg, rgb(143 188 170 / 92%), rgb(143 188 170 / 45%));
-  box-shadow: 0 0 16px -6px rgb(143 188 170 / 80%);
+  background: linear-gradient(180deg, rgb(var(--accent-rgb) / 92%), rgb(var(--accent-rgb) / 45%));
+  box-shadow: 0 0 16px -6px rgb(var(--accent-rgb) / 80%);
 }
 
 .focus-day.is-shown .focus-column > span {
-  border-color: rgb(143 188 170 / 70%);
+  border-color: rgb(var(--accent-rgb) / 70%);
 }
 
 @keyframes rise-up {
@@ -657,7 +657,7 @@
 }
 
 .shelf-all:hover {
-  border-color: rgb(143 188 170 / 45%);
+  border-color: rgb(var(--accent-rgb) / 45%);
   color: var(--accent);
 }
 

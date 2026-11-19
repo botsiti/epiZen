@@ -250,8 +250,8 @@ impl Settings {
     }
 
     #[cfg(feature = "e2e")]
-    pub fn assistant_fixture_export_folder(&self) -> io::Result<PathBuf> {
-        let folder = self.file.parent().unwrap_or(Path::new(".")).join("assistant-exports"); fs::create_dir_all(&folder)?; Ok(folder)
+    pub fn fixture_export_folder(&self) -> io::Result<PathBuf> {
+        let folder = self.file.parent().unwrap_or(Path::new(".")).join("exports"); fs::create_dir_all(&folder)?; Ok(folder)
     }
 
     /// Compare-and-save contains stale windows; each conversation has its own atomic file.

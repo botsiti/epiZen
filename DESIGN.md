@@ -33,7 +33,7 @@ stay sage.
 The app mark is the aqua glass brain in `assets/branding/epizen.png`, shared by the macOS app,
 sidebar, browser icon and repository. The menu-bar timer keeps its functional monochrome dial.
 
-The accent is sage everywhere else. No red for errors, no green for success, no
+Sage is the default accent. Settings → Appearance offers a whole-app color theme with a live note preview. Pasted palettes use a name and four opaque sRGB hex colors for background, surface, text and accent. The theme supplies the accent throughout the workspace, capture controls and tray. No red for errors, no green for success, no
 colour per callout type. A link to a missing note is muted with a dotted underline, not red.
 Covers and other images bring their own colour; the interface doesn't.
 
@@ -713,8 +713,7 @@ with a brief entrance and a small companion hop; Reduce Motion disables both.
 The microphone meter reflects measured audio energy. Listening, transcription, failure and retry
 remain explicit states. Model and reasoning effort use labelled native dropdowns, with a custom
 model escape hatch. Explicit effort reaches both Codex and the API adapter; Connection default preserves legacy routing. App-wide Appearance settings offer Liquid glass, opacity, and optional ambient motion for every vault.
-Native macOS material sits behind the transparent workspace and the compact prompt; it does not apply a
-window-sized WebKit blur. Ambient movement is opt-in and respects Reduce Motion.
+The workspace and native title bar always have an opaque backing. Glass composites the selected local wallpaper inside the workspace. The compact prompt can use native macOS material. Ambient movement is opt-in and respects Reduce Motion.
 
 
 The default text prompt is a 352px-wide single-row pill, approximately 50px high. It grows with

@@ -26,7 +26,7 @@ The core stays available with every optional plugin disabled:
 | Spike | Conversation sidebar, desktop companion, global quick prompt and dictation | Plugins → Spike → Set up Spike |
 | Periodic notes | Daily, weekly and monthly pages with calendar navigation | Plugins → Periodic notes; Periodic notes settings |
 | Check-ins | Selectable mood, energy, focus, social and sleep fields | Plugins → Check-ins |
-| Habits | Persistent routines, archive/reactivation, streaks and history | Plugins → Habits; Habits screen |
+| Habits | Daily check-ins, targets and measurements, streaks, charts and Markdown export | Plugins → Habits; Habits screen |
 | CBT | Thought-record wizard and saved reflection sessions | Plugins → CBT; daily CBT tab |
 | Quests | Weekly/monthly/custom goals, progress, XP, deadlines and adventure logs | Plugins → Quests; quest details |
 | Statistics | Recorded focus, check-in and habit analysis, plus year summaries | Plugins → Statistics; Statistics and Summaries |
@@ -77,9 +77,10 @@ Plus / Minus / Next reflections and daily rollups. Monthly reviews include refle
 spending and optional local photos, a Wheel of Life, weekly reviews and quests. Home Summaries offers
 month-by-month reflections and recorded averages, including months without daily notes.
 
-Habit definitions are normal notes with stable identities and tracking periods; completions remain
-daily Markdown checkboxes. Archive and reactivate routines, resume or restart a current streak, and
-inspect earlier months. Quest details support editing, deadlines, progress and log entries; deletion
+Habit definitions are normal notes with stable identities and tracking periods. Daily checkboxes record
+completions, and an inline field holds each measured value. Habits shows weekly activity, current and
+best streaks, milestone progress, goal bars, measurement trends and a monthly calendar. Choose colors
+and icons, archive or resume a routine, and export its history from Habits. Quest details support editing, deadlines, progress and log entries; deletion
 requires confirmation. Existing vault scoring remains compatible.
 
 Library entries remain Markdown. Filter by media kind, rating, dates, genres, artist/author and

@@ -2,15 +2,20 @@
 :root {
   color-scheme: dark;
 
-  --bg: #121416;
-  --bg-sidebar: #0e1012;
-  --surface: #171a1d;
-  --border: #23272b;
-  --text: #e7e5e0;
+  --palette-bg: #121416;
+  --bg: var(--palette-bg);
+  --palette-sidebar: #0e1012;
+  --bg-sidebar: var(--palette-sidebar);
+  --palette-surface: #171a1d;
+  --surface: var(--palette-surface);
+  --palette-border: #23272b;
+  --border: var(--palette-border);
+  --text: var(--palette-text, #e7e5e0);
   --text-muted: #9a9f9c;
   --text-faint: #5f6568;
-  --accent: #8fbcaa;
-  --accent-soft: rgb(143 188 170 / 12%);
+  --accent: var(--palette-accent, #8fbcaa);
+  --accent-rgb: 143 188 170;
+  --accent-soft: rgb(var(--accent-rgb) / 12%);
   /* The timer's rest, so a break never reads as focus. */
   --rest: #86d8ac;
   --metric-red: #df7c83;
@@ -1175,12 +1180,18 @@ button.dash-row:hover {
 
 .main.is-preferences { padding: 0; container-type: inline-size; }
 
-/* Native macOS material sits behind the WebView. No window-sized CSS blur. */
-:root[data-appearance="glass"] { --bg: rgb(18 20 22 / var(--glass-opacity, .72)); --bg-sidebar: rgb(14 16 18 / .65); --surface: rgb(27 31 34 / .68); --border: rgb(255 255 255 / .1); }
-:root[data-appearance="glass"] body { background: transparent; }
+/* Named palettes apply to native window siblings and glass/solid workspace surfaces. */
+:root[data-color-theme]:not([data-color-theme="Epizen"]) {
+  --palette-sidebar: color-mix(in srgb,var(--palette-bg) 80%,black);
+  --palette-border: color-mix(in srgb,var(--palette-surface) 85%,var(--text));
+  --text-muted: color-mix(in srgb,var(--text) 75%,var(--palette-surface));
+  --text-faint: color-mix(in srgb,var(--text) 58%,var(--palette-surface));
+}
+:root[data-appearance="glass"] { --bg: color-mix(in srgb,var(--palette-bg) calc(var(--glass-opacity, .72) * 100%),transparent); --bg-sidebar: color-mix(in srgb,var(--palette-sidebar) 78%,transparent); --surface: color-mix(in srgb,var(--palette-surface) 78%,transparent); --border: color-mix(in srgb,var(--text) 13%,transparent); }
+:root[data-appearance="glass"] body { background: var(--palette-bg); }
 :root[data-appearance="glass"] .app { background: var(--bg); position: relative; isolation: isolate; }
 :root[data-appearance="glass"] .workspace, :root[data-appearance="glass"] .main, :root[data-appearance="glass"] .preferences { background: transparent; }
-:root[data-ambient="true"] .app::before { content: ''; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 10% 20%, #8fbcaa22, transparent 50%), radial-gradient(ellipse at 85% 75%, #708bba22, transparent 55%); background-size: 140% 140%; animation: epizen-ambient 24s ease-in-out infinite alternate; }
+:root[data-ambient="true"] .app::before { content: ''; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 10% 20%, rgb(var(--accent-rgb) / 13%), transparent 50%), radial-gradient(ellipse at 85% 75%, #708bba22, transparent 55%); background-size: 140% 140%; animation: epizen-ambient 24s ease-in-out infinite alternate; }
 @keyframes epizen-ambient { from { background-position: 0 0; } to { background-position: 100% 100%; } }
 @media (prefers-reduced-motion: reduce) { :root[data-ambient="true"] .app::before { animation: none; } }
-@media (prefers-reduced-transparency: reduce) { :root[data-appearance="glass"] { --bg: #121416; --bg-sidebar: #0e1012; --surface: #171a1d; } :root[data-appearance="glass"] body { background: var(--bg); } }
+@media (prefers-reduced-transparency: reduce) { :root[data-appearance="glass"] { --bg: var(--palette-bg); --bg-sidebar: var(--palette-sidebar); --surface: var(--palette-surface); } :root[data-appearance="glass"] body { background: var(--bg); } }

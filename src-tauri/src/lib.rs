@@ -5,6 +5,7 @@
 //! Apple Calendar, through `calendar.rs`, and never the vault.
 
 mod assistant;
+mod export;
 mod assistant_writes;
 mod calendar;
 #[cfg(target_os = "macos")]
@@ -348,13 +349,19 @@ fn get_settings(settings: State<'_, Settings>) -> Map<String, Value> {
 
 #[tauri::command]
 async fn update_settings(
+    app: tauri::AppHandle,
     settings: State<'_, Settings>,
     patch: Map<String, Value>,
 ) -> Result<Map<String, Value>, String> {
     if patch.keys().any(|key| Settings::is_private(key)) {
         return Err("only opening a vault sets which vault opens next time".to_owned());
     }
-    settings.update(patch).map_err(|err| err.to_string())
+    let appearance_changed = patch.contains_key("appearance");
+    let saved = settings.update(patch).map_err(|err| err.to_string())?;
+    if appearance_changed {
+        let _ = app.emit("epizen://appearance", saved.get("appearance"));
+    }
+    Ok(saved)
 }
 
 /// Apple Calendar, or the e2e build's calendars in memory, so a test never reaches the real ones.
@@ -508,7 +515,7 @@ pub fn run() {
         })
         .invoke_handler({
             let dispatch: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
-            pet::pet_enable, pet::pet_publish, pet::pet_state, pet::pet_position, pet::pet_move,
+            pet::pet_enable, pet::pet_publish, pet::pet_state, pet::pet_position, pet::pet_move, pet::drag::pet_drag,
             pet::pet_open_main, pet::pet_hide, pet::pet_motion,
             prompt::prompt_enable, prompt::prompt_publish, prompt::prompt_state, prompt::prompt_save,
             prompt::prompt_submit, prompt::prompt_finish, prompt::prompt_consumed, prompt::prompt_flush, prompt::prompt_flushed, prompt::prompt_open, prompt::prompt_hide, prompt::prompt_resize, prompt::prompt_open_main,
@@ -522,7 +529,7 @@ pub fn run() {
             assistant::assistant_apply_calendar, assistant::assistant_show_workspace, assistant::assistant_prepare_cover,
             assistant::assistant_list_chats,
             assistant::assistant_search_chats,
-            assistant::assistant_export_chat,
+            export::export_markdown,
             assistant::assistant_load_chat,
             assistant::assistant_save_chat,
             assistant::assistant_set_key,
@@ -553,6 +560,7 @@ pub fn run() {
             lookup_image,
             fetch_image_into_vault,
             appearance::apply_appearance,
+            appearance::get_appearance,
             wallpapers::list_wallpapers, wallpapers::choose_wallpaper, wallpapers::remove_wallpaper,
             get_settings,
             update_settings,

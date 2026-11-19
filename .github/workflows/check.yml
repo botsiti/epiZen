@@ -17,7 +17,7 @@ jobs:
   check:
     # Branch protection requires a status called "check". Rename both together.
     name: check
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7

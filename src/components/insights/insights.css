@@ -13,7 +13,7 @@
 .insight-subtitle { margin: 5px 0 16px; }
 .insight-card-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .insight-range { display: flex; gap: 4px; align-items: start; }
-.activity-detail { height: 240px; display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--glass-line); border-radius: 12px; background: rgb(143 188 170 / 4%); font-size: 13px; }
+.activity-detail { height: 240px; display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--glass-line); border-radius: 12px; background: rgb(var(--accent-rgb) / 4%); font-size: 13px; }
 .activity-detail-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; flex: none; font-variant-numeric: tabular-nums; }
 .activity-detail-heading > span { color: var(--text-muted); white-space: nowrap; }
 .activity-detail-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }

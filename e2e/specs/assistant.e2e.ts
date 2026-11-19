@@ -430,7 +430,7 @@ describe('Spike conversations and second-brain actions', () => {
     await $('[aria-label="Conversation history"]').click();
     await $('button=Export conversation…').click();
     await expect($('.assistant-notice')).toHaveText(expect.stringContaining('Conversation exported'));
-    const folder = join(dirname(vaultCopy()), 'config', 'assistant-exports');
+    const folder = join(dirname(vaultCopy()), 'config', 'exports');
     const files = readdirSync(folder).filter((file) => file.endsWith('.md'));
     expect(files).toHaveLength(1);
     const exported = readFileSync(join(folder, files[0]!), 'utf8');
@@ -452,8 +452,11 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.waitUntil(async () => (await $('.desktop-pet').getAttribute('class'))?.includes('has-prompt') === true);
     await expect($('.pet-tools')).not.toBeDisplayed();
     const position = await invoke('pet_position') as { x: number; y: number; scale: number };
-    await invoke('pet_move', { x: position.x - 100, y: position.y - 100 });
+    const delta = Math.round(128 * position.scale);
+    await invoke('pet_move', { x: position.x - delta, y: position.y - delta });
     const dog = await invoke('pet_position') as typeof position;
+    expect(dog.x).toBe(position.x - delta);
+    expect(dog.y).toBe(position.y - delta);
     await browser.switchToWindow('spike-prompt');
     const prompt = await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { outerPosition: () => Promise<{ x: number; y: number }> } } } }).__TAURI__.window.getCurrentWindow().outerPosition());
     expect(prompt.y - dog.y).toBeCloseTo(144 * dog.scale, 0);

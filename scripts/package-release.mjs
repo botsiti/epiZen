@@ -14,6 +14,9 @@ const field = (key) => execFileSync('plutil', ['-extract', key, 'raw', '-o', '-'
 if (field('CFBundleIdentifier') !== 'dev.epizen.desktop' || field('CFBundleShortVersionString') !== version) throw new Error('The built app does not match this version.');
 const architecture = execFileSync('lipo', ['-archs', `${app}/Contents/MacOS/epizen`], { encoding: 'utf8' }).trim();
 if (architecture !== 'arm64') throw new Error(`Expected the Apple Silicon build, got ${architecture}.`);
+const speechHelper = resolve(app, 'Contents/MacOS/epizen-local-speech');
+if (!existsSync(speechHelper)) throw new Error('The bundle is missing its on-device speech helper.');
+if (execFileSync('lipo', ['-archs', speechHelper], { encoding: 'utf8' }).trim() !== architecture) throw new Error('The speech helper architecture does not match Epizen.');
 const outputFlag = process.argv.indexOf('--output');
 if (outputFlag >= 0 && !process.argv[outputFlag + 1]) throw new Error('Give --output a destination folder.');
 const output = resolve(outputFlag >= 0 ? process.argv[outputFlag + 1] : 'release-artifacts');
@@ -21,6 +24,7 @@ const name = `Epizen_${version}_macOS_arm64.zip`;
 mkdirSync(output, { recursive: true });
 if (existsSync(`${output}/${name}`)) throw new Error(`Refusing to replace ${name}; deliver a new version instead.`);
 execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--identifier', 'dev.epizen.desktop', '--options', 'runtime', '--entitlements', entitlementFile, app], { stdio: 'inherit' });
+execFileSync('codesign', ['--verify', '--strict', speechHelper], { stdio: 'inherit' });
 execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
 const signed = execFileSync('codesign', ['--display', '--entitlements', '-', '--xml', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 const entitlements = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', '-'], { input: signed, encoding: 'utf8' }));

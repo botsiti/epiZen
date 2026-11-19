@@ -1,21 +1,26 @@
 import { parseDocument, isMap, isSeq, isScalar, stringify } from 'yaml';
+import { habitValueField, readHabitTracking, type HabitTracking } from './habitMeasurements';
+import { readHabitStyle, type HabitStyle } from './habitStyle';
+export type { HabitStyle } from './habitStyle';
+export type { HabitTracking } from './habitMeasurements';
 import { parseNote } from './frontmatter';
 import { addDays, formatDate, parseDate } from './dates';
 import { parseDay, type Day, type DayTask } from './day';
-import { parseTasks, toggleTask } from './dashboard';
+import { toggleTask } from './dashboard';
 import { lineEnding } from './text';
 import type { DayEntry } from './rollup';
 
 export interface HabitPeriod { from: string; until?: string; reset?: boolean }
-export interface Habit {
+export interface Habit extends HabitStyle {
   id: string;
   name: string;
   aliases: string[];
+  tracking?: HabitTracking;
   periods: HabitPeriod[];
   path?: string;
   source?: string;
 }
-export interface HabitProblem { path: string; message: string }
+export interface HabitProblem { path: string; message: string; source?: string }
 export const habitNameKey = (name: string) => name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
 const iso = (date: Date) => formatDate(date, 'YYYY-MM-DD');
 const validDate = (value: unknown): value is string => typeof value === 'string' && Boolean(parseDate(value, 'YYYY-MM-DD')) && value >= '1900-01-01' && value <= '2200-12-31';
@@ -36,7 +41,7 @@ export function readHabit(path: string, source: string): Habit | undefined {
     return { from: period.from, ...(period.until ? { until: period.until } : {}), ...(period.reset ? { reset: true } : {}) };
   });
   for (let i = 1; i < periods.length; i++) if (!periods[i - 1]!.until || periods[i]!.from < periods[i - 1]!.until!) throw new Error('Tracking periods overlap or are out of order.');
-  return { id: p.habit_id, name: p.name.trim(), aliases: p.aliases as string[], periods, path, source };
+  return { id: p.habit_id, name: p.name.trim(), aliases: p.aliases as string[], periods, path, source, ...readHabitStyle({ color: p.color, icon: p.icon }), tracking: readHabitTracking(p.tracking) };
 }
 
 export function collectHabits(notes: ReadonlyMap<string, string>): { habits: Habit[]; problems: HabitProblem[] } {
@@ -44,13 +49,13 @@ export function collectHabits(notes: ReadonlyMap<string, string>): { habits: Hab
   for (const [path, source] of notes) {
     if (!/^type:\s*['"]?habit['"]?\s*(?:#.*)?$/m.test(source)) continue;
     try { const habit = readHabit(path, source); if (habit) habits.push(habit); }
-    catch (err) { problems.push({ path, message: (err as Error).message }); }
+    catch (err) { problems.push({ path, source, message: (err as Error).message }); }
   }
   const invalid = new Set<string>();
   for (let i = 0; i < habits.length; i++) for (let j = i + 1; j < habits.length; j++) {
     const a = habits[i]!; const b = habits[j]!;
     if (a.id === b.id || [a.name, ...a.aliases].some((name) => [b.name, ...b.aliases].some((other) => habitNameKey(name) === habitNameKey(other)))) {
-      for (const h of [a, b]) { invalid.add(h.id); problems.push({ path: h.path!, message: 'This habit shares an identity or historical name with another definition. Resolve the duplicate in the notes.' }); }
+      for (const h of [a, b]) { invalid.add(h.id); problems.push({ path: h.path!, source: h.source, message: 'This habit shares an identity or historical name with another definition. Resolve the duplicate in the notes.' }); }
     }
   }
   return { habits: habits.filter((h) => !invalid.has(h.id)), problems };
@@ -76,7 +81,7 @@ export function discoveredHabits(days: DayEntry[], managed: Habit[]): Habit[] {
   });
 }
 
-export function newHabit(name: string, from: string, id: string, history?: Habit): { path: string; text: string } {
+export function newHabit(name: string, from: string, id: string, history?: Habit, tracking?: HabitTracking, style?: HabitStyle): { path: string; text: string } {
   name = name.trim();
   if (!name || name.length > 100 || /[\r\n[\]<>]/.test(name)) throw new Error('Choose a name of up to 100 characters, without brackets or line breaks.');
   if (!validDate(from)) throw new Error('Choose a valid start date.');
@@ -85,7 +90,7 @@ export function newHabit(name: string, from: string, id: string, history?: Habit
     const past = history.periods[0]!;
     periods = past.until && past.until < from ? [{ ...past }, { from }] : [{ from: past.from < from ? past.from : from }];
   } else periods = [{ from }];
-  const data = { type: 'habit', habit_id: id, name, aliases: history && history.name !== name ? [history.name] : [], periods };
+  const data = { ...readHabitStyle(style ?? {}), type: 'habit', habit_id: id, name, aliases: history && history.name !== name ? [history.name] : [], periods, ...(tracking ? { tracking: readHabitTracking(tracking) } : {}) };
   const text = `---\n${stringify(data, { lineWidth: 0 })}---\n\n# ${name}\n\nA daily habit. Tracking periods keep its history when it is archived and resumed.\n`;
   const safe = name.replace(/[\\/:*?"|#%]/g, '-').replace(/^\.+|\.+$/g, '').trim() || 'Habit';
   const path = `Habits/${safe}-${id.slice(0, 8)}.md`;
@@ -136,16 +141,43 @@ export function withHabits(day: Day, habits: Habit[], date: Date, today: Date): 
 }
 
 export function setHabitCompletion(text: string, habit: Habit, expectedDone: boolean, done: boolean): string {
+  if (habit.tracking) throw new Error('Log a value for this habit.');
   const records = parseDay(text).habits.filter((r) => habitMatches(habit, r));
   if (records.length > 1) throw new Error('This note has duplicate records for this habit. Resolve them in the note editor.');
   const record = records[0];
   if ((record?.done ?? false) !== expectedDone) throw new Error('This habit completion changed outside Epizen. Refresh before trying again.');
   if (record) {
     if (record.done === done) return text;
-    const task = parseTasks(text).find((t) => t.line === record.line)!;
-    return toggleTask(text, task);
+    return toggleTask(text, record);
   }
   if (!done) return text;
+  return appendHabitRecord(text, `> - [x] ${habit.name} [habit::${habit.id}]`);
+}
+
+export function setHabitValue(text: string, habit: Habit, expected: number | undefined, value: number): string {
+  const tracking = habit.tracking;
+  if (!tracking || !Number.isFinite(value) || (tracking.kind === 'goal' && value < 0)) throw new Error('Enter a valid value for this habit.');
+  const records = parseDay(text).habits.filter((record) => habitMatches(habit, record));
+  if (records.length > 1) throw new Error('Resolve the duplicate habit records before logging a value.');
+  const record = records[0];
+  const field = record && habitValueField(record.text);
+  if (field?.invalid) throw new Error('Resolve the unreadable habit value in the daily note before logging.');
+  if (field?.value !== expected) throw new Error('This habit value changed outside Epizen. Reopen the entry before logging.');
+  const done = tracking.kind === 'measure' || value >= tracking.target;
+  if (!record) return appendHabitRecord(text, `> - [${done ? 'x' : ' '}] ${habit.name} [habit::${habit.id}] [habit_value::${value}]`);
+  if (field?.value === value && record.done === done) return text;
+  // The task parser retains the body verbatim and gives the checkbox's exact offset.
+  const newline = text.indexOf('\n', record.offset);
+  const end = newline < 0 ? text.length : newline;
+  const lineEnd = text[end - 1] === '\r' ? end - 1 : end;
+  const bodyStart = lineEnd - record.text.length;
+  const changed = field
+    ? text.slice(0, bodyStart + field.start) + value + text.slice(bodyStart + field.end)
+    : text.slice(0, bodyStart) + `[habit_value::${value}] ` + text.slice(bodyStart);
+  return record.done === done ? changed : toggleTask(changed, record);
+}
+
+function appendHabitRecord(text: string, line: string): string {
   const eol = lineEnding(text);
   if (!eol) throw new Error('The daily note has mixed line endings.');
   if (parseNote(text).error) throw new Error('The daily note has unreadable frontmatter.');
@@ -176,13 +208,13 @@ export function setHabitCompletion(text: string, habit: Habit, expectedDone: boo
   if (existing >= 0) {
     let end = existing + 1;
     while (end < lines.length && /^>/.test(lines[end]!) && !/^>\s*\[!/.test(lines[end]!)) end++;
-    lines.splice(end, 0, `> - [x] ${habit.name} [habit::${habit.id}]`);
+    lines.splice(end, 0, line);
     return lines.join(eol);
   }
-  return `${text}${text.endsWith(eol + eol) ? '' : text.endsWith(eol) ? eol : eol + eol}> [!habits]- Habits${eol}> - [x] ${habit.name} [habit::${habit.id}]${eol}`;
+  return `${text}${text.endsWith(eol + eol) ? '' : text.endsWith(eol) ? eol : eol + eol}> [!habits]- Habits${eol}${line}${eol}`;
 }
 
-export interface HabitMark { date: Date; done: boolean; due: boolean; reset: boolean }
+export interface HabitMark { date: Date; done: boolean; due: boolean; reset: boolean; value?: number }
 export function habitHistory(habit: Habit, days: DayEntry[], today: Date): HabitMark[] {
   const records = new Map(days.map((entry) => [iso(entry.date), entry.day?.habits.filter((r) => habitMatches(habit, r)) ?? []]));
   const starts = [...habit.periods.map((p) => p.from), ...[...records].filter(([, r]) => r.length).map(([key]) => key)].sort();
@@ -191,7 +223,8 @@ export function habitHistory(habit: Habit, days: DayEntry[], today: Date): Habit
   const marks: HabitMark[] = [];
   for (let cursor = first; cursor <= today; cursor = addDays(cursor, 1)) {
     const key = iso(cursor); const recorded = records.get(key) ?? [];
-    marks.push({ date: cursor, done: recorded.some((r) => r.done), due: habitActive(habit, key) || recorded.some((r) => r.done), reset: habit.periods.some((p) => p.from === key && Boolean(p.reset)) });
+    const value = habit.tracking && recorded.length === 1 ? recorded[0]!.habitValue : undefined;
+    marks.push({ date: cursor, value, done: recorded.some((r) => r.done), due: habitActive(habit, key) || recorded.some((r) => r.done), reset: habit.periods.some((p) => p.from === key && Boolean(p.reset)) });
   }
   return marks;
 }

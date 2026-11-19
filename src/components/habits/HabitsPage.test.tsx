@@ -10,7 +10,7 @@ import { HabitsPage, type HabitsPageProps } from './HabitsPage';
 const TODAY = day(2026, 10, 2);
 const create = () => { const n = newHabit('No sweets', '2026-11-01', 'habit-sweets-001'); return readHabit(n.path, n.text)!; };
 const entries = [{ date: day(2026, 10, 1), day: parseDay('> [!habits]\n> - [x] No sweets\n') }];
-const props = (): HabitsPageProps => ({ habits: [create()], problems: [], days: entries, today: TODAY, onCreate: vi.fn(async () => {}), onLifecycle: vi.fn(async () => {}), onComplete: vi.fn(async () => {}), onOpenDay: vi.fn(), onOpenNote: vi.fn() });
+const props = (): HabitsPageProps => ({ habits: [create()], problems: [], days: entries, today: TODAY, onCreate: vi.fn(async () => {}), onLifecycle: vi.fn(async () => {}), onComplete: vi.fn(async () => {}), onMeasure: vi.fn(async () => {}), onOpenDay: vi.fn(), onOpenNote: vi.fn() });
 
 it('creates a habit with a chosen date and retains a failed creation draft', async () => {
   const user = userEvent.setup();const p = props();p.habits = [];p.days = [];
@@ -53,7 +53,7 @@ it('archives, views history and reactivates the same habit with an explicit stre
 it('offers older habits for continuation and keeps their history separate from the active list', async () => {
   const user = userEvent.setup();const p = props();p.habits = [];
   render(<HabitsPage {...p} />);
-  expect(screen.getByRole('button', { name: 'Continue 1 habits' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Continue 1 habit' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'History1' }));
   expect(within(screen.getByTestId('habit-detail')).getByRole('heading', { name: 'No sweets' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Continue tracking' }));
@@ -91,4 +91,19 @@ it('contains the creation dialog focus and cancels without creating a note', asy
   await user.keyboard('{Escape}');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(add).toHaveFocus();expect(p.onCreate).not.toHaveBeenCalled();
+});
+
+it('shows a partial target as recorded progress, accepts a zero measurement, and exposes its monthly total', async () => {
+  const user = userEvent.setup();
+  const p = props();
+  const note = newHabit('Drink water', '2026-11-01', 'water-daily-001', undefined, { kind: 'goal', unit: 'glasses', target: 8 });
+  p.habits = [readHabit(note.path, note.text)!];
+  p.days = [{ date: TODAY, day: parseDay('> [!habits]\n> - [ ] Drink water [habit::water-daily-001] [habit_value::0]') }];
+  render(<HabitsPage {...p} />);
+  expect(screen.getByRole('img', { name: /Daily progress, last 14 days in glasses/ })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Add one to Drink water' }));
+  expect(p.onMeasure).toHaveBeenCalledWith(TODAY, p.habits[0], 0, 1);
+  await user.click(screen.getByRole('button', { name: 'Calendar' }));
+  expect(screen.getByRole('button', { name: '2 Nov 2026: Partial' })).toBeVisible();
+  expect(screen.getByText('0 completions this month')).toBeVisible();
 });
