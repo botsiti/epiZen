@@ -508,8 +508,11 @@ still identify their respective data; status colours describe the recorded check
 
 The sidebar's **Habits** screen owns a daily routine across changing months. Active, Archived
 and History collections lead to a selected habit's calendar, current streak, best streak, total
-completions and consistency. Cards carry small recent-day marks; the selected card has a sage
-edge. Empty states offer creating a habit or continuing the most recent set found in daily notes.
+completions and consistency. The selected card, history and milestone bar share the habit's
+color. Each card shows its icon and seven recent days. The inspector shows twenty weeks of
+activity, daily target bars or a measured-value trend, and a navigable monthly calendar.
+When only historical routines exist, the initial Active view opens History and offers to
+continue the most recent set. Export journal saves or copies a portable Markdown report.
 
 Definitions are ordinary Markdown notes under `Habits/`, with `type: habit`, a stable `habit_id`,
 a name, aliases and dated tracking periods. Completions stay as normal daily checkboxes inside

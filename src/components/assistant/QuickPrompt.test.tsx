@@ -4,14 +4,14 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import * as api from '../../lib/api';
 import { QuickPrompt } from './QuickPrompt';
 import type { QuickSnapshot } from '../../lib/api';
-const voice = vi.hoisted(() => ({ phase: 'idle', seconds: 0, canRetry: false, start: vi.fn(), stop: vi.fn(), pauseRecording: vi.fn(), cancel: vi.fn(), retry: vi.fn() }));
+const voice = vi.hoisted(() => ({ phase: 'idle', seconds: 0, canRetry: false, error: undefined as string | undefined, start: vi.fn(), stop: vi.fn(), pauseRecording: vi.fn(), cancel: vi.fn(), retry: vi.fn() }));
 vi.mock('../../lib/api');
 vi.mock('./Spike', () => ({ Spike: () => null }));
 vi.mock('./useVoice', () => ({ useVoice: () => voice }));
 let update!: (snapshot: QuickSnapshot) => void, command!: (command: string) => void;
 const state = (patch: Partial<QuickSnapshot> = {}): QuickSnapshot => ({ shortcuts: { typing: true, dictation: true }, root: '/copy', visible: true, opened: 1, dictate: false, status: { connected: true, busy: false, review: false, label: 'Ready', reply: '', voice: { provider: 'local', model: '' } }, document: { revision: 0, draft: '', pending: null }, ...patch });
 beforeEach(() => {
-  vi.clearAllMocks(); voice.phase = 'idle';
+  vi.clearAllMocks(); voice.phase = 'idle'; voice.canRetry = false; voice.error = undefined;
   vi.mocked(api.onQuickPrompt).mockImplementation((callback) => { update = callback; return Promise.resolve(() => undefined); });
   vi.mocked(api.onQuickCommand).mockImplementation((callback) => { command = callback; return Promise.resolve(() => undefined); });
   vi.mocked(api.quickPromptState).mockResolvedValue(state());
@@ -149,4 +149,19 @@ it('keeps the composer on the desktop and expands the current reply without open
   expect(screen.getByRole('button', { name: 'Less' })).toHaveAttribute('aria-expanded','true');
   expect(input).toBeEnabled();
   expect(api.openQuickConversation).not.toHaveBeenCalled();
+});
+
+it('keeps a failed recording retryable and returns focus to typing when discarded', async () => {
+  voice.canRetry = true;
+  voice.error = 'Enable Dictation in System Settings → Keyboard and retry this recording.';
+  render(<QuickPrompt />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('System Settings');
+  const input = screen.getByLabelText('Quick message to Spike');
+  expect(input).toBeEnabled();
+  await userEvent.click(screen.getByRole('button', { name: 'Retry recording' }));
+  expect(voice.retry).toHaveBeenCalledOnce();
+  await userEvent.click(screen.getByRole('button', { name: 'Discard recording' }));
+  expect(voice.cancel).toHaveBeenCalledOnce();
+  expect(input).toHaveFocus();
+  expect(api.submitQuickPrompt).not.toHaveBeenCalled();
 });

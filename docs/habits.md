@@ -1,5 +1,7 @@
 # Habits
 
+![The Habits workspace showing four routines and a daily water target](images/habits.png)
+
 Open **Habits** from the sidebar. Add a daily habit with **New habit**, or use **Continue recent
 routine** to carry forward the latest habit set found in your daily notes. The History collection
 also lets you continue an older habit individually. No existing daily note is rewritten by this step.
