@@ -17,7 +17,7 @@ export function AssistantConfiguration({ value, pluginEnabled, profileExists, on
     return () => { gone = true; };
   }, [value.provider]);
   return <div className="spike-configuration">
-    {!pluginEnabled && <p className="preferences-description">Enable Spike in Plugins and save your changes to use the sidebar and desktop companion. You can configure it here first.</p>}
-    <AssistantSettings backLabel="Plugins" value={value} configured={configured} profileExists={profileExists} onSave={onSave} onCompanionChange={(patch) => onSave({ ...value, ...patch })} onConnection={check} onProfile={onOpenProfile} onBack={onBack} />
+    {!pluginEnabled && <p className="spike-availability">Enable Spike and save your workspace changes to use the desktop companion. <button type="button" onClick={onBack}>Manage plugin</button></p>}
+    <AssistantSettings pluginEnabled={pluginEnabled} workspace backLabel="Plugins" value={value} configured={configured} profileExists={profileExists} onSave={onSave} onCompanionChange={(patch) => onSave({ ...value, ...patch })} onConnection={check} onProfile={onOpenProfile} onBack={onBack} />
   </div>;
 }

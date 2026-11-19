@@ -440,3 +440,6 @@ body.tray-body {
     transition: none;
   }
 }
+
+.tray[data-density="compact"] { --tray-gutter: 10px; }
+.tray[data-density="compact"] .tray-task { padding-block: 5px; }

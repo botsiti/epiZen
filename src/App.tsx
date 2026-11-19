@@ -1,3 +1,6 @@
+import { checkWallpaper } from './components/settings/checkWallpaper';
+import { LiveWallpaper } from './components/settings/WallpaperMedia';
+import { useWallpapers } from './components/settings/useWallpapers';
 import { appearanceSettings, type Appearance } from './lib/appearance';
 import { applyAppearance } from './lib/api';
 import { collectHabits, withHabits, habitActive, habitHistory, habitStats } from './lib/habits';
@@ -5,12 +8,15 @@ import { HabitsPage } from './components/habits/HabitsPage';
 import { useHabitActions } from './components/habits/useHabitActions';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
+import { calendarZonePreference } from './lib/calendarZone';
 import { CalendarView } from './components/calendar/CalendarView';
 import { chime } from './components/calendar/chime';
-import { TimerPill } from './components/calendar/Timer';
+import { HabitPreferences } from './components/habits/HabitPreferences';
+import { taskRefs } from './components/calendar/taskRefs';
+import { TimerCard, TimerPill } from './components/calendar/Timer';
 import type { FocusHow } from './components/calendar/FocusMenu';
 import type { TaskChange, TaskChoice } from './components/calendar/types';
-import { deletePlans, renamePlans } from './components/calendar/usePlans';
+import { useTaskPlans } from './components/calendar/useTaskPlans';
 import { reason, useNoteWriter } from './components/calendar/useNoteWriter';
 import { useTimer, type TimerDeps } from './components/calendar/useTimer';
 import { GraphView } from './components/GraphView';
@@ -21,9 +27,10 @@ import { AttachmentView } from './components/bases/AttachmentView';
 import { NewBase } from './components/bases/NewBase';
 import { BasesProvider } from './components/bases/context';
 import { savedPluginDisplays } from './lib/pluginDisplay';
-import { PluginDisplayProvider, PluginSurface } from './components/workspace/PluginDisplay';
-import { PLUGINS, pluginSettings, effectivePlugins, pluginPreferencesPatch, savedHomeSections, requiredPlugin, savedCheckIns } from './lib/plugins';
-import { MarkdownHome, PluginUnavailable } from './components/workspace/MarkdownHome';
+import { PluginDisplayProvider } from './components/workspace/PluginDisplay';
+import { pluginSettings, effectivePlugins, pluginPreferencesPatch, savedHomeSections, visibleHomeSections, savedCheckIns } from './lib/plugins';
+import { PluginRoute } from './components/workspace/PluginRoute';
+import { MarkdownHome } from './components/workspace/MarkdownHome';
 import { Home } from './components/home/Home';
 import { rewardArea } from './lib/rewardRules';
 import { questActivity, taskTags } from './lib/questActivity';
@@ -79,7 +86,6 @@ import { METRICS } from './lib/categories';
 import { addDays, addMonths, formatDate, parseDate, startOfMonth, today } from './lib/dates';
 import { parseDay, type Day } from './lib/day';
 import { addTask } from './lib/edits';
-import { planText } from './lib/plans';
 import { addBlock, addTaskWithBlock, findTask, focusIdOf, hasTask, newTaskLabel } from './lib/timeblocks';
 import { dayKey, dayOfKey, type PendingBlock } from './lib/timer';
 import { buildGraph } from './lib/graph';
@@ -147,6 +153,7 @@ function dayFrom(path: string, text: string): Day {
 export function App() {
   const [setup, setSetup] = useState<'existing' | 'create'>();
   const [status, setStatus] = useState<VaultStatus>();
+  const vault = status?.state === 'open' ? status.root : undefined;
   const [files, setFiles] = useState<VaultFile[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
   // The open tabs, each with its own history (src/lib/tabs.ts); the main pane shows the one in front.
@@ -160,6 +167,13 @@ export function App() {
   const [folderError, setFolderError] = useState<string>();
   const [settings, setSettings] = useState<Settings>({});
   const appearance = useMemo(() => appearanceSettings(settings.appearance), [settings.appearance]);
+  const wallpaperLibrary = useWallpapers(status?.state === 'open', (id) => setSettings((previous) => {
+    const current = appearanceSettings(previous.appearance);
+    if (current.wallpaper !== id) return previous;
+    delete current.wallpaper;
+    return { ...previous, appearance: current };
+  }));
+  const wallpaper = appearance.surface === 'glass' && wallpaperLibrary.items.find((item) => item.id === appearance.wallpaper);
   const [appearanceError, setAppearanceError] = useState<string>();
   useEffect(() => {
     let gone = false;
@@ -169,7 +183,14 @@ export function App() {
     void applyAppearance(appearance.surface === 'glass').then(() => { if (!gone) setAppearanceError(undefined); }).catch((error: unknown) => { if (!gone) { root.dataset.appearance = 'solid'; setAppearanceError(String(error)); } });
     return () => { gone = true; };
   }, [appearance]);
-  const saveAppearance = async (value: Appearance) => { setSettings(await updateSettings({ appearance: value })); };
+  const saveAppearance = async (value: Appearance) => {
+    if (value.surface === 'glass' && value.wallpaper && (value.wallpaper !== appearance.wallpaper || appearance.surface !== 'glass')) {
+      const next = wallpaperLibrary.items.find((item) => item.id === value.wallpaper);
+      if (!next) throw new Error('The selected wallpaper is unavailable. Choose another background.');
+      await checkWallpaper(next);
+    }
+    setSettings(await updateSettings({ appearance: value }));
+  };
 
   const timerBusy = useRef(false);
   // Every note's text, for links, backlinks and the graph. Saves and new notes keep it current.
@@ -300,7 +321,7 @@ export function App() {
     const text = texts.get(path);
     return date && text !== undefined ? [{ date, path, day: dayFrom(path, text) }] : [];
   }), [periodicNotes, texts]);
-  const scoredDays = useMemo(() => rewards && questActivity(recordedDays.map(({ date, path, day }) => ({ date: formatDate(date, 'YYYY-MM-DD'), path, day })), rewards), [recordedDays, rewards]);
+  const scoredDays = useMemo(() => plugins.quests && rewards ? questActivity(recordedDays.map(({ date, path, day }) => ({ date: formatDate(date, 'YYYY-MM-DD'), path, day })), rewards) : undefined, [recordedDays, rewards, plugins.quests]);
   const scoringIssue = useMemo(() => scoredDays && [...scoredDays].find(([, day]) => day.rewardProblem), [scoredDays]);
   // Everything a daily, weekly or monthly note's page reads from the rest of the vault.
   const dayOf = useCallback(
@@ -398,12 +419,13 @@ export function App() {
       insert: (titles.get(noteTitle(path)) ?? 0) > 1 ? path : undefined,
     }));
     // Daily notes that don't exist yet can be linked too; following the link creates them.
+    if (!plugins.periodic) return targets;
     for (const [offset, detail] of [[0, 'today'], [-1, 'yesterday'], [1, 'tomorrow']] as const) {
       const path = periodicPath('day', addDays(now, offset), periodic).replace(/\.md$/i, '');
       if (!titles.has(noteTitle(path))) targets.push({ label: noteTitle(path), detail });
     }
     return targets;
-  }, [notes, periodic, now]);
+  }, [notes, periodic, now, plugins.periodic]);
   // Reads the vault's files and texts again after the app created a note.
   const refresh = useCallback(async () => {
     if (status?.state !== 'open') return;
@@ -548,22 +570,22 @@ export function App() {
   // The calendar and the timer use this too, without opening the note.
   const ensurePeriodic = useCallback(
     async (period: Period, date: Date): Promise<string> => {
-      if (!plugins.periodic) throw new Error('Enable Periodic notes in Settings → Plugins first.');
+      if (!vault || !plugins.periodic) throw new Error('Enable Periodic notes in Settings → Plugins first.');
       const existing = periodicNotes.get(periodKey(period, date));
       if (existing) return existing;
       if (catalog.matches.has(periodKey(period, date))) throw new Error('More than one note has this date. Choose its calendar note in Settings → Existing notes.');
       const path = periodicPath(period, date, periodic);
       try {
-        await createNote(path, builtInPeriodicText(period, date));
+        await createNote(path, builtInPeriodicText(period, date), vault);
       } catch (err) {
         // A concurrent creation is safe to reuse only if it is this period's note.
         if (!String(err).includes('already exists')) throw err;
-        assertPeriodicNote(path, await readNote(path), period, date, periodic, recognition);
+        assertPeriodicNote(path, await readNote(path, vault), period, date, periodic, recognition);
       }
       await refresh();
       return path;
     },
-    [periodic, periodicNotes, catalog, recognition, refresh, plugins.periodic],
+    [vault, periodic, periodicNotes, catalog, recognition, refresh, plugins.periodic],
   );
   // A day, week or month opens its note, creating it first if it has none.
   const openPeriodic = useCallback(
@@ -591,7 +613,7 @@ export function App() {
     settings: () => { if (view.kind !== 'settings') go({ kind: 'settings' }); },
     home: () => go(HOME),
     library: () => openLibrary('all'),
-    today: () => openPeriodicOrSay('day', today()),
+    today: () => plugins.periodic ? openPeriodicOrSay('day', today()) : go({ kind: 'settings', section: 'periodic' }),
     back: () => update((prev) => goBack(prev)),
     forward: () => update((prev) => goForward(prev)),
     cycle: (step) => update((prev) => cycle(prev, step)),
@@ -627,7 +649,7 @@ export function App() {
       const latest = await getSettings();
       const patch = vaultPreferencesPatch(latest, status.root, rememberPeriodic(periodic, next.periodic), next.recognition ?? recognition, next.fileDefaults);
       const pluginPatch = next.plugins ? pluginPreferencesPatch({ ...latest, ...patch }, status.root, next.plugins, next.homeSections ?? homeSections, next.features.checkIns, next.pluginDisplay) : {};
-      setSettings(await updateSettings({ ...patch, ...pluginPatch, ...(!preferences.complete && settings.libraryFilters === undefined ? { libraryFilters: DEFAULT_FILTERS } : {}), librarySources: next.sources, lifetimeYears: next.lifetimeYears, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
+      setSettings(await updateSettings({ ...patch, ...pluginPatch, ...(next.calendarTimeZone !== undefined ? { calendarTimeZone: next.calendarTimeZone } : {}), ...(!preferences.complete && settings.libraryFilters === undefined ? { libraryFilters: DEFAULT_FILTERS } : {}), librarySources: next.sources, lifetimeYears: next.lifetimeYears, birthDate: next.birthDate.trim() || null, podcasts: next.podcasts, periodicFeatures: next.features }));
     },
     [settings, status, periodic, recognition, homeSections, plugins.timer, plugins.spike, preferences.complete, saveRewards],
   );
@@ -641,16 +663,16 @@ export function App() {
   }, [status, settings, periodic, preferences.complete, now, refresh, configuredPlugins, homeSections, features.checkIns]);
 
   // The calendar's and the timer's writes: one at a time, over the text the app last read.
-  const changeNote = useNoteWriter(texts, noteSaved);
+  const changeNote = useNoteWriter(vault, texts, noteSaved);
   const [calendarWarning, setCalendarWarning] = useState<string>();
   // Why the timer last didn't start, for the menu bar's panel, where a start may have come from.
   const [startProblem, setStartProblem] = useState<string>();
   // Which vault is open, by its folder: a timed block is only ever written into the vault it was timed in.
-  const vault = status?.state === 'open' ? status.root : undefined;
   // Changes a day's note. A day without one gets built-in starting text with the change already
   // in: if the change can't be made (for example, if its Tasks heading is missing), no note is created.
   const changeDay = useCallback(
     async (date: Date, edit: (text: string) => string | undefined): Promise<{ path: string; text: string }> => {
+      if (!vault) throw new Error('No vault is open.');
       const existing = periodicNotes.get(periodKey('day', date));
       if (existing) return { path: existing, text: await changeNote(existing, edit) };
       if (catalog.matches.has(periodKey('day', date))) throw new Error('Choose the calendar note for this day in Settings → Existing notes before adding tasks.');
@@ -658,7 +680,7 @@ export function App() {
       const template = builtInPeriodicText('day', date);
       const text = edit(template) ?? template;
       try {
-        await createNote(path, text);
+        await createNote(path, text, vault);
       } catch (err) {
         // Validate the text inside the conditional write, including explicit calendar exclusions.
         if (!String(err).includes('already exists')) throw err;
@@ -671,7 +693,7 @@ export function App() {
       await refresh();
       return { path, text };
     },
-    [changeNote, periodic, periodicNotes, catalog, recognition, refresh],
+    [vault, changeNote, periodic, periodicNotes, catalog, recognition, refresh],
   );
   const writeDay = useCallback(
     async (date: Date, edit: (text: string) => string, failed: string) => {
@@ -781,18 +803,21 @@ export function App() {
     setNoteVersion((version) => version + 1);
   }, [timer.state.session, timer.state.pending, catalog, update, go, refresh]);
   const vaultName = status?.state === 'open' ? status.name : undefined;
+  const followTaskPlans = useTaskPlans(plugins.calendar ? vault : undefined, vaultName);
   // A task edited or deleted from a menu: the timer follows it, and so do its plans in Calendar.
   const taskChanged = useCallback(
     (change: TaskChange) => {
-      if (change.kind === 'edited') timer.retask(change.path, change.before, change.after);
-      if (!change.focusId || !vaultName) return;
-      const link = { vault: vaultName, note: change.path, id: change.focusId };
-      const follow = change.kind === 'edited' ? renamePlans(link, change.date, planText(change.after.category, change.after.label)) : deletePlans(link, change.date);
-      follow.catch((err: unknown) => setCalendarWarning(`The task’s plans in Calendar didn’t follow it: ${reason(err)}`));
+      if (plugins.timer && change.kind === 'edited') timer.retask(change.path, change.before, change.after);
+      void followTaskPlans(change).catch((err: unknown) => setCalendarWarning(`The task’s plans in Calendar didn’t follow it: ${reason(err)}`));
     },
-    [timer, vaultName],
+    [timer, plugins.timer, followTaskPlans],
   );
   // The Apple Calendar last chosen for each category's plans.
+  const calendarTimeZone = useMemo(() => calendarZonePreference(settings.calendarTimeZone), [settings.calendarTimeZone]);
+  const saveCalendarTimeZone = async (zone: string | undefined) => {
+    const saved = await updateSettings({ calendarTimeZone: zone ?? null });
+    setSettings((current) => ({ ...current, calendarTimeZone: saved.calendarTimeZone }));
+  };
   const planCalendars = useMemo(() => {
     const stored = settings.planCalendars;
     if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
@@ -836,7 +861,7 @@ export function App() {
     },
     [changeDay, timer, vault, plugins.timer],
   );
-  const habitActions = useHabitActions({ root: vault, habits: habitCatalog.habits, onSaved: noteSaved, refresh, changeDay });
+  const habitActions = useHabitActions({ root: plugins.habits ? vault : undefined, habits: habitCatalog.habits, onSaved: noteSaved, refresh, changeDay });
   // The menu bar item and its panel: the timer and today's tasks, published as they change; the
   // panel's buttons start, pause and stop this same timer.
   const todayEntry = useMemo(() => dayOf(now), [dayOf, now]);
@@ -847,6 +872,8 @@ export function App() {
     () =>
       panelView({
         vault: vaultName,
+        scope: vault,
+        options: { timer: plugins.timer, tasks: plugins.periodic, sound: pluginDisplay.menubar.sections.sound !== false, density: pluginDisplay.menubar.density },
         navigation: { dailyNote: Boolean(vaultName && !setup && plugins.periodic), calendar: Boolean(vaultName && !setup && plugins.calendar) },
         today: now,
         path: todayEntry.path,
@@ -856,7 +883,7 @@ export function App() {
         unwritten,
         problem: startProblem ?? (timer.saveError && `The timer couldn’t save itself: ${timer.saveError}`),
       }),
-    [vaultName, setup, plugins.periodic, plugins.calendar, now, todayEntry, texts, timer.state, timer.saveError, unwritten, startProblem],
+    [vault, vaultName, setup, pluginDisplay.menubar, plugins.timer, plugins.periodic, plugins.calendar, now, todayEntry, texts, timer.state, timer.saveError, unwritten, startProblem],
   );
   const startFromTray = useCallback((choice: TaskChoice, how: FocusHow) => void startTimer(choice, how), [startTimer]);
   // Opening the panel had it show today's list again; the start was on the day before's.
@@ -865,7 +892,7 @@ export function App() {
     if (destination === 'daily-note' && trayView.navigation?.dailyNote) openPeriodicOrSay('day', today());
     if (destination === 'calendar' && trayView.navigation?.calendar) go({ kind: 'calendar' });
   };
-  useTrayBridge(timer, trayView, { onStart: startFromTray, onStale: staleFromTray, onOpen: openFromTray }, plugins.timer);
+  const menuBar = useTrayBridge(timer, trayView, { onStart: startFromTray, onStale: staleFromTray, onOpen: openFromTray }, !!vault && plugins.menubar);
   const textOf = useCallback((path: string) => texts.get(path), [texts]);
   const frontNote = notePath(view);
   // Laid out only while it can be seen.
@@ -889,6 +916,7 @@ export function App() {
 
   return (
     <PluginDisplayProvider value={pluginDisplay}><div className={['app', right.open && !assistantOpen && 'has-right', assistantOpen && 'has-assistant', !leftOpen && 'without-left'].filter(Boolean).join(' ')}>
+      {wallpaper && <LiveWallpaper item={wallpaper} still={appearance.wallpaperStill} />}
       {leftOpen && <Sidebar
         plugins={plugins}
         vaultName={status.name}
@@ -911,7 +939,7 @@ export function App() {
         onHabits={(newTab) => go({ kind: 'habits' }, newTab)}
         onStatistics={(newTab) => go({ kind: 'statistics' }, newTab)}
         onNoteMenu={(path, x, y) => { if (!/\.base$/i.test(path)) setNoteMenu({ path, x, y }); }}
-        timer={plugins.timer && <TimerPill timer={timer} onOpen={() => go({ kind: 'calendar' })} />}
+        timer={plugins.timer && <TimerPill timer={timer} onOpen={() => go(plugins.calendar ? { kind: 'calendar' } : { kind: 'settings', section: 'timer' })} />}
         folderError={folderError}
         calendar={
           plugins.periodic && <Calendar
@@ -945,12 +973,12 @@ export function App() {
           {/* Only the tab in front is drawn, afresh for each tab: an editor leaving saves as it goes. */}
           <Fragment key={tab.id}>
             {plugins.quests && ['home', 'quests', 'statistics', 'summaries', 'note'].includes(view.kind) && (rewardError || scoringIssue) && <p className="note-warning" role="status">{rewardError ? 'Custom XP settings are unavailable. Check Settings → Quests.' : `XP excluded for ${scoringIssue?.[0]} · ${scoringIssue?.[1].rewardProblem}`}</p>}
-            {view.kind === 'home' && !plugins.home && <MarkdownHome name={status.name} files={files} onOpen={openNote} onNew={newNote} onPlugins={() => go({ kind: 'settings' })} />}
-            {view.kind !== 'home' && requiredPlugin(view.kind) && !plugins[requiredPlugin(view.kind)!] && <PluginUnavailable name={PLUGINS.find((item) => item.id === requiredPlugin(view.kind))!.name} onSettings={() => go({ kind: 'settings' })} />}
-            {view.kind === 'home' && plugins.home && (
-              <PluginSurface id="home"><Home
+            <PluginRoute view={view} active={plugins} onSettings={() => go({ kind: 'settings', section: 'plugins' })}
+              markdownHome={<MarkdownHome name={status.name} files={files} onOpen={openNote} onNew={newNote} onPlugins={() => go({ kind: 'settings', section: 'plugins' })} />}>
+            {view.kind === 'home' && (
+              <Home
                 rewards={rewards}
-                sections={{ ...homeSections, profile: homeSections.profile && plugins.periodic, averages: homeSections.averages && plugins.periodic, focus: homeSections.focus && plugins.periodic, today: homeSections.today && plugins.periodic, spheres: homeSections.spheres && plugins.quests, quests: homeSections.quests && plugins.quests, library: homeSections.library && plugins.library }}
+                sections={visibleHomeSections(homeSections, plugins)}
                 statisticsEnabled={plugins.statistics}
                 vaultName={status.name}
                 stats={{
@@ -976,13 +1004,14 @@ export function App() {
                 onSeeLibrary={() => openLibrary('all')}
                 onSeeQuests={() => go({ kind: 'quests' })}
                 onSeeStatistics={() => go({ kind: 'statistics' })}
+                onEditSpheres={() => go({ kind: 'settings', section: 'quests' })}
                 onSeeSummaries={() => go({ kind: 'summaries' })}
-              /></PluginSurface>
+              />
             )}
-            {view.kind === 'quests' && plugins.quests && <PluginSurface id="quests"><QuestPage days={dailyNotes} rewards={rewards} quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} /></PluginSurface>}
-            {view.kind === 'habits' && plugins.habits && <PluginSurface id="habits"><HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} /></PluginSurface>}
-            {view.kind === 'statistics' && plugins.statistics && <PluginSurface id="statistics"><StatisticsPage showQuestXp={plugins.quests} rewards={rewards} days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} /></PluginSurface>}
-            {view.kind === 'summaries' && plugins.statistics && <PluginSurface id="statistics"><Summaries scales={dailyFacts.scales} today={todayNote.date} days={dailyNotes} lifetimeYears={lifetimeYears} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} /></PluginSurface>}
+            {view.kind === 'quests' && <QuestPage days={dailyNotes} rewards={rewards} quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} />}
+            {view.kind === 'habits' && <HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} />}
+            {view.kind === 'statistics' && <StatisticsPage showQuestXp={plugins.quests} rewards={rewards} days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} />}
+            {view.kind === 'summaries' && <Summaries scales={dailyFacts.scales} today={todayNote.date} days={dailyNotes} lifetimeYears={lifetimeYears} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} />}
             {fileActionError && <p className="note-warning" role="alert">{fileActionError}</p>}
             {editError && (
               <p className="note-warning" data-testid="edit-warning">
@@ -1025,8 +1054,8 @@ export function App() {
               />}
               </BasesProvider>
             )}
-            {view.kind === 'calendar' && plugins.calendar && (
-              <PluginSurface id="calendar"><CalendarView focusDate={assistantCalendar} onFocusDate={() => setAssistantCalendar(undefined)}
+            {view.kind === 'calendar' && (
+              <CalendarView onOpenLinkedNote={openNote} timeZone={calendarTimeZone} onSaveTimeZone={saveCalendarTimeZone} focusDate={assistantCalendar} onFocusDate={() => setAssistantCalendar(undefined)}
                 timerEnabled={plugins.timer}
                 dayOf={dayOf}
                 textOf={textOf}
@@ -1040,10 +1069,10 @@ export function App() {
                 planCalendars={planCalendars}
                 onChooseCalendar={chooseCalendar}
                 warning={calendarWarning}
-              /></PluginSurface>
+              />
             )}
-            {view.kind === 'library' && plugins.library && (
-              <PluginSurface id="library"><LibraryView
+            {view.kind === 'library' && (
+              <LibraryView
                 library={library}
                 files={files}
                 tab={view.tab}
@@ -1063,15 +1092,21 @@ export function App() {
                 podcastArtwork={podcasts.artwork}
                 sources={sources}
                 onChanged={refresh}
-              /></PluginSurface>
+              />
             )}
             {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
             {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
             {view.kind === 'new' && view.item === 'base' && <NewBase root={status.root} folder={view.folder} folders={folders} onCreated={async (path) => { await refresh(); openNote(path); }} />}
             {view.kind === 'new' && view.item !== 'base' && <NewNote key={`${tab.index}-${view.item ?? 'note'}`} kind={view.item ?? 'note'} folders={folders} folder={view.folder} onNewNote={(folder) => go({ kind: 'new', folder })} onCreate={view.item === 'folder' ? async (path) => { await createFolder(path); setFolders((previous) => [...new Set([...previous, path])]); } : create} />}
-            {view.kind === 'graph' && plugins.graph && <PluginSurface id="graph"><GraphView graph={graph} onOpen={openNote} /></PluginSurface>}
-            {view.kind === 'settings' && <SettingsScreen key={status.root} rewardDocument={rewardDocument} rewardError={rewardError} retryRewards={retryRewards} rewardDate={rewardDate} observedTags={dailyFacts.categories} appearance={appearance} onSaveAppearance={saveAppearance} appearanceError={appearanceError} spikeSettings={(onBack) => <AssistantConfiguration value={assistantSettings} pluginEnabled={plugins.spike} profileExists={files.some((file) => file.path === assistantSettings.profilePath)} onSave={saveAssistantSettings} onOpenProfile={() => openNote(assistantSettings.profilePath)} onBack={onBack} />} pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} lifetimeYears={lifetimeYears} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
+            {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
+            {view.kind === 'settings' && <SettingsScreen key={status.root}
+              menuBarNotice={menuBar.problem && <p className="preferences-error" role="alert">{menuBar.problem} <button type="button" className="quiet-button" onClick={menuBar.retry}>Retry menu bar</button></p>}
+              habitSettings={<HabitPreferences habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} onOpenNote={openNote} {...habitActions} />}
+              timerSettings={() => <div className="settings-focus-timer"><TimerCard timer={timer} tasks={taskRefs(todayEntry, todayEntry.path ? texts.get(todayEntry.path) : undefined)} categories={categories}
+                timeZone={calendarTimeZone} onStart={(choice) => void startTimer(choice)} />{startProblem && <p role="alert">{startProblem}</p>}</div>}
+              wallpaperLibrary={wallpaperLibrary} calendarTimeZone={calendarTimeZone} rewardDocument={rewardDocument} rewardError={rewardError} retryRewards={retryRewards} rewardDate={rewardDate} observedTags={dailyFacts.categories} appearance={appearance} onSaveAppearance={saveAppearance} appearanceError={appearanceError} spikeSettings={(onBack) => <AssistantConfiguration value={assistantSettings} pluginEnabled={plugins.spike} profileExists={files.some((file) => file.path === assistantSettings.profilePath)} onSave={saveAssistantSettings} onOpenProfile={() => openNote(assistantSettings.profilePath)} onBack={onBack} />} pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} lifetimeYears={lifetimeYears} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}
             {view.kind === 'problem' && <Problem title={view.title} message={view.message} onBack={back} />}
+            </PluginRoute>
           </Fragment>
         </main>
       </div>
@@ -1088,7 +1123,7 @@ export function App() {
           onOpen={openNote}
         />
       )}
-      {plugins.spike && <AssistantWorkspace glass={appearance.surface === 'glass'} key={status.root} context={{ root: status.root, now, questAreas, questPresets, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, features: { periodic: plugins.periodic, cbt: plugins.cbt, quests: plugins.quests, library: plugins.library, calendar: plugins.calendar }, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenCalendar={(time) => { setAssistantCalendar({ time, token: Date.now() }); go({ kind: 'calendar' }); }} onOpenNote={(path, cbt, start) => { if (cbt) setAssistantCbt({ path, token: Date.now(), start }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
+      {plugins.spike && <AssistantWorkspace glass={appearance.surface === 'glass'} key={status.root} context={{ root: status.root, now, calendarTimeZone, questAreas, questPresets, files, texts, currentPath: frontNote, dailyPath: assistantCatalog.index.get(periodKey('day', now)), dailyAmbiguous: !assistantCatalog.index.has(periodKey('day', now)) && (assistantCatalog.matches.get(periodKey('day', now))?.length ?? 0) > 1, periodic, recognition, features: { periodic: plugins.periodic, cbt: plugins.cbt, quests: plugins.quests, library: plugins.library, calendar: plugins.calendar }, settings: assistantSettings }} open={assistantOpen} onOpen={() => setAssistantOpen(true)} onClose={() => setAssistantOpen(false)} onSaved={noteSaved} onRefresh={refresh} onOpenCalendar={(time) => { setAssistantCalendar({ time, token: Date.now() }); go({ kind: 'calendar' }); }} onOpenNote={(path, cbt, start) => { if (cbt) setAssistantCbt({ path, token: Date.now(), start }); openNote(path); }} onSaveSettings={saveAssistantSettings} />}
     </div></PluginDisplayProvider>
   );
 }

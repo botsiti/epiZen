@@ -1387,6 +1387,22 @@ describe('the demo vault', () => {
     await expect($('[data-testid="cal-planned"]')).toHaveText(expect.stringContaining('2 events in Calendar'));
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
     await screenshot('44-calendar-week');
+    // Noon UTC on Friday becomes 02:00 Saturday across the date line.
+    await $('[data-testid="cal-time-zone"]').click();
+    await $('[aria-label="Search time zones"]').setValue('Kiritimati');
+    await screenshot('44-calendar-zone-picker');
+    await $('button=Pacific/Kiritimati').click();
+    await expect($('[data-testid="cal-time-zone"]')).toHaveText(expect.stringContaining('Kiritimati'));
+    await $('[data-testid="cal-fold-early"]').click();
+    await expect($('[data-testid="cal-col"][data-date="2026-08-15"] [data-testid="cal-plan"]')).toHaveText(expect.stringContaining('02:00–03:00'));
+    await expect($('[data-testid="cal-allday"]')).toHaveText(expect.stringContaining('Summer holiday'));
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="open-calendar"]').click();
+    await expect($('[data-testid="cal-time-zone"]')).toHaveText(expect.stringContaining('Kiritimati'));
+    await $('[data-testid="cal-time-zone"]').click();
+    await $('button*=Follow Mac time zone').click();
+    await expect($('[data-testid="cal-col"][data-date="2026-08-14"] [data-testid="cal-plan"]')).toHaveText(expect.stringContaining('Dentist'));
+
 
     await $('[data-testid="cal-day-head"][data-date="2026-08-14"]').click();
     await expect(calendar).toHaveAttribute('data-mode', 'day');
@@ -1560,14 +1576,24 @@ describe('the demo vault', () => {
 
     await openTray();
     await $('button=Sound').click();
-    await expect($('button=White noise')).toBeDisplayed();
-    await expect($('button=Brown noise')).toBeDisplayed();
+    const volume = $('[aria-label="Sound volume"]');
+    await volume.click();
+    await browser.keys('Home');
+    await expect(volume).toHaveValue('0');
+    await $('button=White noise').click();
+    await expect($('button=White noise')).toHaveAttribute('aria-pressed', 'true');
     await screenshot('tray-focus-sounds');
     await $('[data-testid="tray-open-calendar"]').click();
     await browser.switchToWindow('main');
     await expect($('[data-testid="cal-view"]')).toBeDisplayed();
 
     await openTray();
+    await expect($('button=White noise')).toHaveAttribute('aria-pressed', 'true');
+    await $('button=Brown noise').click();
+    await expect($('button=White noise')).toHaveAttribute('aria-pressed', 'false');
+    await expect($('button=Brown noise')).toHaveAttribute('aria-pressed', 'true');
+    await $('button=Brown noise').click();
+    await expect($('button=Brown noise')).toHaveAttribute('aria-pressed', 'false');
     await $('[data-testid="tray-open-daily"]').click();
     await browser.switchToWindow('main');
     await expect(title()).toHaveText(TODAY);

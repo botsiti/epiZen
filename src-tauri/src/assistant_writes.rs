@@ -117,6 +117,8 @@ pub fn apply_cover(vault: &Vault, settings: &Settings, action: &CoverAction, byt
 pub struct CalendarAction {
     pub id: String, pub root: String, pub calendar: String, pub title: String,
     pub start: i64, pub end: i64, pub notes: Option<String>,
+    #[serde(default, rename = "timeZone", skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
     #[serde(default, rename = "avoidConflicts", skip_serializing_if = "is_false")]
     pub avoid_conflicts: bool,
 }
@@ -143,7 +145,7 @@ pub fn apply_calendar(calendars: &dyn crate::Calendars, settings: &Settings, act
     }
     receipts.push(Receipt { id: action.id.clone(), fingerprint: mark, path: format!("calendar:{}", action.calendar), done: false, draft: None, result: None, abandoned: false, root: action.root.clone(), cover_hash: None });
     save(settings, &receipts)?;
-    let event = calendars.create(&crate::NewEvent { calendar: action.calendar.clone(), title: action.title.clone(), start: action.start, end: action.end, notes: action.notes.clone(), url: None })?;
+    let event = calendars.create(&crate::NewEvent { time_zone: action.time_zone.clone(), calendar: action.calendar.clone(), title: action.title.clone(), start: action.start, end: action.end, notes: action.notes.clone(), url: None })?;
     let receipt = receipts.last_mut().expect("just inserted"); receipt.done = true; receipt.result = Some(event.id.clone());
     save(settings, &receipts)?;
     Ok(event.id)
@@ -280,7 +282,7 @@ mod tests {
         let (_dir, vault, settings, _) = fixture();
         let calendars = crate::MemoryCalendars::demo();
         let calendar = calendars.calendars().unwrap().into_iter().find(|item| item.writable).unwrap().id;
-        let mut action = CalendarAction { id: "plan-block".into(), root: vault.root(), calendar, title: "code".into(), start: 1_800_000_000_000, end: 1_800_005_400_000, notes: Some("Feature work".into()), avoid_conflicts: true };
+        let mut action = CalendarAction { time_zone: None, id: "plan-block".into(), root: vault.root(), calendar, title: "code".into(), start: 1_800_000_000_000, end: 1_800_005_400_000, notes: Some("Feature work".into()), avoid_conflicts: true };
         let saved = apply_calendar(&calendars, &settings, &action).unwrap();
         assert_eq!(apply_calendar(&calendars, &settings, &action).unwrap(), saved);
         action.id = "conflicting-block".into();
@@ -299,7 +301,7 @@ mod tests {
         let (_dir, vault, settings, _) = fixture();
         let calendars = crate::MemoryCalendars::demo();
         let calendar = calendars.calendars().unwrap().into_iter().find(|item| item.writable).unwrap().id;
-        let mut action = CalendarAction { id: "calendar-1".to_owned(), root: vault.root(), calendar, title: "A reading hour".to_owned(), start: 1_800_000_000_000, end: 1_800_003_600_000, notes: None, avoid_conflicts: false };
+        let mut action = CalendarAction { time_zone: None, id: "calendar-1".to_owned(), root: vault.root(), calendar, title: "A reading hour".to_owned(), start: 1_800_000_000_000, end: 1_800_003_600_000, notes: None, avoid_conflicts: false };
         let first = apply_calendar(&calendars, &settings, &action).unwrap();
         assert_eq!(apply_calendar(&calendars, &settings, &action).unwrap(), first);
         assert_eq!(calendars.events(action.start, action.end).unwrap().len(), 1);

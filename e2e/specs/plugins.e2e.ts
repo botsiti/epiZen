@@ -95,4 +95,27 @@ describe('a Markdown core with optional workflows', () => {
     await expect($('[aria-label="Habits default view"]')).toHaveValue('History');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
   });
+  it('manages a tracked habit in its plugin settings and keeps the same definition through disable and reload', async () => {
+    const before = snapshotVault(root);
+    await $('[data-testid="settings-nav-habits"]').click();
+    await $('button=Add habit').click();
+    await $('[aria-label="Habit name"]').setValue('Take a midday walk');
+    await $('button=Save habit').click();
+    await $('[aria-label="Archive Take a midday walk"]').waitForDisplayed();
+    await screenshot('227-habit-plugin-routine');
+    const created = snapshotVault(root);
+    expect(diffSnapshots(before, created)).toEqual([expect.stringMatching(/^added: Habits\/Take a midday walk-.*\.md$/)]);
+    await toggle('Habits'); await save();
+    await expect($('[data-testid="open-habits"]')).not.toBeExisting();
+    await browser.refresh(); await prepareWindow();
+    await $('[data-testid="open-settings"]').click();
+    await $('[data-testid="settings-nav-habits"]').click();
+    await toggle('Habits'); await save();
+    await expect($('[aria-label="Archive Take a midday walk"]')).toBeDisplayed();
+    expect(diffSnapshots(created, snapshotVault(root))).toEqual([]);
+    await $('[data-testid="open-habits"]').click();
+    await $('[aria-label="Habit collection"]').$('button*=Active').click();
+    await expect($('.habits-list')).toHaveText(expect.stringContaining('Take a midday walk'));
+  });
+
 });

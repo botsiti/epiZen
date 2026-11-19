@@ -114,3 +114,20 @@ describe('the menu bar’s panel', () => {
     expect(screen.getByRole('button', { name: 'Calendar' })).toBeDisabled();
   });
 });
+
+it('shows only the available shortcuts and activities with an independent menu bar', () => {
+  const options = { timer: false, tasks: true, sound: true, density: 'compact' as const };
+  const view = panelView({ options, vault: 'demo', today: new Date(AT), path: PATH, day: parseDay(TEXT), text: TEXT, timer: initialTimer(), unwritten: 0, navigation: { dailyNote: true, calendar: false } });
+  const common = { now: AT, send: vi.fn(), onOpen: vi.fn(), onQuit: vi.fn() };
+  const { rerender } = render(<TrayPanel {...common} view={view} />);
+  expect(screen.getByTestId('tray-open-calendar')).toBeDisabled();
+  expect(screen.getByTestId('tray-open-daily')).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Sound' })).toBeEnabled();
+  expect(cards()).toHaveLength(2);
+  expect(screen.queryByTestId('tray-now')).toBeNull();
+  expect(screen.queryByTestId('tray-start-25')).toBeNull();
+  expect(screen.getByTestId('tray')).toHaveAttribute('data-density', 'compact');
+  rerender(<TrayPanel {...common} view={{ ...view, options: { ...options, sound: false, tasks: false } }} />);
+  expect(screen.queryByRole('button', { name: 'Sound' })).toBeNull();
+  expect(screen.queryByText('Today’s tasks')).toBeNull();
+});

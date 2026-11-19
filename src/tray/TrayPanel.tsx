@@ -21,8 +21,9 @@ const toneOf = (name?: string) => (name ? category(name).color : 'var(--accent)'
 export function TrayPanel({ view, now, send, onOpen, onQuit, problem }: Props) {
   const shown = view && panelNow(view, now);
   const [sounds, setSounds] = useState(false);
+  const soundEnabled = !!view && view.options?.sound !== false;
   return (
-    <div className="tray" data-testid="tray">
+    <div className="tray" data-density={view?.options?.density} data-testid="tray">
       {shown && <Head shown={shown} />}
       <nav className="tray-nav" aria-label="Menu bar shortcuts">
         <button type="button" className="tray-button" disabled={!view?.navigation?.dailyNote} onClick={() => onOpen('daily-note')} data-testid="tray-open-daily">
@@ -31,16 +32,16 @@ export function TrayPanel({ view, now, send, onOpen, onQuit, problem }: Props) {
         <button type="button" className="tray-button" disabled={!view?.navigation?.calendar} onClick={() => onOpen('calendar')} data-testid="tray-open-calendar">
           <TrayGlyph name="calendar" /> Calendar
         </button>
-        <button type="button" className="tray-button" aria-expanded={sounds} aria-controls="tray-sounds" onClick={() => setSounds(!sounds)}>
+        {soundEnabled && <button type="button" className="tray-button" aria-expanded={sounds} aria-controls="tray-sounds" onClick={() => setSounds(!sounds)}>
           <TrayGlyph name="sound" /> Sound
-        </button>
+        </button>}
       </nav>
-      <FocusSound expanded={sounds} />
+      {soundEnabled && <FocusSound key={view?.scope ?? view?.vault} expanded={sounds} />}
       {(problem || view?.warning) && <p className="tray-warning" role="status">{problem ?? view?.warning}</p>}
       {shown && view ? (
         <div className="tray-scroll">
-          <Now view={view} shown={shown} send={send} />
-          <Tasks view={view} send={send} />
+          {view.options?.timer !== false && <Now view={view} shown={shown} send={send} />}
+          {view.options?.tasks !== false && <Tasks view={view} send={send} />}
         </div>
       ) : (
         <p className="tray-empty">Epizen is opening…</p>
@@ -192,7 +193,7 @@ function TaskCard({ task, view, send }: { task: PanelTask; view: PanelView; send
         {task.category && <span className="tray-category">{task.category}</span>}
         <span>{formatMinutes(task.minutes)} logged</span>
       </div>
-      {!task.current && !task.done &&
+      {view.options?.timer !== false && !task.current && !task.done &&
         (custom === undefined ? (
           <div className="tray-starts" role="group" aria-label={`Start a round on ${task.label}`}>
             {POMODORO_PRESETS.map((minutes, i) => (

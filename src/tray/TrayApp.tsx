@@ -62,8 +62,8 @@ export function TrayApp() {
       view={view}
       now={now}
       problem={problem}
-      send={(command) => perform(() => trayCommand(command), 'The timer didn’t respond. Try again.')}
-      onOpen={(destination) => perform(() => openMainWindow(destination), 'Epizen couldn’t open. Try again.')}
+      send={(command) => perform(() => trayCommand({ ...command, scope: view?.scope }), 'The timer didn’t respond. Try again.')}
+      onOpen={(destination) => perform(() => openMainWindow(destination, view?.scope), 'Epizen couldn’t open. Try again.')}
       onQuit={() => perform(quitApp, 'Epizen couldn’t quit. Try again.')}
     />
   );

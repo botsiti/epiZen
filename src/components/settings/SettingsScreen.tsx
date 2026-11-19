@@ -1,10 +1,21 @@
+import { ErrorBoundary } from '../ErrorBoundary';
+import { manifests, type PluginId } from '../../lib/pluginCatalog';
+import { PluginSurface } from '../workspace/PluginDisplay';
+import type { WallpaperLibrary } from './useWallpapers';
+import { CalendarZonePicker } from '../calendar/CalendarZonePicker';
+import { HomepagePreferences } from './HomepagePreferences';
+import { LibraryPreferences } from './LibraryPreferences';
+import { FileLocationPreferences } from './FileLocationPreferences';
+import { SettingsToolbar } from './SettingsToolbar';
+import { SECTIONS, type Section } from './settingsSections';
+import { DailyTaskCategories } from './DailyTaskCategories';
 import { QuestRuleFields } from './QuestRuleFields';
-import { editQuestPreferences, saveQuestPreferences, type QuestPreferences } from '../../lib/questPreferences';
+import { CategoryNameError, editQuestPreferences, saveQuestPreferences, type QuestPreferences } from '../../lib/questPreferences';
 import type { QuestRulesDocument } from './useQuestRules';
 import type { RewardSettings } from '../../lib/rewardRules';
 import { AppearancePreferences } from './AppearancePreferences';
 import type { Appearance } from '../../lib/appearance';
-import { useId, useMemo, useRef, useState, type ReactNode, type FormEvent } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { today } from '../../lib/dates';
 import { DEFAULT_LIFETIME_YEARS, parseBirthDate, validLifetimeYears } from '../../lib/home';
 import { DEFAULT_RECOGNITION, periodicNamingError, type Period, type PeriodicRecognition, type PeriodicSettings, type PeriodicFeatures } from '../../lib/periodic';
@@ -12,18 +23,18 @@ import type { VaultFile } from '../../lib/api';
 import { PeriodicFolders, PeriodicRecognitionFields } from '../periodic/PeriodicPreferences';
 import { type PodcastSettings } from '../../lib/podcasts';
 import { ShortcutReference } from '../workspace/ShortcutReference';
-import { DEFAULT_SOURCES, SOURCE_OPTIONS, type LibrarySources, type Source } from '../../lib/librarySources';
-import { SOURCE_NAMES } from '../../lib/lookup';
+import { DEFAULT_SOURCES, type LibrarySources } from '../../lib/librarySources';
 import { DEFAULT_FILE_PREFERENCES, folderProblem, type FilePreferences } from '../../lib/filePreferences';
 import { SettingRow } from './SettingRow';
 import { DailyImport } from './DailyImport';
-import { PreferenceIcon } from './icons';
-import { ALL_PLUGINS, DEFAULT_HOME_SECTIONS, checkInSettings, setPlugin, HOME_SECTIONS, type PluginConfiguration, type PluginSettings, type HomeSections } from '../../lib/plugins';
+import { ALL_PLUGINS, DEFAULT_HOME_SECTIONS, checkInSettings, effectivePlugins, setPlugin, type PluginConfiguration, type PluginSettings, type HomeSections } from '../../lib/plugins';
 import { PluginPreferences } from './PluginPreferences';
 import { pluginDisplays, type PluginDisplays } from '../../lib/pluginDisplay';
 import './settings.css';
+import './questRules.css';
 
 export interface SettingsDraft {
+  calendarTimeZone?: string | null;
   rewards?: { revision: number; value: RewardSettings };
   pluginDisplay?: PluginDisplays;
   plugins?: PluginSettings;
@@ -38,12 +49,17 @@ export interface SettingsDraft {
   fileDefaults: FilePreferences;
 }
 interface Props {
+  wallpaperLibrary?: WallpaperLibrary;
+  calendarTimeZone?: string;
   rewardDocument?: QuestRulesDocument;
   rewardError?: string;
   retryRewards?: () => void;
   rewardDate?: string;
   observedTags?: string[];
   appearance?: Appearance; onSaveAppearance?: (value: Appearance) => Promise<void>; appearanceError?: string;
+  habitSettings?: ReactNode;
+  timerSettings?: () => ReactNode;
+  menuBarNotice?: ReactNode;
   spikeSettings?: (onBack: () => void) => ReactNode;
   pluginDisplay?: PluginDisplays;
   initialSection?: Section;
@@ -62,20 +78,8 @@ interface Props {
   texts?: ReadonlyMap<string, string>;
   onSave: (settings: SettingsDraft) => Promise<void>;
 }
-const SECTIONS = [
-  { id: 'plugins', title: 'Plugins', group: 'Your vault', hint: 'Start with Markdown. Add only what you use.', words: 'enable disable epiBase bases home library habits cbt check-ins mood energy focus social sleep calendar graph timer spike assistant companion' },
-  { id: 'periodic', title: 'Periodic notes', group: 'Your vault', hint: 'A place for your days, weeks and months.', words: 'daily weekly monthly import dates calendar habits thought records format folder' },
-  { id: 'files', title: 'Files & folders', group: 'Your vault', hint: 'Choose where new ideas begin.', words: 'new note create folder location' },
-  { id: 'home', title: 'Homepage', group: 'Personal', hint: 'A home for your days and the things you love.', words: 'birth birthday memento lifetime years sections dashboard' },
-  { id: 'appearance', title: 'Appearance', group: 'Personal', hint: 'A surface for your whole workspace.', words: 'glass transparent opacity animation background theme' },
-  { id: 'spike', title: 'Spike', group: 'Personal', hint: 'Your companion, on your terms.', words: 'assistant voice connection api companion desktop microphone' },
-  { id: 'library', title: 'Library', group: 'Personal', hint: 'Choose how to collect and display your media.', words: 'books podcasts movies films music albums library sources artwork' },
-  { id: 'quests', title: 'Quests', group: 'Personal', hint: 'Choose which activities earn XP and where the points go.', words: 'task categories life spheres rewards points productivity focus timer' },
-  { id: 'hotkeys', title: 'Hotkeys', group: 'Personal', hint: 'Move through Epizen without leaving the keyboard.', words: 'keyboard shortcuts commands' },
-] as const;
-type Section = typeof SECTIONS[number]['id'];
 
-export function SettingsScreen({ rewardDocument, rewardError, retryRewards, rewardDate, observedTags = [], appearance, onSaveAppearance, appearanceError, spikeSettings, periodic, birthDate, lifetimeYears = DEFAULT_LIFETIME_YEARS, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
+export function SettingsScreen({ menuBarNotice, habitSettings, timerSettings, wallpaperLibrary, calendarTimeZone, rewardDocument, rewardError, retryRewards, rewardDate, observedTags = [], appearance, onSaveAppearance, appearanceError, spikeSettings, periodic, birthDate, lifetimeYears = DEFAULT_LIFETIME_YEARS, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
   const id = useId();
   const heading = useRef<HTMLElement>(null);
   const [section, setSection] = useState<Section>(initialSection ?? (plugins ? 'plugins' : 'periodic'));
@@ -84,17 +88,22 @@ export function SettingsScreen({ rewardDocument, rewardError, retryRewards, rewa
   const [pluginDraft, setPluginDraft] = useState<PluginConfiguration>(() => ({ enabled: plugins ?? ALL_PLUGINS, home: homeSections, checks: checkInSettings(features.checkIns), display: pluginDisplay ?? pluginDisplays() }));
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('day');
   const [query, setQuery] = useState('');
+  // Keep unsubmitted connection fields in this Settings tab while browsing its sections.
+  const [visitedSpike, setVisitedSpike] = useState(false);
+  if (section === 'spike' && !visitedSpike) setVisitedSpike(true);
   const [draft, setDraft] = useState(periodic);
   const [recognitionDraft, setRecognitionDraft] = useState(recognition ?? DEFAULT_RECOGNITION);
+  const [zoneDraft, setZoneDraft] = useState<string | null>();
   const [years, setYears] = useState(String(lifetimeYears));
   const [birth, setBirth] = useState(birthDate);
   const [featureDraft, setFeatureDraft] = useState(features);
   const [podcastDraft, setPodcastDraft] = useState(podcasts);
   const [sourceDraft, setSourceDraft] = useState(sources);
+  const [appearanceDraft, setAppearanceDraft] = useState<Appearance>();
   const [fileDraft, setFileDraft] = useState(fileDefaults);
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState<{ saved?: boolean; error?: string }>({});
-  const initialRules = useMemo(() => rewardDocument && rewardDate ? editQuestPreferences(rewardDocument.value, rewardDocument.revision, rewardDate) : undefined, [rewardDocument, rewardDate]);
+  const initialRules = useMemo(() => rewardDocument && rewardDate ? editQuestPreferences(rewardDocument.value, rewardDocument.revision, rewardDate, observedTags) : undefined, [rewardDocument, rewardDate, observedTags]);
   const [rulesDraft, setRulesDraft] = useState<QuestPreferences>();
   const rules = rulesDraft ?? initialRules;
   const [dirty, setDirty] = useState(false);
@@ -116,38 +125,66 @@ export function SettingsScreen({ rewardDocument, rewardError, retryRewards, rewa
         rewards = { revision: rulesDraft.revision, value: saveQuestPreferences(rulesDraft, observedTags) };
       } catch (error) {
         if (rewardDate && rulesDraft.effectiveFrom < rewardDate) setRulesDraft({ ...rulesDraft, effectiveFrom: rewardDate });
-        setSection('quests'); setState({ error: String(error) }); return;
+        if (error instanceof CategoryNameError) { setSection('periodic'); setSelectedPeriod('day'); }
+        else setSection('quests');
+        setState({ error: error instanceof Error ? error.message : String(error) }); return;
       }
     }
     setSaving(true); setState({});
     try {
       const nextFeatures = plugins ? { ...featureDraft, habits: pluginDraft.enabled.habits, thoughtRecords: pluginDraft.enabled.cbt, checkIns: { ...pluginDraft.checks, enabled: pluginDraft.enabled.checkins } } : featureDraft;
-      await onSave({ ...(rewards ? { rewards } : {}), ...(plugins ? { plugins: pluginDraft.enabled, homeSections: pluginDraft.home, pluginDisplay: pluginDraft.display } : {}), ...(recognition ? { recognition: recognitionDraft } : {}), periodic: draft, birthDate: birth.trim(), lifetimeYears: Number(years), podcasts: podcastDraft, features: nextFeatures, sources: sourceDraft, fileDefaults: fileDraft });
-      setRulesDraft(undefined); setDirty(false); setState({ saved: true });
+      await onSave({ ...(zoneDraft !== undefined ? { calendarTimeZone: zoneDraft } : {}), ...(rewards ? { rewards } : {}), ...(plugins ? { plugins: pluginDraft.enabled, homeSections: pluginDraft.home, pluginDisplay: pluginDraft.display } : {}), ...(recognition ? { recognition: recognitionDraft } : {}), periodic: draft, birthDate: birth.trim(), lifetimeYears: Number(years), podcasts: podcastDraft, features: nextFeatures, sources: sourceDraft, fileDefaults: fileDraft });
+      setRulesDraft(undefined); setZoneDraft(undefined); setDirty(false); setState({ saved: true });
     } catch (error) { setState({ error: String(error) }); }
     finally { setSaving(false); }
   };
   const active = SECTIONS.find((item) => item.id === section)!;
-  const shown = SECTIONS.filter((item) => `${item.title} ${item.words}`.toLowerCase().includes(query.trim().toLowerCase()));
+  useLayoutEffect(() => { heading.current?.closest('.main')?.scrollTo?.(0, 0); }, [section]);
+  const navigate = (next: Section) => { setSection(next); setQuery(''); };
+  const owner = Object.hasOwn(manifests, section) ? section as PluginId : undefined;
+  const running = effectivePlugins(pluginDraft.enabled);
+  const liveSettings = section === 'habits' || section === 'timer';
+  const ownForm = liveSettings || section === 'hotkeys' || section === 'spike' || section === 'appearance' && !!appearance && !!onSaveAppearance;
   const period = section === 'periodic' ? selectedPeriod : undefined;
+  const changeRules = (next: QuestPreferences) => { setRulesDraft(next); changed(); };
+  const manageCategories = () => { navigate('periodic'); setSelectedPeriod('day'); };
+  const rulesStatus = rewardError
+    ? <p role="alert">{rewardError} <button type="button" className="quiet-button" onClick={retryRewards}>Retry settings</button></p>
+    : <p role="status">Loading categories and rewards…</p>;
   const setReading = (next: PeriodicRecognition) => { setRecognitionDraft(next); changed(); };
-  return <section className="preferences" data-testid="settings">
-    <aside className="preferences-nav">
-      <h1>Settings</h1>
-      <input type="search" aria-label="Search settings" placeholder="Search settings…" value={query} onChange={(event) => setQuery(event.target.value)} />
-      <nav aria-label="Settings sections">{['Your vault', 'Personal'].map((group) => <div key={group}><p className="preferences-nav-group">{group}</p>{shown.filter((item) => item.group === group).map((item) => <button type="button" key={item.id} aria-current={section === item.id ? 'page' : undefined} data-testid={`settings-nav-${item.id}`} onClick={() => { setSection(item.id); heading.current?.closest('.main')?.scrollTo?.(0, 0); }}><PreferenceIcon name={item.id} /><span>{item.title}</span></button>)}</div>)}</nav>
-      {!shown.length && <p className="muted" role="status">No matching settings.</p>}
-      <p className="preferences-nav-foot">A little more your own.</p>
-    </aside>
+  return <section className="preferences" data-testid="settings" data-section={section}>
+    <SettingsToolbar section={section} query={query} onQuery={setQuery} onNavigate={navigate}
+      action={(!ownForm || dirty) && <button type={ownForm ? 'button' : 'submit'} form={ownForm ? undefined : id}
+        className="preferences-commit" data-dirty={dirty} disabled={saving} data-testid="settings-save"
+        onClick={ownForm ? () => void save() : undefined}>{section === 'appearance' || section === 'spike' ? 'Save workspace changes' : 'Save changes'}</button>}
+      status={saving ? 'Saving…' : state.saved ? 'Saved' : dirty ? 'Unsaved changes' : ''} error={state.error} />
     <div className="preferences-main">
-      <header className="preferences-heading" ref={heading}><PreferenceIcon name={section} /><div><h2>{active.title}</h2><p>{active.hint}</p></div></header>
-      {section === 'appearance' && appearance && onSaveAppearance ? <AppearancePreferences value={appearance} onSave={onSaveAppearance} nativeError={appearanceError} /> : section === 'spike' ? <>{spikeSettings?.(() => setSection('plugins')) ?? <p>Open a vault to configure Spike.</p>}{dirty && <footer className="preferences-save"><span>Unsaved plugin preferences</span><button type="button" className="quiet-button" disabled={saving} onClick={() => void save()}>Save changes</button>{state.error && <p role="alert">{state.error}</p>}</footer>}</> : section === 'hotkeys' ? <><ShortcutReference />{dirty && <footer className="preferences-save"><span>Unsaved preferences</span><button type="button" className="quiet-button" disabled={saving} onClick={() => void save()}>Save changes</button>{state.error && <p role="alert">{state.error}</p>}</footer>}</> : <form className="preferences-form" onSubmit={(event) => void save(event)}>
+      <header className="preferences-heading" ref={heading}>
+        <div className="preferences-heading-copy"><h2>{active.title}</h2><p>{active.hint}</p></div>
+        {section === 'plugins' && <div className="preferences-plugin-count"><strong>{Object.values(pluginDraft.enabled).filter(Boolean).length}</strong>
+          <span>of {Object.keys(pluginDraft.enabled).length} enabled</span></div>}
+        {owner && plugins && <label className="preferences-plugin-toggle">
+          <span>{!pluginDraft.enabled[owner] ? 'Disabled' : running[owner] ? 'Enabled' : 'Paused'}</span>
+          <input type="checkbox" role="switch" className="preference-switch" aria-label={`Enable ${active.title}`} disabled={saving}
+            checked={pluginDraft.enabled[owner]} onChange={(event) => { setPluginDraft({ ...pluginDraft, enabled: setPlugin(pluginDraft.enabled, owner, event.target.checked) }); changed(); }} />
+        </label>}
+      </header>
+      {visitedSpike && <div hidden={section !== 'spike'}><ErrorBoundary label="Spike settings">{spikeSettings?.(() => { setVisitedSpike(false); navigate('plugins'); }) ?? <p>Open a vault to configure Spike.</p>}</ErrorBoundary></div>}
+      <ErrorBoundary key={section} label={active.title + ' settings'}>
+      {liveSettings ? <PluginSurface id={section}>{running[section] && (!plugins || effectivePlugins(plugins)[section])
+        ? section === 'habits' ? habitSettings : timerSettings?.()
+        : <p className="preferences-footnote">Enable {active.title} and save changes to use these controls.</p>}</PluginSurface>
+        : section === 'appearance' && appearance && onSaveAppearance ? <AppearancePreferences library={wallpaperLibrary} value={appearanceDraft ?? appearance} onChange={setAppearanceDraft} onSave={async (next) => { await onSaveAppearance(next); setAppearanceDraft(undefined); }} nativeError={appearanceError} /> : section === 'spike' ? null : section === 'hotkeys' ? <ShortcutReference /> : <form id={id} className="preferences-form" onSubmit={(event) => void save(event)}>
         <fieldset className="preferences-fields" disabled={saving}>
-          {section === 'plugins' && <PluginPreferences value={pluginDraft} onChange={(next) => { setPluginDraft(next); changed(); }} onSetup={setSection} />}
+          {section === 'plugins' && menuBarNotice}
+          {section === 'plugins' && <PluginPreferences value={pluginDraft} onChange={(next) => { setPluginDraft(next); changed(); }} onSetup={navigate}
+            calendarZoneControl={<CalendarZonePicker value={zoneDraft === undefined ? calendarTimeZone : zoneDraft ?? undefined} instant={today().getTime()}
+              onSave={(zone) => { setZoneDraft(zone ?? null); changed(); return Promise.resolve(); }} />} />}
           {period && <>
             <div className="preferences-periods" role="group" aria-label="Periodic note type">
               {(['day', 'week', 'month'] as const).map((value) => <button type="button" key={value} aria-pressed={period === value} data-testid={`settings-period-${value}`} onClick={() => setSelectedPeriod(value)}>{value === 'day' ? 'Daily' : value === 'week' ? 'Weekly' : 'Monthly'}</button>)}
             </div>
+            {period === 'day' && (rules ? <DailyTaskCategories draft={rules} onChange={changeRules} /> : rewardDate && rulesStatus)}
             <PeriodicFolders value={draft} periods={[period]} folders={folders} onChange={(next) => { setDraft(next); changed(); }} />
             {period === 'day' && recognition && <DailyImport folders={folders} files={files} texts={texts} periodic={draft} value={recognitionDraft} onChange={setReading} />}
             {recognition && <details className="preferences-disclosure"><summary><span><strong>Review existing notes</strong><small>Resolve duplicate dates or link a note with an unusual name.</small></span></summary><div className="preferences-disclosure-body"><PeriodicRecognitionFields periodFilter={period} periodic={draft} value={recognitionDraft} files={files} texts={texts} onChange={setReading} key={period} /></div></details>}
@@ -156,23 +193,16 @@ export function SettingsScreen({ rewardDocument, rewardError, retryRewards, rewa
               ['thoughtRecords', 'Thought records', 'A quiet space to work through a thought.'],
             ] as const).map(([key, label, description]) => <SettingRow key={key} title={label} description={description}><input className="preference-switch" type="checkbox" aria-label={label} data-testid={`settings-feature-${key}`} checked={featureDraft[key]} onChange={(event) => { setFeatureDraft({ ...featureDraft, [key]: event.target.checked }); changed(); }} /></SettingRow>)}</div></section>}
           </>}
-          {section === 'home' && <>
-            <section className="preferences-section" data-testid="settings-home"><h3>Time in perspective</h3><div className="preferences-card"><SettingRow title="Birth date" description="Used to calculate how much of your chosen lifetime has passed."><input aria-label="Birth date" value={birth} onChange={(event) => { setBirth(event.target.value); changed(); }} placeholder="YYYY-MM-DD" inputMode="numeric" data-testid="settings-birth-date" /></SettingRow><SettingRow title="Expected years to live" description="The age you want to use for your lifetime progress."><input aria-label="Expected years to live" data-testid="settings-lifetime-years" type="number" min="1" step="1" value={years} onChange={(event) => { setYears(event.target.value); changed(); }} /></SettingRow></div></section>
-            {plugins && <section className="preferences-section"><h3>Homepage sections</h3><div className="preferences-card">{HOME_SECTIONS.map(({ key, label }) => <SettingRow key={key} title={label}><input className="preference-switch" type="checkbox" aria-label={label} checked={pluginDraft.home[key]} onChange={(event) => { setPluginDraft({ ...pluginDraft, home: { ...pluginDraft.home, [key]: event.target.checked } }); changed(); }} /></SettingRow>)}</div></section>}
-          </>}
-          {(section === 'library' || section === 'quests') && plugins && <div className="preferences-card preferences-section"><SettingRow title={`Enable ${active.title}`} description={section === 'quests' ? 'Uses periodic notes for tasks and quests.' : 'Show the library in this vault.'}><input type="checkbox" role="switch" className="preference-switch" aria-label={`Enable ${active.title}`} checked={pluginDraft.enabled[section]} onChange={(event) => { setPluginDraft({ ...pluginDraft, enabled: setPlugin(pluginDraft.enabled, section, event.target.checked) }); changed(); }} /></SettingRow></div>}
-          {section === 'quests' && (rules ? <QuestRuleFields draft={rules} observed={observedTags} onChange={(next) => { setRulesDraft(next); changed(); }} /> : rewardError ? <p role="alert">{rewardError} <button type="button" className="quiet-button" onClick={retryRewards}>Retry XP settings</button></p> : <p role="status">Loading XP settings…</p>)}
-          {section === 'library' && <>
-            <section className="preferences-section"><h3>Library sources</h3><p className="preferences-description">Choose where to find titles, details and cover artwork when adding to your library.</p><div className="preferences-card">{([['album', 'Music albums', 'Album and artist information.'], ['film', 'Movies & series', 'Film, director and release information.'], ['book', 'Books', 'Titles, authors and cover artwork.'], ['podcast', 'Podcasts', 'Find a show, then keep your favorite episodes.']] as const).map(([kind, label, description]) => <SettingRow key={kind} title={label} description={description}><select aria-label={`${label} source`} data-testid={`settings-source-${kind}`} value={sourceDraft[kind]} onChange={(event) => { setSourceDraft({ ...sourceDraft, [kind]: event.target.value as Source }); changed(); }}>{SOURCE_OPTIONS[kind].map((source) => <option key={source} value={source}>{SOURCE_NAMES[source]}</option>)}</select></SettingRow>)}</div><p className="preferences-footnote">Search starts when you type in Add. Wikipedia provides podcast show details; enter the episode title yourself. iTunes also lists episodes.</p></section>
-            <section className="preferences-section" data-testid="settings-podcasts"><h3>Podcast artwork</h3><div className="preferences-card"><SettingRow title="Artwork for new episodes" description="If your choice is unavailable, use the other artwork."><select aria-label="Artwork for new episodes" data-testid="settings-podcast-artwork" value={podcastDraft.artwork} onChange={(event) => { setPodcastDraft({ artwork: event.target.value === 'episode' ? 'episode' : 'show' }); changed(); }}><option value="show">Show thumbnail</option><option value="episode">Episode artwork</option></select></SettingRow></div></section>
-          </>}
-          {section === 'files' && <section className="preferences-section"><h3>New items</h3><div className="preferences-card">{(['note', 'folder'] as const).map((kind) => {
-            const mode = kind === 'note' ? 'notes' : 'folders', path = kind === 'note' ? 'noteFolder' : 'folderParent';
-            return <div key={kind}><SettingRow title={kind === 'note' ? 'New notes' : 'New folders'} description={kind === 'note' ? 'Default location when you create a note.' : 'Default parent when you create a folder.'}><select aria-label={`Location for new ${mode}`} value={fileDraft[mode]} onChange={(event) => { setFileDraft({ ...fileDraft, [mode]: event.target.value }); changed(); }}><option value="current">Same folder as current note</option><option value="root">Top of the vault</option><option value="folder">A specific folder</option></select></SettingRow>{fileDraft[mode] === 'folder' && <SettingRow title={kind === 'note' ? 'Notes folder' : 'Parent folder'} description="A path relative to this vault."><input aria-label={kind === 'note' ? 'Notes folder' : 'Parent folder'} value={fileDraft[path]} list={`${id}-folders`} placeholder="Top of the vault" onChange={(event) => { setFileDraft({ ...fileDraft, [path]: event.target.value }); changed(); }} /></SettingRow>}</div>;
-          })}</div><datalist id={`${id}-folders`}>{folders.map((path) => <option key={path}>{path}</option>)}</datalist><p className="preferences-footnote">You can choose a different location each time. With no note open, “Same folder” uses the top of the vault. Daily, weekly and monthly notes use their own locations.</p></section>}
+          {section === 'home' && <HomepagePreferences birth={birth} years={years} sections={plugins && pluginDraft.home}
+            onBirth={(next) => { setBirth(next); changed(); }} onYears={(next) => { setYears(next); changed(); }}
+            onSections={(home) => { setPluginDraft({ ...pluginDraft, home }); changed(); }} />}
+          {section === 'quests' && (rules ? <QuestRuleFields draft={rules} onManageCategories={manageCategories} onChange={changeRules} /> : rulesStatus)}
+          {section === 'library' && <LibraryPreferences sources={sourceDraft} podcasts={podcastDraft}
+            onSources={(next) => { setSourceDraft(next); changed(); }} onPodcasts={(next) => { setPodcastDraft(next); changed(); }} />}
+          {section === 'files' && <FileLocationPreferences value={fileDraft} folders={folders} onChange={(next) => { setFileDraft(next); changed(); }} />}
         </fieldset>
-        <footer className="preferences-save">{state.error && <p className="form-error" role="alert">{state.error}</p>}<span className={state.saved ? 'save-state' : undefined} role="status">{saving ? 'Saving…' : state.saved ? 'Saved' : dirty ? 'Unsaved changes' : 'Preferences are saved in Epizen.'}</span><button type="submit" className="quiet-button" disabled={saving} data-testid="settings-save">Save changes</button></footer>
       </form>}
+      </ErrorBoundary>
     </div>
   </section>;
 }

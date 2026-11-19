@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { hidePet, movePet, onPetWake, onPetState, openQuickPrompt, petPosition, petState, setPetMotion, type PetPosition, type PetStatus } from '../lib/api';
+import { CompanionDock, CaptureIcon } from '../components/companion/CompanionDock';
 import { Spike } from '../components/assistant/Spike';
 import { SPIKE_FRAMES, type SpikeState } from '../lib/assistant/spike';
 
@@ -59,9 +60,13 @@ export function DesktopPet() {
       void origin.catch((error: unknown) => { endDrag(); setError(String(error)); });
       drag.current = { id: event.pointerId, x: event.screenX, y: event.screenY, origin, moved: false, token };
     }} onPointerMove={move} onPointerUp={(event) => { move(event); const active = drag.current; endDrag(); if (active && !active.moved) perform(() => openQuickPrompt()); }} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
-      <Spike size={144} state={dragging ?? status.animation as SpikeState} motion={status.motion} followPointer />
+      <Spike size={132} state={dragging ?? status.animation as SpikeState} motion={status.motion} followPointer />
     </div>
-    <div className="pet-tools"><button type="button" aria-label="Dictate to Spike" onClick={() => perform(() => openQuickPrompt(true))}>Speak</button><button type="button" aria-label={status.motion ? 'Pause animation' : 'Resume animation'} onClick={() => perform(() => setPetMotion(!status.motion))}>{status.motion ? 'Ⅱ' : '▷'}</button><button type="button" aria-label="Open quick prompt" onClick={() => perform(() => openQuickPrompt())}>Text</button></div>
+    <div className="pet-tools">
+      <CompanionDock onWrite={() => perform(() => openQuickPrompt())} onVoice={() => perform(() => openQuickPrompt(true))} />
+      <button className="pet-motion" type="button" title={status.motion ? 'Pause animation' : 'Resume animation'} aria-label={status.motion ? 'Pause animation' : 'Resume animation'}
+        onClick={() => perform(() => setPetMotion(!status.motion))}><CaptureIcon name={status.motion ? 'pause' : 'play'} /></button>
+    </div>
     {!error && status.animation !== 'idle' && <span className="pet-status" role="status">{status.label}</span>}
     {error && <p className="pet-error" role="alert" title={error}>{error}</p>}
   </main>;

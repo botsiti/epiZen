@@ -1,10 +1,13 @@
 import { usePluginDisplay } from '../workspace/PluginDisplay';
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type PointerEvent } from 'react';
-import { addDays, formatDate, isoWeek, sameDay, startOfWeek, today } from '../../lib/dates';
+import { addDays, formatDate, isoWeek, parseDate, sameDay, startOfWeek } from '../../lib/dates';
 import { formatMinutes, parseDay } from '../../lib/day';
 import type { CalendarEvent } from '../../lib/api';
-import { allDayOn, at, calendarFor, planText, plansOn, taskUrl, type PlanBlock, type TaskLink } from '../../lib/plans';
+import { allDayOn, calendarFor, planText, planTimes, plansOn, taskUrl, type PlanBlock, type TaskLink } from '../../lib/plans';
 import type { DayEntry } from '../../lib/rollup';
+import { calendarDay, calendarDayStart, calendarQueryRange, systemCalendarZone } from '../../lib/calendarZone';
+import { CalendarZonePicker } from './CalendarZonePicker';
+import { useNow } from './useNow';
 import { shownHours } from '../../lib/schedule';
 import { addTask, syncPlanDone } from '../../lib/edits';
 import { addTaskWithFocusId, deleteTask, editTask, focusIdOf, newTaskLabel, withFocusId, type TaskEdit } from '../../lib/timeblocks';
@@ -16,6 +19,7 @@ import { TimeGrid, type Column } from './TimeGrid';
 import { FocusMenu, type FocusHow } from './FocusMenu';
 import { NewTask } from './NewTask';
 import { DeleteTask, EditTask } from './TaskDialogs';
+import { taskRefs } from './taskRefs';
 import { TimerCard } from './Timer';
 import type { DayTaskRef, TaskChange, TaskChoice } from './types';
 import { usePlans } from './usePlans';
@@ -28,6 +32,8 @@ interface Props {
   focusDate?: { time: number; token: number };
   onFocusDate?: () => void;
   timerEnabled?: boolean;
+  timeZone?: string;
+  onSaveTimeZone?: (zone: string | undefined) => Promise<void>;
   /** The day behind a date: its note, if it has one, and what the note holds. */
   dayOf: (date: Date) => DayEntry;
   /** A note's text as the app last read or wrote it. */
@@ -39,6 +45,7 @@ interface Props {
   onStartTimer: (choice: TaskChoice, how?: FocusHow) => void;
   /** Opens a day's page. */
   onOpenDay: (date: Date) => void;
+  onOpenLinkedNote?: (path: string) => void;
   /** Changes a day's note, creating it with built-in starting text first. The note's path once the change is in it. */
   onWrite: (date: Date, edit: (text: string) => string, failed: string) => Promise<string | undefined>;
   /** A task edited or deleted here, once its note holds the change. */
@@ -54,20 +61,13 @@ interface Props {
 
 type Mode = 'week' | 'day';
 // Where the calendar was, so coming back to it shows the same week or day. Kept for the session.
-let remembered: { mode: Mode; date: Date } = { mode: 'week', date: today() };
+let remembered: { mode: Mode; date?: string } = { mode: 'week' };
 
-/** The days on show, as moments: from the first one's midnight to the midnight after the last. */
-function shownRange(mode: Mode, time: number) {
-  const first = mode === 'week' ? startOfWeek(new Date(time)) : new Date(time);
-  return { from: at(first, 0), to: at(addDays(first, mode === 'week' ? 7 : 1), 0) };
-}
-
-function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], events: CalendarEvent[], taskOf: (link?: TaskLink) => DayTaskRef | undefined): Column {
+function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], events: CalendarEvent[], taskOf: (link?: TaskLink) => DayTaskRef | undefined, zone: string): Column {
   const entry = dayOf(date);
   const text = entry.path === undefined ? undefined : textOf(entry.path);
-  const lines = text?.split('\n').map((line) => line.replace(/\r$/, ''));
-  const tasks: DayTaskRef[] = entry.day && lines ? entry.day.tasks.map((task) => ({ task, ref: { line: task.line, text: lines[task.line] ?? '' } })) : [];
-  const plans: PlanBlock[] = plansOn(events, date);
+  const tasks = taskRefs(entry, text);
+  const plans: PlanBlock[] = plansOn(events, date, zone);
   return {
     date,
     key: dayKey(date),
@@ -85,14 +85,22 @@ function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], even
  * Calendar, never minutes in the note. The note's time blocks aren't drawn: they are the timer's
  * record, and the minutes are what counts.
  */
-export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
+export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate, dayOf, textOf, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onOpenLinkedNote, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
   const display = usePluginDisplay('calendar');
   const [mode, setMode] = useState<Mode>(display.defaultView === 'Week' ? 'week' : display.defaultView === 'Day' ? 'day' : remembered.mode);
-  const [date, setDate] = useState(remembered.date);
+  const clock = useNow(true, 30_000);
+  const { local, zone, now, localToday } = useMemo(() => {
+    const local = systemCalendarZone(), zone = timeZone ?? local;
+    return { local, zone, now: calendarDay(clock, zone), localToday: calendarDay(clock, local) };
+  }, [clock, timeZone]);
+  const [selectedDate, setDate] = useState(remembered.date);
+  const date = (selectedDate && parseDate(selectedDate, 'YYYY-MM-DD')) || now;
+  useEffect(() => { remembered = { mode, date: selectedDate }; }, [mode, selectedDate]);
+  const [timeError, setTimeError] = useState<string>();
   const [seenFocus, setSeenFocus] = useState<number>();
   if (focusDate && focusDate.token !== seenFocus && Number.isFinite(focusDate.time)) {
-    const target = new Date(focusDate.time), date = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-    setSeenFocus(focusDate.token); setDate(date); setMode('day');
+    const date = calendarDay(focusDate.time, zone);
+    setSeenFocus(focusDate.token); setDate(dayKey(date)); setMode('day');
   }
   useEffect(() => { if (focusDate?.token === seenFocus && focusDate !== undefined) onFocusDate?.(); }, [focusDate, seenFocus, onFocusDate]);
   const [early, setEarly] = useState(false);
@@ -102,16 +110,15 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
   const [adding, setAdding] = useState(false);
   const [dialog, setDialog] = useState<{ kind: 'edit' | 'delete'; date: Date; item: DayTaskRef }>();
   const show = (nextMode: Mode, nextDate: Date) => {
-    remembered = { mode: nextMode, date: nextDate };
     setMode(nextMode);
-    setDate(nextDate);
+    setDate(sameDay(nextDate, now) ? undefined : dayKey(nextDate));
     setHighlight(undefined);
   };
 
-  const now = today();
   const monday = startOfWeek(date);
   const time = date.getTime();
-  const range = shownRange(mode, time);
+  const first = mode === 'week' ? monday : date;
+  const range = useMemo(() => calendarQueryRange(mode === 'week' ? startOfWeek(new Date(time)) : new Date(time), mode === 'week' ? 7 : 1, zone, local), [time, mode, zone, local]);
   const plans = usePlans(range.from, range.to);
   const planEvents = plans.events;
   // The task a plan is bound to, read from its note as the app knows it, wherever the plan is now.
@@ -128,9 +135,10 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
   const columns = useMemo(() => {
     const day = new Date(time);
     const days = mode === 'week' ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(day), i)) : [day];
-    return days.map((d) => column(d, dayOf, textOf, planEvents, taskOf));
-  }, [mode, time, dayOf, textOf, planEvents, taskOf]);
-  const todayTasks = useMemo(() => column(today(), dayOf, textOf, [], taskOf).tasks, [dayOf, textOf, taskOf]);
+    return days.map((d) => column(d, dayOf, textOf, planEvents, taskOf, zone));
+  }, [mode, time, dayOf, textOf, planEvents, taskOf, zone]);
+  const localDayKey = localToday.getTime();
+  const todayTasks = useMemo(() => column(new Date(localDayKey), dayOf, textOf, [], taskOf, zone).tasks, [dayOf, textOf, taskOf, localDayKey, zone]);
   const total = columns.reduce((sum, col) => sum + col.total, 0);
   // The period's minutes by category, most first, for the legend under the title.
   const byCategory = useMemo(() => {
@@ -146,7 +154,7 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
     return [...totals].sort((a, b) => b[1].minutes - a[1].minutes || a[0].localeCompare(b[0]));
   }, [columns]);
   // Each event once, though one that spans days is on each of them.
-  const events = new Set(columns.flatMap((col) => [...col.plans.map((plan) => plan.key), ...col.allDay.map((event) => `${event.id}@${event.start}`)])).size;
+  const events = new Set(columns.flatMap((col) => [...col.plans.map(({ event }) => `${event.id}@${event.start}`), ...col.allDay.map((event) => `${event.id}@${event.start}`)])).size;
   const hours = shownHours(early, late);
   const shown = columns.some((col) => sameDay(col.date, now));
 
@@ -163,6 +171,10 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
   // A plan: the task, given a focus-id (and added, when new), then its event in Calendar,
   // linked to it. The note gets no time: minutes come from the timer or the task's card.
   const plan = async (day: Date, start: number, finish: number, choice: TaskChoice, calendar: string) => {
+    setTimeError(undefined);
+    let times;
+    try { times = planTimes(day, start, finish, zone); }
+    catch (error) { setTimeError(error instanceof Error ? error.message : String(error)); return; }
     const made: { focusId?: string } = {};
     const path = await onWrite(
       day,
@@ -176,7 +188,7 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
     if (!path || !made.focusId) return;
     if (choice.category) onChooseCalendar(choice.category.toLowerCase(), calendar);
     const text = planText(choice.category, choice.kind === 'task' ? choice.label : newTaskLabel(choice.words));
-    await plans.create({ calendar, ...text, start: at(day, start), end: at(day, finish), url: taskUrl({ vault, note: path, id: made.focusId }) });
+    await plans.create({ calendar, ...text, ...times, timeZone, url: taskUrl({ vault, note: path, id: made.focusId }) });
   };
   const focus = (ref: DayTaskRef['ref'], task: DayTaskRef['task'], how: FocusHow) =>
     onStartTimer({ kind: 'task', ref, label: task.label, category: task.category?.name }, how);
@@ -197,16 +209,20 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
   const single = mode === 'day' ? columns[0] : undefined;
   return (
     <div className="periodic-frame cal-frame" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)} data-testid="cal-view" data-mode={mode} data-start={columns[0]?.key}>
-      {(warning ?? plans.error) && (
+      {(warning || plans.error || timeError) && (
         <p className="note-warning" data-testid="cal-warning">
-          {[warning, plans.error].filter(Boolean).join(' ')}
+          {[warning, plans.error, timeError].filter(Boolean).join(' ')}
         </p>
       )}
       <div className="cal-top">
         <header className="hero glass cal-hero" data-testid="hero">
           <div className="hero-aurora" aria-hidden="true" />
           <div className="hero-main">
-            <p className="kicker">{kicker}</p>
+            <div className="cal-hero-heading"><p className="kicker">{kicker}</p>
+              {onSaveTimeZone && <CalendarZonePicker value={timeZone} instant={shown ? clock : calendarDayStart(first, zone)} onSave={async (next) => {
+                await onSaveTimeZone(next); setTimeError(undefined); setHighlight(undefined);
+              }} />}
+            </div>
             <h1 className="hero-title cal-title" data-testid="cal-title">
               {title}
             </h1>
@@ -286,13 +302,15 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
             </div>
           </nav>
         </header>
-        {timerEnabled && <TimerCard timer={timer} tasks={todayTasks} categories={categories} onStart={onStartTimer} />}
+        {timerEnabled && <TimerCard timeZone={zone} timer={timer} tasks={todayTasks} categories={categories} onStart={onStartTimer} />}
       </div>
 
       <div className={single ? 'cal-main is-day' : 'cal-main'}>
         <TimeGrid
           focusEnabled={timerEnabled}
-          key={mode}
+          key={`${mode}-${columns[0]?.key}-${zone}`}
+          zone={zone}
+          now={clock}
           columns={columns}
           hours={hours}
           early={early}
@@ -306,11 +324,18 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
           plans={plans}
           calendarFor={(category) => calendarFor(category, plans.calendars, planCalendars)}
           onPlan={plan}
-          onMovePlan={(day, item, start, finish) => plans.move(item.event, at(day, start), at(day, finish))}
+          onMovePlan={async (day, item, start, finish, edge) => {
+            setTimeError(undefined);
+            try {
+              const times = planTimes(day, start, finish, zone, { event: item.event, edge });
+              await plans.move(item.event, times.start, times.end);
+            } catch (error) { setTimeError(error instanceof Error ? error.message : String(error)); }
+          }}
           onDeletePlan={(item) => plans.remove(item.event)}
           onFocus={(_, item, how) => focus(item.ref, item.task, how)}
           onEditTask={(day, item) => setDialog({ kind: 'edit', date: day, item })}
           onOpenDay={onOpenDay}
+          onOpenLinkedNote={onOpenLinkedNote}
           onHead={(day) => (single ? onOpenDay(day) : show('day', day))}
         />
         {single && (
@@ -340,7 +365,7 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
                       {task.label || <span className="faint">untitled</span>}
                     </span>
                     <span className="cal-side-minutes">{task.minutes ? formatMinutes(task.minutes) : '—'}</span>
-                    {sameDay(single.date, now) && !timer.state.session && (
+                    {sameDay(single.date, localToday) && !timer.state.session && (
                       <button
                         type="button"
                         className="cal-side-start"
@@ -366,7 +391,7 @@ export function CalendarView({ focusDate, onFocusDate, dayOf, textOf, categories
           focusEnabled={timerEnabled}
           at={menu}
           label={menu.item.task.label}
-          noFocus={sameDay(menu.date, now) ? undefined : 'Focus runs on today’s tasks: the timer logs into today’s note.'}
+          noFocus={sameDay(menu.date, localToday) ? undefined : 'Focus runs on today’s tasks: the timer logs into today’s note.'}
           running={Boolean(timer.state.session)}
           onFocus={(how) => focus(menu.item.ref, menu.item.task, how)}
           onOpenDay={() => onOpenDay(menu.date)}

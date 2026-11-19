@@ -10,21 +10,24 @@ const thousands = (n: number) => Math.round(n).toLocaleString('en-US');
 const percent = (share: number) => `${Math.floor(share * 100)}%`;
 
 /** XP per life sphere, each a level on the character's curve, drawn one segment a level. */
-export function Spheres({ spheres, i }: { spheres: SphereState[]; i: number }) {
-  const total = spheres.reduce((sum, sphere) => sum + sphere.xp, 0);
+export function Spheres({ spheres, i, onEdit }: { spheres: SphereState[]; i: number; onEdit?: () => void }) {
+  const active = spheres.filter((sphere) => !sphere.archived);
+  const archived = spheres.filter((sphere) => sphere.archived);
+  const total = active.reduce((sum, sphere) => sum + sphere.xp, 0);
   // Room for the highest level and the one it is working toward, in steps of five, ten at least.
-  const scale = Math.max(10, Math.ceil((Math.max(1, ...spheres.map((sphere) => sphere.level)) + 1) / 5) * 5);
+  const scale = Math.max(10, Math.ceil((Math.max(1, ...active.map((sphere) => sphere.level)) + 1) / 5) * 5);
   return (
     <section className="card glass rise" style={order(i)} data-testid="spheres">
       <div className="card-head">
         <p className="tile-label">Life spheres</p>
         <span className="card-note">
-          {spheres.length} spheres · {thousands(total)} XP
+          {active.length} spheres · {thousands(total)} XP
+          {onEdit && <button type="button" className="sphere-edit-link" aria-label="Edit life spheres" onClick={onEdit}>Edit</button>}
         </span>
       </div>
       <p className="spheres-key">Levels 1–{scale}, a segment each</p>
       <ul className="spheres">
-        {spheres.map((sphere, n) => (
+        {active.map((sphere, n) => (
           <li key={sphere.name} className="rise" style={{ ...order(n), '--tone': sphere.color } as CSSProperties} data-sphere={sphere.name}>
             <span className="chip-dot" />
             <span className="sphere-main">
@@ -43,6 +46,8 @@ export function Spheres({ spheres, i }: { spheres: SphereState[]; i: number }) {
           </li>
         ))}
       </ul>
+      {archived.length > 0 && <details className="sphere-history"><summary>Archived spheres ({archived.length})</summary>
+        <ul>{archived.map((sphere) => <li key={sphere.name}><span>{sphere.name}</span><span>{thousands(sphere.xp)} XP</span></li>)}</ul></details>}
     </section>
   );
 }

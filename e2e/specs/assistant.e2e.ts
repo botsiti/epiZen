@@ -42,14 +42,19 @@ describe('Spike conversations and second-brain actions', () => {
   it('persists whole-app glass independently of Spike and restores solid appearance', async () => {
     await browser.execute(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true, bubbles: true, cancelable: true })));
     await $('[data-testid="settings-nav-appearance"]').click();
-    await selectOption('[aria-label="Application surface"]', 'glass');
+    await $('[aria-label="Liquid glass"]').click();
+    await $('button=Test aurora').click();
+    await $('button=Still').click();
     await $('button=Save appearance').click();
     await browser.waitUntil(async () => browser.execute(() => document.documentElement.dataset.appearance === 'glass'));
+    await browser.waitUntil(() => browser.execute(() => document.querySelector<HTMLCanvasElement>('.workspace-wallpaper canvas')?.width === 64));
     await screenshot('228-app-appearance');
     await browser.refresh(); await prepareWindow();
     expect(await browser.execute(() => document.documentElement.dataset.appearance)).toBe('glass');
     await $('[data-testid="settings-nav-appearance"]').click();
-    await selectOption('[aria-label="Application surface"]', 'solid');
+    await expect($('button=Test aurora')).toHaveAttribute('aria-pressed', 'true');
+    await $('button=Window material').click();
+    await $('[aria-label="Solid"]').click();
     await $('button=Save appearance').click();
     await browser.waitUntil(async () => browser.execute(() => document.documentElement.dataset.appearance === 'solid'));
   });
@@ -265,8 +270,9 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.switchToWindow('spike-prompt');
     await $('[aria-label="Quick message to Spike"]').waitForExist();
     await browser.execute(() => { document.documentElement.dataset.motion = 'off'; });
-    await browser.waitUntil(async () => browser.execute(() => innerWidth <= 440 && innerHeight <= 80));
+    await browser.waitUntil(async () => browser.execute(() => innerWidth === 352 && innerHeight <= 80));
     await $('[aria-label="Quick message to Spike"]').setValue('Remember that I enjoy quiet walks.');
+    await $('[aria-label="More prompt actions"]').click();
     await $('[aria-label="Close quick prompt"]').click();
     await browser.switchToWindow('main');
     await browser.execute(async () => { await (window as unknown as { __TAURI__: { core: { invoke: (command: string, args: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke('prompt_open', { dictate: false }); });
@@ -369,7 +375,7 @@ describe('Spike conversations and second-brain actions', () => {
   it('shows animated desktop Spike, pauses motion, and returns to an unsent draft after closing the main window', async () => {
     const before = snapshotVault(root);
     await $('[aria-label="Assistant settings"]').click();
-    await $('.assistant-sidebar').$('button=Show Spike on desktop').click();
+    await $('.assistant-sidebar').$('[aria-label="Show Spike on desktop"]').click();
     await browser.waitUntil(async () => (await browser.getWindowHandles()).includes('spike'));
     await $('button=← Conversation').click();
     await browser.switchToWindow('spike');
@@ -386,6 +392,7 @@ describe('Spike conversations and second-brain actions', () => {
     if (animation.reducedMotion) expect(animation.frames).toBe(1);
     else expect(animation.frames).toBeGreaterThan(1);
     await screenshot('220-desktop-spike');
+    await browser.execute(() => document.querySelector<HTMLButtonElement>('[aria-label="Pause animation"]')?.focus());
     await $('[aria-label="Pause animation"]').click();
     await $('[aria-label="Resume animation"]').waitForDisplayed();
     const paused = await browser.execute(() => getComputedStyle(document.querySelector('.spike-sprite')!).backgroundPosition);
@@ -402,10 +409,11 @@ describe('Spike conversations and second-brain actions', () => {
     await browser.switchToWindow('spike-prompt');
     await $('[aria-label="Quick message to Spike"]').waitForExist();
     await browser.execute(() => { document.documentElement.dataset.motion = 'off'; });
+    await $('[aria-label="More prompt actions"]').click();
     await $('button[aria-label="Open conversation"]').click();
     await browser.switchToWindow('main');
     await expect($('[aria-label="Message Spike"]')).toHaveValue('Keep this unsent thought while Spike stays on my desktop.');
-    await browser.switchToWindow('spike'); await browser.switchToWindow('main'); await $('[aria-label="Assistant settings"]').click(); await $('.assistant-sidebar').$('button=Hide desktop Spike').click(); await browser.switchToWindow('spike');
+    await browser.switchToWindow('spike'); await browser.switchToWindow('main'); await $('[aria-label="Assistant settings"]').click(); await $('.assistant-sidebar').$('[aria-label="Hide desktop Spike"]').click(); await browser.switchToWindow('spike');
     await browser.waitUntil(async () => !(await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { isVisible: () => Promise<boolean> } } } }).__TAURI__.window.getCurrentWindow().isVisible())));
     await browser.switchToWindow('main');
     await $('.assistant-sidebar').$('button=← Conversation').click();
@@ -446,8 +454,8 @@ describe('Spike conversations and second-brain actions', () => {
     const dog = await invoke('pet_position') as typeof position;
     await browser.switchToWindow('spike-prompt');
     const prompt = await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { outerPosition: () => Promise<{ x: number; y: number }> } } } }).__TAURI__.window.getCurrentWindow().outerPosition());
-    expect(prompt.y - dog.y).toBeCloseTo(156 * dog.scale, 0);
-    expect(dog.x - prompt.x).toBeCloseTo(130 * dog.scale, 0);
+    expect(prompt.y - dog.y).toBeCloseTo(144 * dog.scale, 0);
+    expect(dog.x - prompt.x).toBeCloseTo(94 * dog.scale, 0);
     await screenshot('229-spike-attached-prompt');
     await browser.switchToWindow('spike');
     // The embedded driver's pointer actions do not synthesize contextmenu.
@@ -458,6 +466,7 @@ describe('Spike conversations and second-brain actions', () => {
     await invoke('prompt_open', { dictate: false });
     await browser.switchToWindow('spike-prompt');
     await expect($('[aria-label="Quick message to Spike"]')).toHaveValue('Keep this draft beside Spike.');
+    await $('[aria-label="More prompt actions"]').click();
     await $('[aria-label="Close quick prompt"]').click();
     await browser.switchToWindow('main');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);

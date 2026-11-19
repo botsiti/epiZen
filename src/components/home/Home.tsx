@@ -52,6 +52,7 @@ export interface HomeProps {
   onSeeLibrary: () => void;
   onSeeQuests: () => void;
   onSeeStatistics: () => void;
+  onEditSpheres?: () => void;
   onSeeSummaries: () => void;
 }
 
@@ -82,7 +83,7 @@ export function Home(props: HomeProps) {
         {sections.today && <Today entry={todayEntry} today={today} todayNote={props.todayNote} exists={props.exists} onOpenPeriod={props.onOpenPeriod} i={4} />}
       </div>
       {sections.spheres && <div className="home-row is-spheres">
-        <Spheres spheres={spheres} i={5} />
+        <Spheres spheres={spheres} i={5} onEdit={props.onEditSpheres} />
         <LeadSphere spheres={spheres} dayOf={dayOf} today={today} i={6} />
       </div>}
       {sections.quests && <Section title={`Quests · ${formatDate(month, 'MMMM')}`} note={`${thisMonth.filter(({ quest }) => quest.done).length}/${thisMonth.length} done`} i={7} testId="home-quests">

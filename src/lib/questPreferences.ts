@@ -2,11 +2,11 @@ import { TIERS, type Tier } from './quests';
 import { category, habitColor } from './categories';
 import {
   defaultAreaId, formatPercent, newRewardSettings, percentBasisPoints, rewardIdentity, rewardPolicy,
-  UNASSIGNED, validateRewardSettings, type RewardArea, type RewardCategory, type RewardSettings,
+  UNASSIGNED, validCategoryTag, validateRewardSettings, type RewardArea, type RewardCategory, type RewardSettings,
 } from './rewardRules';
 
 export interface EditableShare { area: string; percent: string }
-export interface EditableCategory extends RewardCategory { rate: string; shares: EditableShare[] }
+export interface EditableCategory extends RewardCategory { suggested?: boolean; rate: string; shares: EditableShare[] }
 export interface QuestPreferences {
   base: RewardSettings;
   revision: number;
@@ -32,16 +32,30 @@ function starterRules(date: string): RewardSettings {
   return base;
 }
 
-export function editQuestPreferences(value: RewardSettings | undefined, revision: number, effectiveFrom: string): QuestPreferences {
+export function editQuestPreferences(value: RewardSettings | undefined, revision: number, effectiveFrom: string, observed: readonly string[] = []): QuestPreferences {
   const base = value ?? starterRules(effectiveFrom);
   // Include a pending policy when reopening settings before its start date.
   const date = [effectiveFrom, base.policies.at(-1)!.effectiveFrom].sort().at(-1)!;
   const policy = rewardPolicy(base, date)!;
-  const categories = base.categories.map((item) => {
+  const categories: EditableCategory[] = base.categories.map((item) => {
     const rule = policy.categories[item.id] ?? rewardPolicy(base, item.createdAt)?.categories[item.id];
     return { ...item, rate: rule?.rateHundredths === undefined ? '' : String(rule.rateHundredths / 100),
       shares: (rule?.shares ?? [{ area: UNASSIGNED, basisPoints: 10000 }]).map(({ area, basisPoints }) => ({ area, percent: formatPercent(basisPoints) })) };
   });
+  // Offer tags already present in notes. Merely opening Settings or editing a different
+  // rule must not adopt those tags into the dated XP policy.
+  const known = new Set(categories.flatMap((item) => [item.tag, ...item.aliases].map(rewardIdentity)));
+  const ids = new Set(categories.map((item) => item.id));
+  let sequence = 0;
+  for (const raw of observed) {
+    const tag = rewardIdentity(raw);
+    if (known.has(tag) || !validCategoryTag(tag)) continue;
+    known.add(tag);
+    let id: string;
+    do { id = `note-category-${++sequence}`; } while (ids.has(id));
+    categories.push({ ...newTaskRule(id, date, categories.length), name: tag, tag, color: category(tag).color,
+      aliases: [tag], suggested: true });
+  }
   const presets = Object.fromEntries(Object.entries(base.questRewards.presets).map(([key, value]) => [key, String(value)])) as Record<Tier, string>;
   return { base, revision, effectiveFrom: date, areas: base.areas, categories, presets };
 }
@@ -53,6 +67,12 @@ export function newTaskRule(id: string, date: string, index: number): EditableCa
   return { id, name: '', tag: '', aliases: [], color: habitColor(index), kind: 'main', createdAt: date, archived: false,
     rate: '1', shares: [{ area: UNASSIGNED, percent: '100' }] };
 }
+export function changeTaskCategory(draft: QuestPreferences, id: string, edit: Partial<EditableCategory>): QuestPreferences {
+  return { ...draft, categories: draft.categories.map((item) => item.id === id ? { ...item, ...edit, suggested: false } : item) };
+}
+
+export class CategoryNameError extends Error {}
+
 function previousNames(current: string, previous: string | undefined, aliases: string[]) {
   return previous && rewardIdentity(previous) !== rewardIdentity(current) ? [...new Set([...aliases, previous])] : aliases;
 }
@@ -74,11 +94,22 @@ export function saveQuestPreferences(draft: QuestPreferences, observed: readonly
   next.areas = draft.areas.map((area) => ({ ...area, name: area.name.trim(),
     aliases: previousNames(area.name, base.areas.find((item) => item.id === area.id)?.name, area.aliases) }));
   if (!next.areas.some((area) => !area.archived)) throw new Error('Keep at least one active life sphere for new quests.');
-  next.categories = draft.categories.map(({ rate, shares, ...item }) => {
-    const tag = item.tag.trim();
+  const names = new Set<string>();
+  next.categories = draft.categories.filter((item) => !item.suggested).map((entry) => {
+    const { rate, shares, ...item } = entry;
+    delete item.suggested;
+    const tag = rewardIdentity(item.tag).replace(/\s+/g, '-');
+    if (!validCategoryTag(tag)) throw new CategoryNameError('Give each task category a name using letters, numbers, hyphens or underscores.');
     const previous = base.categories.find((entry) => entry.id === item.id);
-    if (previous && rewardIdentity(tag) !== rewardIdentity(previous.tag) && !previous.aliases.some((alias) => rewardIdentity(alias) === rewardIdentity(tag))
-      && observed.some((used) => rewardIdentity(used) === rewardIdentity(tag))) throw new Error(`The tag “${tag}” already has tasks. Add it as its own category to keep its historical XP.`);
+    const oldNames = previous ? [previous.tag, ...previous.aliases] : item.aliases;
+    if (oldNames.length && !oldNames.some((alias) => rewardIdentity(alias) === tag) && observed.some((used) => rewardIdentity(used) === tag)) {
+      throw new CategoryNameError(`The category “${tag}” already has tasks. Edit that category to keep its historical XP.`);
+    }
+    const aliases = previousNames(tag, previous?.tag, item.aliases);
+    for (const name of new Set([tag, ...aliases].map(rewardIdentity))) {
+      if (names.has(name)) throw new CategoryNameError(`“${name}” already belongs to a task category, including its previous names.`);
+      names.add(name);
+    }
     if (rate !== '' && (!/^\d+(\.\d{1,2})?$/.test(rate) || Number(rate) > 10000)) throw new Error(`Enter an XP rate from 0 to 10,000 with up to two decimal places for ${tag || 'the new category'}.`);
     const allocations = new Map<string, number>();
     const seen = new Set<string>();
@@ -92,11 +123,28 @@ export function saveQuestPreferences(draft: QuestPreferences, observed: readonly
     policy.categories[item.id] = { profile: policy.categories[item.id]?.profile ?? 'focus',
       ...(rate !== '' ? { rateHundredths: Math.round(Number(rate) * 100) } : {}),
       shares: [...allocations].map(([area, basisPoints]) => ({ area, basisPoints })) };
-    return { ...item, createdAt: previous?.createdAt ?? effectiveFrom, tag, name: previous?.tag === tag ? previous.name : tag,
-      aliases: previousNames(tag, previous?.tag, item.aliases) };
+    return { ...item, createdAt: previous?.createdAt ?? effectiveFrom, tag, name: tag, aliases };
   });
-  if (!next.categories.some((item) => !item.archived)) throw new Error('Keep at least one active task category for logging time.');
+  if (!next.categories.some((item) => !item.archived)) throw new CategoryNameError('Keep at least one active task category for logging time.');
   next.policies = [...next.policies.filter((entry) => entry.effectiveFrom !== effectiveFrom), policy].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
   validateRewardSettings(next);
   return next;
+}
+
+/** Keep a valid allocation at 100% while adding or removing a destination. */
+export function addRewardShare(shares: EditableShare[], area: string): EditableShare[] {
+  const values = shares.map((share) => percentBasisPoints(share.percent) ?? 0);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (total !== 10000) return [...shares, { area, percent: formatPercent(Math.max(0, 10000 - total)) }];
+  const largest = Math.max(...values), index = values.indexOf(largest), half = Math.floor(largest / 2);
+  return [...shares.map((share, i) => i === index ? { ...share, percent: formatPercent(largest - half) } : share), { area, percent: formatPercent(half) }];
+}
+
+export function removeRewardShare(shares: EditableShare[], index: number): EditableShare[] {
+  const left = shares.filter((_, i) => i !== index);
+  if (!left.length) return shares;
+  const removed = percentBasisPoints(shares[index]?.percent ?? '') ?? 0;
+  const first = percentBasisPoints(left[0]!.percent);
+  if (first !== undefined && first + removed <= 10000) left[0] = { ...left[0]!, percent: formatPercent(first + removed) };
+  return left;
 }

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { enableTray, onTimerDue, onTrayCommand, onTrayShown, publishTray } from '../../lib/api';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { onTimerDue, onTrayCommand, onTrayShown, publishTray } from '../../lib/api';
 import { today } from '../../lib/dates';
 import { dayKey } from '../../lib/timer';
 import { readCommand, trayClock, trayTooltip, type PanelView, type TrayCommand, type TrayDestination } from '../../lib/tray';
@@ -54,42 +54,51 @@ export function runCommand(command: TrayCommand, { timer, onStart, onStale, onOp
  * panel opens, since a hidden window's own timers are held back.
  */
 export function useTrayBridge(timer: TimerApi, view: PanelView, actions: Omit<TrayHandlers, 'timer'>, enabled = true) {
-  const clock = useMemo(() => trayClock(timer.state), [timer.state]);
-  const tooltip = useMemo(() => trayTooltip(timer.state), [timer.state]);
+  const timerEnabled = view.options?.timer ?? enabled;
+  const [attempt, setAttempt] = useState(0);
+  const [problem, setProblem] = useState<string>();
   const published = useRef<string>(undefined);
-  useEffect(() => { void enableTray(enabled).catch((error: unknown) => console.error('Could not change focus timer visibility', error)); }, [enabled]);
+  const retry = () => { setProblem(undefined); published.current = undefined; setAttempt((previous) => previous + 1); };
+  const clock = useMemo(() => timerEnabled ? trayClock(timer.state) : { kind: 'idle' } as const, [timerEnabled, timer.state]);
+  const tooltip = timerEnabled && enabled ? trayTooltip(timer.state) : 'Epizen';
   useEffect(() => {
-    if (!enabled) {
-      published.current = undefined;
-      return;
-    }
-    const status = { clock, tooltip, panel: view };
+    // An invisible menu can still wake a running focus timer. Only visible menus receive vault data.
+    const status = { visible: enabled, clock, tooltip, panel: enabled ? view : null };
     const text = JSON.stringify(status);
     if (text === published.current) return;
     published.current = text;
-    publishTray(status).catch(() => {
-      // Tried again with the next change.
+    void publishTray(status).catch((error: unknown) => {
+      if (published.current !== text) return;
       published.current = undefined;
+      setProblem(`Could not update the menu bar. ${String(error)}`);
     });
-  }, [clock, tooltip, view, enabled]);
+  }, [clock, tooltip, view, enabled, attempt]);
 
-  const handlers = useRef({ timer, ...actions });
+  const handlers = useRef({ timer, ...actions, enabled, timerEnabled, scope: view.scope });
+  useLayoutEffect(() => { handlers.current = { timer, ...actions, enabled, timerEnabled, scope: view.scope }; }, [timer, actions, enabled, timerEnabled, view.scope]);
   useEffect(() => {
-    handlers.current = { timer, ...actions };
-  }, [timer, actions]);
+    if (!timerEnabled) return;
+    let live = true;
+    const due = onTimerDue(() => { if (live && handlers.current.timerEnabled) handlers.current.timer.tick(); });
+    void due.catch(() => { if (live) setProblem('The menu bar could not connect to the focus timer.'); });
+    return () => { live = false; void due.then((unlisten) => unlisten(), () => undefined); };
+  }, [timerEnabled, attempt]);
   useEffect(() => {
     if (!enabled) return;
+    let live = true;
     const commands = onTrayCommand((value) => {
+      const current = handlers.current;
+      if (current.scope && (!value || typeof value !== 'object' || !('scope' in value) || value.scope !== current.scope)) return;
       const command = readCommand(value);
-      if (command) runCommand(command, handlers.current);
+      if (live && current.enabled && command && (command.kind === 'open' || current.timerEnabled)) runCommand(command, current);
     });
-    const due = onTimerDue(() => handlers.current.timer.tick());
-    // The panel opening: a window asleep and hidden over midnight may still think it yesterday.
-    const shown = onTrayShown(checkToday);
+    const shown = onTrayShown(() => { if (live) checkToday(); });
+    void Promise.all([commands, shown]).catch(() => { if (live) setProblem('The menu bar could not connect to workspace shortcuts.'); });
     return () => {
-      void commands.then((unlisten) => unlisten());
-      void due.then((unlisten) => unlisten());
-      void shown.then((unlisten) => unlisten());
+      live = false;
+      void commands.then((unlisten) => unlisten(), () => undefined);
+      void shown.then((unlisten) => unlisten(), () => undefined);
     };
-  }, [enabled]);
+  }, [enabled, attempt]);
+  return { problem, retry };
 }

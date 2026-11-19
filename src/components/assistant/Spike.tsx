@@ -7,6 +7,7 @@ export function Spike({ state = 'idle', size = 96, followPointer = false, motion
   const element = useRef<HTMLSpanElement>(null);
   const [frame, setFrame] = useState({ column: 0, row: 0 });
   useEffect(() => {
+    if (!window.matchMedia) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     let timer: ReturnType<typeof setTimeout> | undefined, animation = 0, started = performance.now();
     let look: ReturnType<typeof spikeLook>;

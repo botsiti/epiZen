@@ -200,6 +200,7 @@ fn now_ms() -> i64 {
 /// The last thing the main window published.
 #[derive(Default)]
 struct Published {
+    visible: bool,
     /// Counts publishes, so the title's thread knows when to look again.
     version: u64,
     clock: Clock,
@@ -358,6 +359,7 @@ pub fn close<R: Runtime>(app: &AppHandle<R>) {
 
 #[derive(Deserialize)]
 pub struct Publish {
+    visible: bool,
     clock: Clock,
     tooltip: String,
     panel: Value,
@@ -365,37 +367,34 @@ pub struct Publish {
 
 /// The main window's timer, for the item's title and the panel.
 #[tauri::command]
-pub fn tray_enable(app: AppHandle, tray: State<'_, Tray>, enabled: bool) -> Result<(), String> {
-    if let Some(icon) = tray.icon.get() { icon.set_visible(enabled).map_err(|error| error.to_string())?; }
-    if !enabled {
-        // Destroying the webview also stops any background focus sound.
-        close(&app);
-        let (lock, changed) = &*tray.published;
-        let mut published = lock.lock().unwrap_or_else(PoisonError::into_inner);
-        published.clock = Clock::default();
-        published.version += 1;
-        changed.notify_all();
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub fn tray_publish(app: AppHandle, tray: State<'_, Tray>, status: Publish) {
+pub fn tray_publish(app: AppHandle, tray: State<'_, Tray>, status: Publish) -> Result<(), String> {
     let (lock, publish) = &*tray.published;
-    let retitled = {
+    let (retitled, visibility_changed) = {
         let mut published = lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let visibility_changed = status.visible != published.visible;
+        if visibility_changed {
+            let icon = tray.icon.get().ok_or("The macOS status item is unavailable. Reopen Epizen to try again.")?;
+            icon.set_visible(status.visible).map_err(|error| error.to_string())?;
+        }
+        published.visible = status.visible;
         published.version += 1;
         published.clock = status.clock;
         published.panel = status.panel.clone();
         let retitled = published.tooltip != status.tooltip;
         published.tooltip = status.tooltip.clone();
-        retitled
+        (retitled, visibility_changed)
     };
     publish.notify_all();
     if retitled && let Some(icon) = tray.icon.get() {
         let _ = icon.set_tooltip(Some(&status.tooltip));
     }
-    let _ = app.emit_to(PANEL, STATE_EVENT, status.panel);
+    if status.visible {
+        let _ = app.emit_to(PANEL, STATE_EVENT, status.panel);
+    } else if visibility_changed {
+        // Destroying the panel also stops its audio. The timer clock belongs to the workspace.
+        close(&app);
+    }
+    Ok(())
 }
 
 /// What the panel shows, as last published; `null` before the main window has published.
@@ -419,12 +418,12 @@ pub enum TrayDestination {
 
 /// Reveals the workspace and optionally opens a destination through its usual navigation.
 #[tauri::command]
-pub async fn tray_open_main(app: AppHandle, destination: Option<TrayDestination>) -> Result<(), String> {
+pub async fn tray_open_main(app: AppHandle, destination: Option<TrayDestination>, scope: Option<String>) -> Result<(), String> {
     let main = app.get_webview_window(MAIN).ok_or("Epizen’s workspace is unavailable.")?;
     main.unminimize().map_err(|err| err.to_string())?;
     crate::companion_display::show(&main)?;
     if let Some(destination) = destination {
-        app.emit_to(MAIN, COMMAND_EVENT, serde_json::json!({ "kind": "open", "destination": destination }))
+        app.emit_to(MAIN, COMMAND_EVENT, serde_json::json!({ "kind": "open", "destination": destination, "scope": scope }))
             .map_err(|err| err.to_string())?;
     }
     hide(&app);

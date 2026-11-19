@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { resizeQuickPrompt, consumeQuickOpen, hideQuickPrompt, onQuickCommand, onQuickPrompt, openQuickConversation, quickPromptFlushed, quickPromptState, saveQuickDraft, submitQuickPrompt, transcribeQuickPrompt, type QuickSnapshot } from '../../lib/api';
 import { useVoice } from './useVoice';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { Spike } from './Spike';
+import { CaptureIcon } from '../companion/CompanionDock';
 import './quickPrompt.css';
 
 export function QuickPrompt() {
@@ -24,6 +24,10 @@ function QuickEntry({ snapshot }: { snapshot: QuickSnapshot }) {
   const input = useRef<HTMLTextAreaElement>(null), text = useRef(doc.draft), revision = useRef(doc.revision), saved = useRef(doc.draft);
   const queue = useRef(Promise.resolve()), timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const sending = useRef(false);
+  const [menuOpening, setMenuOpening] = useState<number>();
+  const menuOpen = snapshot.visible && menuOpening === snapshot.opened;
+  const [expandedReply, setExpandedReply] = useState<number>();
+  const [previousReply, setPreviousReply] = useState('');
   const [requestedAt, setRequestedAt] = useState(-1);
   const pending = useRef(doc.pending), sent = useRef<{ id: string; text: string; revision: number } | undefined>(undefined);
   const save = useCallback(() => {
@@ -46,7 +50,7 @@ function QuickEntry({ snapshot }: { snapshot: QuickSnapshot }) {
   }, [doc]);
   const send = useCallback(async () => {
     if (sending.current || sent.current || pending.current || !text.current.trim()) return;
-    sending.current = true; setRequestedAt(snapshot.opened);
+    sending.current = true; setRequestedAt(snapshot.opened); setPreviousReply(status.replyId ?? status.reply);
     setSubmitting(true); setError(undefined);
     try {
       await save();
@@ -54,7 +58,7 @@ function QuickEntry({ snapshot }: { snapshot: QuickSnapshot }) {
       await submitQuickPrompt(root, revision.current, id);
     } catch (error) { sent.current = undefined; setSubmitting(false); setError(String(error)); }
     finally { sending.current = false; }
-  }, [root, save, snapshot.opened]);
+  }, [root, save, snapshot.opened, status.replyId, status.reply]);
   const receiveVoice = useCallback(async (transcript: string) => {
     text.current = [text.current.trim(), transcript.trim()].filter(Boolean).join('\n'); setDraft(text.current);
     await save(); await send();
@@ -110,14 +114,44 @@ function QuickEntry({ snapshot }: { snapshot: QuickSnapshot }) {
   const voiceBusy = ['requesting', 'recording', 'transcribing'].includes(voice.phase);
   const locked = submitting || Boolean(doc.pending) || voiceBusy;
   const retry = () => { if (doc.pending) void submitQuickPrompt(root, doc.revision, doc.pending.id).catch((error: unknown) => setError(String(error))); };
-  return <ErrorBoundary label="Spike quick prompt" frame={(message) => <main className="quick-prompt quick-feedback">{message}<textarea aria-label="Recover quick prompt" readOnly value={draft} /><button type="button" onClick={() => void close()}>Save and close</button></main>}><main ref={container} className={`quick-prompt${status.glass ? ' is-glass' : ''}`} data-testid="quick-prompt" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); void close(); } }}>
-    <form key={snapshot.opened} className={`quick-pill${voice.phase === 'recording' ? ' is-recording' : ''}`} onSubmit={(event) => { event.preventDefault(); if (!locked && status.connected && !status.busy) void send(); }}>
-      <button type="button" className="quick-spike" aria-label="Open conversation" title="Open conversation" onClick={openConversation}><Spike size={24} state={voice.phase === 'recording' ? 'listening' : status.busy ? 'thinking' : 'idle'} motion={voiceBusy || status.busy} /></button>
-      {voice.phase === 'recording' ? <div className="quick-recording" role="status"><div className="quick-wave" aria-hidden="true">{Array.from({ length: 16 }, (_, index) => <i key={index} style={{ height: `${4 + (voice.level ?? 0) * (12 + 10 * Math.sin(index * .7) ** 2)}px` }} />)}</div><span>Listening · {voice.seconds}s</span></div> : <textarea ref={input} aria-label="Quick message to Spike" rows={1} maxLength={10000} placeholder={voice.phase === 'transcribing' ? 'Transcribing…' : status.busy ? 'Spike is thinking…' : 'Message Spike…'} value={draft} disabled={locked} onChange={(event) => change(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!locked && status.connected && !status.busy) void send(); } }} />}
-      {voice.phase === 'recording' ? <><button type="button" className="quick-icon" aria-label="Cancel recording" onClick={voice.cancel}>×</button><button type="button" className="quick-send" aria-label="Send quick voice message" onClick={voice.stop}>↑</button></> : <><button type="button" className="quick-icon" aria-label="Dictate to Spike" title="Dictate · ⌥⇧⌘Space" disabled={!status.connected || status.busy || locked} onClick={() => void voice.start()}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v3m-3 0h6"/></svg></button><button type="submit" className="quick-send" aria-label="Send ↑" disabled={!status.connected || status.busy || locked || !draft.trim()}>↑</button><button type="button" className="quick-icon quick-close" aria-label="Close quick prompt" title="Close · Escape" onClick={() => void close()}>×</button></>}
-    </form>
-    {(error || voice.error || doc.pending?.error) && <div className="quick-feedback" role="alert"><p>{error ?? voice.error ?? doc.pending?.error}</p>{doc.pending?.error && <button type="button" onClick={retry}>Retry prompt</button>}{voice.canRetry && <button type="button" onClick={voice.retry}>Retry recording</button>}</div>}
-    {voice.canRetry && !voice.error && <div className="quick-feedback"><button type="button" onClick={voice.retry}>Send saved recording</button></div>}
-    {(!status.connected || status.review || requestedAt === snapshot.opened && status.reply) && <div className="quick-response">{status.reply && <p>{status.reply}</p>}<button type="button" onClick={openConversation}>{!status.connected ? 'Connect Spike' : status.review ? 'Review in conversation ↗' : 'Open conversation ↗'}</button></div>}
-  </main></ErrorBoundary>;
+  const canSpeak = status.connected && !status.busy && !locked;
+  const beginVoice = () => { setMenuOpening(undefined); void voice.start(); };
+  const reply = requestedAt === snapshot.opened && !status.busy && !submitting && !doc.pending && previousReply !== (status.replyId ?? status.reply) ? status.reply : '';
+  const placeholder = voice.phase === 'transcribing' ? 'Transcribing…' : voice.phase === 'requesting' ? 'Opening microphone…' : status.busy ? 'Thinking…' : 'Ask Spike…';
+  const waiting = requestedAt === snapshot.opened && (status.busy || submitting || !!doc.pending) && !doc.pending?.error && !error;
+  return <ErrorBoundary label="Spike quick prompt" frame={(message) => <main className="quick-prompt quick-feedback">{message}<textarea aria-label="Recover quick prompt" readOnly value={draft} /><button type="button" onClick={() => void close()}>Save and close</button></main>}>
+    <main ref={container} className={`quick-prompt${status.glass ? ' is-glass' : ''}`} data-testid="quick-prompt"
+      onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); if (menuOpen) { setMenuOpening(undefined); input.current?.focus(); } else void close(); } }}>
+      <form key={snapshot.opened} className="quick-pill" onSubmit={(event) => { event.preventDefault(); if (!locked && status.connected && !status.busy) void send(); }}>
+        {voice.phase === 'recording' ? <>
+          <button type="button" className="quick-round" aria-label="Cancel recording" title="Cancel recording" onClick={voice.cancel}><CaptureIcon name="close" /></button>
+          <div className="quick-recording" role="status"><div className="quick-wave" aria-hidden="true">{Array.from({ length: 20 }, (_, index) =>
+            <i key={index} style={{ height: `${3 + (voice.level ?? 0) * (8 + 13 * Math.sin(index * .7) ** 2)}px` }} />)}</div>
+            <span>Listening · {Math.floor(voice.seconds / 60)}:{String(voice.seconds % 60).padStart(2, '0')}</span></div>
+          <button type="button" className="quick-send" aria-label="Send quick voice message" title="Finish and send" onClick={voice.stop}><CaptureIcon name="send" /></button>
+        </> : <>
+          <button type="button" className="quick-round" aria-label="More prompt actions" title="Prompt actions" aria-expanded={menuOpen}
+            onClick={() => setMenuOpening(menuOpen ? undefined : snapshot.opened)}><CaptureIcon name="plus" /></button>
+          <textarea ref={input} aria-label="Quick message to Spike" rows={1} maxLength={10000} placeholder={placeholder} value={draft} disabled={locked}
+            onFocus={() => setMenuOpening(undefined)} onChange={(event) => change(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!locked && status.connected && !status.busy) void send(); } }} />
+          {draft.trim() ? <button type="submit" className="quick-send" aria-label="Send ↑" title="Send · Return" disabled={!canSpeak}><CaptureIcon name="send" /></button>
+            : <button type="button" className="quick-round quick-voice" aria-label="Dictate quick message" title="Dictate to Spike" disabled={!canSpeak} onClick={beginVoice}><CaptureIcon name="voice" /></button>}
+        </>}
+      </form>
+      {menuOpen && <div className="quick-actions" role="group" aria-label="Prompt actions">
+        <button type="button" aria-label="Open conversation" onClick={openConversation}><CaptureIcon name="conversation" />Conversation</button>
+        <button type="button" disabled={!canSpeak} onClick={beginVoice}><CaptureIcon name="voice" />Dictate</button>
+        <button type="button" aria-label="Close quick prompt" onClick={() => void close()}><CaptureIcon name="close" />Close</button>
+      </div>}
+      {(error || voice.error || doc.pending?.error) && <div className="quick-feedback" role="alert"><p>{error ?? voice.error ?? doc.pending?.error}</p>{doc.pending?.error && <button type="button" onClick={retry}>Retry prompt</button>}{voice.canRetry && <button type="button" onClick={voice.retry}>Retry recording</button>}</div>}
+      {voice.canRetry && !voice.error && <div className="quick-feedback"><button type="button" onClick={voice.retry}>Send saved recording</button></div>}
+      {waiting && <div className="quick-progress" role="status">{status.busy ? status.label || 'Thinking…' : 'Sending…'}</div>}
+      {(!status.connected || status.review || reply) && <div className="quick-response">
+        {reply && <div className="quick-reply"><p className={expandedReply === snapshot.opened ? 'is-expanded' : undefined}>{reply}</p>
+          {reply.length > 160 || reply.includes('\n') ? <button type="button" aria-expanded={expandedReply === snapshot.opened}
+            onClick={() => setExpandedReply(expandedReply === snapshot.opened ? undefined : snapshot.opened)}>{expandedReply === snapshot.opened ? 'Less' : 'Expand reply'}</button> : null}</div>}
+        <button type="button" onClick={openConversation}>{!status.connected ? 'Connect Spike' : status.review ? 'Review in conversation ↗' : 'Open conversation ↗'}</button>
+      </div>}
+    </main></ErrorBoundary>;
 }

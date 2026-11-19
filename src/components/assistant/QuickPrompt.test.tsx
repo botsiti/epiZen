@@ -39,12 +39,14 @@ it('holds a failed draft open, reports the failure during quit, and closes only 
   vi.mocked(api.saveQuickDraft).mockRejectedValue(new Error('Disk full'));
   render(<QuickPrompt />); const input = await screen.findByLabelText('Quick message to Spike');
   fireEvent.change(input, { target: { value: 'Do not lose this.' } });
+  if (!screen.queryByLabelText('Close quick prompt')) await userEvent.click(screen.getByLabelText('More prompt actions'));
   await userEvent.click(screen.getByLabelText('Close quick prompt'));
   expect(await screen.findByRole('alert')).toHaveTextContent('Disk full');
   expect(api.hideQuickPrompt).not.toHaveBeenCalled(); expect(input).toHaveValue('Do not lose this.');
   act(() => { command('flush'); });
   await waitFor(() => expect(api.quickPromptFlushed).toHaveBeenCalledWith('Error: Disk full'));
   vi.mocked(api.saveQuickDraft).mockResolvedValue({ revision: 1, draft: 'Do not lose this.', pending: null });
+  if (!screen.queryByLabelText('Close quick prompt')) await userEvent.click(screen.getByLabelText('More prompt actions'));
   await userEvent.click(screen.getByLabelText('Close quick prompt'));
   await waitFor(() => expect(api.hideQuickPrompt).toHaveBeenCalledOnce());
   expect(voice.pauseRecording).toHaveBeenCalled();
@@ -107,6 +109,7 @@ it('scopes a delayed close to the opening it belongs to', async () => {
   vi.mocked(api.saveQuickDraft).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
   render(<QuickPrompt />); const input = await screen.findByLabelText('Quick message to Spike');
   fireEvent.change(input, { target: { value: 'Preserve across reopen' } });
+  if (!screen.queryByLabelText('Close quick prompt')) await userEvent.click(screen.getByLabelText('More prompt actions'));
   await userEvent.click(screen.getByLabelText('Close quick prompt'));
   act(() => update(state({ opened: 2 })));
   act(() => { finish({ revision: 1, draft: 'Preserve across reopen', pending: null }); });
@@ -128,4 +131,22 @@ it('saves a shortcut or right-click close before hiding and retains a failed dra
   act(() => command('close'));
   await waitFor(() => expect(api.hideQuickPrompt).toHaveBeenCalledWith(1));
   expect(api.saveQuickDraft).toHaveBeenLastCalledWith('/copy', 0, 'A thought to keep');
+});
+
+it('keeps the composer on the desktop and expands the current reply without opening the workspace', async () => {
+  const first = state();
+  const reply = 'A reply long enough to expand. '.repeat(12);
+  vi.mocked(api.quickPromptState).mockResolvedValue({ ...first, status: { ...first.status, reply: 'Older answer', replyId: 'old' } });
+  render(<QuickPrompt />);
+  const input = await screen.findByLabelText('Quick message to Spike');
+  expect(screen.queryByText('Older answer')).toBeNull();
+  await userEvent.type(input, 'What did I plan?{Enter}');
+  await waitFor(() => expect(api.submitQuickPrompt).toHaveBeenCalledOnce());
+  act(() => update({ ...first, document: { revision: 2, draft: '', pending: { id: 'request', text: 'What did I plan?', error: null } } }));
+  act(() => update({ ...first, document: { revision: 3, draft: '', pending: null }, status: { ...first.status, reply, replyId: 'new' } }));
+  const expand = await screen.findByRole('button', { name: 'Expand reply' });
+  await userEvent.click(expand);
+  expect(screen.getByRole('button', { name: 'Less' })).toHaveAttribute('aria-expanded','true');
+  expect(input).toBeEnabled();
+  expect(api.openQuickConversation).not.toHaveBeenCalled();
 });

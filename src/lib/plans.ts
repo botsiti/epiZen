@@ -1,4 +1,6 @@
 import type { CalendarEvent, CalendarInfo } from './api';
+import { calendarDayStart, calendarInstant, calendarMoment, systemCalendarZone } from './calendarZone';
+import type { DragEdge } from './schedule';
 import { addDays } from './dates';
 
 // The calendar view is Apple Calendar: its events, as Calendar and Senioro show them. A task
@@ -81,23 +83,43 @@ export interface PlanBlock {
   cut: boolean;
 }
 
-const minuteOf = (time: number) => {
-  const date = new Date(time);
-  return date.getHours() * 60 + date.getMinutes();
-};
-
-/** The timed events on a day, cut to it. All-day events take no time on the grid. */
-export function plansOn(events: CalendarEvent[], day: Date): PlanBlock[] {
-  const from = at(day, 0);
-  const to = at(addDays(day, 1), 0);
+/** The timed events on a civil day. A block spanning a backward clock change has two
+ * visible pieces on the 24-hour dial. Both refer to the same native occurrence. */
+export function plansOn(events: CalendarEvent[], day: Date, zone = systemCalendarZone()): PlanBlock[] {
+  const from = calendarDayStart(day, zone), to = calendarDayStart(addDays(day, 1), zone);
+  if (from >= to) return [];
+  const midnight = calendarMoment(from, zone);
+  const fold = midnight.offsetNanoseconds > calendarMoment(to - 1, zone).offsetNanoseconds
+    ? midnight.getTimeZoneTransition('next')?.epochMilliseconds : undefined;
+  const minuteOf = (time: number) => {
+    const value = calendarMoment(time, zone);
+    return value.hour * 60 + value.minute;
+  };
   return events
     .filter((event) => !event.allDay && event.start < to && event.end > from)
-    .map((event) => {
-      const start = event.start <= from ? 0 : minuteOf(event.start);
-      const end = event.end >= to ? 24 * 60 : minuteOf(event.end);
-      return { key: `${event.id}@${event.start}`, start, end: Math.max(end, start + 1), event, link: parseTaskUrl(event.url), cut: event.start < from || event.end > to };
+    .flatMap((event) => {
+      const key = `${event.id}@${event.start}`, link = parseTaskUrl(event.url);
+      const start = event.start <= from ? minuteOf(from) : minuteOf(event.start);
+      const end = event.end >= to ? 1440 : minuteOf(event.end);
+      if (fold !== undefined && event.start < fold && event.end >= fold) {
+        const pieces = [{ key, event, link, start, end: minuteOf(fold - 1) + 1, cut: true }];
+        if (event.end > fold) pieces.push({ key: key + '/fold', event, link, start: minuteOf(fold), end, cut: true });
+        return pieces;
+      }
+      return [{ key, event, link, start, end: Math.max(end, start + 1), cut: event.start < from || event.end > to }];
     })
     .sort((a, b) => a.start - b.start || b.end - a.end);
+}
+
+export function planTimes(day: Date, start: number, end: number, zone: string, edit?: { event: CalendarEvent; edge: DragEdge }) {
+  const from = edit?.edge === 'bottom' ? edit.event.start : calendarInstant(day, start, zone, edit?.event.start);
+  let to: number;
+  if (edit?.edge === 'top') to = edit.event.end;
+  else if (edit?.edge === 'move') to = from + (edit.event.end - edit.event.start);
+  else to = calendarInstant(day, end, zone, edit?.event.end);
+  if (edit?.edge === 'move' && to > calendarDayStart(addDays(day, 1), zone)) throw new Error('Choose a time where the full event fits on this day.');
+  if (to <= from) throw new Error('Choose an end time after the start.');
+  return { start: from, end: to };
 }
 
 /** The all-day events on a day, for the row above its hours. */

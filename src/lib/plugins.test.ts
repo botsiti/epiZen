@@ -10,7 +10,7 @@ describe('built-in plugins', () => {
   });
   it('retains child preferences while a parent is disabled and enables the required parent explicitly', () => {
     const configured = { ...ALL_PLUGINS, periodic: false };
-    expect(effectivePlugins(configured)).toEqual({ ...NO_PLUGINS, home: true, library: true, bases: true, graph: true, spike: true });
+    expect(effectivePlugins(configured)).toEqual({ ...NO_PLUGINS, home: true, library: true, bases: true, graph: true, spike: true, menubar: true });
     expect(configured.habits).toBe(true);
     expect(setPlugin(NO_PLUGINS, 'cbt', true)).toEqual({ ...NO_PLUGINS, cbt: true, periodic: true });
     expect(effectivePlugins({ ...configured, periodic: true })).toEqual(ALL_PLUGINS);
@@ -45,4 +45,12 @@ it('migrates existing Spike users and respects an explicit per-vault disable', (
     expect(pluginSettings({ vaults: { one: { plugins: { spike: false }, assistant } } }, 'one').spike).toBe(false);
   }
   expect(pluginSettings({ vaults: { one: { assistant: { enabled: true } } } }, 'two').spike).toBe(false);
+});
+
+it('migrates the menu bar from the previously effective timer and keeps later choices independent', () => {
+  const read = (plugins: Record<string, boolean>) => pluginSettings({ vaults: { one: { complete: true, plugins } } }, 'one');
+  expect(read({ timer: true, periodic: true }).menubar).toBe(true);
+  expect(read({ timer: true, periodic: false }).menubar).toBe(false);
+  expect(read({ timer: true, periodic: true, menubar: false }).menubar).toBe(false);
+  expect(effectivePlugins(setPlugin(NO_PLUGINS, 'menubar', true))).toEqual({ ...NO_PLUGINS, menubar: true });
 });

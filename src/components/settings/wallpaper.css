@@ -1,0 +1,25 @@
+.workspace-wallpaper, .wallpaper-preview-media { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.workspace-wallpaper { z-index: -1; }
+.workspace-wallpaper::after { content: ''; position: absolute; inset: 0; background: var(--bg); }
+.workspace-wallpaper :is(img,video,canvas), .wallpaper-preview-media :is(img,video,canvas), .wallpaper-thumb :is(img,video,canvas) { display: block; width: 100%; height: 100%; object-fit: cover; }
+.workspace-wallpaper .wallpaper-unavailable { display: none; }
+:root[data-ambient="true"] .app:has(.workspace-wallpaper)::before { display: none; }
+.surface-scene { position: relative; isolation: isolate; }
+.surface-scene .wallpaper-preview-media { z-index: -1; }
+.wallpaper-heading, .wallpaper-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wallpaper-heading h3 { margin: 0; font-size: 15px; }
+.wallpaper-add, .wallpaper-remove, .wallpaper-forget button { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); padding: 5px 8px; font-size: 12px; }
+.wallpaper-add svg { width: 14px; height: 14px; }
+.wallpaper-preferences > .preferences-description { margin: 4px 0 12px; }
+.wallpaper-shelf { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(142px,100%),1fr)); gap: 10px; }
+.wallpaper-shelf button { min-width: 0; text-align: left; border: 1px solid var(--pref-edge); border-radius: 9px; background: var(--pref-panel); padding: 5px; }
+.wallpaper-shelf button[aria-pressed="true"] { border-color: var(--accent); }
+.wallpaper-shelf button > span:last-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 5px 2px; font-size: 12px; }
+.wallpaper-thumb { display: grid; place-items: center; height: 66px; border-radius: 5px; overflow: hidden; background: var(--pref-field); }
+.wallpaper-thumb.is-material { color: var(--accent); background: linear-gradient(125deg,#2f4242,#192024 60%,#343d44); }
+.wallpaper-unavailable { font-size: 11px; color: var(--text-muted); }
+.wallpaper-controls { margin-top: 10px; justify-content: flex-start; }
+.wallpaper-controls .preferences-periods { margin: 0; }
+.wallpaper-forget { font-size: 12px; color: var(--text-muted); }
+@media (prefers-reduced-transparency: reduce) { .workspace-wallpaper { display: none; } }
+:root:not([data-appearance="glass"]) .workspace-wallpaper { display: none; }

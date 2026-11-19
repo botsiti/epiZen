@@ -17,6 +17,7 @@ mod pet;
 mod prompt;
 mod companion_display;
 mod appearance;
+mod wallpapers;
 mod rewards;
 mod settings;
 mod tray;
@@ -74,6 +75,15 @@ impl VaultState {
             Self::Failed(message) => Err(message.clone()),
         }
     }
+
+    fn vault_for_note(&self, expected_root: Option<&str>) -> Result<&Vault, String> {
+        let vault = self.vault()?;
+        if expected_root.is_some_and(|expected| expected != vault.root()) {
+            return Err("The open vault changed. Reopen the note before saving.".into());
+        }
+        Ok(vault)
+    }
+
 }
 
 fn vault_arg(args: impl IntoIterator<Item = OsString>) -> Option<PathBuf> {
@@ -178,8 +188,9 @@ async fn list_files(state: Shared<'_>) -> Result<Vec<VaultFile>, String> {
 }
 
 #[tauri::command]
-async fn read_note(state: Shared<'_>, path: String) -> Result<String, String> {
-    with_vault(state, |vault| vault.read_note(&path))
+async fn read_note(state: Shared<'_>, path: String, root: Option<String>) -> Result<String, String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.vault_for_note(root.as_deref())?.read_note(&path).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -209,8 +220,7 @@ async fn write_base(state: Shared<'_>, root: String, path: String, text: String,
 #[tauri::command]
 async fn write_note_scoped(state: Shared<'_>, root: String, path: String, text: String, expected: String) -> Result<(), String> {
     let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let vault = guard.vault()?;
-    if vault.root() != root { return Err("The open vault changed. Your property was not saved.".to_owned()); }
+    let vault = guard.vault_for_note(Some(&root))?;
     vault.write_note(&path, &text, &expected).map_err(|error| error.to_string())
 }
 
@@ -244,8 +254,10 @@ async fn save_expense_photo(state: Shared<'_>, root: String, note_path: String, 
 }
 
 #[tauri::command]
-async fn create_note(state: Shared<'_>, path: String, text: String) -> Result<(), String> {
-    with_vault(state, |vault| vault.create_note(&path, &text))
+async fn create_note(state: Shared<'_>, path: String, text: String, root: Option<String>) -> Result<(), String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let vault = guard.vault_for_note(root.as_deref())?;
+    vault.create_note(&path, &text).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -545,6 +557,7 @@ pub fn run() {
             lookup_image,
             fetch_image_into_vault,
             appearance::apply_appearance,
+            wallpapers::list_wallpapers, wallpapers::choose_wallpaper, wallpapers::remove_wallpaper,
             get_settings,
             update_settings,
             rewards::reward_settings,
@@ -560,7 +573,6 @@ pub fn run() {
             calendar_delete,
             calendar_open_settings,
             tray::tray_publish,
-            tray::tray_enable,
             tray::tray_state,
             tray::tray_command,
             tray::tray_open_main,
@@ -617,6 +629,20 @@ mod tests {
 
     fn args(list: &[&str]) -> Vec<OsString> {
         list.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn note_writes_with_a_plugin_scope_refuse_a_switched_vault() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let previous = super::Vault::open(first.path()).unwrap().root();
+        let state = VaultState::Open(super::Vault::open(second.path()).unwrap());
+        let root = state.vault_for_note(None).unwrap().root();
+        assert!(state.vault_for_note(Some(&previous)).is_err());
+        let current = state.vault_for_note(Some(&root)).unwrap();
+        current.create_note("Habits/Read.md", "read").unwrap();
+        assert!(!first.path().join("Habits/Read.md").exists());
+        assert_eq!(current.read_note("Habits/Read.md").unwrap(), "read");
     }
 
     #[test]

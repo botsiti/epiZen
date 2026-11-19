@@ -128,6 +128,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   that turns accent on focus.
 - **Settings**: a quiet, readable preferences page with built-in periodic features, future note locations and naming, homepage, library and quest preferences. Naming patterns apply only to new files. Existing notes are recognized from their dates and known older names; ambiguous numeric dates have an explicit day/month order, and unusual names can be linked to a date without changing Markdown. Duplicate dates require choosing the calendar note. These choices belong to the individual vault. Habits and thought records can be hidden without changing notes.
 - **Vault setup**: a short, skippable questionnaire asks whether daily notes already exist and lets the user choose their folders. A new vault previews its calendar (year, days, weeks, months) and five library shelves before creating ordinary Markdown notes. Attachments are created lazily in `_attachments` beside library notes. No imported note is converted or renamed.
+- **Category and reward settings**: under Periodic notes → Daily, task categories form an editable list. The category name supplies its Markdown tag. New and renamed categories reach task and timer pickers through the same catalogue. Quests shows editable life spheres in their Home colours. Selecting a task category reveals its XP rate, a proportional colour bar and one aligned row per sphere and percentage. Home lists active spheres and keeps earned XP for archived spheres behind a disclosure.
 - **Podcast settings**: one artwork preference for newly added episodes, defaulting to the show's
   thumbnail. Episode artwork can be chosen instead; either falls back to the other when missing.
   An episode entered by hand uses its selected show's thumbnail. The preference lives in app settings.
@@ -243,6 +244,7 @@ from "Calendar" in the sidebar.
   minutes the daily notes log counting up with their categories, how many events Calendar has on
   show, ‹ › and Today, and a Week | Day switch. The timer's card sits beside it. Until Epizen may use
   Calendar, a chip asks for it (or opens System Settings once it was refused).
+- **Time zone**: the city and UTC offset beside the date open a searchable zone picker. The app follows the Mac by default. A saved zone applies to timed events, scheduling and the current-time line across vaults. All-day entries stay on their calendar dates and daily tasks stay with their Markdown notes.
 - **Grid**: hours down, 07–22, with the night before and after folded into a thin striped band that
   unfolds on a click and marks each event it hides. All-day events sit in a row above the hours. A
   hairline every hour, a slightly stronger one every three hours, small mono hour labels. Today's
@@ -525,13 +527,14 @@ all past months. Archive, resume and create forms retain failed drafts and repor
 
 ### Focused preferences and file creation
 
-Settings has its own navigation for Plugins, Periodic notes, Files & folders, Homepage and Hotkeys.
-Periodic notes contains a compact Daily / Weekly / Monthly selector; drafts and the shared Save
-action span all three periods. Compact grouped rows use workspace surfaces, hairlines and sage selection;
-controls sit beside their descriptions and stack in narrow panes. Homepage owns the birth date,
-media lookup sources for Add, and podcast artwork. Changing a catalogue preserves the same result
-cards, edit form and library page. Wikipedia podcast results describe shows; the episode title is
-entered manually, while iTunes offers episode listings.
+Settings uses a searchable horizontal section strip beneath a sticky toolbar. All nine sections
+share a serif page title, a short description and a common reading edge. The compact browse
+control expands the strip into a directory when the pane is narrow. Workspace drafts share the
+toolbar Save action. Appearance, assistant connection and voice use their own save actions.
+Plugins supports search, on/off filtering and inline configuration. Calendar configuration also
+offers the application-wide time zone. Periodic notes uses a Daily / Weekly / Monthly selector.
+Homepage shows lifetime progress while editing. Library owns catalogue sources and podcast
+artwork. Appearance compares solid and glass surfaces before saving.
 
 Daily notes offers a folder-scoped preview of existing notes before connecting their calendar dates.
 The date-order choice uses an actual example. Duplicate-date choices and individual date corrections
@@ -714,7 +717,7 @@ Native macOS material sits behind the transparent workspace and the compact prom
 window-sized WebKit blur. Ambient movement is opt-in and respects Reduce Motion.
 
 
-The default text prompt is a 440px-wide single-row pill, approximately 56px high. It grows with
+The default text prompt is a 352px-wide single-row pill, approximately 50px high. It grows with
 multiline text (up to 96px) and actionable feedback rather than reserving a large empty window.
 Old replies stay hidden on a fresh opening. Native bounds follow measured content; Spike and the prompt move together when dragged or when feedback needs more room, staying within the display work area. The companion toolbar disappears while the prompt is open. Appearance is one global app preference, independent of Spike and vaults.
 When local speech reports service failure, guide the user to macOS Keyboard → Dictation and retain
@@ -748,3 +751,29 @@ bytes after interruption and reuse the attachment on retry. A failed download ke
 proposal; it does not silently omit artwork. A failed note creation keeps any saved cover
 available for recovery. Saved entries open their media page. Saved calendar blocks reveal their
 date once; subsequent calendar navigation remains under the user's control.
+
+### Desktop conversation and wallpapers
+
+Spike keeps a compact Write / Dictate dock below his sprite. Clicking Write or Spike opens the anchored composer. The action menu holds conversation, dictation and close controls. Recording shows a live level meter, elapsed time, cancel and send. Replies to the current request can expand in place. The companion settings show the same dock, visibility, animation and shortcut controls.
+
+Appearance → Liquid glass includes an app-owned library of local pictures, animated GIFs and compatible MP4 or QuickTime movies. Adding makes a copy outside the vault. Save appearance applies the selected background and opacity across vaults. Moving media pauses when the workspace loses focus or is hidden. Still mode and Reduce Motion use a stationary frame, and Reduce Transparency uses the solid workspace. Removing an imported copy leaves the source file intact.
+
+### Built-in plugin host
+
+Each optional workflow declares its stable ID in the catalog and its contributions in
+`src/lib/builtins/`. The catalog supplies Settings, route ownership, display defaults and
+dependencies. Workspace routes consult the active vault's effective plugins on each render,
+including when a tab is restored or revisited. Disabling a dependency pauses its dependents
+and keeps their saved settings. Markdown editing, the file explorer and workspace navigation
+are host services. Built-in plugins ship with Epizen.
+
+**Habits.** Configure Habits → Manage tracked habits opens the routine in Settings. Adding,
+archiving, reactivating and continuing an older habit use the same schedule editor and Markdown
+definitions as the Habits page. A plugin switch only changes preferences.
+
+**Menu bar.** The Menu bar plugin can run independently of Calendar, Periodic notes and Focus
+timer. Its settings control panel density and ambient sound. Daily note and Calendar shortcuts
+follow the corresponding plugins. A hidden panel can keep playing sound. Disabling Menu bar
+closes the panel and stops sound while Focus timer keeps its own deadline. Existing vaults
+inherit the status item's former visibility on upgrade. Focus timer controls and pending-save
+recovery are also available from Settings → Focus timer when Calendar is disabled.

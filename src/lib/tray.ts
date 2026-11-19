@@ -57,7 +57,15 @@ interface TrayNavigation {
   calendar: boolean;
 }
 
+interface PanelOptions {
+  timer: boolean;
+  tasks: boolean;
+  sound: boolean;
+  density: 'comfortable' | 'compact';
+}
 export interface PanelView {
+  scope?: string;
+  options?: PanelOptions;
   navigation?: TrayNavigation;
   /** The open vault's name. Without one there is nothing to start. */
   vault?: string;
@@ -84,6 +92,8 @@ export function isSessionTask(task: TimerTask, path: string, line: string, label
 }
 
 export interface PanelInput {
+  scope?: string;
+  options?: PanelOptions;
   navigation?: TrayNavigation;
   vault?: string;
   today: Date;
@@ -98,7 +108,7 @@ export interface PanelInput {
   problem?: string;
 }
 
-export function panelView({ navigation, vault, today, path, text, day, timer, unwritten, problem }: PanelInput): PanelView {
+export function panelView({ scope, options, navigation, vault, today, path, text, day, timer, unwritten, problem }: PanelInput): PanelView {
   const lines = text?.split('\n').map((line) => line.replace(/\r$/, '')) ?? [];
   const { session, rest, prefs } = timer;
   const tasks = day && path !== undefined && vault
@@ -119,6 +129,8 @@ export function panelView({ navigation, vault, today, path, text, day, timer, un
   const stray = unwritten ? `${unwritten === 1 ? 'A stretch of focus isn’t' : `${unwritten} stretches of focus aren’t`} in the note yet. Open Epizen to see why.` : undefined;
   const warning = problem ?? stray;
   return {
+    ...(scope ? { scope } : {}),
+    ...(options ? { options } : {}),
     ...(navigation ? { navigation } : {}),
     ...(vault ? { vault } : {}),
     day: dayKey(today),

@@ -1,6 +1,6 @@
 import type { TrayDestination } from './tray';
 import type { VoiceProvider, VoiceSettings } from './assistant/voice';
-import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 /** Mirrors `VaultStatus` in src-tauri/src/lib.rs. */
@@ -29,7 +29,7 @@ export const pickVault = () => invoke<VaultStatus | null>('pick_vault');
 export const listFiles = () => invoke<VaultFile[]>('list_files');
 export const listFolders = () => invoke<string[]>('list_folders');
 export const createFolder = (path: string) => invoke<void>('create_folder', { path });
-export const readNote = (path: string) => invoke<string>('read_note', { path });
+export const readNote = (path: string, root?: string) => invoke<string>('read_note', { path, root });
 export const readBase = (root: string, path: string) => invoke<string>('read_base', { root, path });
 export const createBase = (root: string, path: string, text: string) => invoke<void>('create_base', { root, path, text });
 export const writeBase = (root: string, path: string, text: string, expected: string) => invoke<void>('write_base', { root, path, text, expected });
@@ -50,7 +50,7 @@ export const readAllNotes = () => invoke<NoteText[]>('read_all_notes');
 
 // The note writes go through src-tauri/src/vault.rs: a new note never replaces a file, and
 // a note's text is replaced only while it still holds `expected`. Covers are saved separately below.
-export const createNote = (path: string, text: string) => invoke<void>('create_note', { path, text });
+export const createNote = (path: string, text: string, root?: string) => invoke<void>('create_note', { path, text, root });
 export interface NoteEdit { path: string; expected: string; text: string }
 /** Renames the file and conditionally updates its incoming links, rolling back on a conflict. */
 export const renameNote = (path: string, destination: string, expected: string, edits: NoteEdit[]) => invoke<void>('rename_note', { path, destination, expected, edits });
@@ -80,7 +80,7 @@ export const assistantReadNote = (root: string, path: string) => invoke<string>(
 export const assistantPrepareCover = (action: { id: string; root: string; note: string; path: string; url: string }) => invoke<string>('assistant_prepare_cover', { action });
 export const assistantApplyNote = (action: { id: string; root: string; path: string; before: string | null; after: string }) => invoke<string>('assistant_apply_note', { action });
 export const assistantAbandonAction = (root: string, id: string) => invoke<void>('assistant_abandon_action', { root, id });
-export const assistantApplyCalendar = (action: { id: string; root: string; calendar: string; title: string; start: number; end: number; notes?: string; avoidConflicts?: boolean }) => invoke<string>('assistant_apply_calendar', { action });
+export const assistantApplyCalendar = (action: { id: string; root: string; calendar: string; title: string; start: number; end: number; notes?: string; timeZone?: string; avoidConflicts?: boolean }) => invoke<string>('assistant_apply_calendar', { action });
 export const assistantHasMessage = (root: string, id: string) => invoke<boolean>('assistant_has_message', { root, id });
 export const assistantListChats = (root: string) => invoke<unknown>('assistant_list_chats', { root });
 export const assistantSearchChats = (root: string, query: string, excludeMessage?: string) => invoke<unknown>('assistant_search_chats', { root, query, excludeMessage });
@@ -104,7 +104,7 @@ export const assistantSpeak = (text: string, signal?: AbortSignal, provider: 'op
 export const assistantOpenUrl = (url: string) => invoke<void>('assistant_open_url', { url });
 export interface QuickCapture { id: string; text: string; error: string | null }
 export interface QuickDocument { revision: number; draft: string; pending: QuickCapture | null }
-export interface QuickStatus { glass?: boolean; connected: boolean; busy: boolean; review: boolean; label: string; reply: string; voice: VoiceSettings }
+export interface QuickStatus { replyId?: string; glass?: boolean; connected: boolean; busy: boolean; review: boolean; label: string; reply: string; voice: VoiceSettings }
 export interface QuickSnapshot { shortcuts: { typing: boolean; dictation: boolean }; root: string; visible: boolean; opened: number; dictate: boolean; status: QuickStatus; document: QuickDocument }
 export const enableQuickPrompt = (root: string, enabled: boolean) => invoke<void>('prompt_enable', { root, enabled });
 export const publishQuickPrompt = (root: string, status: QuickStatus) => invoke<void>('prompt_publish', { root, status });
@@ -155,8 +155,7 @@ export const closeNow = () => invoke<void>('close_now');
 // for both, and gets the panel's buttons back as commands; the panel shows what was published.
 
 /** The main window's timer, for the item's title and tooltip and for the panel (src/lib/tray.ts). */
-export const publishTray = (status: { clock: unknown; tooltip: string; panel: unknown }) => invoke<void>('tray_publish', { status });
-export const enableTray = (enabled: boolean) => invoke<void>('tray_enable', { enabled });
+export const publishTray = (status: { visible: boolean; clock: unknown; tooltip: string; panel: unknown }) => invoke<void>('tray_publish', { status });
 /** In the main window: a command from one of the panel's buttons, unchecked. */
 export const onTrayCommand = (handler: (command: unknown) => void) => listen<unknown>('epizen://tray-command', (event) => handler(event.payload));
 /** In the main window: the round or rest it published has run out, though its own timers may be held back. */
@@ -169,7 +168,7 @@ export const onTrayShown = (handler: () => void) => listen('epizen://tray-shown'
 export const onTrayHidden = (handler: () => void) => listen('epizen://tray-hidden', handler);
 export const trayCommand = (command: unknown) => invoke<void>('tray_command', { command });
 /** Brings the main window to the front, and hides the panel. */
-export const openMainWindow = (destination?: TrayDestination) => invoke<void>('tray_open_main', { destination });
+export const openMainWindow = (destination?: TrayDestination, scope?: string) => invoke<void>('tray_open_main', { destination, scope });
 export const hideTray = () => invoke<void>('tray_hide');
 /** Quits as ⌘Q does, after the editor's last save. */
 export const quitApp = () => invoke<void>('tray_quit');
@@ -215,6 +214,7 @@ export interface CalendarEvent {
 }
 
 export interface NewCalendarEvent {
+  timeZone?: string;
   calendar: string;
   title: string;
   start: number;
@@ -242,3 +242,13 @@ export const onPetWake = (handler: () => void) => listen('epizen://pet-wake', ha
 export const resizeQuickPrompt = (height: number) => invoke<void>('prompt_resize', { height });
 
 export const applyAppearance = (glass: boolean) => invoke<void>('apply_appearance', { glass });
+
+export interface Wallpaper { id: string; name: string; kind: 'gif' | 'video' | 'image'; url: string }
+type StoredWallpaper = Omit<Wallpaper, 'url'> & { path: string };
+const wallpaperMedia = ({ path, ...item }: StoredWallpaper): Wallpaper => ({ ...item, url: convertFileSrc(path) });
+export const listWallpapers = async () => (await invoke<StoredWallpaper[]>('list_wallpapers')).map(wallpaperMedia);
+export async function chooseWallpaper(): Promise<Wallpaper | undefined> {
+  const item = await invoke<StoredWallpaper | null>('choose_wallpaper');
+  return item ? wallpaperMedia(item) : undefined;
+}
+export const removeWallpaper = (id: string) => invoke<void>('remove_wallpaper', { id });

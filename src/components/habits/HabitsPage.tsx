@@ -1,10 +1,9 @@
 import { usePluginDisplay } from '../workspace/PluginDisplay';
 import { useMemo, useState } from 'react';
-import { HabitDialog } from './HabitDialog';
+import { HabitScheduleDialog, type HabitScheduleRequest } from './HabitScheduleDialog';
 import { addDays, addMonths, formatDate, monthGrid, parseDate, startOfWeek, startOfMonth } from '../../lib/dates';
 import { discoveredHabits, habitActive, habitHistory, habitMatches, habitStats, type Habit, type HabitLifecycle, type HabitProblem } from '../../lib/habits';
 import type { DayEntry } from '../../lib/rollup';
-import { DateField } from '../DateField';
 import './habits.css';
 
 export interface HabitsPageProps {
@@ -29,7 +28,7 @@ export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycl
   const history = useMemo(() => discoveredHabits(days, habits), [days, habits]);
   const [filter, setFilter] = useState<Filter>(display.defaultView as Filter);
   const [selected, setSelected] = useState<string>();
-  const [form, setForm] = useState<{ kind: 'new' | 'archive' | 'resume' | 'continue'; habit?: Habit; name: string; date: string; restart: boolean }>();
+  const [form, setForm] = useState<HabitScheduleRequest>();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const [notice, setNotice] = useState<string>();
@@ -55,19 +54,9 @@ export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycl
     catch (err) { setProblem(err instanceof Error ? err.message : String(err)); }
     finally { setBusy(false); }
   };
-  const startForm = (kind: 'new' | 'archive' | 'resume' | 'continue', habit?: Habit) => {
-    setProblem(undefined); setNotice(undefined);
-    const start = habit?.periods.at(-1)?.from;
-    setForm({ kind, habit, name: habit?.name ?? '', date: start && start > dateKey(today) ? start : dateKey(today), restart: false });
+  const startForm = (kind: HabitScheduleRequest['kind'], habit?: Habit) => {
+    setProblem(undefined); setNotice(undefined); setForm({ kind, habit });
   };
-  const submit = () => form && run(async () => {
-    if (form.kind === 'new' || form.kind === 'continue') {
-      await onCreate(form.name, form.date, form.habit); setFilter('Active');
-    } else {
-      await onLifecycle(form.habit!, form.kind === 'archive' ? { kind: 'archive', date: form.date } : { kind: 'resume', date: form.date, restart: form.restart });
-      setFilter(form.kind === 'archive' && form.date <= dateKey(today) ? 'Archived' : 'Active');
-    }
-  }, form.kind === 'archive' ? form.date > dateKey(today) ? `Archive scheduled for ${form.date}. Its history will be kept.` : 'Habit archived. Its history is kept.' : 'Habit schedule saved.');
 
   return <div className="periodic-frame habits-page" data-testid="habits-page">
     <header className="habits-head"><div><p className="kicker">Small actions, over time</p><h1>Habits</h1><p>Your routines can change. Your history stays with you.</p></div><button type="button" className="primary-button" disabled={busy} onClick={() => startForm('new')}>＋ New habit</button></header>
@@ -75,14 +64,8 @@ export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycl
     {!enabled && <p className="habits-warning">Habits are hidden on daily and monthly pages. <button type="button" onClick={onOpenSettings}>Enable them in Settings</button></p>}
     {problems.length > 0 && <div className="habits-warning" role="alert"><strong>Some habit notes need attention</strong>{problems.map((p) => <p key={`${p.path}:${p.message}`}>{p.message} <button type="button" onClick={() => onOpenNote(p.path)}>Open note</button></p>)}</div>}
     {problem && <p className="habits-warning" role="alert">{problem}</p>}{notice && <p className="habits-notice" role="status">{notice}</p>}
-    {form && <HabitDialog busy={busy} onCancel={() => setForm(undefined)} title={form.kind === 'archive' ? 'Archive habit' : form.kind === 'resume' ? 'Reactivate habit' : 'New habit'}><form className="habits-form card glass" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <div><p className="kicker">{form.habit?.name ?? 'A new daily routine'}</p><h2>{form.kind === 'archive' ? 'Make room for a break' : form.kind === 'resume' ? 'Bring this habit back' : form.kind === 'continue' ? 'Continue your history' : 'What would you like to practice?'}</h2></div>
-      {form.kind === 'new' && <label className="field"><span>Habit name</span><input maxLength={100} aria-label="Habit name" placeholder="No sweets, read a chapter, take a walk…" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} disabled={busy} /></label>}
-      <label className="field"><span>{form.kind === 'archive' ? 'Archive from' : 'Start tracking from'}</span><DateField testId="habit-effective-date" label="Habit effective date" value={form.date} onChange={(date) => setForm({ ...form, date })} /></label>
-      <p>{form.kind === 'archive' ? 'The habit will disappear from this date onward. Previous check-ins, calendars and your best streak stay available.' : 'The habit appears in daily notes from this date. Existing completions remain in their original notes.'}</p>
-      {form.kind === 'resume' && <fieldset><legend>Streak after the break</legend><label><input type="radio" name="streak" checked={!form.restart} onChange={() => setForm({ ...form, restart: false })} /> Resume the paused streak</label><label><input type="radio" name="streak" checked={form.restart} onChange={() => setForm({ ...form, restart: true })} /> Start fresh; keep the previous best</label></fieldset>}
-      <div className="habits-form-actions"><button type="button" className="quiet-chip" disabled={busy} onClick={() => setForm(undefined)}>Cancel</button><button className="primary-button" type="submit" disabled={busy || !form.name.trim() || !form.date}>{busy ? 'Saving…' : form.kind === 'archive' ? 'Archive habit' : 'Save habit'}</button></div>
-    </form></HabitDialog>}
+    {form && <HabitScheduleDialog request={form} today={today} onCreate={onCreate} onLifecycle={onLifecycle}
+      onClose={() => setForm(undefined)} onSaved={(collection, message) => { setFilter(collection); setForm(undefined); setNotice(message); }} />}
     {!active.length && recent.length > 0 && filter === 'Active' && <section className="habits-recent card glass"><div><span className="kicker">From your daily notes</span><h2>Continue your recent routine</h2><p>{recent.map((h) => h.name).join(' · ')}</p><p>Bring this set into your current days. All earlier check-ins stay connected.</p></div><button type="button" className="primary-button" disabled={busy} onClick={() => void run(async () => { let count = 0; for (const h of recent) { try { await onCreate(h.name, dateKey(today), h); count++; } catch (err) { throw new Error(`${count} habits added. ${(err as Error).message} Reopen the page to see the saved habits.`, { cause: err }); } } }, 'Your recent routine is active again.')}>Continue {recent.length} habits</button></section>}
     <div className="habits-toolbar" role="group" aria-label="Habit collection">{(['Active', 'Archived', 'History'] as const).map((name) => <button type="button" key={name} aria-pressed={filter === name} onClick={() => { setFilter(name); setSelected(undefined); }} className={filter === name ? 'is-selected' : ''}>{name}<small>{name === 'Active' ? active.length : name === 'Archived' ? archived.length : history.length}</small></button>)}</div>
     {!list.length ? <div className="habits-empty"><h2>{filter === 'Archived' ? 'A place for habits on pause' : filter === 'History' ? 'Your history starts with a check-in' : 'Make space for one small habit'}</h2><p>{filter === 'History' ? 'Habits found in older daily notes appear here, ready to continue.' : filter === 'Archived' ? 'Archive a habit when it no longer fits your routine. Bring it back whenever you are ready.' : 'Add a habit above, or continue a habit from History. It will appear in your daily notes.'}</p></div> : <div className="habits-layout"><div className="habits-list">{list.map((habit) => {
@@ -94,7 +77,7 @@ export function HabitsPage({ habits, problems, days, today, onCreate, onLifecycl
         {habit.path && habitActive(habit, today) && <button type="button" className={completed ? 'habit-quick-check is-done' : 'habit-quick-check'} disabled={busy} aria-label={`${completed ? 'Undo today for' : 'Complete today for'} ${habit.name}`} aria-pressed={completed} onClick={() => void run(() => onComplete(today, habit, completed, !completed))}>{completed ? '✓' : <span />}</button>}
       </article>;
 
-    })}</div>{chosen && <section className="habits-detail card glass" data-testid="habit-detail"><div className="habits-detail-head"><div><p className="kicker">{!chosen.path ? 'Historical habit' : live(chosen, today) ? 'Your daily practice' : 'On pause'}</p><h2>{chosen.name}</h2></div>{!chosen.path ? <button type="button" className="quiet-chip" disabled={busy} onClick={() => startForm('continue', chosen)}>Continue tracking</button> : <button type="button" className="quiet-chip" disabled={busy} onClick={() => startForm(live(chosen, today) ? 'archive' : 'resume', chosen)}>{live(chosen, today) ? 'Archive' : 'Reactivate'}</button>}</div>
+    })}</div>{chosen && <section className="habits-detail card glass" data-testid="habit-detail"><div className="habits-detail-head"><div><p className="kicker">{!chosen.path ? 'Historical habit' : live(chosen, today) ? 'Your daily practice' : 'On pause'}</p><h2>{chosen.name}</h2></div>{!chosen.path ? <button type="button" className="quiet-chip" disabled={busy} onClick={() => startForm('continue', chosen)}>Continue tracking</button> : <button type="button" className="quiet-chip" disabled={busy} onClick={() => startForm(chosen.periods.at(-1)?.until ? 'resume' : 'archive', chosen)}>{chosen.periods.at(-1)?.until ? 'Reactivate' : 'Archive'}</button>}</div>
       <div className="habits-stats"><div><span>Current streak</span><strong>{stats.current}<small> {stats.current === 1 ? 'day' : 'days'}</small></strong></div><div><span>Best streak</span><strong>{stats.best}<small> {stats.best === 1 ? 'day' : 'days'}</small></strong></div><div><span>Completed</span><strong>{stats.completed}</strong></div><div><span>Consistency</span><strong>{stats.rate === undefined ? '—' : `${stats.rate}%`}</strong></div></div>
       {chosen.path && habitActive(chosen, today) && <button type="button" className={marks.at(-1)?.done ? 'habits-check-today is-done' : 'habits-check-today'} disabled={busy} aria-pressed={marks.at(-1)?.done ?? false} onClick={() => void run(() => onComplete(today, chosen, marks.at(-1)?.done ?? false, !marks.at(-1)?.done))}><span>{marks.at(-1)?.done ? '✓' : '○'}</span>{marks.at(-1)?.done ? 'Completed today' : 'Mark today complete'}<small>{formatDate(today, 'D MMM')}</small></button>}
       <div className="habit-detail-tabs" role="group" aria-label="Habit history view">{(['Overview', 'Calendar'] as const).map((view) => <button type="button" key={view} aria-pressed={detailView === view} onClick={() => setDetailView(view)}>{view}</button>)}</div>

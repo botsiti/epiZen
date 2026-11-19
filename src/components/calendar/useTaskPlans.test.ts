@@ -1,0 +1,32 @@
+import { renderHook } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
+import { calendarAccess, calendarEvents, deleteEvent, updateEvent, type CalendarEvent } from '../../lib/api';
+import { taskUrl } from '../../lib/plans';
+import { useTaskPlans } from './useTaskPlans';
+import type { TaskChange } from './types';
+
+vi.mock('../../lib/api', () => ({ calendarAccess: vi.fn(), calendarEvents: vi.fn(), updateEvent: vi.fn(), deleteEvent: vi.fn() }));
+it('follows the matching task while enabled and abandons an outstanding lookup when the vault changes', async () => {
+  const change: TaskChange = { kind: 'edited', focusId: 'abc', path: 'Daily.md', date: new Date(2026, 10, 18), before: { label: 'Draft' }, after: { label: 'Review', category: 'code' } };
+  const event: CalendarEvent = { id: '1', calendar: 'test', title: 'Draft', notes: '', start: 1, end: 2, allDay: false, writable: true, url: taskUrl({ vault: 'Demo', note: change.path, id: 'abc' }) };
+  vi.mocked(calendarAccess).mockResolvedValue('allowed');
+  vi.mocked(calendarEvents).mockResolvedValue([event, { ...event, id: '2', url: null }]);
+  const initialProps: { root?: string } = {};
+  const { result, rerender } = renderHook(({ root }: { root?: string }) => useTaskPlans(root, 'Demo'), { initialProps });
+  await result.current(change);
+  expect(calendarAccess).not.toHaveBeenCalled();
+  rerender({ root: '/first/Demo' });
+  await result.current(change);
+  expect(updateEvent).toHaveBeenCalledExactlyOnceWith(event, { title: 'code', notes: 'Review' });
+  let finish!: (events: CalendarEvent[]) => void;
+  vi.mocked(calendarEvents).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  const old = result.current;
+  const pending = old({ ...change, kind: 'deleted' });
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+  rerender({ root: '/second/Demo' });
+  finish([event]); await pending;
+  expect(deleteEvent).not.toHaveBeenCalled();
+  rerender({});
+  await old(change);
+  expect(calendarAccess).toHaveBeenCalledTimes(2);
+});
