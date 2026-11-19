@@ -814,10 +814,16 @@ describe('the demo vault', () => {
   });
 
   it('explains a link to a note that does not exist, and creates nothing', async () => {
+    const before = snapshotVault(vaultCopy());
     await followLink('Someday maybe');
-    await expect($('[data-testid="missing-note"]')).toHaveText(expect.stringContaining('Nothing was created'));
-    await screenshot('17-missing-note');
-    await $('[data-testid="missing-note"] button').click();
+    const missing = $('[data-testid="missing-note"]');
+    try {
+      await expect(missing.$('p')).toHaveText('No note has this name.');
+      expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+      await screenshot('17-missing-note');
+    } finally {
+      await missing.$('button').click();
+    }
   });
 
   it('lists the notes that link to a note in the right sidebar, not under the note', async () => {
