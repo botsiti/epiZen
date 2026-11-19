@@ -392,13 +392,15 @@ describe('Spike conversations and second-brain actions', () => {
     if (animation.reducedMotion) expect(animation.frames).toBe(1);
     else expect(animation.frames).toBeGreaterThan(1);
     await screenshot('220-desktop-spike');
-    await browser.execute(() => document.querySelector<HTMLButtonElement>('[aria-label="Pause animation"]')?.focus());
+    // The companion stays usable while the person's keyboard focus is in another app.
+    await expect($('[aria-label="Pause animation"]')).toBeDisplayed();
     await $('[aria-label="Pause animation"]').click();
     await $('[aria-label="Resume animation"]').waitForDisplayed();
     const paused = await browser.execute(() => getComputedStyle(document.querySelector('.spike-sprite')!).backgroundPosition);
     await browser.pause(350);
     expect(await browser.execute(() => getComputedStyle(document.querySelector('.spike-sprite')!).backgroundPosition)).toBe(paused);
     await $('[aria-label="Resume animation"]').click();
+    await expect($('[aria-label="Pause animation"]')).toBeDisplayed();
     await browser.switchToWindow('main');
     await $('[aria-label="Message Spike"]').setValue('Keep this unsent thought while Spike stays on my desktop.');
     await browser.execute(async () => { await (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { close: () => Promise<void> } } } }).__TAURI__.window.getCurrentWindow().close(); });
