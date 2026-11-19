@@ -1,7 +1,7 @@
 //! A small capture window. Only the main workspace may accept requests or execute actions.
 use std::{collections::HashSet, sync::Mutex};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use crate::assistant::voice::{VoiceProvider, VoiceSettings};
@@ -226,10 +226,8 @@ pub fn show(app: &AppHandle, dictate: bool) -> Result<(), String> {
     };
     apply_surface(&prompt, app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.status.glass)?;
     let pet = crate::pet::for_prompt(app, &root)?;
-    let monitor = pet.current_monitor().ok().flatten().ok_or("Spike’s display is unavailable.")?;
-    // Preserve the dragged location, adjusting the pair only enough to fit the work area.
-    position_pair(&pet, &prompt, &monitor)?;
     crate::pet::attach_prompt(app, true)?;
+    position_pair(&pet, &prompt)?;
     crate::companion_display::show(&pet)?;
     { let prompt = app.state::<Prompt>(); let mut state = prompt.state.lock().unwrap_or_else(|p| p.into_inner()); state.snapshot.visible = true; state.snapshot.opened += 1; state.snapshot.dictate = dictate; }
     let _ = app.emit_to(crate::pet::LABEL, "epizen://pet-wake", ());
@@ -237,8 +235,8 @@ pub fn show(app: &AppHandle, dictate: bool) -> Result<(), String> {
     if !preview { prompt.set_focus().map_err(|error| error.to_string())?; }
     Ok(())
 }
-/// Keep the two native windows together in physical pixels, including Retina and negative origins.
-fn pair_positions(pet: (f64, f64), area: (f64, f64, f64, f64), scale: f64, prompt_height: f64) -> ((i32, i32), (i32, i32)) {
+/// Place the composer using the same units and coordinate space as the pet and work area.
+fn prompt_origin(pet: (f64, f64), area: (f64, f64, f64, f64), scale: f64, prompt_height: f64) -> (f64, f64) {
     let (left, top, width, height) = area;
     let offset = (WIDTH - crate::pet::WIDTH) * scale / 2.0;
     let anchor = crate::pet::PROMPT_ANCHOR * scale;
@@ -248,20 +246,43 @@ fn pair_positions(pet: (f64, f64), area: (f64, f64, f64, f64), scale: f64, promp
     let below = pet.1 + anchor;
     let y = if below + panel_height <= bottom { below } else { pet.1 - panel_height };
     let y = y.clamp(top, (bottom - panel_height).max(top));
-    ((pet.0.round() as i32, pet.1.round() as i32), (x.round() as i32, y.round() as i32))
+    (x, y)
 }
-fn position_pair(pet: &WebviewWindow, prompt: &WebviewWindow, monitor: &tauri::Monitor) -> Result<(), String> {
-    let position = pet.outer_position().map_err(|error| error.to_string())?;
-    let area = monitor.work_area(); let scale = monitor.scale_factor();
-    let height = prompt.inner_size().map_err(|error| error.to_string())?.height as f64 / prompt.scale_factor().map_err(|error| error.to_string())?;
-    let (_, input) = pair_positions((position.x as f64, position.y as f64), (area.position.x as f64, area.position.y as f64, area.size.width as f64, area.size.height as f64), scale, height);
-    prompt.set_position(PhysicalPosition::new(input.0, input.1)).map_err(|error| error.to_string())
+fn position_pair(pet: &WebviewWindow, prompt: &WebviewWindow) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let pet = pet.clone();
+        crate::companion_display::with_window(prompt, move |composer| {
+            let raw = pet.ns_window().map_err(|err| err.to_string())?;
+            // SAFETY: both window handles are live, on AppKit's main thread.
+            let dog = unsafe { &*raw.cast::<objc2_app_kit::NSWindow>() };
+            let frame = dog.frame();
+            let area = dog.screen().ok_or("Spike’s display is unavailable.")?.visibleFrame();
+            // The geometry function measures down from the top in a single coordinate
+            // space. AppKit's global coordinates measure upwards, in logical points.
+            let input = prompt_origin(
+                (frame.origin.x, -(frame.origin.y + frame.size.height)),
+                (area.origin.x, -(area.origin.y + area.size.height), area.size.width, area.size.height),
+                1.0, composer.frame().size.height,
+            );
+            composer.setFrameTopLeftPoint(objc2_foundation::NSPoint::new(input.0, -input.1));
+            Ok(())
+        })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let position = pet.outer_position().map_err(|error| error.to_string())?;
+        let monitor = pet.current_monitor().map_err(|err| err.to_string())?.ok_or("Spike’s display is unavailable.")?;
+        let area = monitor.work_area(); let scale = monitor.scale_factor();
+        let height = prompt.inner_size().map_err(|error| error.to_string())?.height as f64 / prompt.scale_factor().map_err(|error| error.to_string())?;
+        let input = prompt_origin((position.x as f64, position.y as f64), (area.position.x as f64, area.position.y as f64, area.size.width as f64, area.size.height as f64), scale, height);
+        crate::companion_display::move_to(prompt, input.0.round() as i32, input.1.round() as i32, scale)
+    }
 }
 pub fn follow_pet(app: &AppHandle) -> Result<(), String> {
     let visible = app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.visible;
     if visible && let (Some(pet), Some(prompt)) = (app.get_webview_window(crate::pet::LABEL), app.get_webview_window(LABEL)) {
-        let monitor = pet.current_monitor().map_err(|error| error.to_string())?.ok_or("Spike’s display is unavailable.")?;
-        position_pair(&pet, &prompt, &monitor)?;
+        position_pair(&pet, &prompt)?;
     }
     Ok(())
 }
@@ -283,7 +304,7 @@ pub fn prompt_resize(window: WebviewWindow, height: f64) -> Result<(), String> {
     from_window(&window, &[LABEL])?;
     if !height.is_finite() { return Err("Invalid prompt size.".into()); }
     let height = height.clamp(50.0, 320.0);
-    window.set_size(tauri::LogicalSize::new(WIDTH, height)).map_err(|error| error.to_string())?;
+    crate::companion_display::resize(&window, WIDTH, height)?;
     follow_pet(window.app_handle())?;
     Ok(())
 }
@@ -353,23 +374,28 @@ mod tests {
     }
     #[test]
     fn prompt_stays_centered_below_spike_on_retina_and_negative_displays() {
-        let (dog, input) = pair_positions((1000.0, 600.0), (0.0, 50.0, 3456.0, 2100.0), 2.0, 64.0);
-        assert_eq!(dog, (1000, 600));
-        assert_eq!(input, (812, 888));
-        let (dog, input) = pair_positions((-1500.0, 100.0), (-1920.0, 0.0, 1920.0, 1080.0), 1.0, 64.0);
-        assert_eq!(dog, (-1500, 100)); assert_eq!(input, (-1594, 244));
+        let input = prompt_origin((1000.0, 600.0), (0.0, 50.0, 3456.0, 2100.0), 2.0, 64.0);
+        assert_eq!(input, (812.0, 888.0));
+        let input = prompt_origin((-1500.0, 100.0), (-1920.0, 0.0, 1920.0, 1080.0), 1.0, 64.0);
+        assert_eq!(input, (-1594.0, 244.0));
+        // AppKit points can lie between logical pixels on Retina. A second drag
+        // must retain the same fractional anchor when both windows move.
+        let work = (-1728.0, -1100.0, 1728.0, 1040.0);
+        let before = prompt_origin((-500.5, -700.5), work, 1.0, 54.0);
+        let after = prompt_origin((-628.5, -828.5), work, 1.0, 54.0);
+        assert_eq!(before, (-594.5, -556.5));
+        assert_eq!(after, (before.0 - 128.0, before.1 - 128.0));
     }
     #[test]
     fn prompt_stays_visible_without_pushing_the_pet_away_from_edges() {
         for scale in [1.0, 2.0] {
             for height in [50.0, 96.0, 320.0] {
                 for position in [(0.0, 0.0), (3400.0, 2100.0), (-10000.0, -10000.0)] {
-                    let (dog, input) = pair_positions(position, (0.0, 50.0, 3456.0, 2100.0), scale, height);
-                    assert_eq!(dog, (position.0 as i32, position.1 as i32));
-                    assert!(input.1 >= 50);
-                    assert!(input.0 >= 0 && input.0 as f64 + WIDTH * scale <= 3456.0);
-                    assert!(input.1 as f64 + height * scale <= 2150.0);
-                    if position.1 == 2100.0 { assert_eq!(input.1 as f64 + height * scale, position.1); }
+                    let input = prompt_origin(position, (0.0, 50.0, 3456.0, 2100.0), scale, height);
+                    assert!(input.1 >= 50.0);
+                    assert!(input.0 >= 0.0 && input.0 + WIDTH * scale <= 3456.0);
+                    assert!(input.1 + height * scale <= 2150.0);
+                    if position.1 == 2100.0 { assert_eq!(input.1 + height * scale, position.1); }
                 }
             }
         }

@@ -18,6 +18,17 @@ async function select(css: string, value: string) {
 async function section(name: string) { await $(`[data-testid="settings-nav-${name}"]`).click(); }
 async function save() { await scrollIntoView('[data-testid="settings-save"]'); await $('[data-testid="settings-save"]').click(); await $('[data-testid="settings"] .save-state').waitForDisplayed(); }
 
+async function saveColorTheme(name: string) {
+  const radio = 'input[name="color-theme"][aria-label="' + name + '"]';
+  const label = '.theme-choices label:has(> ' + radio + ')';
+  await scrollIntoView(label);
+  await $(label).click();
+  await expect($(radio)).toBeSelected();
+  await $('button=Save appearance').click();
+  await expect($('.appearance-form .preferences-local-action [role="status"]')).toHaveText('Appearance saved for the whole app.');
+  await expect($('html')).toHaveAttribute('data-color-theme', name);
+}
+
 describe('focused preferences and file creation', () => {
   before(prepareWindow);
   it('connects existing daily notes and persists library sources without changing Markdown', async () => {
@@ -83,17 +94,14 @@ describe('focused preferences and file creation', () => {
   it('applies a color theme across the workspace and restores it after reopening', async () => {
     await $('[data-testid="open-settings"]').click();
     await section('appearance');
-    await $('label*=Gruvbox').click();
-    await $('button=Save appearance').click();
-    await expect($('html')).toHaveAttribute('data-color-theme', 'Gruvbox');
+    await saveColorTheme('Gruvbox');
     await browser.refresh(); await prepareWindow();
     await expect($('html')).toHaveAttribute('data-color-theme', 'Gruvbox');
     await $('[data-testid="open-settings"]').click(); await section('appearance');
-    await $('.theme-preview').scrollIntoView();
+    await expect($('input[name="color-theme"][aria-label="Gruvbox"]')).toBeSelected();
+    await scrollIntoView('.theme-library');
     await screenshot('178-settings-color-themes');
-    await $('[aria-label="Epizen"][name="color-theme"]').parentElement().click();
-    await $('button=Save appearance').click();
-    await expect($('html')).toHaveAttribute('data-color-theme', 'Epizen');
+    await saveColorTheme('Epizen');
   });
   it('uses daily categories for rewards and shows newly saved life spheres on Home', async () => {
     const before = snapshotVault(root);

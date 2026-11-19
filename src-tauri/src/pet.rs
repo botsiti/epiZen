@@ -2,7 +2,7 @@
 pub mod drag;
 use std::sync::{Mutex, atomic::{AtomicBool, Ordering}};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub const LABEL: &str = "spike";
 pub const COMMAND: &str = "epizen://pet-command";
@@ -87,17 +87,18 @@ fn place(app: &AppHandle, window: &WebviewWindow, height: f64) -> Result<(), Str
     let saved = settings.get("desktopPetPosition");
     if !cfg!(feature = "e2e") && std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_none()
         && let Some((x, y)) = saved.and_then(|value| Some((i32::try_from(value["x"].as_i64()?).ok()?, i32::try_from(value["y"].as_i64()?).ok()?)))
-        && let Some((x, y)) = monitors.iter().find_map(|monitor| {
+        && let Some(((x, y), scale)) = monitors.iter().find_map(|monitor| {
             let area = monitor.work_area();
             restore_origin((x, y), (area.position.x, area.position.y, area.size.width, area.size.height), monitor.scale_factor(), height)
+                .map(|origin| (origin, monitor.scale_factor()))
         }) {
-        return window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string());
+        return crate::companion_display::move_to(window, x, y, scale);
     }
     let monitor = crate::companion_display::select(&main, cfg!(feature = "e2e") || std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_some())?;
     let area = monitor.work_area(); let scale = monitor.scale_factor();
     let x = area.position.x + (f64::from(area.size.width) - (WIDTH + 24.0) * scale).max(0.0).round() as i32;
     let y = area.position.y + (f64::from(area.size.height) - (height + 24.0) * scale).max(0.0).round() as i32;
-    window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string())
+    crate::companion_display::move_to(window, x, y, scale)
 }
 /// Quick capture may summon Spike without changing the user's startup preference.
 pub fn for_prompt(app: &AppHandle, root: &str) -> Result<WebviewWindow, String> {
@@ -110,7 +111,7 @@ pub fn for_prompt(app: &AppHandle, root: &str) -> Result<WebviewWindow, String> 
 }
 pub fn attach_prompt(app: &AppHandle, attached: bool) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(LABEL) {
-        window.set_size(tauri::LogicalSize::new(WIDTH, if attached { PROMPT_ANCHOR } else { HEIGHT })).map_err(|error| error.to_string())?;
+        crate::companion_display::resize(&window, WIDTH, if attached { PROMPT_ANCHOR } else { HEIGHT })?;
     }
     let pet = app.state::<Pet>(); let mut state = pet.state.lock().unwrap_or_else(|p| p.into_inner());
     state.prompt_open = attached;
@@ -169,7 +170,8 @@ pub fn pet_position(window: WebviewWindow) -> Result<PetPosition, String> {
 #[tauri::command]
 pub fn pet_move(app: AppHandle, window: WebviewWindow, x: i32, y: i32) -> Result<(), String> {
     pet_only(&window)?;
-    window.set_position(PhysicalPosition::new(x, y)).map_err(|error| error.to_string())?;
+    let scale = window.scale_factor().map_err(|err| err.to_string())?;
+    crate::companion_display::move_to(&window, x, y, scale)?;
     crate::prompt::follow_pet(&app)
 }
 #[tauri::command]

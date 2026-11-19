@@ -51,12 +51,12 @@ pub async fn pet_drag(window: WebviewWindow, x: f64, y: f64) -> Result<bool, Str
                     let frame = native.frame();
                     let start = origin.unwrap_or(frame.origin);
                     let held = NSEvent::pressedMouseButtons() & 1 != 0;
-                    if !native.isVisible() { return Ok((start, false, true, false)); }
-                    if !held && origin.is_none() { return Ok((start, false, false, false)); }
+                    if !native.isVisible() { return Ok((start, false, true)); }
+                    if !held && origin.is_none() { return Ok((start, false, false)); }
                     let mouse = NSEvent::mouseLocation();
                     let anchor = NSPoint::new(start.x + offset.x, start.y + frame.size.height - offset.y);
                     let moved = dragged || (mouse.x - anchor.x).hypot(mouse.y - anchor.y) >= 4.0;
-                    if !moved { return Ok((start, held, false, false)); }
+                    if !moved { return Ok((start, held, false)); }
                     // CGPoint values here are logical AppKit points on every display, even
                     // across a Retina/non-Retina boundary or a negative display origin.
                     let screen = if preview { native.screen() } else {
@@ -68,15 +68,17 @@ pub async fn pet_drag(window: WebviewWindow, x: f64, y: f64) -> Result<bool, Str
                     }.ok_or("Spike’s display is unavailable.")?;
                     let next = drag_origin(mouse, offset, frame.size, screen.visibleFrame());
                     let changed = next != frame.origin;
-                    if changed { native.setFrameOrigin(next); }
-                    Ok((start, held, true, changed))
+                    if changed {
+                        native.setFrameOrigin(next);
+                        crate::prompt::follow_pet(panel.app_handle())?;
+                    }
+                    Ok((start, held, true))
                 })();
                 let _ = send.send(sample);
             }).map_err(|e| e.to_string())?;
-            let (start, held, moved, changed) = receive.await.map_err(|_| "Spike’s window closed.")??;
+            let (start, held, moved) = receive.await.map_err(|_| "Spike’s window closed.")??;
             origin = Some(start);
             dragged |= moved;
-            if changed { crate::prompt::follow_pet(window.app_handle())?; }
             if !held {
                 if dragged { super::remember_position(window.app_handle()); }
                 return Ok(dragged);

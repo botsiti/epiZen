@@ -459,9 +459,16 @@ describe('Spike conversations and second-brain actions', () => {
     expect(dog.x).toBe(position.x - delta);
     expect(dog.y).toBe(position.y - delta);
     await browser.switchToWindow('spike-prompt');
-    const prompt = await browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { outerPosition: () => Promise<{ x: number; y: number }> } } } }).__TAURI__.window.getCurrentWindow().outerPosition());
+    const promptPosition = () => browser.execute(async () => (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { outerPosition: () => Promise<{ x: number; y: number }> } } } }).__TAURI__.window.getCurrentWindow().outerPosition());
+    const prompt = await promptPosition();
     expect(prompt.y - dog.y).toBeCloseTo(144 * dog.scale, 0);
     expect(dog.x - prompt.x).toBeCloseTo(94 * dog.scale, 0);
+    // Another move must be reflected by both windows when the command resolves.
+    await browser.switchToWindow('spike');
+    const step = Math.round(16 * dog.scale);
+    await invoke('pet_move', { x: dog.x - step, y: dog.y - step });
+    await browser.switchToWindow('spike-prompt');
+    expect(await promptPosition()).toMatchObject({ x: prompt.x - step, y: prompt.y - step });
     await screenshot('229-spike-attached-prompt');
     await browser.switchToWindow('spike');
     // The embedded driver's pointer actions do not synthesize contextmenu.
