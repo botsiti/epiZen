@@ -21,6 +21,18 @@ pub struct Settings {
 const LAST_VAULT: &str = "lastVault";
 
 impl Settings {
+    pub fn forget_wallpaper(&self, id: &str) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut settings = self.load();
+        if let Some(appearance) = settings.get_mut("appearance").and_then(Value::as_object_mut)
+            && appearance.get("wallpaper").and_then(Value::as_str) == Some(id)
+        {
+            appearance.remove("wallpaper");
+            self.save(&settings)?;
+        }
+        Ok(())
+    }
+
     pub fn assistant_runtime_dir(&self) -> PathBuf { self.file.with_file_name("assistant-runtime") }
     pub fn new(dir: impl AsRef<Path>) -> Self {
         Self {
@@ -74,8 +86,8 @@ impl Settings {
             .map(|_| ())
     }
 
-    /// Per-vault XP settings live in the app config, never beside a user's notes.
-    fn reward_location(&self, root: &str) -> io::Result<(PathBuf, String)> {
+    /// Resolve the config location before creating app-owned media or per-vault XP rules.
+    pub fn directory_outside_vault(&self, root: &str) -> io::Result<PathBuf> {
         if root.is_empty() || root.len() > 4096 { return Err(io::Error::other("Invalid vault identifier.")); }
         let vault_root = Path::new(root).canonicalize()?;
         if !vault_root.is_dir() { return Err(io::Error::other("The vault is unavailable.")); }
@@ -89,8 +101,12 @@ impl Settings {
         }
         let mut resolved = existing.canonicalize()?;
         for component in missing.iter().rev() { resolved.push(component); }
-        if resolved.starts_with(&vault_root) { return Err(io::Error::other("Keep Epizen settings outside the vault before using XP rules.")); }
-        Ok((parent.to_path_buf(), format!("xp-rules-{:x}.md", Sha256::digest(root.as_bytes()))))
+        if resolved.starts_with(&vault_root) { return Err(io::Error::other("Keep Epizen settings outside the vault.")); }
+        Ok(resolved)
+    }
+
+    fn reward_location(&self, root: &str) -> io::Result<(PathBuf, String)> {
+        Ok((self.directory_outside_vault(root)?, format!("xp-rules-{:x}.md", Sha256::digest(root.as_bytes()))))
     }
 
     fn reward_document(&self, root: &str) -> io::Result<Option<(u64, Value, String)>> {

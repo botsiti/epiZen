@@ -1,11 +1,12 @@
+import { CompanionPreferences } from './CompanionPreferences';
 import { ModelPreferences } from './ModelPreferences';
 import { VoicePreferences } from './VoicePreferences';
 import { useState, type FormEvent } from 'react';
 import { assistantConnection, setAssistantKey } from '../../lib/api';
 import { safeNotePath } from '../../lib/assistant/changes';
 import type { AssistantProvider, AssistantSettings as Preferences } from '../../lib/assistant/types';
-interface Props { backLabel?: string; value: Preferences; configured: boolean; profileExists: boolean; onSave: (value: Preferences) => Promise<void>; onCompanionChange: (value: Partial<Pick<Preferences, 'desktopPet' | 'petMotion'>>) => Promise<void>; onConnection: (provider?: AssistantProvider) => Promise<void>; onProfile: () => void; onBack: () => void }
-export function AssistantSettings({ backLabel = 'Conversation', value, configured, profileExists, onSave, onCompanionChange, onConnection, onProfile, onBack }: Props) {
+interface Props { pluginEnabled?: boolean; workspace?: boolean; backLabel?: string; value: Preferences; configured: boolean; profileExists: boolean; onSave: (value: Preferences) => Promise<void>; onCompanionChange: (value: Partial<Pick<Preferences, 'desktopPet' | 'petMotion'>>) => Promise<void>; onConnection: (provider?: AssistantProvider) => Promise<void>; onProfile: () => void; onBack: () => void }
+export function AssistantSettings({ workspace, pluginEnabled = true, backLabel = 'Conversation', value, configured, profileExists, onSave, onCompanionChange, onConnection, onProfile, onBack }: Props) {
   const [draft, setDraft] = useState(value), [key, setKey] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState<string>();
   const [seenPet, setSeenPet] = useState({ desktopPet: value.desktopPet, petMotion: value.petMotion });
   if (seenPet.desktopPet !== value.desktopPet || seenPet.petMotion !== value.petMotion) {
@@ -40,26 +41,34 @@ export function AssistantSettings({ backLabel = 'Conversation', value, configure
     catch (error) { setError(String(error)); } finally { setBusy(false); }
   };
   return <form className="assistant-preferences" onSubmit={(event) => void save(event)}>
-    <button type="button" className="assistant-back" onClick={onBack}>← {backLabel}</button>
+    {!workspace && <><button type="button" className="assistant-back" onClick={onBack}>← {backLabel}</button>
     <h2>{configured && value.enabled ? 'Make Spike your own' : 'Connect Spike'}</h2>
-    <p>Choose how Spike connects. Messages and selected note context are sent through that provider when you talk to Spike.</p>
+    <p>Choose how Spike connects. Messages and selected note context are sent through that provider when you talk to Spike.</p></>}
     <fieldset disabled={busy}>
+      <CompanionPreferences visible={draft.desktopPet} motion={draft.petMotion} enabled={pluginEnabled} connected={configured && value.enabled}
+        onVisibility={() => void companion({ desktopPet: !draft.desktopPet })} onMotion={() => void companion({ petMotion: !draft.petMotion })} />
+      <section className="assistant-setting-section"><h3>Provider</h3>
+      {workspace && <p className="assistant-hint">Messages and selected note context go to this provider when you talk to Spike.</p>}
       <label>Connection<select aria-label="Spike connection" value={draft.provider} onChange={(event) => { setDraft({ ...draft, provider: event.target.value as AssistantProvider }); setError(undefined); }}><option value="codex">ChatGPT subscription · Codex CLI</option><option value="openai">OpenAI API key</option></select></label>
       {draft.provider === 'codex' && <p className="assistant-hint">Uses your installed Codex CLI and its ChatGPT login. Subscription limits apply. If needed, run <code>codex login</code> in Terminal first. Spike keeps note changes in its review flow.</p>}
-      <div className="assistant-companion-settings"><strong>Desktop companion</strong><p className="assistant-hint">Drag Spike to a comfortable spot. Click Spike to type below him. Right-click to hide him.</p><button type="button" onClick={() => void companion({ desktopPet: !draft.desktopPet })}>{draft.desktopPet ? 'Hide desktop Spike' : 'Show Spike on desktop'}</button><p className="assistant-hint">⇧⌘Space shows or hides Spike and his prompt from any app. ⌥⇧⌘Space starts or finishes dictation. ⌘8 toggles the sidebar in Epizen.</p><label className="assistant-check"><input type="checkbox" checked={draft.petMotion} onChange={(event) => void companion({ petMotion: event.target.checked })} />Animate Spike</label></div>
       {draft.provider === 'openai' && <><label>OpenAI API key<input type="password" autoComplete="off" spellCheck={false} aria-label="OpenAI API key" value={key} placeholder={configured && value.provider === 'openai' ? 'Key stored · paste to replace' : 'Paste your API key'} onChange={(event) => setKey(event.target.value)} /></label><p className="assistant-hint">Stored in macOS Keychain. API usage is billed separately from a ChatGPT subscription.</p></>}
+      </section>
       <ModelPreferences value={draft} onChange={setDraft} />
+      <section className="assistant-setting-section"><h3>Conversation</h3>
       {value.enabled && <label className="assistant-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />Enable assistant connection</label>}
       <label className="assistant-check"><input type="checkbox" checked={draft.shareCurrentNote} onChange={(event) => setDraft({ ...draft, shareCurrentNote: event.target.checked })} />Include the note I’m viewing</label>
       <label className="assistant-check"><input type="checkbox" checked={draft.allowChanges} onChange={(event) => setDraft({ ...draft, allowChanges: event.target.checked })} />Apply the changes I request automatically</label>
       <p className="assistant-hint">When this is off, Spike shows each proposed note or calendar change for your review.</p>
       <label className="assistant-check"><input type="checkbox" checked={draft.speakReplies} onChange={(event) => setDraft({ ...draft, speakReplies: event.target.checked })} />Read replies aloud</label>
       <p className="assistant-hint">{draft.provider === 'codex' ? 'Spoken replies use the macOS system voice. Dictation is configured separately below.' : 'Spike’s speaking voice is AI-generated.'}</p>
+      </section>
       <VoicePreferences onBusy={setBusy} value={value.voice} onSave={(voice) => onSave({ ...value, voice })} />
+      <section className="assistant-setting-section"><h3>Notes</h3>
       <label>My profile note<input aria-label="Assistant profile note" value={draft.profilePath} onChange={(event) => setDraft({ ...draft, profilePath: event.target.value })} /></label>
       <p className="assistant-hint">Use a note with your preferences, background or personality profile. Spike remembers new details here when you ask. You can edit or remove them at any time.</p>
       {profileExists && <button type="button" className="assistant-text-button" onClick={onProfile}>Open my profile</button>}
       <label>Save links in<input aria-label="Assistant inbox folder" value={draft.inboxFolder} onChange={(event) => setDraft({ ...draft, inboxFolder: event.target.value })} /></label>
+      </section>
       <button className="assistant-primary" type="submit">{busy ? 'Connecting…' : value.enabled && configured ? 'Save preferences' : 'Connect Spike'}</button>
       {value.enabled && <button type="button" className="assistant-text-button" onClick={() => void disconnect()}>{draft.provider === 'codex' ? 'Disable Spike' : 'Disconnect API key'}</button>}
     </fieldset>

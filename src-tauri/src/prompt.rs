@@ -11,8 +11,8 @@ pub const EVENT: &str = "epizen://prompt-state";
 pub const COMMAND: &str = "epizen://prompt-command";
 pub const TEXT_SHORTCUT: &str = "Command+Shift+Space";
 pub const VOICE_SHORTCUT: &str = "Command+Alt+Shift+Space";
-const WIDTH: f64 = 440.0;
-const HEIGHT: f64 = 64.0;
+const WIDTH: f64 = 352.0;
+const HEIGHT: f64 = 54.0;
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Capture { pub id: String, pub text: String, pub error: Option<String> }
@@ -21,9 +21,9 @@ pub struct Capture { pub id: String, pub text: String, pub error: Option<String>
 pub struct Document { pub revision: u64, pub draft: String, pub pending: Option<Capture> }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Status { pub connected: bool, pub busy: bool, pub review: bool, pub label: String, pub reply: String, pub voice: VoiceSettings, #[serde(default)] pub glass: bool }
+pub struct Status { pub reply_id: Option<String>, pub connected: bool, pub busy: bool, pub review: bool, pub label: String, pub reply: String, pub voice: VoiceSettings, #[serde(default)] pub glass: bool }
 impl Default for Status {
-    fn default() -> Self { Self { glass: false, connected: false, busy: false, review: false, label: "Connect Spike to start".into(), reply: String::new(), voice: VoiceSettings { provider: VoiceProvider::Local, model: String::new() } } }
+    fn default() -> Self { Self { reply_id: None, glass: false, connected: false, busy: false, review: false, label: "Connect Spike to start".into(), reply: String::new(), voice: VoiceSettings { provider: VoiceProvider::Local, model: String::new() } } }
 }
 #[derive(Clone, Default, Serialize)]
 pub struct Shortcuts { typing: bool, dictation: bool }
@@ -153,7 +153,7 @@ pub async fn prompt_enable(app: AppHandle, window: WebviewWindow, root: String, 
 #[tauri::command]
 pub fn prompt_publish(app: AppHandle, window: WebviewWindow, root: String, status: Status) -> Result<(), String> {
     from_window(&window, &["main"])?; current(&app, &root)?;
-    if status.label.len() > 2000 || status.reply.len() > 8000 { return Err("The quick prompt status is too long.".into()); }
+    if status.label.len() > 2000 || status.reply.len() > 8000 || status.reply_id.as_ref().is_some_and(|id| id.len() > 200) { return Err("The quick prompt status is too long.".into()); }
     let changed = app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.status.glass != status.glass;
     if changed && let Some(prompt) = app.get_webview_window(LABEL) { apply_surface(&prompt, status.glass)?; }
     app.state::<Prompt>().state.lock().unwrap_or_else(|p| p.into_inner()).snapshot.status = status;
@@ -279,7 +279,7 @@ pub async fn prompt_open(app: AppHandle, window: WebviewWindow, dictate: bool) -
 pub fn prompt_resize(window: WebviewWindow, height: f64) -> Result<(), String> {
     from_window(&window, &[LABEL])?;
     if !height.is_finite() { return Err("Invalid prompt size.".into()); }
-    let height = height.clamp(56.0, 320.0);
+    let height = height.clamp(50.0, 320.0);
     window.set_size(tauri::LogicalSize::new(WIDTH, height)).map_err(|error| error.to_string())?;
     follow_pet(window.app_handle())?;
     Ok(())
@@ -351,14 +351,14 @@ mod tests {
     fn prompt_stays_centered_below_spike_on_retina_and_negative_displays() {
         let (dog, input) = pair_positions((1000.0, 600.0), (0.0, 50.0, 3456.0, 2100.0), 2.0, 64.0);
         assert_eq!(dog, (1000, 600));
-        assert_eq!(input, (740, 912));
+        assert_eq!(input, (812, 888));
         let (dog, input) = pair_positions((-1500.0, 100.0), (-1920.0, 0.0, 1920.0, 1080.0), 1.0, 64.0);
-        assert_eq!(dog, (-1500, 100)); assert_eq!(input, (-1630, 256));
+        assert_eq!(dog, (-1500, 100)); assert_eq!(input, (-1594, 244));
     }
     #[test]
     fn pair_fits_edges_and_growing_feedback_without_separating() {
         for scale in [1.0, 2.0] {
-            for height in [56.0, 96.0, 320.0] {
+            for height in [50.0, 96.0, 320.0] {
                 for position in [(0.0, 0.0), (3400.0, 2100.0), (-10000.0, -10000.0)] {
                     let (dog, input) = pair_positions(position, (0.0, 50.0, 3456.0, 2100.0), scale, height);
                     assert!(dog.1 >= 50);

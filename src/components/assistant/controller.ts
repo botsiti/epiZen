@@ -275,7 +275,7 @@ export class AssistantController {
             await api.assistantApplyNote({ id, root: this.root, path: change.path, before: change.before, after });
             appliedChange = { ...change, after };
             if (this.alive) this.host.onSaved(change.path, after);
-          } else await api.assistantApplyCalendar({ id, root: this.root, calendar: change.calendar, title: change.title, start: change.start, end: change.end, notes: change.notes, avoidConflicts: change.avoidConflicts });
+          } else await api.assistantApplyCalendar({ id, root: this.root, calendar: change.calendar, title: change.title, start: change.start, end: change.end, notes: change.notes, timeZone: change.timeZone, avoidConflicts: change.avoidConflicts });
           written = true;
           this.action({ ...entry, change: appliedChange, status: 'saved', error: undefined }); await this.persist();
         } catch (error) {

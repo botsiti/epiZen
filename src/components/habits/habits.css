@@ -125,3 +125,17 @@
 .habits-dialog > [role="dialog"] { animation: habits-dialog-enter 160ms ease-out both; }
 @keyframes habits-dialog-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .habits-dialog > [role="dialog"] { animation: none; } }
+
+.habit-settings header, .habit-settings li { display: flex; align-items: center; gap: 12px; }
+.habit-settings header { justify-content: space-between; margin-bottom: 12px; }
+.habit-settings h3, .habit-settings ul { margin: 0; }
+.habit-settings ul { list-style: none; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.habit-settings li { padding: 10px 0; }
+.habit-settings li + li { border-top: 1px solid var(--border); }
+.habit-settings .quiet-button { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+.habit-setting-mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: var(--text-muted); }
+.habit-setting-mark[data-active="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.habit-setting-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.habit-setting-copy small { display: block; margin-top: 3px; color: var(--text-muted); }
+.habit-settings details { margin-top: 20px; }
+.habit-settings summary { cursor: pointer; margin-bottom: 10px; }

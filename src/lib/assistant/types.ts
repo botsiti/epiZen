@@ -30,6 +30,7 @@ export interface AssistantContext {
   currentPath?: string;
   dailyPath?: string;
   dailyAmbiguous?: boolean;
+  calendarTimeZone?: string;
   questPresets?: Record<import('../quests').Tier, number>;
   questAreas?: readonly { name: string }[];
   features?: { periodic: boolean; cbt: boolean; quests: boolean; library: boolean; calendar: boolean };
@@ -72,6 +73,7 @@ export interface NoteChange {
 }
 export interface CalendarChange {
   kind: 'calendar';
+  timeZone?: string;
   avoidConflicts?: boolean;
   root: string;
   calendar: string;

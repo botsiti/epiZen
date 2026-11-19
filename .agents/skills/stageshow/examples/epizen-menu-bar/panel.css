@@ -1,0 +1,54 @@
+.epizen-stage .ss-stage {
+  background: #111415;
+  overflow: hidden;
+}
+
+.epizen-stage .epizen-stage-window {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: 590px;
+  height: 550px;
+}
+
+.epizen-stage .epizen-stage-calendar {
+  padding: 16px;
+}
+
+.epizen-stage .epizen-stage-week {
+  display: flex;
+  margin-top: 20px;
+  min-height: 450px;
+  background: repeating-linear-gradient(transparent 0 35px, var(--ss-line) 35px 36px);
+}
+
+.epizen-stage .epizen-stage-week > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 0 86px;
+  gap: 42px;
+  padding: 10px;
+  border-right: 1px solid var(--ss-line);
+}
+
+.epizen-stage .epizen-stage-panel {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 360px;
+  height: 502px;
+  border-radius: 14px;
+  background: #141718;
+  box-shadow: 0 16px 50px rgb(0 0 0 / 50%);
+}
+
+.epizen-stage [data-layout='compact'] .epizen-stage-panel {
+  inset: 12px;
+  width: auto;
+}
+
+.epizen-stage .tray-button[data-hover] {
+  background: rgb(255 255 255 / 10%);
+  border-color: rgb(255 255 255 / 17%);
+}

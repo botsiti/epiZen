@@ -11,16 +11,13 @@ import { CUSTOM_MINUTES, dayKey, dayOfKey, elapsed, formatSeconds, restLeft, sho
 export type TrayClock =
   | { kind: 'idle' }
   /** Focus counted is `accumulated`, plus the time since `since` unless paused; a pomodoro counts down from `planned` seconds. */
-  | { kind: 'focus'; label: string; accumulated: number; since: number; paused: boolean; planned?: number }
+  | { kind: 'focus'; accumulated: number; since: number; paused: boolean; planned?: number }
   | { kind: 'rest'; endsAt: number };
-
-/** The word after the time in the menu bar: the task's category, as Senioro shows it, or "focus". */
-export const menuBarLabel = (category?: string) => category?.trim().toLowerCase() || 'focus';
 
 export function trayClock({ session, rest }: TimerState): TrayClock {
   if (session) {
     const { accumulated, segmentStartedAt: since, planned } = session;
-    return { kind: 'focus', label: menuBarLabel(session.task.category), accumulated, since, paused: session.pausedAt !== undefined, ...(planned ? { planned } : {}) };
+    return { kind: 'focus', accumulated, since, paused: session.pausedAt !== undefined, ...(planned ? { planned } : {}) };
   }
   return rest ? { kind: 'rest', endsAt: rest.startedAt + rest.seconds * 1000 } : { kind: 'idle' };
 }
@@ -53,7 +50,23 @@ export interface PanelSession extends SessionTime {
 }
 
 /** Everything the panel shows, published by the main window whenever it changes. */
+export type TrayDestination = 'daily-note' | 'calendar';
+
+interface TrayNavigation {
+  dailyNote: boolean;
+  calendar: boolean;
+}
+
+interface PanelOptions {
+  timer: boolean;
+  tasks: boolean;
+  sound: boolean;
+  density: 'comfortable' | 'compact';
+}
 export interface PanelView {
+  scope?: string;
+  options?: PanelOptions;
+  navigation?: TrayNavigation;
   /** The open vault's name. Without one there is nothing to start. */
   vault?: string;
   /** The main window's today, `YYYY-MM-DD`. */
@@ -79,6 +92,9 @@ export function isSessionTask(task: TimerTask, path: string, line: string, label
 }
 
 export interface PanelInput {
+  scope?: string;
+  options?: PanelOptions;
+  navigation?: TrayNavigation;
   vault?: string;
   today: Date;
   /** Today's note, its text and what it holds, when it has one. */
@@ -92,7 +108,7 @@ export interface PanelInput {
   problem?: string;
 }
 
-export function panelView({ vault, today, path, text, day, timer, unwritten, problem }: PanelInput): PanelView {
+export function panelView({ scope, options, navigation, vault, today, path, text, day, timer, unwritten, problem }: PanelInput): PanelView {
   const lines = text?.split('\n').map((line) => line.replace(/\r$/, '')) ?? [];
   const { session, rest, prefs } = timer;
   const tasks = day && path !== undefined && vault
@@ -113,6 +129,9 @@ export function panelView({ vault, today, path, text, day, timer, unwritten, pro
   const stray = unwritten ? `${unwritten === 1 ? 'A stretch of focus isn’t' : `${unwritten} stretches of focus aren’t`} in the note yet. Open Epizen to see why.` : undefined;
   const warning = problem ?? stray;
   return {
+    ...(scope ? { scope } : {}),
+    ...(options ? { options } : {}),
+    ...(navigation ? { navigation } : {}),
     ...(vault ? { vault } : {}),
     day: dayKey(today),
     note: path !== undefined,
@@ -144,7 +163,7 @@ export const TIMELINE_MARKS = Array.from({ length: 9 }, (_, i) => ({ hour: i * 3
 
 /** What the panel shows at `now`, from what was published: the parts that move with the clock. */
 export interface PanelNow {
-  /** `Wednesday, 28 October`. */
+  /** `Wed, 28 Oct`. */
   date: string;
   /** `14:05`. */
   clock: string;
@@ -178,7 +197,7 @@ export function panelNow(view: PanelView, now: number): PanelNow {
     ...(session.planned ? { progress: Math.min(1, elapsed(session, now) / 1000 / session.planned) } : {}),
   };
   return {
-    date: formatDate(dayOfKey(view.day), 'dddd, D MMMM'),
+    date: formatDate(dayOfKey(view.day), 'ddd, D MMM'),
     clock: formatDate(at, 'HH:mm'),
     share,
     percent: Math.floor(share * 100),
@@ -195,7 +214,8 @@ export function panelNow(view: PanelView, now: number): PanelNow {
  */
 export type TrayCommand =
   | { kind: 'start'; day: string; task: { line: number; text: string; label: string; category?: string }; mode: TimerMode; minutes?: number }
-  | { kind: 'pause' | 'resume' | 'stop' | 'rest' | 'skip-rest' };
+  | { kind: 'pause' | 'resume' | 'stop' | 'rest' | 'skip-rest' }
+  | { kind: 'open'; destination: TrayDestination };
 
 /** How a round runs: 25 or 42 minutes, Custom, or Live (the stopwatch). */
 export type RoundHow = { mode: 'pomodoro'; minutes: number } | { mode: 'stopwatch' };
@@ -220,6 +240,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 /** A command as it arrives from the panel, checked; anything else is left alone. */
 export function readCommand(value: unknown): TrayCommand | undefined {
   if (!isRecord(value) || typeof value.kind !== 'string') return undefined;
+  if (value.kind === 'open') {
+    const { destination } = value;
+    return destination === 'daily-note' || destination === 'calendar' ? { kind: 'open', destination } : undefined;
+  }
   if (SIMPLE.has(value.kind)) return { kind: value.kind as 'pause' | 'resume' | 'stop' | 'rest' | 'skip-rest' };
   if (value.kind !== 'start' || !isRecord(value.task) || typeof value.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.day)) return undefined;
   const { day } = value;

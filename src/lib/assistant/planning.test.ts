@@ -94,3 +94,12 @@ describe('local free slots', () => {
     expect(() => calendarSlot(date, now, 60, '24:00', 'any', [])).toThrow('HH:mm');
   });
 });
+
+it('finds and previews calendar slots in the chosen zone using real instants for conflicts', () => {
+  const day = new Date(2026, 10, 18), now = new Date('2026-11-17T23:00Z');
+  const busy: CalendarEvent = { id: 'a', calendar: 'work', title: 'Busy', allDay: false, writable: true, start: Date.parse('2026-11-18T00:00Z'), end: Date.parse('2026-11-18T01:00Z') };
+  expect(calendarSlot(day, now, 30, '', 'morning', [busy], 'Asia/Tokyo')).toEqual({
+    start: Date.parse('2026-11-18T01:00Z'), end: Date.parse('2026-11-18T01:30Z'),
+  });
+  expect(() => calendarSlot(day, now, 20, '09:30', 'morning', [busy], 'Asia/Tokyo')).toThrow('overlaps');
+});

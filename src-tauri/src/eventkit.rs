@@ -12,7 +12,7 @@ use objc2::runtime::Bool;
 use objc2::{ClassType, sel};
 use objc2_app_kit::NSColorSpace;
 use objc2_event_kit::{EKAuthorizationStatus, EKCalendar, EKEntityType, EKEvent, EKEventStore, EKSpan};
-use objc2_foundation::{NSDate, NSError, NSString, NSURL};
+use objc2_foundation::{NSDate, NSError, NSString, NSTimeZone, NSURL};
 
 use crate::calendar::{Access, CalendarInfo, Calendars, Event, EventChange, NewEvent, Occurrence, SAME_START_MS, changed, check_times};
 
@@ -75,6 +75,12 @@ fn color(calendar: &EKCalendar) -> String {
     let [r, g, b] = rgb.map_or([0.6; 3], |c| [c.redComponent(), c.greenComponent(), c.blueComponent()]);
     let byte = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     format!("#{:02x}{:02x}{:02x}", byte(r), byte(g), byte(b))
+}
+
+/// A pinned calendar creates zoned events. The default keeps EventKit's native behaviour.
+fn event_zone(name: Option<&str>) -> Result<Option<Retained<NSTimeZone>>, String> {
+    name.map(|id| NSTimeZone::timeZoneWithName(&NSString::from_str(id))
+        .ok_or_else(|| "Apple Calendar does not recognize this time zone.".to_owned())).transpose()
 }
 
 /// An event as the page sees it. `None` for one EventKit hasn't given an identifier.
@@ -214,6 +220,9 @@ impl Calendars for EventKit {
                 let made = EKEvent::eventWithEventStore(store);
                 made.setCalendar(Some(&calendar));
                 made.setTitle(Some(&NSString::from_str(&new.title)));
+                if let Some(zone) = event_zone(new.time_zone.as_deref())? {
+                    made.setTimeZone(Some(&zone));
+                }
                 made.setStartDate(Some(&date(new.start)));
                 made.setEndDate(Some(&date(new.end)));
                 if let Some(notes) = &new.notes {
@@ -254,5 +263,17 @@ impl Calendars for EventKit {
             // SAFETY: removes an event the store just returned.
             unsafe { store.removeEvent_span_commit_error(&found, EKSpan::ThisEvent, true) }.map_err(|err| message(&err))
         })
+    }
+}
+
+#[cfg(test)]
+mod zone_tests {
+    use super::*;
+
+    #[test]
+    fn resolves_a_pinned_event_zone_without_opening_any_calendar() {
+        assert!(event_zone(None).unwrap().is_none());
+        assert_eq!(event_zone(Some("Asia/Tokyo")).unwrap().unwrap().name().to_string(), "Asia/Tokyo");
+        assert!(event_zone(Some("Invalid/Zone")).is_err());
     }
 }

@@ -1,24 +1,32 @@
-.quick-prompt { padding: 6px; color: var(--text); font: 13px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; width: 100%; height: auto; max-height: 320px; overflow-y: auto; }
-.quick-pill { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px; background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 24px; box-shadow: inset 0 1px #ffffff12; animation: spike-prompt-arrive 180ms ease-out; }
-.quick-prompt button { flex: none; padding: 4px 8px; border: 0; border-radius: 16px; background: transparent; color: var(--text-muted); font: inherit; cursor: pointer; }
-.quick-prompt button:hover { color: var(--text); background: var(--surface); }
-.quick-prompt button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.quick-prompt button:disabled { cursor: default; opacity: .4; }
-.quick-pill .quick-spike { display: grid; place-items: center; padding: 0; width: 28px; height: 28px; }
-.quick-pill .quick-icon { display: grid; place-items: center; width: 26px; height: 28px; padding: 0; font-size: 17px; }
-.quick-pill textarea { display: block; flex: 1; min-width: 0; resize: none; border: 0; outline: 0; padding: 2px 0; max-height: 96px; background: transparent; color: var(--text); font: 14px/20px -apple-system, BlinkMacSystemFont, sans-serif; }
-.quick-pill textarea::placeholder { color: var(--text-muted); }
-.quick-pill:focus-within { border-color: color-mix(in srgb, var(--accent) 65%, var(--border)); }
-.quick-pill .quick-send { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--bg); background: var(--accent); font-size: 18px; }
-.quick-response, .quick-feedback { margin-top: 6px; padding: 8px 12px; border-radius: 14px; background: var(--bg-sidebar); border: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
-.quick-response p, .quick-feedback p { min-width: 0; flex: 1; margin: 0; color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }
-.quick-response p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.quick-response button, .quick-feedback button { flex: none; font-size: 11px; padding: 2px 4px; color: var(--accent); }
-.quick-recording { flex: 1; display: flex; align-items: center; gap: 8px; color: var(--accent); }
-.quick-wave { height: 28px; flex: 1; display: flex; gap: 4px; align-items: center; justify-content: center; }
-.quick-wave i { display: block; width: 3px; border-radius: 3px; background: var(--accent); transition: height 80ms linear; }
-.quick-prompt.is-glass .quick-pill, .quick-prompt.is-glass .quick-response { background: linear-gradient(135deg, #ffffff0d, #8fbcaa08), #12141688; border-color: #ffffff26; }
-@keyframes spike-prompt-arrive { from { transform: translateY(5px) scale(.98); } to { transform: none; } }
+.quick-prompt { padding: 3px; width: 100%; max-height: 320px; overflow-y: auto; color: var(--text); font: 13px/1.45 -apple-system,BlinkMacSystemFont,sans-serif; }
+.quick-pill, .quick-actions, .quick-response, .quick-feedback { color: #f3f2ef; border: 1px solid #ffffff28; background: #252628; box-shadow: inset 0 1px #ffffff12; }
+.quick-pill { display: flex; align-items: center; gap: 7px; min-height: 42px; margin: 0; padding: 4px 5px; border-radius: 24px; animation: spike-prompt-arrive 150ms ease-out; }
+.quick-prompt button { flex: none; padding: 4px 7px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.quick-prompt button:hover { background: #ffffff15; }
+.quick-prompt button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.quick-prompt button:disabled { opacity: .45; cursor: default; }
+.quick-pill .quick-round, .quick-pill .quick-send { display: grid; place-items: center; width: 31px; height: 31px; padding: 0; border-radius: 50%; }
+.quick-pill .quick-round { background: #ffffff09; }
+.quick-pill .quick-round[aria-expanded="true"], .quick-pill .quick-round:hover { background: #ffffff1c; }
+.quick-pill .quick-send { color: #16221c; background: var(--accent); }
+.quick-pill .quick-send:disabled { color: #242525; background: #a5a5a4; }
+.quick-pill textarea { display: block; flex: 1; min-width: 0; resize: none; border: 0; outline: 0; padding: 2px 0; max-height: 96px; background: transparent; color: #f3f2ef; font: 14px/20px -apple-system,BlinkMacSystemFont,sans-serif; }
+.quick-pill textarea::placeholder { color: #b6b8b5; }
+.quick-actions, .quick-feedback, .quick-response { margin-top: 5px; padding: 7px 9px; border-radius: 15px; }
+.quick-actions { display: flex; justify-content: space-between; gap: 3px; }
+.quick-actions button { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
+.quick-actions svg { width: 14px; height: 14px; }
+.quick-feedback p, .quick-reply p { margin: 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.quick-reply p { max-height: 4.5em; overflow-y: auto; }
+.quick-reply p.is-expanded { max-height: 9em; }
+.quick-response > button, .quick-reply button, .quick-feedback button { font-size: 11px; color: var(--accent); }
+.quick-recording { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 12px; font-variant-numeric: tabular-nums; }
+.quick-wave { height: 28px; flex: 1; display: flex; gap: 2px; align-items: center; justify-content: center; }
+.quick-wave i { display: block; width: 3px; border-radius: 2px; background: var(--accent); transition: height 80ms linear; }
+.quick-prompt.is-glass :is(.quick-pill,.quick-response,.quick-feedback,.quick-actions) { background: linear-gradient(130deg,#ffffff13,#ffffff02),#191a1ccf; }
+@keyframes spike-prompt-arrive { from { transform: translateY(-3px) scale(.99); } to { transform: none; } }
 :root[data-motion="off"] .quick-pill { animation: none; }
 @media (prefers-reduced-motion: reduce) { .quick-pill { animation: none; } .quick-wave i { transition: none; } }
-@media (prefers-reduced-transparency: reduce) { .quick-prompt.is-glass .quick-pill, .quick-prompt.is-glass .quick-response { background: var(--bg-sidebar); } }
+@media (prefers-reduced-transparency: reduce) { .quick-prompt.is-glass :is(.quick-pill,.quick-response,.quick-feedback,.quick-actions) { background: #252628; } }
+
+.quick-progress { width: fit-content; max-width: 100%; margin: 5px auto 0; padding: 3px 10px; border-radius: 12px; background: #252628; color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }

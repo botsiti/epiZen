@@ -1,4 +1,5 @@
 import SPIKE_GUIDE from '../../../SPIKE.MD?raw';
+import { calendarMoment, systemCalendarZone } from '../calendarZone';
 import { addDays, formatDate } from '../dates';
 import { KINDS, LIBRARY_ROOT } from '../library';
 import { noteTitle } from '../links';
@@ -14,6 +15,7 @@ export function currentAssistantContext(context: AssistantContext, now = new Dat
 }
 
 export function routingContext(context: AssistantContext) {
+  const calendarZone = context.calendarTimeZone ?? systemCalendarZone();
   return {
     features: context.features ?? null,
     today: formatDate(context.now, 'YYYY-MM-DD'),
@@ -24,7 +26,9 @@ export function routingContext(context: AssistantContext) {
     currentNote: context.currentPath ?? null,
     dailyNote: context.dailyPath ?? periodicPath('day', context.now, context.periodic),
     library: Object.fromEntries(KINDS.map((kind) => [kind.kind, `${LIBRARY_ROOT}/${kind.folder}`])),
-    calendar: 'Local Apple Calendar. Use list_calendars before scheduling; never invent calendar identifiers.',
+    calendarTimeZone: calendarZone,
+    calendarNow: calendarMoment(context.now.getTime(), calendarZone).toString({ smallestUnit: 'minute' }),
+    calendar: 'Use calendarNow and calendarTimeZone for Apple Calendar dates and times. Use list_calendars before scheduling; never invent calendar identifiers.',
     profile: context.settings.profilePath,
     inbox: context.settings.inboxFolder,
   };

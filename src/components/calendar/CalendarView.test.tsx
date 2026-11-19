@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarAccess, CalendarEvent, CalendarInfo, NewCalendarEvent, Occurrence } from '../../lib/api';
 import { addDays, sameDay, startOfWeek, today } from '../../lib/dates';
+import { calendarDay } from '../../lib/calendarZone';
 import { parseDay } from '../../lib/day';
 import { at, taskUrl } from '../../lib/plans';
 import type { DayEntry } from '../../lib/rollup';
@@ -128,10 +130,10 @@ function setup() {
 }
 
 /** Draws from one time to another on the day's column, as a mouse would. */
-function draw(column: HTMLElement, from: number, to: number) {
-  fireEvent.pointerDown(column, { button: 0, clientY: y(Math.floor(from / 60), from % 60) });
-  if (to !== from) fireEvent.pointerMove(window, { clientY: y(Math.floor(to / 60), to % 60) });
-  fireEvent.pointerUp(window, { clientY: y(Math.floor(to / 60), to % 60) });
+function draw(column: HTMLElement, from: number, to: number, hourHeight = HOUR) {
+  fireEvent.pointerDown(column, { button: 0, clientY: y(Math.floor(from / 60), from % 60) * hourHeight / HOUR });
+  if (to !== from) fireEvent.pointerMove(window, { clientY: y(Math.floor(to / 60), to % 60) * hourHeight / HOUR });
+  fireEvent.pointerUp(window, { clientY: y(Math.floor(to / 60), to % 60) * hourHeight / HOUR });
 }
 
 describe('the calendar', () => {
@@ -296,4 +298,81 @@ it('reveals an assistant block date once without taking over later calendar navi
   expect(screen.getByTestId('cal-view')).toHaveAttribute('data-start', '2026-12-02');
   view.rerender(<CalendarView {...props} />);
   expect(screen.getByTestId('cal-view')).toHaveAttribute('data-start', '2026-12-02');
+});
+
+it('changes the calendar zone, places an event in its new day, and saves a newly drawn plan at that wall time', async () => {
+  const anchor = Date.parse('2026-11-17T20:00:00Z');
+  calendar.events = [{ id: 'one', title: 'Design review', calendar: 'work', start: Date.parse('2026-11-18T02:00:00Z'), end: Date.parse('2026-11-18T03:00:00Z'), allDay: false, writable: true }];
+  const save = vi.fn<(zone?: string) => Promise<void>>().mockRejectedValueOnce(new Error('Settings busy')).mockResolvedValue(undefined);
+  const write = vi.fn((_date: Date, edit: (text: string) => string) => { edit(TEXT); return Promise.resolve('november.md'); });
+  function Display() {
+    const [zone, setZone] = useState<string | undefined>('America/Los_Angeles');
+    return <CalendarView timeZone={zone} onSaveTimeZone={async (next) => { await save(next); setZone(next); }}
+      focusDate={{ time: anchor, token: 1 }} dayOf={dayOf} textOf={textOf} categories={['code']} timer={timer()} onStartTimer={vi.fn()} onOpenDay={vi.fn()}
+      onWrite={write} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />;
+  }
+  render(<Display />);
+  expect(await screen.findByTestId('cal-plan')).toHaveTextContent('18:00–19:00');
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', {name:'Calendar time zone'}));
+  await user.type(screen.getByRole('searchbox', {name:'Search time zones'}), 'Tokyo');
+  const choice = screen.getByRole('button', {name: 'Asia/Tokyo'});
+  await user.click(choice);
+  expect(screen.getByRole('alert')).toHaveTextContent('Settings busy');
+  expect(screen.getByTestId('cal-time-zone')).toHaveTextContent('Los Angeles');
+  await user.click(choice);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByTestId('cal-plan')).toBeNull();
+  await user.click(screen.getByTestId('cal-next'));
+  expect(await screen.findByTestId('cal-plan')).toHaveTextContent('11:00–12:00');
+  draw(screen.getByTestId('cal-col'), 13 * 60, 14 * 60, 52);
+  await user.type(screen.getByTestId('pick-new'), 'Schedule in Tokyo');
+  await user.click(screen.getByTestId('block-save'));
+  await waitFor(() => expect(calendar.events).toHaveLength(2));
+  expect(calendar.events[1]).toMatchObject({ timeZone: 'Asia/Tokyo', start: Date.parse('2026-11-18T04:00:00Z'), end: Date.parse('2026-11-18T05:00:00Z') });
+  expect(dayKey(write.mock.calls[0]![0])).toBe('2026-11-18');
+  await user.click(screen.getByTestId('cal-time-zone'));
+  await user.click(screen.getByRole('button', { name: /Follow Mac time zone/ }));
+  expect(save).toHaveBeenLastCalledWith(undefined);
+});
+
+it('highlights today in the display zone while focus stays attached to the Mac day’s note', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    const instant = Date.parse('2026-11-17T21:00:00Z');
+    vi.setSystemTime(instant);
+    const local = today();
+    const zone = sameDay(local, calendarDay(instant, 'Asia/Tokyo')) ? 'America/Los_Angeles' : 'Asia/Tokyo';
+    const viewed = calendarDay(instant, zone);
+    const note = (date: Date) => `### Tasks
+- [ ] #daily/code — ${dayKey(date)} task
+`;
+    const data = (date: Date) => ({ date, path: dayKey(date), day: parseDay(note(date)) });
+    const text = (path: string) => path === dayKey(local) ? note(local) : note(viewed);
+    render(<CalendarView timeZone={zone} focusDate={{ time: instant, token: 1 }} dayOf={data} textOf={text} categories={['code']}
+      timer={timer()} onStartTimer={vi.fn()} onOpenDay={vi.fn()} onWrite={vi.fn()} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />);
+    expect(screen.getByTestId('cal-view')).toHaveAttribute('data-start', dayKey(viewed));
+    expect(screen.getByTestId('cal-day-head')).toHaveClass('is-today');
+    expect(screen.getByTestId('cal-day-task')).toHaveTextContent(dayKey(viewed));
+    expect(screen.queryByRole('button', { name: /^Focus on/ })).toBeNull();
+    fireEvent.click(screen.getByText('Start focus…'));
+    expect(await screen.findByTestId('pick-task')).toHaveTextContent(dayKey(local));
+  } finally { vi.useRealTimers(); }
+});
+
+it('rejects a plan in a skipped hour before creating its task or event', async () => {
+  const write = vi.fn(), zone = 'America/Los_Angeles';
+  render(<CalendarView timeZone={zone} focusDate={{ time: Date.parse('2026-03-08T18:00:00Z'), token: 1 }}
+    dayOf={dayOf} textOf={textOf} categories={['code']} timer={timer()} onStartTimer={vi.fn()} onOpenDay={vi.fn()}
+    onWrite={write} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />);
+  await waitFor(() => expect(screen.getByTestId('cal-planned')).toBeVisible());
+  fireEvent.click(screen.getByTestId('cal-fold-early'));
+  fireEvent.pointerDown(screen.getByTestId('cal-col'), { button: 0, clientY: 2.5 * 52 });
+  fireEvent.pointerUp(window, { clientY: 2.5 * 52 });
+  const user = userEvent.setup();
+  await user.type(screen.getByTestId('pick-new'), 'Skipped time');
+  await user.click(screen.getByTestId('block-save'));
+  expect(screen.getByTestId('cal-warning')).toHaveTextContent('does not exist');
+  expect(write).not.toHaveBeenCalled();
+  expect(calendar.events).toHaveLength(0);
 });

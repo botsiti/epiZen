@@ -14,7 +14,6 @@ import {
   type NewCalendarEvent,
   type Occurrence,
 } from '../../lib/api';
-import { parseTaskUrl, planWindow, sameLink, type TaskLink } from '../../lib/plans';
 import { reason } from './useNoteWriter';
 
 export interface PlansApi {
@@ -119,21 +118,4 @@ export function usePlans(from: number, to: number): PlansApi {
         return (list) => list.filter((event) => !same(at)(event));
       }, 'The plan wasn’t deleted from Calendar'),
   };
-}
-
-/** A task's events, wherever Calendar has them now. None when Epizen can't use Calendar. */
-async function eventsOf(link: TaskLink, day: Date): Promise<CalendarEvent[]> {
-  if ((await calendarAccess()) !== 'allowed') return [];
-  const { from, to } = planWindow(day);
-  return (await calendarEvents(from, to)).filter((event) => sameLink(parseTaskUrl(event.url), link));
-}
-
-/** An edited task's events take its new words (their notes) and category (their title). */
-export async function renamePlans(link: TaskLink, day: Date, text: { title: string; notes: string }): Promise<void> {
-  for (const event of await eventsOf(link, day)) if (event.title !== text.title || event.notes !== text.notes) await updateEvent(event, text);
-}
-
-/** A deleted task's events go from Calendar with it. */
-export async function deletePlans(link: TaskLink, day: Date): Promise<void> {
-  for (const event of await eventsOf(link, day)) await deleteEvent(event);
 }

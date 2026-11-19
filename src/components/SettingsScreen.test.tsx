@@ -124,3 +124,35 @@ it('keeps drafts across sections and saves the selected sources and creation loc
   await user.click(screen.getByTestId('settings-save'));
   expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ birthDate: '1995-01-02', sources: { ...DEFAULT_SOURCES, book: 'wikipedia-book', podcast: 'wikipedia-podcast' }, fileDefaults: { ...DEFAULT_FILE_PREFERENCES, notes: 'folder', noteFolder: 'Inbox' } }));
 });
+
+it('keeps the appearance draft across sections while workspace and appearance saves are independent', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined), appearance = vi.fn().mockResolvedValue(undefined);
+  render(<SettingsScreen periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} folders={[]} birthDate="" podcasts={{ artwork: 'show' }}
+    appearance={{ surface: 'solid', opacity: .72, motion: false }} onSaveAppearance={appearance} onSave={save} />);
+  await user.click(screen.getByTestId('settings-nav-home'));
+  await user.type(screen.getByLabelText('Birth date'), '1995-02-01');
+  await user.click(screen.getByTestId('settings-nav-appearance'));
+  await user.click(screen.getByRole('radio', { name: 'Liquid glass' }));
+  await user.click(screen.getByRole('button', { name: 'Save workspace changes' }));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ birthDate: '1995-02-01' }));
+  expect(appearance).not.toHaveBeenCalled();
+  await user.click(screen.getByTestId('settings-nav-library'));
+  await user.click(screen.getByTestId('settings-nav-appearance'));
+  expect(screen.getByRole('radio', { name: 'Liquid glass' })).toBeChecked();
+  await user.click(screen.getByRole('button', { name: 'Save appearance' }));
+  expect(appearance).toHaveBeenCalledWith({ surface: 'glass', opacity: .72, motion: false });
+});
+
+it('keeps an unsaved Spike form while browsing settings and clears it on an explicit return to Plugins', async () => {
+  const user = userEvent.setup();
+  render(<SettingsScreen periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} folders={[]} birthDate="" podcasts={{ artwork: 'show' }}
+    onSave={vi.fn()} spikeSettings={(back) => <><input aria-label="Spike draft" defaultValue="" /><button type="button" onClick={back}>Back to Plugins</button></>} />);
+  await user.click(screen.getByTestId('settings-nav-spike'));
+  await user.type(screen.getByLabelText('Spike draft'), 'notes/profile.md');
+  await user.click(screen.getByTestId('settings-nav-hotkeys'));
+  expect(screen.queryByRole('textbox', { name: 'Spike draft' })).toBeNull();
+  await user.click(screen.getByTestId('settings-nav-spike'));
+  expect(screen.getByLabelText('Spike draft')).toHaveValue('notes/profile.md');
+  await user.click(screen.getByRole('button', { name: 'Back to Plugins' }));
+  expect(screen.queryByLabelText('Spike draft')).toBeNull();
+});

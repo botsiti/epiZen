@@ -5,7 +5,7 @@ import { parseDay } from './day';
 import { exactXp } from './xp';
 import { sphereXp } from './home';
 import { questActivity, taskTags } from './questActivity';
-import { editQuestPreferences, newQuestArea, newTaskRule, saveQuestPreferences } from './questPreferences';
+import { addRewardShare, changeTaskCategory, removeRewardShare, editQuestPreferences, newQuestArea, newTaskRule, saveQuestPreferences } from './questPreferences';
 import { parseQuests, questLine, questSphereXp } from './quests';
 import { addBlock, findTask } from './timeblocks';
 
@@ -80,4 +80,28 @@ it('keeps a newly logged day under legacy rules if the first setup moves to tomo
   const days = questActivity([first, next].map((date) => ({ date, path: date, day: parseDay(logged) })), settings);
   expect(days.get(first)?.totals.xp).toBe(50);
   expect(days.get(next)?.totals.xp).toBe(30);
+});
+
+it('offers categories from notes and adopts only the edited tag, retaining its older spelling', () => {
+  const draft = editQuestPreferences(undefined, 0, first, ['woodwork', 'swimming', 'SWIMMING', 'CODE']);
+  expect(draft.categories.filter((entry) => entry.suggested).map((entry) => entry.tag)).toEqual(['woodwork', 'swimming']);
+  const item = draft.categories.find((entry) => entry.tag === 'woodwork')!;
+  const edited = changeTaskCategory(draft, item.id, { tag: 'Wood Craft', rate: '2.5', shares: [{ area: 'personal-growth', percent: '100' }] });
+  const saved = saveQuestPreferences(edited, ['woodwork', 'swimming']);
+  expect(saved.categories.some((entry) => entry.tag === 'swimming')).toBe(false);
+  expect(saved.categories.find((entry) => entry.id === item.id)).toMatchObject({ name: 'wood-craft', tag: 'wood-craft', aliases: ['woodwork'] });
+  const lookup = taskTags(['woodwork', 'wood-craft', 'swimming'], saved);
+  expect(lookup).toContain('wood-craft');
+  expect(lookup).toContain('swimming');
+  expect(lookup).not.toContain('woodwork');
+  const activity = questActivity([{ path: 'logged', date: first, day: parseDay('- [ ] #daily/woodwork Carve [minutes::10]') }], saved);
+  expect(activity.get('logged')?.areaCredits?.get('Personal Growth')).toEqual(exactXp(25));
+});
+
+it('balances new and removed destinations to the hundredth of a percent', () => {
+  const shares = [{ area: 'finance', percent: '66.67' }, { area: 'spiritual', percent: '33.33' }];
+  const split = addRewardShare(shares, 'social');
+  expect(split.map((row) => row.percent)).toEqual(['33.34', '33.33', '33.33']);
+  expect(removeRewardShare(split, 2)).toEqual(shares);
+  expect(addRewardShare([{ area: 'social', percent: '80' }], 'finance')[1]?.percent).toBe('20');
 });

@@ -52,6 +52,8 @@ pub struct Event {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewEvent {
+    #[serde(rename = "timeZone")]
+    pub time_zone: Option<String>,
     pub calendar: String,
     pub title: String,
     pub start: i64,
@@ -290,6 +292,7 @@ mod tests {
 
     fn plan(calendar: &str, start: i64) -> NewEvent {
         NewEvent {
+            time_zone: None,
             calendar: calendar.to_owned(),
             title: "sport".to_owned(),
             start,

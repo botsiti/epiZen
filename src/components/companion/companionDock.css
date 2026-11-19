@@ -1,0 +1,7 @@
+.companion-dock { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 24px; color: #f1f1ef; background: linear-gradient(150deg,#363738ee,#202122f5); border: 1px solid #ffffff28; box-shadow: inset 0 1px #ffffff12,0 2px 5px #0003; }
+.companion-dock button { display: grid; place-items: center; width: 32px; height: 30px; margin: 0; padding: 0; color: inherit; background: transparent; border: 0; border-radius: 50%; cursor: pointer; }
+.companion-dock .dock-write { background: #ffffff0e; }
+.companion-dock button:hover { background: #ffffff1f; }
+.companion-dock button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.companion-dock button:disabled { opacity: .45; cursor: default; }
+@media (prefers-reduced-transparency: reduce) { .companion-dock { background: #282a2b; } }

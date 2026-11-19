@@ -1,22 +1,8 @@
 import type { Settings } from './api';
 import type { PluginDisplays } from './pluginDisplay';
 
-export const PLUGINS = [
-  { id: 'home', name: 'Homepage', description: 'A personal dashboard for your days, progress and collections.', group: 'Workspace' },
-  { id: 'bases', name: 'epiBase', description: 'Render Obsidian Bases as tables, cards and lists from your vault properties.', group: 'Workspace' },
-  { id: 'library', name: 'Library', description: 'Collect books, music, films, podcasts and videos.', group: 'Workspace' },
-  { id: 'graph', name: 'Graph', description: 'Explore connections between your notes.', group: 'Workspace' },
-  { id: 'spike', name: 'Spike', description: 'A personal assistant and desktop companion, with text and voice.', group: 'Workspace' },
-  { id: 'periodic', name: 'Periodic notes', description: 'Daily, weekly and monthly notes, with calendar navigation.', group: 'Daily life' },
-  { id: 'checkins', name: 'Check-ins', description: 'Choose the daily numbers you want to record.', group: 'Daily life', requires: 'periodic' },
-  { id: 'habits', name: 'Habits', description: 'Keep a routine and see its history over time.', group: 'Daily life', requires: 'periodic' },
-  { id: 'cbt', name: 'CBT', description: 'Thought records and a space to reflect on your thinking.', group: 'Daily life', requires: 'periodic' },
-  { id: 'quests', name: 'Quests', description: 'Turn goals into weekly and monthly adventures.', group: 'Daily life', requires: 'periodic' },
-  { id: 'statistics', name: 'Statistics', description: 'Review recorded time, habits and check-ins.', group: 'Daily life', requires: 'periodic' },
-  { id: 'calendar', name: 'Calendar', description: 'Plan time alongside your local Apple calendars.', group: 'Planning', requires: 'periodic' },
-  { id: 'timer', name: 'Focus timer', description: 'Time your work and save completed sessions to daily notes.', group: 'Planning', requires: 'periodic' },
-] as const;
-export type PluginId = typeof PLUGINS[number]['id'];
+import { PLUGINS, pluginDependencies, type PluginId } from './pluginCatalog';
+export { PLUGINS, requiredPlugin, type PluginId } from './pluginCatalog';
 export type PluginSettings = Record<PluginId, boolean>;
 export interface PluginConfiguration { enabled: PluginSettings; home: HomeSections; checks: CheckInSettings; display: PluginDisplays }
 export const NO_PLUGINS = Object.fromEntries(PLUGINS.map(({ id }) => [id, false])) as PluginSettings;
@@ -25,7 +11,16 @@ export const CHECK_INS = [{ key: 'mood', label: 'Mood' }, { key: 'energy', label
 export type CheckInKey = typeof CHECK_INS[number]['key'];
 export interface CheckInSettings { enabled: boolean; metrics: CheckInKey[] }
 export const DEFAULT_CHECK_INS: CheckInSettings = { enabled: true, metrics: CHECK_INS.map(({ key }) => key) };
-export const HOME_SECTIONS = [{ key: 'profile', label: 'Progress & XP' }, { key: 'memento', label: 'Memento mori' }, { key: 'averages', label: 'Recent check-ins' }, { key: 'focus', label: 'Focus time' }, { key: 'today', label: 'Today’s tasks' }, { key: 'spheres', label: 'Life spheres' }, { key: 'quests', label: 'Quests' }, { key: 'library', label: 'Recent library' }] as const;
+export const HOME_SECTIONS = [
+  { key: 'profile', label: 'Progress & XP', owner: 'periodic' },
+  { key: 'memento', label: 'Memento mori', owner: 'home' },
+  { key: 'averages', label: 'Recent check-ins', owner: 'checkins' },
+  { key: 'focus', label: 'Focus time', owner: 'periodic' },
+  { key: 'today', label: 'Today’s tasks', owner: 'periodic' },
+  { key: 'spheres', label: 'Life spheres', owner: 'quests' },
+  { key: 'quests', label: 'Quests', owner: 'quests' },
+  { key: 'library', label: 'Recent library', owner: 'library' },
+] as const satisfies readonly { key: string; label: string; owner: PluginId }[];
 export type HomeSections = Record<typeof HOME_SECTIONS[number]['key'], boolean>;
 export const DEFAULT_HOME_SECTIONS = Object.fromEntries(HOME_SECTIONS.map(({ key }) => [key, true])) as HomeSections;
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -48,14 +43,23 @@ export function pluginSettings(settings: Settings, root: string): PluginSettings
   const defaults = legacyDefaults ? ALL_PLUGINS : NO_PLUGINS;
   const legacy = record(settings.periodicFeatures);
   const assistant = record(vault.assistant);
-  return Object.fromEntries(PLUGINS.map(({ id }) => [id, typeof saved[id] === 'boolean' ? saved[id] : id === 'spike' ? assistant.enabled === true || assistant.desktopPet === true : id === 'habits' && legacyDefaults ? legacy.habits !== false : id === 'cbt' && legacyDefaults ? legacy.thoughtRecords !== false : defaults[id]])) as PluginSettings;
+  return Object.fromEntries(PLUGINS.map(({ id }) => {
+    if (typeof saved[id] === 'boolean') return [id, saved[id]];
+    if (id === 'spike') return [id, assistant.enabled === true || assistant.desktopPet === true];
+    if (id === 'habits' && legacyDefaults) return [id, legacy.habits !== false];
+    if (id === 'cbt' && legacyDefaults) return [id, legacy.thoughtRecords !== false];
+    // Before the separate switch, only a functioning focus timer showed the status item.
+    if (id === 'menubar' && !legacyDefaults) return [id, saved.timer === true && saved.periodic === true];
+    return [id, defaults[id]];
+  })) as PluginSettings;
 }
 export function effectivePlugins(configured: PluginSettings): PluginSettings {
-  return Object.fromEntries(PLUGINS.map((plugin) => [plugin.id, configured[plugin.id] && (!('requires' in plugin) || configured[plugin.requires])])) as PluginSettings;
+  return Object.fromEntries(PLUGINS.map(({ id }) => [id, configured[id] && pluginDependencies[id].every((parent) => configured[parent])])) as PluginSettings;
 }
 export function setPlugin(configured: PluginSettings, id: PluginId, enabled: boolean): PluginSettings {
-  const definition = PLUGINS.find((plugin) => plugin.id === id)!;
-  return { ...configured, [id]: enabled, ...(enabled && 'requires' in definition ? { [definition.requires]: true } : {}) };
+  const next = { ...configured, [id]: enabled };
+  if (enabled) for (const parent of pluginDependencies[id]) next[parent] = true;
+  return next;
 }
 export function pluginPreferencesPatch(settings: Settings, root: string, plugins: PluginSettings, sections: HomeSections, checks?: CheckInSettings, display?: PluginDisplays): Settings {
   const vaults = record(settings.vaults);
@@ -68,6 +72,6 @@ export function savedCheckIns(settings: Settings, root: string): CheckInSettings
 export function savedHomeSections(settings: Settings, root: string): HomeSections {
   return homeSections(record(record(settings.vaults)[root]).homeSections);
 }
-export function requiredPlugin(kind: string): PluginId | undefined {
-  return ({ home: 'home', library: 'library', graph: 'graph', calendar: 'calendar', habits: 'habits', quests: 'quests', statistics: 'statistics', summaries: 'statistics' } as Record<string, PluginId>)[kind];
+export function visibleHomeSections(sections: HomeSections, active: PluginSettings): HomeSections {
+  return Object.fromEntries(HOME_SECTIONS.map(({ key, owner }) => [key, sections[key] && active[owner]])) as HomeSections;
 }

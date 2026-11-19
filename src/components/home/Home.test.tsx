@@ -5,6 +5,7 @@ import { day, sameDay } from '../../lib/dates';
 import { parseDay } from '../../lib/day';
 import type { MediaEntry } from '../../lib/library';
 import type { DayEntry } from '../../lib/rollup';
+import { editQuestPreferences, newQuestArea, saveQuestPreferences } from '../../lib/questPreferences';
 import { Home, type HomeProps } from './Home';
 
 vi.mock('../../lib/api', () => ({ readImage: vi.fn(() => Promise.resolve(new ArrayBuffer(0))) }));
@@ -180,4 +181,20 @@ describe('the homepage', () => {
     await user.click(within(recent).getAllByTestId('cover-card')[0] as HTMLElement);
     expect(onOpenNote).toHaveBeenCalled();
   });
+});
+
+it('shows a saved zero-XP sphere, exposes previous credit in history, and opens sphere settings', async () => {
+  const user = userEvent.setup(), onEdit = vi.fn();
+  const draft = editQuestPreferences(undefined, 0, '2026-11-18');
+  draft.areas = [...draft.areas.map((area) => area.id === 'career-work' ? { ...area, archived: true } : area),
+    { ...newQuestArea('music', 0), name: 'Music' }];
+  render(<Home {...props({ rewards: saveQuestPreferences(draft), onEditSpheres: onEdit })} />);
+  const card = screen.getByTestId('spheres');
+  expect(card.querySelector('[data-sphere="Music"]')).toHaveTextContent('0 XP');
+  expect(card.querySelector('[data-sphere="Career/Work"]')).toBeNull();
+  expect(screen.getByTestId('lead-sphere')).not.toHaveTextContent('Career/Work');
+  await user.click(within(card).getByText('Archived spheres (1)'));
+  expect(within(card).getByText('Career/Work')).toBeVisible();
+  await user.click(within(card).getByRole('button', { name: 'Edit life spheres' }));
+  expect(onEdit).toHaveBeenCalledOnce();
 });

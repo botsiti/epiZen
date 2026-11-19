@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { pluginDisplays, type PluginDisplays } from '../../lib/pluginDisplay';
-import { PLUGINS, type PluginId } from '../../lib/plugins';
+import { manifests, type PluginId } from '../../lib/pluginCatalog';
 import { ErrorBoundary } from '../ErrorBoundary';
 import './pluginDisplay.css';
 
@@ -15,5 +15,5 @@ export function PluginAppearance({ id, children }: { id: PluginId; children: Rea
 }
 /** Navigation and sibling modules stay mounted when an optional screen fails. */
 export function PluginSurface({ id, children }: { id: PluginId; children: ReactNode }) {
-  return <ErrorBoundary key={id} label={PLUGINS.find((plugin) => plugin.id === id)!.name}><PluginAppearance id={id}>{children}</PluginAppearance></ErrorBoundary>;
+  return <ErrorBoundary key={id} label={manifests[id].name}><PluginAppearance id={id}>{children}</PluginAppearance></ErrorBoundary>;
 }

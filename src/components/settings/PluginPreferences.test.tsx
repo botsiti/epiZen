@@ -77,9 +77,16 @@ it('edits life spheres and task rules from the quest plugin and keeps the draft 
   await user.click(screen.getByRole('button', { name: 'Life spheres & XP' }));
   await user.click(screen.getByRole('switch', { name: 'Enable Quests' }));
   await user.click(screen.getByRole('button', { name: 'Add sphere' }));
-  await user.type(screen.getByLabelText('Sphere name'), 'Music');
+  const sphereInput = screen.getByRole('textbox', { name: 'Sphere name · new sphere' });
+  expect(sphereInput).toHaveFocus();
+  await user.type(sphereInput, 'Music');
+  expect(screen.queryByLabelText('Task tag')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: /Manage categories/ }));
+  expect(screen.getByTestId('settings-period-day')).toHaveAttribute('aria-pressed', 'true');
   await user.click(screen.getByRole('button', { name: 'Add category' }));
-  await user.type(screen.getByLabelText('Task tag'), 'piano');
+  await user.type(screen.getByRole('textbox', { name: 'Category name · new category' }), 'piano');
+  await user.click(screen.getByTestId('settings-nav-quests'));
+  await user.click(screen.getByRole('button', { name: 'piano' }));
   await user.clear(screen.getByLabelText('XP per minute'));
   await user.type(screen.getByLabelText('XP per minute'), '3');
   await user.selectOptions(screen.getByLabelText('Reward sphere 1'), within(screen.getByLabelText('Reward sphere 1')).getByRole('option', { name: 'Music' }));
@@ -99,4 +106,77 @@ it('edits life spheres and task rules from the quest plugin and keeps the draft 
   const prefs = saved.rewards!.value, piano = prefs.categories.find((entry) => entry.tag === 'piano')!, music = prefs.areas.find((entry) => entry.name === 'Music')!;
   expect(prefs.questRewards.presets.rare).toBe(375);
   expect(prefs.policies[0]!.categories[piano.id]).toMatchObject({ rateHundredths: 300, shares: [{ area: music.id, basisPoints: 10000 }] });
+});
+
+it('manages daily categories with Quests off and returns name errors to the Daily list', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined);
+  render(<SettingsScreen rewardDocument={{ revision: 0 }} rewardDate="2026-11-18" observedTags={['swimming']} plugins={NO_PLUGINS} periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} birthDate="" podcasts={{ artwork: 'show' }} folders={[]} onSave={save} />);
+  await user.click(screen.getByTestId('settings-nav-periodic'));
+  await user.click(screen.getByRole('button', { name: 'Add category' }));
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('textbox', { name: 'Category name · new category' })).not.toBeInTheDocument();
+  const swimming = screen.getByRole('textbox', { name: 'Category name · swimming' });
+  await user.clear(swimming);
+  await user.type(swimming, 'business');
+  await user.click(screen.getByTestId('settings-nav-home'));
+  await user.click(screen.getByTestId('settings-save'));
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveTextContent('already belongs');
+  expect(screen.getByTestId('task-category-list')).toBeVisible();
+  const renamed = screen.getAllByRole('textbox', { name: 'Category name · business' }).at(-1)!;
+  await user.clear(renamed); await user.type(renamed, 'Lap swim');
+  await user.click(screen.getByTestId('settings-save'));
+  const settings = save.mock.calls[0]![0] as SettingsDraft;
+  expect(settings.plugins?.quests).toBe(false);
+  expect(settings.rewards?.value.categories).toContainEqual(expect.objectContaining({ name: 'lap-swim', tag: 'lap-swim', aliases: ['swimming'] }));
+});
+
+it('filters plugins by switch state and finds a section from the settings toolbar using the keyboard', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined);
+  render(<SettingsScreen plugins={{ ...NO_PLUGINS, library: true }} periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} birthDate="" podcasts={{ artwork: 'show' }} folders={[]} onSave={save} />);
+  await user.click(screen.getByRole('button', { name: 'Enabled' }));
+  expect(screen.getAllByRole('switch')).toHaveLength(1);
+  expect(screen.getByRole('switch', { name: 'Enable Library' })).toBeChecked();
+  await user.click(screen.getByRole('switch', { name: 'Enable Library' }));
+  expect(screen.getByText('No matching plugins.')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Disabled' }));
+  expect(screen.getByRole('switch', { name: 'Enable Library' })).not.toBeChecked();
+  await user.type(screen.getByRole('searchbox', { name: 'Search settings' }), 'music{Enter}');
+  expect(screen.getByRole('heading', { name: 'Library' })).toBeVisible();
+  expect(screen.getByLabelText('Search settings')).toHaveValue('');
+  await user.click(screen.getByTestId('settings-save'));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ plugins: NO_PLUGINS }));
+});
+
+it('saves a calendar zone chosen inside the plugin with the rest of the settings draft', async () => {
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined);
+  render(<SettingsScreen calendarTimeZone="UTC" plugins={ALL_PLUGINS} periodic={DEFAULT_PERIODIC} features={DEFAULT_PERIODIC_FEATURES} folders={[]} birthDate="" podcasts={{ artwork: 'show' }} onSave={save} />);
+  await user.click(screen.getByRole('button', { name: 'Configure Calendar' }));
+  await user.click(screen.getByRole('button', { name: 'Calendar time zone' }));
+  await user.type(screen.getByLabelText('Search time zones'), 'Tokyo{Enter}');
+  expect(save).not.toHaveBeenCalled();
+  await user.type(screen.getByLabelText('Search settings'), 'library{Enter}');
+  expect(screen.getByRole('heading', { name: 'Library' })).toBeVisible();
+  await user.click(screen.getByTestId('settings-save'));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ calendarTimeZone: 'Asia/Tokyo' }));
+});
+
+it('keeps the catalog and its draft usable when an individual plugin settings page fails', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const user = userEvent.setup(), save = vi.fn().mockResolvedValue(undefined);
+  let broken = true;
+  function SpikeSettings() { if (broken) throw new Error('Fixture settings failure'); return <p>Connection ready</p>; }
+  try {
+    render(<SettingsScreen spikeSettings={() => <SpikeSettings />} plugins={NO_PLUGINS} periodic={DEFAULT_PERIODIC}
+      features={DEFAULT_PERIODIC_FEATURES} folders={[]} birthDate="" podcasts={{ artwork: 'show' }} onSave={save} />);
+    await user.click(screen.getByRole('switch', { name: 'Enable Menu bar' }));
+    await user.click(screen.getByTestId('settings-nav-spike'));
+    expect(screen.getByRole('alert')).toHaveTextContent('Spike settings couldn’t be shown');
+    broken = false;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(screen.getByText('Connection ready')).toBeVisible();
+    await user.click(screen.getByTestId('settings-nav-plugins'));
+    await user.click(screen.getByTestId('settings-save'));
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ plugins: { ...NO_PLUGINS, menubar: true } }));
+  } finally { log.mockRestore(); }
 });

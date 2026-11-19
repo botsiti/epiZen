@@ -80,18 +80,54 @@ describe('focused preferences and file creation', () => {
     await screenshot('165-selected-source');
     await browser.keys(['Escape']);
   });
-  it('keeps customized task rewards after reopening the vault', async () => {
+  it('uses daily categories for rewards and shows newly saved life spheres on Home', async () => {
     const before = snapshotVault(root);
     await $('[data-testid="open-settings"]').click(); await section('quests');
-    await select('[aria-label="Task category"]', 'meditation');
+    await $('[aria-label="Add sphere"]').click();
+    await $('[aria-label="Sphere name · new sphere"]').setValue('Music');
+    await screenshot('174-settings-life-spheres');
+    await $('button*=Manage categories').click();
+    await $('[aria-label="Add category"]').click();
+    await $('[aria-label="Category name · new category"]').setValue('piano');
+    await screenshot('175-settings-daily-categories');
+    await section('quests');
+    await $('.reward-category-list').$('button=piano').click();
     await $('[aria-label="XP per minute"]').setValue('7');
+    const musicId = await $('[aria-label="Reward sphere 1"]').$('option=Music').getValue();
+    await select('[aria-label="Reward sphere 1"]', musicId);
     await save();
-    await screenshot('174-settings-quest-rewards');
+    await $('[data-testid="sidebar-vault"]').click();
+    await expect($('[data-testid="spheres"] [data-sphere="Music"] .sphere-xp')).toHaveText('0 XP');
+    await $('[aria-label="Edit life spheres"]').click();
+    await expect($('[data-testid="life-sphere-list"]')).toBeDisplayed();
     await browser.refresh(); await prepareWindow();
     await $('[data-testid="open-settings"]').click(); await section('quests');
-    await select('[aria-label="Task category"]', 'meditation');
+    await $('.reward-category-list').$('button=piano').click();
     await expect($('[aria-label="XP per minute"]')).toHaveValue('7');
+    await expect($('[aria-label="Reward sphere 1"] option:checked')).toHaveText('Music');
+    await scrollIntoView('.reward-workbench');
+    await screenshot('174-settings-quest-rewards');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
+  });
+  it('navigates all settings sections in a compact pane and saves a draft from the shared toolbar', async () => {
+    await browser.setWindowSize(720, 700);
+    try {
+      await $('[data-testid="open-settings"]').click();
+      await $('[aria-label="Browse settings sections"]').click();
+      await expect($('[aria-label="Browse settings sections"]')).toHaveAttribute('aria-expanded', 'true');
+      await screenshot('176-settings-section-browser');
+      await section('home');
+      await $('[data-testid="settings-lifetime-years"]').setValue('95');
+      await $('[aria-label="Search settings"]').setValue('music');
+      await section('library');
+      await save();
+      await $('[aria-label="Search settings"]').setValue('lifetime');
+      await section('home');
+      await expect($('[data-testid="settings-lifetime-years"]')).toHaveValue('95');
+      await screenshot('177-settings-home-compact');
+    } finally {
+      await browser.setWindowSize(1280, 820);
+    }
   });
   it('creates a visible folder, uses the saved note location, and refuses collisions', async () => {
     const before = snapshotVault(root);
@@ -105,7 +141,7 @@ describe('focused preferences and file creation', () => {
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await $('[data-testid="open-settings"]').click(); await section('files');
     await select('[aria-label="Location for new notes"]', 'folder');
-    await $('[aria-label="Notes folder"]').setValue('Fresh ideas');
+    await $('label=Notes folder').$('input').setValue('Fresh ideas');
     await save();
     await screenshot('167-settings-files');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);

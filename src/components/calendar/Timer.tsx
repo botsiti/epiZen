@@ -69,6 +69,7 @@ export function Dial({ mode, seconds, progress, tone, paused, label, size = 172,
 }
 
 interface CardProps {
+  timeZone?: string;
   timer: TimerApi;
   /** Today's tasks, to start on. */
   tasks: DayTaskRef[];
@@ -77,7 +78,7 @@ interface CardProps {
 }
 
 /** The timer on the calendar page: the dial, the task, and what can be done now. */
-export function TimerCard({ timer, tasks, categories, onStart }: CardProps) {
+export function TimerCard({ timer, tasks, categories, onStart, timeZone }: CardProps) {
   const display = usePluginDisplay('timer');
   const { state } = timer;
   const { session, rest, prefs } = state;
@@ -127,7 +128,7 @@ export function TimerCard({ timer, tasks, categories, onStart }: CardProps) {
             )}
             <span className="timer-task-label">{session.task.label}</span>
           </p>
-          <p className="timer-since">since {clock(new Date(session.stretchStartedAt).getHours() * 60 + new Date(session.stretchStartedAt).getMinutes())}</p>
+          <p className="timer-since">since {new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(session.stretchStartedAt)}</p>
           <div className="timer-actions">
             {session.pausedAt === undefined ? (
               <button type="button" className="nav-chip" onClick={timer.pause} data-testid="timer-pause">
@@ -278,7 +279,7 @@ export function TimerPill({ timer, onOpen }: { timer: TimerApi; onOpen: () => vo
   const time = session ? formatSeconds(shownSeconds(session, now)) : rest ? formatSeconds(restLeft(rest, now)) : '!';
   const paused = session?.pausedAt !== undefined;
   return (
-    <button type="button" className={paused ? 'timer-pill is-paused' : 'timer-pill'} style={{ '--tone': tone } as CSSProperties} onClick={onOpen} title="Open the calendar" data-testid="timer-pill" data-density={display.density}>
+    <button type="button" className={paused ? 'timer-pill is-paused' : 'timer-pill'} style={{ '--tone': tone } as CSSProperties} onClick={onOpen} title="Open focus timer" data-testid="timer-pill" data-density={display.density}>
       <span className="timer-pill-dot" aria-hidden="true" />
       <span className="timer-pill-label">{paused ? `Paused · ${label}` : label}</span>
       <span className="timer-pill-time">{time}</span>

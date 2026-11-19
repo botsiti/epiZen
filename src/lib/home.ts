@@ -170,6 +170,7 @@ export function splitXp(xp: number, spheres: Category['spheres']): [Sphere, numb
 }
 
 export interface SphereState extends Progress {
+  archived?: boolean;
   name: string;
   color: string;
 }
@@ -200,12 +201,12 @@ export function sphereXp(days: DayEntry[], extra: ReadonlyMap<string, number> = 
   const catalog = settings?.areas.filter((area) => !area.archived || xp.get(area.name)) ?? SPHERES;
   const rows = new Map<string, string>(catalog.map(({ name, color }) => [name, color]));
   for (const [name, amount] of xp) if (amount && !rows.has(name)) rows.set(name, 'var(--accent)');
-  return [...rows].map(([name, color]) => ({ name, color, ...progress(xp.get(name) ?? 0) }));
+  return [...rows].map(([name, color]) => ({ name, color, archived: settings?.areas.find((area) => area.name === name)?.archived, ...progress(xp.get(name) ?? 0) }));
 }
 
 /** The sphere with the most XP, the first of them on a tie; none while no sphere has any. */
 export const leadSphere = (spheres: SphereState[]) =>
-  spheres.reduce<SphereState | undefined>((lead, sphere) => (sphere.xp > (lead?.xp ?? 0) ? sphere : lead), undefined);
+  spheres.reduce<SphereState | undefined>((lead, sphere) => (!sphere.archived && sphere.xp > (lead?.xp ?? 0) ? sphere : lead), undefined);
 
 /** Minutes logged in one category over some days. */
 export const categoryMinutes = (days: DayEntry[], name: string) =>

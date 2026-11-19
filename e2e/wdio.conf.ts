@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { browser } from '@wdio/globals';
-import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TauriCapabilities } from '@wdio/tauri-service';
@@ -47,6 +48,9 @@ function copyDemoVault() {
   // The demo vault's periodic notes, set up the way a user would in Settings.
   const config = join(dirname(copy), 'config');
   mkdirSync(config);
+  const media = readFileSync(join(DEMO_VAULT, '..', 'test', 'fixtures', 'wallpaper-motion.gif'));
+  const wallpapers = join(config, 'wallpapers'); mkdirSync(wallpapers);
+  writeFileSync(join(wallpapers, `${createHash('sha256').update(media).digest('hex')}--Test aurora.gif`), media, { flag: 'wx' });
   // Vault::open canonicalizes paths (on macOS, /var resolves to /private/var).
   // Settings must use the same roots or the test vaults appear to need first-run setup.
   const canonicalParent = realpathSync(dirname(copy));
@@ -102,6 +106,8 @@ export const config: WebdriverIO.Config = {
   // floating level without activating it, so earlier windows or another Space cannot occlude
   // its WebKit renderer and suspend animation frames.
   async beforeTest() {
+    // A failed secondary-window journey can leave WebDriver targeting the prompt or tray.
+    if (await browser.getWindowHandle() !== 'main') await browser.switchToWindow('main');
     await browser.execute(async () => {
       const tauri = (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { setAlwaysOnTop: (value: boolean) => Promise<void> } } } }).__TAURI__;
       const current = tauri.window.getCurrentWindow();
@@ -111,6 +117,7 @@ export const config: WebdriverIO.Config = {
   },
   // The next worker gets the floating slot; leave the keyboard focus with the user.
   async after() {
+    if (await browser.getWindowHandle() !== 'main') await browser.switchToWindow('main');
     await browser.execute(async () => {
       const tauri = (window as unknown as { __TAURI__: { window: { getCurrentWindow: () => { setAlwaysOnTop: (value: boolean) => Promise<void> } } } }).__TAURI__;
       await tauri.window.getCurrentWindow().setAlwaysOnTop(false);

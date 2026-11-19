@@ -1,6 +1,7 @@
 import type { CalendarEvent, CalendarInfo } from '../api';
 import { SPHERES } from '../categories';
 import { TIERS } from '../quests';
+import { calendarDay, calendarMoment, systemCalendarZone } from '../calendarZone';
 import { calendarRange, calendarSlot, openPeriod, periodDestination, planningDate, planningPeriod, questChange, questTier, sectionChange, tasksChange } from './planning';
 import { formatDate } from '../dates';
 import { KINDS, type MediaKind } from '../library';
@@ -30,7 +31,7 @@ export const assistantTools = (areas: readonly { name: string }[] = SPHERES): Re
   definition('add_tasks', 'Add the requested categorized tasks to a daily note. Preserves existing tasks and logged minutes. Planned duration belongs in the calendar, not completed time.', { date, tasks: { type: 'array', minItems: 1, maxItems: 30, items: { type: 'object', properties: { category: text, title: text }, required: ['category', 'title'], additionalProperties: false } } }),
   definition('add_quest', 'Add a weekly or monthly quest through the normal quest format. Use common unless the user specifies another tier; xp=0 uses that tier’s standard reward; target=0 means done/not done. Describe a concrete outcome.', { period: { type: 'string', enum: ['week', 'month'] }, date, title: text, sphere: { type: 'string', enum: areas.map(({ name }) => name) }, tier: { type: 'string', enum: Object.keys(TIERS) }, xp: number, target: number }),
   definition('update_period_section', 'Save the user’s supplied words to a periodic dashboard field. Never invent personal reflections, emotions or ratings. Day: summary. Week: Plus/Minus/Next. Month: summary/decisions/spending/expenses/sphere:<life area>. Preserves unrelated text.', { period, date, section: text, text }),
-  definition('plan_block', 'Schedule a requested block in local time after listing calendars. start is HH:mm for an exact time or empty to find a free slot in the window. Defaults: morning 09–12, afternoon 12–18, evening 18–22, any 09–22. Reads current events and avoids overlaps; reports when no slot fits. title is the task category (code, business, biology, sport, etc.); notes describe the activity.', { calendar: text, date, title: text, notes: text, minutes: { type: 'integer', minimum: 1, maximum: 720 }, start: text, window: { type: 'string', enum: ['morning', 'afternoon', 'evening', 'any'] } }),
+  definition('plan_block', 'Schedule a requested block in the configured calendar time zone after listing calendars (empty date means today in that zone). start is HH:mm for an exact time or empty to find a free slot in the window. Defaults: morning 09–12, afternoon 12–18, evening 18–22, any 09–22. Reads current events and avoids overlaps; reports when no slot fits. title is the task category (code, business, biology, sport, etc.); notes describe the activity.', { calendar: text, date, title: text, notes: text, minutes: { type: 'integer', minimum: 1, maximum: 720 }, start: text, window: { type: 'string', enum: ['morning', 'afternoon', 'evening', 'any'] } }),
   definition('save_thought_record', 'Save the thought record agreed during this conversation into today’s note. Do not invent feelings afterward. Empty unfinished fields are allowed.', {
     situation: { ...text, description: 'The situation and automatic thought, in the user’s words. Include the evidence they shared when relevant.' },
     before: { ...list, description: 'Only user-reported emotions before reflection, with intensity if supplied. Put the automatic thought in situation.' },
@@ -166,12 +167,13 @@ export function createToolHandler(root: string, ports: AssistantToolPorts) {
       case 'plan_block': {
         const calendar = string(args, 'calendar');
         if (!calendars.some((item) => item.id === calendar && item.writable)) throw new Error('List calendars and choose a writable calendar before scheduling.');
-        const date = planningDate(string(args, 'date', 10), context.now), title = string(args, 'title', 300).trim(), notes = string(args, 'notes');
+        const zone = context.calendarTimeZone ?? systemCalendarZone();
+        const date = planningDate(string(args, 'date', 10), calendarDay(context.now.getTime(), zone)), title = string(args, 'title', 300).trim(), notes = string(args, 'notes');
         if (!title) throw new Error('Give this block a category or title.');
         const minutes = integer(args, 'minutes', 1, 720), start = string(args, 'start', 5), window = string(args, 'window', 20);
-        const range = calendarRange(date), events = await ports.listEvents(range.from, range.to); active();
-        const slot = calendarSlot(date, context.now, minutes, start, window, events);
-        return { openCalendar: slot.start, change: { kind: 'calendar', root, calendar, title, ...slot, notes, avoidConflicts: true, description: `Schedule ${title} · ${formatDate(new Date(slot.start), 'YYYY-MM-DD HH:mm')}–${formatDate(new Date(slot.end), 'HH:mm')}${start ? '' : ` (first free slot; ${window})`}` } };
+        const range = calendarRange(date, zone), events = await ports.listEvents(range.from, range.to); active();
+        const slot = calendarSlot(date, context.now, minutes, start, window, events, zone);
+        return { openCalendar: slot.start, change: { kind: 'calendar', root, calendar, title, ...slot, notes, timeZone: context.calendarTimeZone, avoidConflicts: true, description: `Schedule ${title} · ${calendarMoment(slot.start, zone).toPlainDateTime().toString({ smallestUnit: 'minute' }).replace('T', ' ')}–${calendarMoment(slot.end, zone).toPlainTime().toString({ smallestUnit: 'minute' })} ${zone}${start ? '' : ` (first free slot; ${window})`}` } };
       }
       case 'save_thought_record': {
         const path = context.dailyPath ?? periodicPath('day', context.now, context.periodic);

@@ -1387,6 +1387,22 @@ describe('the demo vault', () => {
     await expect($('[data-testid="cal-planned"]')).toHaveText(expect.stringContaining('2 events in Calendar'));
     await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
     await screenshot('44-calendar-week');
+    // Noon UTC on Friday becomes 02:00 Saturday across the date line.
+    await $('[data-testid="cal-time-zone"]').click();
+    await $('[aria-label="Search time zones"]').setValue('Kiritimati');
+    await screenshot('44-calendar-zone-picker');
+    await $('button=Pacific/Kiritimati').click();
+    await expect($('[data-testid="cal-time-zone"]')).toHaveText(expect.stringContaining('Kiritimati'));
+    await $('[data-testid="cal-fold-early"]').click();
+    await expect($('[data-testid="cal-col"][data-date="2026-08-15"] [data-testid="cal-plan"]')).toHaveText(expect.stringContaining('02:00–03:00'));
+    await expect($('[data-testid="cal-allday"]')).toHaveText(expect.stringContaining('Summer holiday'));
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="open-calendar"]').click();
+    await expect($('[data-testid="cal-time-zone"]')).toHaveText(expect.stringContaining('Kiritimati'));
+    await $('[data-testid="cal-time-zone"]').click();
+    await $('button*=Follow Mac time zone').click();
+    await expect($('[data-testid="cal-col"][data-date="2026-08-14"] [data-testid="cal-plan"]')).toHaveText(expect.stringContaining('Dentist'));
+
 
     await $('[data-testid="cal-day-head"][data-date="2026-08-14"]').click();
     await expect(calendar).toHaveAttribute('data-mode', 'day');
@@ -1544,6 +1560,49 @@ describe('the demo vault', () => {
     await expect(title()).toHaveText(TODAY);
     expect(diffSnapshots(after, snapshotVault(vaultCopy()))).toEqual([]);
     await pressCommand('h', { shift: true });
+  });
+
+  it('opens Calendar and today’s daily note from the menu bar without changing the vault', async () => {
+    const before = snapshotVault(vaultCopy());
+    const openTray = async () => {
+      await browser.execute(() => {
+        const tauri = (window as unknown as { __TAURI__: { core: { invoke: (command: string) => Promise<void> } } }).__TAURI__;
+        return tauri.core.invoke('tray_test_show');
+      });
+      await browser.waitUntil(async () => (await browser.getWindowHandles()).includes('tray'));
+      await browser.switchToWindow('tray');
+      await $('[data-testid="tray"]').waitForDisplayed();
+    };
+
+    await openTray();
+    await $('button=Sound').click();
+    const volume = $('[aria-label="Sound volume"]');
+    // The embedded driver synthesizes key events and cannot apply a range input's Home key.
+    await browser.execute(() => {
+      const slider = document.querySelector<HTMLInputElement>('[aria-label="Sound volume"]')!;
+      slider.stepDown(100);
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect(volume).toHaveValue('0');
+    await $('button=White noise').click();
+    await expect($('button=White noise')).toHaveAttribute('aria-pressed', 'true');
+    await screenshot('tray-focus-sounds');
+    await $('[data-testid="tray-open-calendar"]').click();
+    await browser.switchToWindow('main');
+    await expect($('[data-testid="cal-view"]')).toBeDisplayed();
+
+    await openTray();
+    await expect($('button=White noise')).toHaveAttribute('aria-pressed', 'true');
+    await $('button=Brown noise').click();
+    await expect($('button=White noise')).toHaveAttribute('aria-pressed', 'false');
+    await expect($('button=Brown noise')).toHaveAttribute('aria-pressed', 'true');
+    await $('button=Brown noise').click();
+    await expect($('button=Brown noise')).toHaveAttribute('aria-pressed', 'false');
+    await $('[data-testid="tray-open-daily"]').click();
+    await browser.switchToWindow('main');
+    await expect(title()).toHaveText(TODAY);
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
   });
 
   it("times a new task of today's with the stopwatch, shown on the timer's card and in the sidebar", async () => {

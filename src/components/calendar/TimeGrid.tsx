@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import type { CalendarEvent, CalendarInfo } from '../../lib/api';
 import { formatDate } from '../../lib/dates';
 import { clock, formatMinutes } from '../../lib/day';
@@ -9,7 +9,7 @@ import { FocusMenu, type FocusHow } from './FocusMenu';
 import { TaskPicker } from './TaskPicker';
 import type { DayTaskRef, TaskChoice } from './types';
 import { useEscape } from './useEscape';
-import { useNow } from './useNow';
+import { calendarMoment } from '../../lib/calendarZone';
 import type { PlansApi } from './usePlans';
 
 /** A plan on a day: its event in Calendar, and the task it is bound to, when Epizen finds it. */
@@ -32,6 +32,8 @@ export interface Column {
 }
 
 interface Props {
+  zone: string;
+  now: number;
   focusEnabled?: boolean;
   columns: Column[];
   hours: Hours;
@@ -50,7 +52,7 @@ interface Props {
   calendarFor: (category?: string) => CalendarInfo | undefined;
   /** Plans a task (new or the day's) from `start` to `end`, in that calendar. */
   onPlan: (date: Date, start: number, end: number, choice: TaskChoice, calendar: string) => Promise<unknown>;
-  onMovePlan: (date: Date, plan: GridPlan, start: number, end: number) => Promise<unknown>;
+  onMovePlan: (date: Date, plan: GridPlan, start: number, end: number, edge: DragEdge) => Promise<unknown>;
   onDeletePlan: (plan: GridPlan) => Promise<unknown>;
   /** A focus round on a plan's task, from the right-click menu. */
   onFocus: (date: Date, item: DayTaskRef, how: FocusHow) => void;
@@ -58,6 +60,7 @@ interface Props {
   onEditTask: (date: Date, item: DayTaskRef) => void;
   /** A block's title: opens the day's page. */
   onOpenDay: (date: Date) => void;
+  onOpenLinkedNote?: (path: string) => void;
   /** A day's name above its column. */
   onHead: (date: Date) => void;
 }
@@ -71,11 +74,6 @@ const NO_FOCUS = 'Focus runs on today’s tasks: the timer logs into today’s n
 
 const GUTTER = 56;
 const POPOVER_WIDTH = 300;
-const minuteOfDay = (time: number) => {
-  const date = new Date(time);
-  return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
-};
-
 /**
  * Days side by side, hours down: Apple Calendar's events, as Calendar and Senioro draw them. A
  * plan is drawn on empty time; events are moved, resized and deleted in place, in Calendar.
@@ -84,13 +82,31 @@ export function TimeGrid(props: Props) {
   const { columns, hours, early, late, onFold, hourHeight, categories, session, wide, highlight, plans, calendarFor, onPlan, onMovePlan, onDeletePlan, onFocus, onEditTask, onOpenDay, onHead } = props;
   const body = useRef<HTMLDivElement>(null);
   const clicked = useRef(false);
+  const endGesture = useRef<() => void>(undefined);
+  useEffect(() => () => endGesture.current?.(), []);
+  const trackGesture = (move: (event: PointerEvent) => void, finish: (event: PointerEvent) => void) => {
+    endGesture.current?.();
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      endGesture.current = undefined;
+    };
+    const up = (event: PointerEvent) => { stop(); finish(event); };
+    const cancel = () => { stop(); setDraft(undefined); setDrag(undefined); };
+    endGesture.current = stop;
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+  };
   const [draft, setDraft] = useState<{ col: number; start: number; end: number; saving?: boolean }>();
   const [drag, setDrag] = useState<{ key: string; start: number; end: number }>();
   const [held, setHeld] = useState<ReadonlyMap<string, { start: number; end: number }>>(new Map());
   const [popover, setPopover] = useState<Popover>();
-  const now = useNow(true, 60_000);
-  const todayKey = dayKey(new Date(now));
-  const nowMinute = minuteOfDay(now);
+  const now = calendarMoment(props.now, props.zone);
+  const todayKey = now.toPlainDate().toString();
+  const timerDayKey = dayKey(new Date(props.now));
+  const nowMinute = now.hour * 60 + now.minute + now.second / 60;
 
   const y = (minutes: number) => ((minutes - hours.first) / 60) * hourHeight;
   const height = y(hours.last);
@@ -130,8 +146,6 @@ export function TimeGrid(props: Props) {
       if (moved) setDraft({ col, ...drawn(from, minuteAt(e.clientY), hours) });
     };
     const up = (e: PointerEvent) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
       let range = drawn(from, minuteAt(e.clientY), hours);
       if (!moved) {
         const start = Math.min(snapDown(from), hours.last - 30);
@@ -140,13 +154,12 @@ export function TimeGrid(props: Props) {
       setDraft({ col, ...range });
       setPopover({ kind: 'new', col, ...range, ...placeAt(col, range.start) });
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    trackGesture(move, up);
   };
 
   // Moving and resizing: the body moves an event, its top and bottom edges resize it. `fixed`
   // keeps one where it is: one Calendar won't let change, or one running past this day.
-  const itemDown = (event: ReactPointerEvent<HTMLDivElement>, item: { key: string; start: number; end: number }, fixed: boolean, land: (next: { start: number; end: number }) => Promise<unknown>) => {
+  const itemDown = (event: ReactPointerEvent<HTMLDivElement>, item: { key: string; start: number; end: number }, fixed: boolean, land: (next: { start: number; end: number }, edge: DragEdge) => Promise<unknown>) => {
     if (event.button !== 0 || (event.target as Element).closest('.cal-block-x')) return;
     event.stopPropagation();
     if (popover) close();
@@ -160,8 +173,6 @@ export function TimeGrid(props: Props) {
       if (moved) setDrag({ key: item.key, ...at(e) });
     };
     const up = (e: PointerEvent) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
       setDrag(undefined);
       if (!moved) return;
       // The click that ends a drag on the title isn't a click on the title.
@@ -170,7 +181,7 @@ export function TimeGrid(props: Props) {
       const next = at(e);
       if (next.start === item.start && next.end === item.end) return;
       setHeld((prev) => new Map(prev).set(item.key, next));
-      void land(next).finally(() =>
+      void land(next, edge).finally(() =>
         setHeld((prev) => {
           const rest = new Map(prev);
           rest.delete(item.key);
@@ -178,10 +189,13 @@ export function TimeGrid(props: Props) {
         }),
       );
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    trackGesture(move, up);
   };
 
+  const openLinkedDay = (col: number, plan: GridPlan) => {
+    if (plan.task && plan.link && props.onOpenLinkedNote) props.onOpenLinkedNote(plan.link.note);
+    else if (plan.here && columns[col]) onOpenDay(columns[col].date);
+  };
   const askDeletePlan = (col: number, plan: GridPlan) => setPopover({ kind: 'delete-plan', col, plan, ...placeAt(col, plan.start) });
 
   const save = (choice: TaskChoice, calendar: string) => {
@@ -276,7 +290,7 @@ export function TimeGrid(props: Props) {
                   const notes = plan.event.notes?.split('\n')[0];
                   const calendar = plans.calendars.find((one) => one.id === plan.event.calendar)?.title;
                   const classes = ['cal-block'];
-                  if (col.key < todayKey || (col.key === todayKey && end <= nowMinute)) classes.push('is-past');
+                  if (plan.event.end <= props.now) classes.push('is-past');
                   if (drag?.key === plan.key) classes.push('is-dragging');
                   if (held.has(plan.key)) classes.push('is-saving');
                   if (tall < 30) classes.push('is-thin');
@@ -287,7 +301,7 @@ export function TimeGrid(props: Props) {
                       key={plan.key}
                       className={classes.join(' ')}
                       style={{ top, height: Math.max(4, tall - 2), '--lane': lane, '--lanes': count, '--tone': toneOf(plan.event) } as CSSProperties}
-                      onPointerDown={(event) => itemDown(event, plan, fixed, (next) => onMovePlan(col.date, plan, next.start, next.end))}
+                      onPointerDown={(event) => itemDown(event, plan, fixed, (next, edge) => onMovePlan(col.date, plan, next.start, next.end, edge))}
                       onContextMenu={(event) => {
                         event.preventDefault();
                         setPopover({ kind: 'plan-menu', col: c, plan, x: event.clientX, y: event.clientY });
@@ -304,7 +318,7 @@ export function TimeGrid(props: Props) {
                             type="button"
                             className="cal-block-title"
                             onClick={() => {
-                              if (!clicked.current && plan.here) onOpenDay(col.date);
+                              if (!clicked.current) openLinkedDay(c, plan);
                             }}
                           >
                             {plan.event.title || 'untitled'}
@@ -331,7 +345,7 @@ export function TimeGrid(props: Props) {
                     </span>
                   </div>
                 )}
-                {col.key === todayKey && <NowLine hours={hours} hourHeight={hourHeight} />}
+                {col.key === todayKey && <NowLine minute={nowMinute} hours={hours} hourHeight={hourHeight} />}
               </div>
             );
           })}
@@ -354,10 +368,10 @@ export function TimeGrid(props: Props) {
             focusEnabled={props.focusEnabled}
             at={popover}
             plan={popover.plan}
-            today={columns[popover.col]?.key === todayKey}
+            today={columns[popover.col]?.key === timerDayKey}
             running={Boolean(session)}
             onFocus={(item, how) => onFocus(columns[popover.col]?.date ?? new Date(), item, how)}
-            onOpenDay={() => onOpenDay(columns[popover.col]?.date ?? new Date())}
+            onOpenDay={popover.plan.here || (popover.plan.task && props.onOpenLinkedNote) ? () => openLinkedDay(popover.col, popover.plan) : undefined}
             onEdit={(item) => onEditTask(columns[popover.col]?.date ?? new Date(), item)}
             onDelete={() => askDeletePlan(popover.col, popover.plan)}
             onClose={close}
@@ -412,6 +426,7 @@ function Fold({ edge, open, from, to, hidden, onToggle }: { edge: 'early' | 'lat
           {blocks.slice(0, 4).map((block) => (
             <span key={block.key} className="cal-fold-mark" style={{ '--tone': block.tone } as CSSProperties} />
           ))}
+          {blocks.length > 4 && <span className="cal-fold-more">+{blocks.length - 4}</span>}
         </span>
       ))}
     </button>
@@ -419,9 +434,7 @@ function Fold({ edge, open, from, to, hidden, onToggle }: { edge: 'early' | 'lat
 }
 
 /** A glowing line at the time now, on today's column. */
-function NowLine({ hours, hourHeight }: { hours: Hours; hourHeight: number }) {
-  const now = useNow(true, 30_000);
-  const minute = minuteOfDay(now);
+function NowLine({ hours, hourHeight, minute }: { hours: Hours; hourHeight: number; minute: number }) {
   if (minute < hours.first || minute > hours.last) return null;
   return <div className="cal-now" style={{ top: ((minute - hours.first) / 60) * hourHeight }} aria-hidden="true" data-testid="cal-now" />;
 }
@@ -522,7 +535,7 @@ function PlanMenu({
   today: boolean;
   running: boolean;
   onFocus: (item: DayTaskRef, how: FocusHow) => void;
-  onOpenDay: () => void;
+  onOpenDay?: () => void;
   onEdit: (item: DayTaskRef) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -537,7 +550,7 @@ function PlanMenu({
       noFocus={noFocus}
       running={running}
       onFocus={(how) => item && onFocus(item, how)}
-      onOpenDay={item ? onOpenDay : undefined}
+      onOpenDay={onOpenDay}
       onEdit={item ? () => onEdit(item) : undefined}
       onDelete={plan.event.writable ? onDelete : undefined}
       deleteLabel="Delete from Calendar…"

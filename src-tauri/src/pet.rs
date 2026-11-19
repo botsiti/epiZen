@@ -6,9 +6,9 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewUrl, We
 pub const LABEL: &str = "spike";
 pub const COMMAND: &str = "epizen://pet-command";
 const STATE_EVENT: &str = "epizen://pet-state";
-pub const WIDTH: f64 = 180.0;
-const HEIGHT: f64 = 220.0;
-pub const PROMPT_ANCHOR: f64 = 156.0;
+pub const WIDTH: f64 = 164.0;
+const HEIGHT: f64 = 205.0;
+pub const PROMPT_ANCHOR: f64 = 144.0;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PetState { pub animation: String, pub label: String, pub motion: bool, #[serde(default)] pub prompt_open: bool }

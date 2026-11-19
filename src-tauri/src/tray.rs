@@ -1,5 +1,4 @@
-//! The menu bar item, as Senioro has one: a small ring and, while a focus round runs, its time and
-//! the task's category (`00:37 code`), `rest 4:12` while resting, the ring alone when nothing runs.
+//! An analog clock in the menu bar, with the focus or rest time beside it while a timer is active.
 //! A click opens the panel (`tray.html`) under it.
 //!
 //! The timer is the main window's (`useTimer`), and stays there. The window publishes what the item
@@ -11,12 +10,13 @@
 //! behind others. When a round or a rest runs out, the window is told to look (`DUE_EVENT`), so it
 //! doesn't wait for its own held-back tick to write the round and start the rest.
 
-use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 use serde_json::Value;
 use tauri::image::Image;
+use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
@@ -33,18 +33,17 @@ const STATE_EVENT: &str = "epizen://tray-state";
 /// To the panel and the main window: the panel has just been shown. The panel refreshes; the
 /// main window looks at the date again, in case it slept hidden over midnight.
 const SHOWN_EVENT: &str = "epizen://tray-shown";
+const HIDDEN_EVENT: &str = "epizen://tray-hidden";
 
 /// The panel's size, in points.
 const PANEL_WIDTH: f64 = 360.0;
-const PANEL_HEIGHT: f64 = 600.0;
+const PANEL_HEIGHT: f64 = 502.0;
 /// Space between the menu bar and the panel, and between the panel and the screen's edge.
 const PANEL_GAP: f64 = 6.0;
-/// The item's ring, in pixels: drawn at 2×, macOS shows it 18 points high.
+/// The clock template, in pixels: drawn at 2×, macOS shows it 18 points high.
 const ICON_SIZE: u32 = 36;
 /// A click on the item this soon after the panel hid on losing focus is the click that hid it.
 const REOPEN_GUARD: Duration = Duration::from_millis(400);
-/// How long the title's thread sleeps when the title can't change before the next publish.
-const IDLE_WAIT: Duration = Duration::from_secs(60);
 
 /// What the item's title is made from: the main window's timer, as `trayClock` in
 /// `src/lib/tray.ts` publishes it. Times are milliseconds since the epoch.
@@ -57,7 +56,6 @@ pub enum Clock {
     /// A pomodoro counts down from `planned` seconds; the stopwatch counts up.
     #[serde(rename_all = "camelCase")]
     Focus {
-        label: String,
         accumulated: i64,
         since: i64,
         paused: bool,
@@ -73,31 +71,24 @@ fn focused(accumulated: i64, since: i64, paused: bool, now: i64) -> i64 {
     accumulated + if paused { 0 } else { (now - since).max(0) }
 }
 
-/// Senioro's menu bar time: `00:37`, `24:59`, `1:02:05`.
+/// Compact menu bar time: `00:37`, `24:59`, `1:02:05`.
 fn padded(seconds: i64) -> String {
     let (h, m, s) = (seconds / 3600, seconds % 3600 / 60, seconds % 60);
     if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m:02}:{s:02}") }
 }
 
-/// The timer card's time: `4:12`, `1:02:05`.
-fn short(seconds: i64) -> String {
-    let (h, m, s) = (seconds / 3600, seconds % 3600 / 60, seconds % 60);
-    if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m}:{s:02}") }
-}
-
-/// What the item shows beside its ring at `now`: `00:37 code` while focusing (time left in a
-/// pomodoro, time so far on the stopwatch), `paused 00:37`, `rest 4:12`, or nothing.
+/// Time left on a countdown or time counted on the stopwatch. Idle shows the icon alone.
 pub fn title(clock: &Clock, now: i64) -> Option<String> {
     match clock {
         Clock::Idle => None,
-        Clock::Focus { label, accumulated, since, paused, planned } => {
+        Clock::Focus { accumulated, since, paused, planned } => {
             let seconds = focused(*accumulated, *since, *paused, now).max(0) / 1000;
             let shown = planned.map_or(seconds, |planned| (planned - seconds).max(0));
-            Some(if *paused { format!("paused {}", padded(shown)) } else { format!("{} {label}", padded(shown)) })
+            Some(padded(shown))
         }
         Clock::Rest { ends_at } => {
             let left = ((ends_at - now).max(0) + 999) / 1000;
-            (left > 0).then(|| format!("rest {}", short(left)))
+            (left > 0).then(|| padded(left))
         }
     }
 }
@@ -170,25 +161,26 @@ pub fn toggle(visible: bool, hidden_at: Option<Instant>, now: Instant) -> Toggle
     }
 }
 
-/// The item's icon, `size` pixels square, RGBA: the timer's ring with its dot at the top and a
-/// little air around the dot, black on clear. macOS tints it for the menu bar (a template image).
-pub fn ring(size: u32) -> Vec<u8> {
-    let s = f64::from(size);
-    let (c, radius, half_width, dot) = (s / 2.0, s * 0.32, s * 0.045, s * 0.12);
-    let air = dot + s * 0.06;
-    let mut rgba = vec![0u8; (size * size * 4) as usize];
+/// A clock face with two round-ended hands, black on clear for macOS template tinting.
+fn clock_icon(size: u32) -> Vec<u8> {
+    let scale = f64::from(size);
+    let mut rgba = vec![0; (size * size * 4) as usize];
+    let on_hand = |x: f64, y: f64, dx: f64, dy: f64| {
+        let along = ((x * dx + y * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+        (x - along * dx).hypot(y - along * dy) <= 0.039
+    };
     for y in 0..size {
         for x in 0..size {
-            // Four by four samples a pixel, for soft edges.
-            let mut hits = 0u32;
+            // Supersample the template for smooth edges at Retina scale.
+            let mut hits = 0;
             for sy in 0..4 {
                 for sx in 0..4 {
-                    let px = f64::from(x) + (f64::from(sx) + 0.5) / 4.0;
-                    let py = f64::from(y) + (f64::from(sy) + 0.5) / 4.0;
-                    let from_centre = (px - c).hypot(py - c);
-                    let from_dot = (px - c).hypot(py - (c - radius));
-                    let on_ring = (from_centre - radius).abs() <= half_width && from_dot > air;
-                    if on_ring || from_dot <= dot {
+                    let px = (f64::from(x) + (f64::from(sx) + 0.5) / 4.0) / scale - 0.5;
+                    let py = (f64::from(y) + (f64::from(sy) + 0.5) / 4.0) / scale - 0.5;
+                    if (px.hypot(py) - 0.375).abs() <= 0.04
+                        || on_hand(px, py, 0.0, -0.205)
+                        || on_hand(px, py, 0.146, 0.098)
+                    {
                         hits += 1;
                     }
                 }
@@ -206,6 +198,8 @@ fn now_ms() -> i64 {
 /// The last thing the main window published.
 #[derive(Default)]
 struct Published {
+    visible: bool,
+    clock_worker: bool,
     /// Counts publishes, so the title's thread knows when to look again.
     version: u64,
     clock: Clock,
@@ -217,16 +211,14 @@ struct Published {
 #[derive(Default)]
 pub struct Tray {
     published: Arc<(Mutex<Published>, Condvar)>,
-    icon: OnceLock<TrayIcon>,
     /// When the panel last hid, for `toggle`.
     hidden_at: Mutex<Option<Instant>>,
 }
 
-/// Makes the item and starts its title's thread. The `Tray` state must already be managed.
-/// An error leaves the app without the item, never without the app: the caller only reports it.
-pub fn install(app: &AppHandle) -> tauri::Result<()> {
+/// Register the macOS item only for a vault that enables Menu bar.
+fn install_item(app: &AppHandle) -> tauri::Result<TrayIcon> {
     let icon = TrayIconBuilder::with_id("epizen")
-        .icon(Image::new_owned(ring(ICON_SIZE), ICON_SIZE, ICON_SIZE))
+        .icon(Image::new_owned(clock_icon(ICON_SIZE), ICON_SIZE, ICON_SIZE))
         .icon_as_template(true)
         .tooltip("Epizen")
         .show_menu_on_left_click(false)
@@ -236,43 +228,59 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
-    icon.set_visible(false)?;
     #[cfg(target_os = "macos")]
     mac::steady_digits(&icon);
-    let tray = app.state::<Tray>();
-    let published = Arc::clone(&tray.published);
-    let _ = tray.icon.set(icon.clone());
-    let app = app.clone();
-    std::thread::Builder::new().name("epizen-tray".into()).spawn(move || keep_time(&app, &icon, &published))?;
-    Ok(())
+    Ok(icon)
 }
 
-/// The title's thread: sets the title whenever it changes, and tells the main window once when
-/// what it published runs out. It sleeps to the next second the title turns over, or until the
-/// next publish.
-fn keep_time(app: &AppHandle, icon: &TrayIcon, published: &(Mutex<Published>, Condvar)) {
-    let (lock, publish) = published;
-    let mut shown: Option<String> = None;
-    let mut told: Option<u64> = None;
+impl Published {
+    /// A title change or a deadline needs one worker. Panel-only updates never start one.
+    fn change_clock(&mut self, clock: Clock, visible: bool) -> bool {
+        if self.clock == clock && (self.visible == visible || clock == Clock::Idle) {
+            self.visible = visible;
+            return false;
+        }
+        self.version += 1;
+        self.clock = clock;
+        self.visible = visible;
+        !std::mem::replace(&mut self.clock_worker, true)
+    }
+}
+
+fn next_wake(clock: &Clock, now: i64, visible: bool) -> Option<Duration> {
+    if visible { return next_change(clock, now); }
+    let remaining = match clock {
+        Clock::Rest { ends_at } => ends_at.saturating_sub(now),
+        Clock::Focus { accumulated, since, paused: false, planned: Some(seconds) } =>
+            seconds.saturating_mul(1000).saturating_sub(focused(*accumulated, *since, false, now)),
+        _ => return None,
+    };
+    (remaining > 0).then(|| Duration::from_millis(remaining as u64))
+}
+
+/// Runs until the title and deadline can change only through a new workspace publication.
+/// An idle or paused timer leaves no polling thread behind.
+fn keep_time(app: &AppHandle, published: &(Mutex<Published>, Condvar)) {
+    let (lock, changed) = published;
     let mut guard = lock.lock().unwrap_or_else(PoisonError::into_inner);
     loop {
-        let (version, clock) = (guard.version, guard.clock.clone());
+        let (version, clock, visible) = (guard.version, guard.clock.clone(), guard.visible);
         drop(guard);
         let now = now_ms();
-        let next = title(&clock, now);
-        if next != shown {
-            // A space keeps the time off the ring, as Senioro has it.
-            let _ = icon.set_title(Some(next.as_deref().map(|text| format!(" {text}")).unwrap_or_default()));
-            shown = next;
+        if visible && let Some(icon) = app.tray_by_id("epizen") {
+            let text = title(&clock, now).map(|time| format!(" {time}")).unwrap_or_default();
+            let _ = icon.set_title(Some(text));
         }
-        if due(&clock, now) && told != Some(version) {
-            told = Some(version);
+        if due(&clock, now) {
             let _ = app.emit_to(MAIN, DUE_EVENT, ());
         }
-        // A few milliseconds past the turn, so the clock reads the new second.
-        let wait = next_change(&clock, now).map_or(IDLE_WAIT, |wait| wait + Duration::from_millis(5));
         guard = lock.lock().unwrap_or_else(PoisonError::into_inner);
-        guard = match publish.wait_timeout_while(guard, wait, |published| published.version == version) {
+        if guard.version != version { continue; }
+        let Some(wait) = next_wake(&clock, now, visible) else {
+            guard.clock_worker = false;
+            return;
+        };
+        guard = match changed.wait_timeout_while(guard, wait + Duration::from_millis(5), |state| state.version == version) {
             Ok((guard, _)) => guard,
             Err(poisoned) => poisoned.into_inner().0,
         };
@@ -293,7 +301,11 @@ fn clicked(app: &AppHandle, icon: &TrayIcon) {
     }
 }
 
-/// The panel's window, made on its first opening and only hidden after.
+fn desktop_only() -> bool {
+    cfg!(feature = "e2e") || std::env::var_os("EPIZEN_PREVIEW_DESKTOP_ONLY").is_some()
+}
+
+/// The panel's window, made on its first opening and normally hidden between uses.
 fn build_panel(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let panel = WebviewWindowBuilder::new(app, PANEL, WebviewUrl::App("tray.html".into()))
         .title("Epizen")
@@ -306,11 +318,14 @@ fn build_panel(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .transparent(true)
         .shadow(true)
         .always_on_top(true)
-        .visible_on_all_workspaces(true)
+        .visible_on_all_workspaces(!desktop_only())
         .accept_first_mouse(true)
+        // The user may leave focus sound running with the panel closed.
+        .background_throttling(BackgroundThrottlingPolicy::Disabled)
         .theme(Some(Theme::Dark))
         // The system's dark glass under the page's own tint, cut to the page's corners.
         .effects(EffectsBuilder::new().effect(Effect::HudWindow).state(EffectState::Active).radius(14.0).build())
+        .focused(false)
         .visible(false)
         .build()?;
     #[cfg(target_os = "macos")]
@@ -327,6 +342,10 @@ fn show(app: &AppHandle, icon: &TrayIcon, panel: &WebviewWindow) {
     let _ = icon;
     let _ = panel.show();
     let _ = panel.set_focus();
+    notify_shown(app);
+}
+
+fn notify_shown(app: &AppHandle) {
     let _ = app.emit_to(PANEL, SHOWN_EVENT, ());
     let _ = app.emit_to(MAIN, SHOWN_EVENT, ());
 }
@@ -337,7 +356,9 @@ pub fn hide<R: Runtime>(app: &AppHandle<R>) {
         && panel.is_visible().unwrap_or(false)
     {
         *app.state::<Tray>().hidden_at.lock().unwrap_or_else(PoisonError::into_inner) = Some(Instant::now());
-        let _ = panel.hide();
+        if panel.hide().is_ok() {
+            let _ = app.emit_to(PANEL, HIDDEN_EVENT, ());
+        }
     }
 }
 
@@ -351,6 +372,7 @@ pub fn close<R: Runtime>(app: &AppHandle<R>) {
 
 #[derive(Deserialize)]
 pub struct Publish {
+    visible: bool,
     clock: Clock,
     tooltip: String,
     panel: Value,
@@ -358,36 +380,38 @@ pub struct Publish {
 
 /// The main window's timer, for the item's title and the panel.
 #[tauri::command]
-pub fn tray_enable(app: AppHandle, tray: State<'_, Tray>, enabled: bool) -> Result<(), String> {
-    if let Some(icon) = tray.icon.get() { icon.set_visible(enabled).map_err(|error| error.to_string())?; }
-    if !enabled {
-        hide(&app);
-        let (lock, changed) = &*tray.published;
-        let mut published = lock.lock().unwrap_or_else(PoisonError::into_inner);
-        published.clock = Clock::default();
-        published.version += 1;
-        changed.notify_all();
+pub fn tray_publish(app: AppHandle, tray: State<'_, Tray>, status: Publish) -> Result<(), String> {
+    let visible = status.visible;
+    let item = if visible {
+        app.tray_by_id("epizen").map_or_else(|| install_item(&app), Ok).map(Some)
+    } else {
+        if app.remove_tray_by_id("epizen").is_some() {
+            close(&app);
+        }
+        Ok(None)
+    };
+    let (lock, changed) = &*tray.published;
+    let mut published = lock.lock().unwrap_or_else(PoisonError::into_inner);
+    let retitled = published.tooltip != status.tooltip || published.visible != visible;
+    published.tooltip.clone_from(&status.tooltip);
+    published.panel = status.panel.clone();
+    // The focus deadline is independent of whether macOS could create a status item.
+    if published.change_clock(status.clock, visible && item.is_ok()) {
+        let app = app.clone();
+        let state = Arc::clone(&tray.published);
+        if let Err(error) = std::thread::Builder::new().name("epizen-tray".into()).spawn(move || keep_time(&app, &state)) {
+            published.clock_worker = false;
+            published.clock = Clock::Idle;
+            return Err(error.to_string());
+        }
+    }
+    drop(published);
+    changed.notify_all();
+    if let Some(icon) = item.map_err(|error| error.to_string())? {
+        if retitled { let _ = icon.set_tooltip(Some(&status.tooltip)); }
+        let _ = app.emit_to(PANEL, STATE_EVENT, status.panel);
     }
     Ok(())
-}
-
-#[tauri::command]
-pub fn tray_publish(app: AppHandle, tray: State<'_, Tray>, status: Publish) {
-    let (lock, publish) = &*tray.published;
-    let retitled = {
-        let mut published = lock.lock().unwrap_or_else(PoisonError::into_inner);
-        published.version += 1;
-        published.clock = status.clock;
-        published.panel = status.panel.clone();
-        let retitled = published.tooltip != status.tooltip;
-        published.tooltip = status.tooltip.clone();
-        retitled
-    };
-    publish.notify_all();
-    if retitled && let Some(icon) = tray.icon.get() {
-        let _ = icon.set_tooltip(Some(&status.tooltip));
-    }
-    let _ = app.emit_to(PANEL, STATE_EVENT, status.panel);
 }
 
 /// What the panel shows, as last published; `null` before the main window has published.
@@ -402,15 +426,48 @@ pub fn tray_command(app: AppHandle, command: Value) -> Result<(), String> {
     app.emit_to(MAIN, COMMAND_EVENT, command).map_err(|err| err.to_string())
 }
 
-/// Brings the main window to the front, out of the Dock if it was minimised.
+#[derive(Clone, Copy, Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrayDestination {
+    DailyNote,
+    Calendar,
+}
+
+/// Reveals the workspace and optionally opens a destination through its usual navigation.
 #[tauri::command]
-pub fn tray_open_main(app: AppHandle) {
-    hide(&app);
-    if let Some(main) = app.get_webview_window(MAIN) {
-        let _ = main.unminimize();
-        let _ = main.show();
-        let _ = main.set_focus();
+pub async fn tray_open_main(app: AppHandle, destination: Option<TrayDestination>, scope: Option<String>) -> Result<(), String> {
+    let main = app.get_webview_window(MAIN).ok_or("Epizen’s workspace is unavailable.")?;
+    main.unminimize().map_err(|err| err.to_string())?;
+    crate::companion_display::show(&main)?;
+    if let Some(destination) = destination {
+        app.emit_to(MAIN, COMMAND_EVENT, serde_json::json!({ "kind": "open", "destination": destination, "scope": scope }))
+            .map_err(|err| err.to_string())?;
     }
+    hide(&app);
+    if !desktop_only() {
+        main.set_focus().map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+// WebDriver can drive the real tray webview but cannot click a macOS status item.
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn tray_test_show(main: WebviewWindow) -> Result<(), String> {
+    if main.label() != MAIN {
+        return Err("Open the test panel from the workspace.".into());
+    }
+    let app = main.app_handle();
+    let panel = app.get_webview_window(PANEL).map_or_else(|| build_panel(app), Ok)
+        .map_err(|err| err.to_string())?;
+    let position = main.outer_position().map_err(|err| err.to_string())?;
+    let scale = main.scale_factor().map_err(|err| err.to_string())?;
+    let inset = (scale * 38.0).round() as i32;
+    panel.set_position(tauri::PhysicalPosition::new(position.x + inset, position.y + inset))
+        .map_err(|err| err.to_string())?;
+    crate::companion_display::show(&panel)?;
+    notify_shown(app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -481,9 +538,12 @@ mod mac {
         with_window(panel, |window| {
             window.setCollectionBehavior(
                 window.collectionBehavior()
-                    | NSWindowCollectionBehavior::CanJoinAllSpaces
-                    | NSWindowCollectionBehavior::FullScreenAuxiliary
-                    | NSWindowCollectionBehavior::Transient,
+                    | NSWindowCollectionBehavior::Transient
+                    | if super::desktop_only() {
+                        NSWindowCollectionBehavior::empty()
+                    } else {
+                        NSWindowCollectionBehavior::CanJoinAllSpaces | NSWindowCollectionBehavior::FullScreenAuxiliary
+                    },
             );
             window.setExcludedFromWindowsMenu(true);
         });
@@ -501,17 +561,33 @@ mod tests {
     const AT: i64 = 1_798_000_000_000;
 
     fn stopwatch(accumulated: i64, since: i64, paused: bool) -> Clock {
-        Clock::Focus { label: "code".into(), accumulated, since, paused, planned: None }
+        Clock::Focus { accumulated, since, paused, planned: None }
     }
 
     fn pomodoro(minutes: i64, since: i64) -> Clock {
-        Clock::Focus { label: "study".into(), accumulated: 0, since, paused: false, planned: Some(minutes * 60) }
+        Clock::Focus { accumulated: 0, since, paused: false, planned: Some(minutes * 60) }
+    }
+
+    #[test]
+    fn an_idle_vault_or_menu_only_never_starts_a_clock_worker() {
+        let mut state = Published::default();
+        assert!(!state.change_clock(Clock::Idle, false));
+        assert!(!state.change_clock(Clock::Idle, true));
+        assert!(!state.change_clock(Clock::Idle, false));
+        assert!(!state.clock_worker);
+        assert!(state.change_clock(pomodoro(25, AT), false));
+        assert!(!state.change_clock(pomodoro(25, AT), true));
+        assert!(!state.change_clock(pomodoro(25, AT), false));
+        assert!(state.clock_worker);
+        assert!(due(&state.clock, AT + 25 * 60_000));
+        assert_eq!(next_wake(&state.clock, AT, false), Some(Duration::from_secs(25 * 60)));
+        assert_eq!(next_wake(&stopwatch(0, AT, false), AT, false), None);
     }
 
     #[test]
     fn reads_the_clock_the_main_window_publishes() {
         let focus: Clock = serde_json::from_str(r#"{"kind":"focus","label":"code","accumulated":5000,"since":10,"paused":false,"planned":1500}"#).unwrap();
-        assert_eq!(focus, Clock::Focus { label: "code".into(), accumulated: 5000, since: 10, paused: false, planned: Some(1500) });
+        assert_eq!(focus, Clock::Focus { accumulated: 5000, since: 10, paused: false, planned: Some(1500) });
         let stopwatch: Clock = serde_json::from_str(r#"{"kind":"focus","label":"focus","accumulated":0,"since":10,"paused":true}"#).unwrap();
         assert!(matches!(stopwatch, Clock::Focus { planned: None, paused: true, .. }));
         assert_eq!(serde_json::from_str::<Clock>(r#"{"kind":"rest","endsAt":42}"#).unwrap(), Clock::Rest { ends_at: 42 });
@@ -520,23 +596,23 @@ mod tests {
 
     #[test]
     fn counts_the_stopwatch_up_and_a_pomodoro_down() {
-        assert_eq!(title(&stopwatch(0, AT, false), AT + 37_400).as_deref(), Some("00:37 code"));
-        assert_eq!(title(&stopwatch(60_000, AT, false), AT + 3_725_000).as_deref(), Some("1:03:05 code"));
-        assert_eq!(title(&pomodoro(25, AT), AT).as_deref(), Some("25:00 study"));
-        assert_eq!(title(&pomodoro(25, AT), AT + 999).as_deref(), Some("25:00 study"));
-        assert_eq!(title(&pomodoro(25, AT), AT + 1000).as_deref(), Some("24:59 study"));
+        assert_eq!(title(&stopwatch(0, AT, false), AT + 37_400).as_deref(), Some("00:37"));
+        assert_eq!(title(&stopwatch(60_000, AT, false), AT + 3_725_000).as_deref(), Some("1:03:05"));
+        assert_eq!(title(&pomodoro(25, AT), AT).as_deref(), Some("25:00"));
+        assert_eq!(title(&pomodoro(25, AT), AT + 999).as_deref(), Some("25:00"));
+        assert_eq!(title(&pomodoro(25, AT), AT + 1000).as_deref(), Some("24:59"));
         // Past its round, a pomodoro waits at zero for the window to start the rest.
-        assert_eq!(title(&pomodoro(25, AT), AT + 26 * 60_000).as_deref(), Some("00:00 study"));
+        assert_eq!(title(&pomodoro(25, AT), AT + 26 * 60_000).as_deref(), Some("00:00"));
     }
 
     #[test]
     fn holds_still_while_paused_and_shows_the_rest_then_nothing() {
         let paused = stopwatch(37_900, AT, true);
-        assert_eq!(title(&paused, AT + 600_000).as_deref(), Some("paused 00:37"));
+        assert_eq!(title(&paused, AT + 600_000).as_deref(), Some("00:37"));
         let rest = Clock::Rest { ends_at: AT + 252_000 };
-        assert_eq!(title(&rest, AT).as_deref(), Some("rest 4:12"));
-        assert_eq!(title(&rest, AT + 1).as_deref(), Some("rest 4:12"));
-        assert_eq!(title(&rest, AT + 1000).as_deref(), Some("rest 4:11"));
+        assert_eq!(title(&rest, AT).as_deref(), Some("04:12"));
+        assert_eq!(title(&rest, AT + 1).as_deref(), Some("04:12"));
+        assert_eq!(title(&rest, AT + 1000).as_deref(), Some("04:11"));
         assert_eq!(title(&rest, AT + 252_000), None);
         assert_eq!(title(&Clock::Idle, AT), None);
     }
@@ -558,7 +634,7 @@ mod tests {
         assert!(!due(&pomodoro(25, AT), AT + 25 * 60_000 - 1));
         assert!(due(&pomodoro(25, AT), AT + 25 * 60_000));
         assert!(!due(&stopwatch(0, AT, false), AT + 10 * 3_600_000));
-        let paused = Clock::Focus { label: "code".into(), accumulated: 0, since: AT, paused: true, planned: Some(60) };
+        let paused = Clock::Focus { accumulated: 0, since: AT, paused: true, planned: Some(60) };
         assert!(!due(&paused, AT + 120_000));
         assert!(due(&Clock::Rest { ends_at: AT }, AT));
         assert!(!due(&Clock::Idle, AT));
@@ -587,17 +663,17 @@ mod tests {
     }
 
     #[test]
-    fn draws_a_ring_with_its_dot_on_top() {
-        let pixels = ring(ICON_SIZE);
+    fn draws_a_template_clock_with_a_clear_face_and_two_hands() {
+        let pixels = clock_icon(ICON_SIZE);
         let alpha = |x: u32, y: u32| pixels[((y * ICON_SIZE + x) * 4 + 3) as usize];
         assert_eq!(pixels.len(), (ICON_SIZE * ICON_SIZE * 4) as usize);
         // Black only: macOS gives it its colour.
         assert!(pixels.chunks(4).all(|px| px[..3] == [0, 0, 0]));
-        assert_eq!(alpha(18, 18), 0, "the middle is clear");
-        assert_eq!(alpha(0, 0), 0, "so are the corners");
-        assert_eq!(alpha(18, 29), 255, "the ring's foot is solid");
-        assert_eq!(alpha(18, 6), 255, "so is the dot");
-        // Air between the dot and the ring beside it.
-        assert_eq!(alpha(23, 7), 0);
+        assert_eq!(alpha(0, 0), 0, "the corners are clear");
+        assert_eq!(alpha(18, 18), 255, "the hands meet in the centre");
+        assert_eq!(alpha(18, 12), 255, "the long hand points up");
+        assert_eq!(alpha(22, 20), 255, "the short hand points right");
+        assert_eq!(alpha(18, 31), 255, "the face is enclosed");
+        assert_eq!(alpha(12, 18), 0, "the left side of the face is clear");
     }
 }

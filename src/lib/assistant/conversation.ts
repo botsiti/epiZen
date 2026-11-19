@@ -1,3 +1,4 @@
+import { calendarZonePreference } from '../calendarZone';
 import { object, responseItem, type AgentRun, type AssistantChange, type ChatMessage, type ResponseItem, type ToolCall, type ToolResult } from './types';
 export interface ConversationAction {
   id: string; call: ToolCall; result: ToolResult; change: AssistantChange;
@@ -23,7 +24,7 @@ function validArtwork(value: unknown): boolean {
 }
 function validChange(value: unknown, root: string): value is AssistantChange {
   const item = object(value);
-  return item.root === root && string(item.description) && (item.kind === 'note' ? validArtwork(item.artwork) && string(item.path) && (item.before === null || string(item.before)) && string(item.after) : item.kind === 'calendar' && (item.avoidConflicts === undefined || typeof item.avoidConflicts === 'boolean') && string(item.calendar) && string(item.title) && typeof item.start === 'number' && Number.isFinite(item.start) && typeof item.end === 'number' && Number.isFinite(item.end) && (item.notes === undefined || string(item.notes)));
+  return item.root === root && string(item.description) && (item.kind === 'note' ? validArtwork(item.artwork) && string(item.path) && (item.before === null || string(item.before)) && string(item.after) : item.kind === 'calendar' && (item.timeZone === undefined || calendarZonePreference(item.timeZone) !== undefined) && (item.avoidConflicts === undefined || typeof item.avoidConflicts === 'boolean') && string(item.calendar) && string(item.title) && typeof item.start === 'number' && Number.isFinite(item.start) && typeof item.end === 'number' && Number.isFinite(item.end) && (item.notes === undefined || string(item.notes)));
 }
 function validSources(value: unknown): boolean {
   return value === undefined || Array.isArray(value) && value.length <= 20 && value.every((raw) => { const source = object(raw); return string(source.title) && string(source.url) && /^https?:\/\//i.test(source.url); });

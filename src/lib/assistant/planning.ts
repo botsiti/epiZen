@@ -1,4 +1,5 @@
 import type { CalendarEvent } from '../api';
+import { calendarDayStart, calendarInstant, systemCalendarZone } from '../calendarZone';
 import { readDay } from '../datePicker';
 import { addDays, formatDate } from '../dates';
 import { addTask, setSummary } from '../edits';
@@ -69,27 +70,27 @@ export function sectionChange(context: AssistantContext, path: string, period: P
 
 export type DayWindow = 'morning' | 'afternoon' | 'evening' | 'any';
 export const DAY_WINDOWS: Record<DayWindow, [number, number]> = { morning: [9, 12], afternoon: [12, 18], evening: [18, 22], any: [9, 22] };
-export function calendarRange(date: Date) { return { from: date.getTime(), to: addDays(date, 1).getTime() }; }
+export function calendarRange(date: Date, zone = systemCalendarZone()) { return { from: calendarDayStart(date, zone), to: calendarDayStart(addDays(date, 1), zone) }; }
 /** Find a free interval in local civil time. Planned time is never logged as completed work. */
-export function calendarSlot(date: Date, now: Date, minutes: number, start: string, window: string, events: CalendarEvent[]): { start: number; end: number } {
+export function calendarSlot(date: Date, now: Date, minutes: number, start: string, window: string, events: CalendarEvent[], zone = systemCalendarZone()): { start: number; end: number } {
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) throw new Error('Choose a duration from 1 to 720 minutes.');
   if (!Object.hasOwn(DAY_WINDOWS, window)) throw new Error('Choose morning, afternoon, evening or any.');
   const [first, last] = DAY_WINDOWS[window as DayWindow];
-  const at = (hour: number, minute = 0) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute).getTime();
+  const at = (hour: number, minute = 0) => calendarInstant(date, hour * 60 + minute, zone);
   const duration = minutes * 60000;
   const free = (time: number) => !events.some((event) => event.start < time + duration && event.end > time);
   if (start) {
     const match = /^(\d{2}):(\d{2})$/.exec(start), hour = Number(match?.[1]), minute = Number(match?.[2]);
     if (!match || hour > 23 || minute > 59) throw new Error('Use a local start time in HH:mm format.');
-    const time = at(hour, minute), resolved = new Date(time);
-    if (resolved.getHours() !== hour || resolved.getMinutes() !== minute) throw new Error('This local time does not exist because the clocks change. Choose another time.');
-    if (time + duration > calendarRange(date).to) throw new Error('Keep this block within the selected day.');
+    const time = at(hour, minute);
+    if (time + duration > calendarRange(date, zone).to) throw new Error('Keep this block within the selected day.');
     if (!free(time)) throw new Error('That time overlaps an existing calendar event. Choose another time or explicitly request an overlapping event.');
     return { start: time, end: time + duration };
   }
   // Quarter-hour suggestions start after now, within the requested part of the day.
   const earliest = Math.max(at(first), now.getTime());
-  for (let time = Math.ceil(earliest / 900000) * 900000; time + duration <= at(last); time += 900000) {
+  const latest = at(last);
+  for (let time = Math.ceil(earliest / 900000) * 900000; time + duration <= latest; time += 900000) {
     if (free(time)) return { start: time, end: time + duration };
   }
   throw new Error(`There is no free ${minutes}-minute block in this ${window === 'any' ? 'day (09:00–22:00)' : window}. Ask for another time window or date.`);

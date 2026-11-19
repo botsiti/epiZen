@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { readNote, writeNote } from '../../lib/api';
+import { useCallback, useLayoutEffect, useRef } from 'react';
+import { readNote, writeNoteScoped } from '../../lib/api';
 
 /** Changes a note over the latest text the app knows of it; resolves to the note's text after. */
 export type NoteChange = (path: string, edit: (text: string) => string | undefined) => Promise<string>;
@@ -11,39 +11,43 @@ export type NoteChange = (path: string, edit: (text: string) => string | undefin
  * do. When the edit throws or the note changed on disk, nothing is written: the note is read
  * again, the app learns its text, and the change rejects with the reason.
  */
-export function useNoteWriter(texts: ReadonlyMap<string, string>, onSaved: (path: string, text: string) => void): NoteChange {
+export function useNoteWriter(root: string | undefined, texts: ReadonlyMap<string, string>, onSaved: (path: string, text: string) => void): NoteChange {
   const latest = useRef(texts);
+  const activeRoot = useRef(root);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const report = useRef(onSaved);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    activeRoot.current = root;
     latest.current = texts;
-  }, [texts]);
-  useEffect(() => {
+  }, [root, texts]);
+  useLayoutEffect(() => {
     report.current = onSaved;
   }, [onSaved]);
 
   return useCallback((path, edit) => {
     const learn = (text: string) => {
+      if (activeRoot.current !== root) return;
       latest.current = new Map(latest.current).set(path, text);
       report.current(path, text);
     };
     const run = queue.current.then(async () => {
-      const current = latest.current.get(path) ?? (await readNote(path));
+      if (!root || activeRoot.current !== root) throw new Error('The open vault changed. Reopen the note before saving.');
+      const current = latest.current.get(path) ?? (await readNote(path, root));
       try {
         const next = edit(current);
         if (next === undefined || next === current) return current;
-        await writeNote(path, next, current);
+        await writeNoteScoped(root, path, next, current);
         learn(next);
         return next;
       } catch (err) {
-        const fresh = await readNote(path).catch(() => undefined);
+        const fresh = await readNote(path, root).catch(() => undefined);
         if (fresh !== undefined) learn(fresh);
         throw err instanceof Error ? err : new Error(String(err));
       }
     });
     queue.current = run.catch(() => undefined);
     return run;
-  }, []);
+  }, [root]);
 }
 
 /** An error's words, without the `Error:` a stringified error starts with. */

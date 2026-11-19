@@ -1,6 +1,6 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { enableTray, onTrayCommand, onTimerDue, onTrayShown, publishTray } from '../../lib/api';
+import { onTrayCommand, onTimerDue, onTrayShown, publishTray } from '../../lib/api';
 import { today } from '../../lib/dates';
 import { dayKey, initialTimer, start, type TimerState } from '../../lib/timer';
 import { panelView, type TrayCommand } from '../../lib/tray';
@@ -13,7 +13,6 @@ const bus = vi.hoisted(() => ({
   shown: undefined as (() => void) | undefined,
 }));
 vi.mock('../../lib/api', () => ({
-  enableTray: vi.fn(() => Promise.resolve()),
   publishTray: vi.fn(() => Promise.resolve()),
   onTrayCommand: vi.fn((handler: (value: unknown) => void) => {
     bus.command = handler;
@@ -29,20 +28,20 @@ vi.mock('../../lib/api', () => ({
   }),
 }));
 
-it('does not publish or subscribe when the timer plugin is disabled', () => {
+it('clears the panel and releases its listeners when both plugins are disabled', () => {
   vi.clearAllMocks();
   const api = timer(), view = panelView({ vault: 'Demo', today: DAY, timer: api.state, unwritten: 0 });
-  const { rerender } = renderHook(({ enabled }) => useTrayBridge(api, view, vi.fn(), vi.fn(), enabled), { initialProps: { enabled: false } });
-  expect(enableTray).toHaveBeenCalledWith(false);
-  expect(publishTray).not.toHaveBeenCalled();
+  const { rerender } = renderHook(({ enabled }) => useTrayBridge(api, view, actions(), enabled), { initialProps: { enabled: false } });
+  expect(publishTray).toHaveBeenCalledWith({ visible: false, clock: { kind: 'idle' }, tooltip: 'Epizen', panel: null });
   expect(onTrayCommand).not.toHaveBeenCalled();
   expect(onTimerDue).not.toHaveBeenCalled();
   expect(onTrayShown).not.toHaveBeenCalled();
   rerender({ enabled: true });
-  expect(enableTray).toHaveBeenLastCalledWith(true);
-  expect(publishTray).toHaveBeenCalled();
+  expect(publishTray).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, panel: view }));
   expect(onTrayCommand).toHaveBeenCalledTimes(1);
 });
+
+const actions = () => ({ onStart: vi.fn(), onStale: vi.fn(), onOpen: vi.fn() });
 
 const timer = (state: TimerState = initialTimer()): TimerApi => ({
   state,
@@ -75,26 +74,26 @@ const START: TrayCommand = {
 describe('the panel’s commands in the main window', () => {
   it('start a round as the calendar’s right-click does, with the same task and the same round', () => {
     const onStart = vi.fn();
-    runCommand(START, { timer: timer(), onStart, onStale: vi.fn() }, DAY);
+    runCommand(START, { timer: timer(), ...actions(), onStart }, DAY);
     expect(onStart).toHaveBeenCalledWith(
       { kind: 'task', ref: { line: 7, text: '- [ ] #daily/kaizen — draft the weekly review [minutes::33]' }, label: 'draft the weekly review', category: 'kaizen' },
       { mode: 'pomodoro', minutes: 42 },
     );
-    runCommand({ ...START, mode: 'stopwatch', minutes: undefined }, { timer: timer(), onStart, onStale: vi.fn() }, DAY);
+    runCommand({ ...START, mode: 'stopwatch', minutes: undefined }, { timer: timer(), ...actions(), onStart }, DAY);
     expect(onStart).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'task' }), { mode: 'stopwatch' });
   });
 
   it('refuse a start on a list from a day that has gone, as every other start does', () => {
     const onStart = vi.fn();
     const onStale = vi.fn();
-    runCommand(START, { timer: timer(), onStart, onStale }, new Date(2026, 8, 2));
+    runCommand(START, { timer: timer(), ...actions(), onStart, onStale }, new Date(2026, 8, 2));
     expect(onStart).not.toHaveBeenCalled();
     expect(onStale).toHaveBeenCalledTimes(1);
   });
 
   it('pause, resume, stop, rest and skip the rest on the one timer', () => {
     const api = timer();
-    for (const kind of ['pause', 'resume', 'stop', 'rest', 'skip-rest'] as const) runCommand({ kind }, { timer: api, onStart: vi.fn(), onStale: vi.fn() });
+    for (const kind of ['pause', 'resume', 'stop', 'rest', 'skip-rest'] as const) runCommand({ kind }, { timer: api, ...actions() });
     for (const call of [api.pause, api.resume, api.stop, api.startRest, api.endRest]) expect(call).toHaveBeenCalledTimes(1);
   });
 });
@@ -107,9 +106,9 @@ describe('the main window’s side of the menu bar', () => {
 
   it('publishes what changed, and nothing when only the heartbeat did', () => {
     const first = start(initialTimer(), 1000, { id: 's', task: TASK, mode: 'stopwatch' });
-    const { rerender } = renderHook(({ state }) => useTrayBridge(timer(state), view(state), vi.fn(), vi.fn()), { initialProps: { state: first } });
+    const { rerender } = renderHook(({ state }) => useTrayBridge(timer(state), view(state), actions()), { initialProps: { state: first } });
     expect(publishTray).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(publishTray).mock.calls[0]?.[0]).toMatchObject({ clock: { kind: 'focus', label: 'code', since: 1000 }, tooltip: 'Stopwatch · review' });
+    expect(vi.mocked(publishTray).mock.calls[0]?.[0]).toMatchObject({ clock: { kind: 'focus', since: 1000 }, tooltip: 'Stopwatch · review' });
     const beat = { ...first, session: first.session && { ...first.session, heartbeat: 31_000 } };
     rerender({ state: beat });
     expect(publishTray).toHaveBeenCalledTimes(1);
@@ -121,7 +120,7 @@ describe('the main window’s side of the menu bar', () => {
   it('applies the panel’s commands once checked, and ticks when the item says time is up', () => {
     const api = timer();
     const onStart = vi.fn();
-    renderHook(() => useTrayBridge(api, view(api.state), onStart, vi.fn()));
+    renderHook(() => useTrayBridge(api, view(api.state), { ...actions(), onStart }));
     bus.command?.({ kind: 'pause' });
     bus.command?.({ kind: 'format-the-disk' });
     bus.command?.(JSON.parse(JSON.stringify({ ...START, day: dayKey(today()) })));
@@ -131,12 +130,73 @@ describe('the main window’s side of the menu bar', () => {
     expect(api.tick).toHaveBeenCalledTimes(1);
   });
 
+  it('routes only the two supported destinations to workspace navigation', () => {
+    const api = timer();
+    const navigation = actions();
+    renderHook(() => useTrayBridge(api, view(api.state), navigation));
+    bus.command?.({ kind: 'open', destination: 'daily-note' });
+    bus.command?.({ kind: 'open', destination: 'calendar' });
+    bus.command?.({ kind: 'open', destination: 'settings' });
+    expect(navigation.onOpen.mock.calls).toEqual([['daily-note'], ['calendar']]);
+    expect(api.stop).not.toHaveBeenCalled();
+  });
+
   it('has the date looked at again when the panel opens', () => {
     const looked = vi.fn();
     window.addEventListener('epizen:check-today', looked);
-    renderHook(() => useTrayBridge(timer(), view(initialTimer()), vi.fn(), vi.fn()));
+    renderHook(() => useTrayBridge(timer(), view(initialTimer()), actions()));
     bus.shown?.();
     window.removeEventListener('epizen:check-today', looked);
     expect(looked).toHaveBeenCalledTimes(1);
   });
+});
+
+it('keeps deadlines running with the menu closed and rejects commands after either plugin is disabled', () => {
+  const api = timer(), handlers = actions();
+  const state = start(initialTimer(), 1000, { id: 'round', task: { path: 'day.md', day: '2026-09-01', line: 1, label: 'Read' }, mode: 'pomodoro', minutes: 25 });
+  api.state = state;
+  const { rerender } = renderHook(({ menu, focus }) => useTrayBridge(api, panelView({
+    vault: 'demo', today: DAY, timer: state, unwritten: 0,
+    options: { timer: focus, tasks: true, sound: true, density: 'comfortable' },
+  }), handlers, menu), { initialProps: { menu: true, focus: true } });
+  const oldCommand = bus.command, oldDue = bus.due;
+  rerender({ menu: false, focus: true });
+  expect(vi.mocked(publishTray).mock.lastCall?.[0]).toMatchObject({ visible: false, panel: null, clock: { kind: 'focus' } });
+  oldCommand?.({ kind: 'stop' });
+  oldDue?.();
+  expect(api.stop).not.toHaveBeenCalled();
+  expect(api.tick).toHaveBeenCalledOnce();
+
+  rerender({ menu: true, focus: false });
+  bus.command?.({ kind: 'rest' });
+  bus.command?.({ kind: 'open', destination: 'daily-note' });
+  oldDue?.();
+  expect(api.startRest).not.toHaveBeenCalled();
+  expect(api.tick).toHaveBeenCalledOnce();
+  expect(handlers.onOpen).toHaveBeenCalledWith('daily-note');
+  expect(publishTray).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, clock: { kind: 'idle' } }));
+});
+
+it('reports a failed menu-bar publication and retries without restarting the timer', async () => {
+  const api = timer(), view = panelView({ today: DAY, timer: api.state, unwritten: 0 });
+  vi.mocked(publishTray).mockRejectedValueOnce(new Error('Status item unavailable'));
+  const { result } = renderHook(() => useTrayBridge(api, view, actions()));
+  await waitFor(() => expect(result.current.problem).toContain('Status item unavailable'));
+  act(() => result.current.retry());
+  await waitFor(() => expect(result.current.problem).toBeUndefined());
+  expect(publishTray).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, panel: view }));
+  expect(api.stop).not.toHaveBeenCalled();
+});
+
+it('ignores old panel commands when two vaults share the same display name', () => {
+  const api = timer(), handlers = actions();
+  const { rerender } = renderHook(({ scope }) => useTrayBridge(api, panelView({
+    scope, vault: 'Notes', today: DAY, timer: api.state, unwritten: 0,
+  }), handlers), { initialProps: { scope: '/first/Notes' } });
+  rerender({ scope: '/second/Notes' });
+  bus.command?.({ kind: 'rest', scope: '/first/Notes' });
+  bus.command?.({ kind: 'open', destination: 'daily-note', scope: '/first/Notes' });
+  expect(api.startRest).not.toHaveBeenCalled(); expect(handlers.onOpen).not.toHaveBeenCalled();
+  bus.command?.({ kind: 'rest', scope: '/second/Notes' });
+  expect(api.startRest).toHaveBeenCalledOnce();
 });

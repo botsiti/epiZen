@@ -16,15 +16,20 @@ export const SHORTCUTS = [
 
 export type ShortcutAction = typeof SHORTCUTS[number]['action'];
 
+const shortcutGroup: Record<ShortcutAction, string> = {
+  collapseFolders: 'Workspace', toggleLeftSidebar: 'Workspace', toggleRightSidebar: 'Workspace', toggleAssistant: 'Spike',
+  newNote: 'Workspace', settings: 'Navigation', home: 'Navigation', library: 'Navigation', today: 'Navigation',
+  newTab: 'Tabs', closeTab: 'Tabs',
+};
 export const SHORTCUT_REFERENCE = [
-  ...SHORTCUTS,
-  { label: 'Spike quick prompt (global, while plugin enabled)', keys: '⇧⌘Space' },
-  { label: 'Spike dictation (global, start / finish)', keys: '⌥⇧⌘Space' },
-  { label: 'Previous tab', keys: '⇧⌃Tab / ⇧⌘[' },
-  { label: 'Next tab', keys: '⌃Tab / ⇧⌘]' },
-  { label: 'Go to tab 1–8', keys: '⌥⌘1–8' },
-  { label: 'Go to last tab', keys: '⌥⌘9' },
-  { label: 'Go to tab 1–6 (alternate)', keys: '⌘1–6' },
-  { label: 'Back in tab history (outside text fields)', keys: '⌘[' },
-  { label: 'Forward in tab history (outside text fields)', keys: '⌘]' },
+  ...SHORTCUTS.map((item) => ({ ...item, group: shortcutGroup[item.action] })),
+  { group: 'Spike', label: 'Spike quick prompt (global, while plugin enabled)', keys: '⇧⌘Space' },
+  { group: 'Spike', label: 'Spike dictation (global, start / finish)', keys: '⌥⇧⌘Space' },
+  { group: 'Tabs', label: 'Previous tab', keys: '⇧⌃Tab / ⇧⌘[' },
+  { group: 'Tabs', label: 'Next tab', keys: '⌃Tab / ⇧⌘]' },
+  { group: 'Tabs', label: 'Go to tab 1–8', keys: '⌥⌘1–8' },
+  { group: 'Tabs', label: 'Go to last tab', keys: '⌥⌘9' },
+  { group: 'Tabs', label: 'Go to tab 1–6 (alternate)', keys: '⌘1–6' },
+  { group: 'Navigation', label: 'Back in tab history (outside text fields)', keys: '⌘[' },
+  { group: 'Navigation', label: 'Forward in tab history (outside text fields)', keys: '⌘]' },
 ];

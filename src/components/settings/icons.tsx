@@ -1,5 +1,14 @@
 export function PreferenceIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
+    settings: 'M3 5h7m4 0h3M3 10h2m4 0h8M3 15h9m4 0h1M10 3v4M5 8v4M12 13v4',
+    sections: 'M3 5h14M3 10h14M3 15h14',
+    search: 'M14 8.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0zM12.8 12.8l4.5 4.5',
+    configure: 'm7 4 6 6-6 6',
+    plus: 'M10 4v12M4 10h12',
+    edit: 'm4 13-.7 3.7 3.8-.8L16 7l-3-3-9 9zM11.5 5.5l3 3',
+    archive: 'M3 4h14v4H3zM4.5 8v8h11V8M8 11h4',
+    restore: 'M4 5v5h5M4 10a6 6 0 1 1 1 5',
+    remove: 'm5.5 5.5 9 9m0-9-9 9',
     appearance: 'M10 2a8 8 0 1 0 8 8c0-1-1-2-2-2h-2a2 2 0 0 1-2-2V4c0-1-1-2-2-2M5 9h.1M7 5h.1M5 13h.1M9 16h.1',
     spike: 'M4 8V5l4 2m8 1V5l-4 2M4 8c0-3 12-3 12 0v5c0 5-12 5-12 0zM7 10h.1M13 10h.1M8 14l2 1 2-1',
     plugins: 'M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z',
@@ -9,6 +18,7 @@ export function PreferenceIcon({ name }: { name: string }) {
     cbt: 'M3 3h14v10H8l-5 4zM6 7h8m-8 3h5',
     checkins: 'M3 15V9m5 6V5m5 10v-7m5 7V3',
     graph: 'M5 5l10 2-5 9zM3 5a2 2 0 1 0 4 0 2 2 0 0 0-4 0M13 7a2 2 0 1 0 4 0 2 2 0 0 0-4 0M8 16a2 2 0 1 0 4 0 2 2 0 0 0-4 0',
+    menubar: 'M2 4h16v12H2zM2 8h16m-5-2h1m1.5 0h1',
     timer: 'M8 2h4M10 2v3M10 8v4l3 2M3 12a7 7 0 1 0 14 0 7 7 0 0 0-14 0',
     quests: 'M4 18V3m0 0h11l-3 4 3 4H4',
     statistics: 'M3 17h14M5 14V9m5 5V3m5 11V6',

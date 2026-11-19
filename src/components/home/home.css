@@ -678,3 +678,10 @@
     gap: 10px;
   }
 }
+
+.home-frame .sphere-edit-link { margin-left: 12px; padding: 2px 6px; font: inherit; color: var(--accent); border-radius: 4px; }
+.home-frame .sphere-edit-link:hover { background: var(--accent-soft); }
+.home-frame .sphere-history { border-top: 1px solid var(--glass-line); margin-top: 12px; padding-top: 12px; color: var(--text-muted); font-size: 12px; }
+.sphere-history > summary { cursor: pointer; }
+.sphere-history ul { padding: 0; list-style: none; }
+.sphere-history li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; }
