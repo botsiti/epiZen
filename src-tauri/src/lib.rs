@@ -567,7 +567,13 @@ pub fn run() {
             tray::tray_hide,
             tray::tray_quit
             ];
+            #[cfg(feature = "e2e")]
+            let test_dispatch: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![tray::tray_test_show];
             move |invoke: tauri::ipc::Invoke<tauri::Wry>| {
+                #[cfg(feature = "e2e")]
+                if invoke.message.command() == "tray_test_show" {
+                    return test_dispatch(invoke);
+                }
                 if !prompt::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
                     invoke.resolver.reject("This companion window cannot access workspace commands.");
                     true

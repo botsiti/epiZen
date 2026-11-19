@@ -1546,6 +1546,34 @@ describe('the demo vault', () => {
     await pressCommand('h', { shift: true });
   });
 
+  it('opens Calendar and today’s daily note from the menu bar without changing the vault', async () => {
+    const before = snapshotVault(vaultCopy());
+    const openTray = async () => {
+      await browser.execute(() => {
+        const tauri = (window as unknown as { __TAURI__: { core: { invoke: (command: string) => Promise<void> } } }).__TAURI__;
+        return tauri.core.invoke('tray_test_show');
+      });
+      await browser.waitUntil(async () => (await browser.getWindowHandles()).includes('tray'));
+      await browser.switchToWindow('tray');
+      await $('[data-testid="tray"]').waitForDisplayed();
+    };
+
+    await openTray();
+    await $('button=Sound').click();
+    await expect($('button=White noise')).toBeDisplayed();
+    await expect($('button=Brown noise')).toBeDisplayed();
+    await screenshot('tray-focus-sounds');
+    await $('[data-testid="tray-open-calendar"]').click();
+    await browser.switchToWindow('main');
+    await expect($('[data-testid="cal-view"]')).toBeDisplayed();
+
+    await openTray();
+    await $('[data-testid="tray-open-daily"]').click();
+    await browser.switchToWindow('main');
+    await expect(title()).toHaveText(TODAY);
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+  });
+
   it("times a new task of today's with the stopwatch, shown on the timer's card and in the sidebar", async () => {
     await $('[data-testid="open-calendar"]').click();
     const back = $('[data-testid="cal-today"]');

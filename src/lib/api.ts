@@ -1,3 +1,4 @@
+import type { TrayDestination } from './tray';
 import type { VoiceProvider, VoiceSettings } from './assistant/voice';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -165,9 +166,10 @@ export const trayState = () => invoke<unknown>('tray_state');
 export const onTrayState = (handler: (panel: unknown) => void) => listen<unknown>('epizen://tray-state', (event) => handler(event.payload));
 /** The panel has just been shown: it refreshes, and the main window looks at the date again. */
 export const onTrayShown = (handler: () => void) => listen('epizen://tray-shown', handler);
+export const onTrayHidden = (handler: () => void) => listen('epizen://tray-hidden', handler);
 export const trayCommand = (command: unknown) => invoke<void>('tray_command', { command });
 /** Brings the main window to the front, and hides the panel. */
-export const openMainWindow = () => invoke<void>('tray_open_main');
+export const openMainWindow = (destination?: TrayDestination) => invoke<void>('tray_open_main', { destination });
 export const hideTray = () => invoke<void>('tray_hide');
 /** Quits as ⌘Q does, after the editor's last save. */
 export const quitApp = () => invoke<void>('tray_quit');

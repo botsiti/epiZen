@@ -131,7 +131,7 @@ import {
   type View,
 } from './lib/tabs';
 import { useToday } from './lib/useToday';
-import { panelView } from './lib/tray';
+import { panelView, type TrayDestination } from './lib/tray';
 import { buildTree, countFolders } from './lib/tree';
 
 // Each daily note parsed once per text it has had: saves and new notes bring new text.
@@ -847,6 +847,7 @@ export function App() {
     () =>
       panelView({
         vault: vaultName,
+        navigation: { dailyNote: Boolean(vaultName && !setup && plugins.periodic), calendar: Boolean(vaultName && !setup && plugins.calendar) },
         today: now,
         path: todayEntry.path,
         text: todayEntry.path === undefined ? undefined : texts.get(todayEntry.path),
@@ -855,12 +856,16 @@ export function App() {
         unwritten,
         problem: startProblem ?? (timer.saveError && `The timer couldn’t save itself: ${timer.saveError}`),
       }),
-    [vaultName, now, todayEntry, texts, timer.state, timer.saveError, unwritten, startProblem],
+    [vaultName, setup, plugins.periodic, plugins.calendar, now, todayEntry, texts, timer.state, timer.saveError, unwritten, startProblem],
   );
   const startFromTray = useCallback((choice: TaskChoice, how: FocusHow) => void startTimer(choice, how), [startTimer]);
   // Opening the panel had it show today's list again; the start was on the day before's.
   const staleFromTray = useCallback(() => setStartProblem('The timer didn’t start: that list was another day’s. Today’s tasks are shown now.'), []);
-  useTrayBridge(timer, trayView, startFromTray, staleFromTray, plugins.timer);
+  const openFromTray = (destination: TrayDestination) => {
+    if (destination === 'daily-note' && trayView.navigation?.dailyNote) openPeriodicOrSay('day', today());
+    if (destination === 'calendar' && trayView.navigation?.calendar) go({ kind: 'calendar' });
+  };
+  useTrayBridge(timer, trayView, { onStart: startFromTray, onStale: staleFromTray, onOpen: openFromTray }, plugins.timer);
   const textOf = useCallback((path: string) => texts.get(path), [texts]);
   const frontNote = notePath(view);
   // Laid out only while it can be seen.

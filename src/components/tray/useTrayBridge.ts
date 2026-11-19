@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { enableTray, onTimerDue, onTrayCommand, onTrayShown, publishTray } from '../../lib/api';
 import { today } from '../../lib/dates';
 import { dayKey } from '../../lib/timer';
-import { readCommand, trayClock, trayTooltip, type PanelView, type TrayCommand } from '../../lib/tray';
+import { readCommand, trayClock, trayTooltip, type PanelView, type TrayCommand, type TrayDestination } from '../../lib/tray';
 import { checkToday } from '../../lib/useToday';
 import { primeChime } from '../calendar/chime';
 import type { FocusHow } from '../calendar/FocusMenu';
@@ -13,6 +13,7 @@ export interface TrayHandlers {
   timer: Pick<TimerApi, 'pause' | 'resume' | 'stop' | 'startRest' | 'endRest'>;
   /** Starts the timer on a task, as the calendar's menu does. */
   onStart: (choice: TaskChoice, how: FocusHow) => void;
+  onOpen: (destination: TrayDestination) => void;
   /** A start on another day's list: the panel was showing a day that has gone. */
   onStale: () => void;
 }
@@ -22,7 +23,7 @@ export interface TrayHandlers {
  * buttons do: a start goes through the same path as a right-click's "Start 25 min pomodoro".
  * Like every other start, it takes only today's tasks: one listed on another day is refused.
  */
-export function runCommand(command: TrayCommand, { timer, onStart, onStale }: TrayHandlers, now = today()) {
+export function runCommand(command: TrayCommand, { timer, onStart, onStale, onOpen }: TrayHandlers, now = today()) {
   switch (command.kind) {
     case 'start': {
       if (command.day !== dayKey(now)) return onStale();
@@ -31,6 +32,8 @@ export function runCommand(command: TrayCommand, { timer, onStart, onStale }: Tr
       onStart({ kind: 'task', ref: { line, text }, label, ...(category ? { category } : {}) }, { mode: command.mode, ...(command.minutes === undefined ? {} : { minutes: command.minutes }) });
       return;
     }
+    case 'open':
+      return onOpen(command.destination);
     case 'pause':
       return timer.pause();
     case 'resume':
@@ -50,13 +53,16 @@ export function runCommand(command: TrayCommand, { timer, onStart, onStale }: Tr
  * soon as the item says a round or a rest has run out, and looks at the date again when the
  * panel opens, since a hidden window's own timers are held back.
  */
-export function useTrayBridge(timer: TimerApi, view: PanelView, onStart: TrayHandlers['onStart'], onStale: TrayHandlers['onStale'], enabled = true) {
+export function useTrayBridge(timer: TimerApi, view: PanelView, actions: Omit<TrayHandlers, 'timer'>, enabled = true) {
   const clock = useMemo(() => trayClock(timer.state), [timer.state]);
   const tooltip = useMemo(() => trayTooltip(timer.state), [timer.state]);
   const published = useRef<string>(undefined);
   useEffect(() => { void enableTray(enabled).catch((error: unknown) => console.error('Could not change focus timer visibility', error)); }, [enabled]);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      published.current = undefined;
+      return;
+    }
     const status = { clock, tooltip, panel: view };
     const text = JSON.stringify(status);
     if (text === published.current) return;
@@ -67,17 +73,17 @@ export function useTrayBridge(timer: TimerApi, view: PanelView, onStart: TrayHan
     });
   }, [clock, tooltip, view, enabled]);
 
-  const handlers = useRef<TrayHandlers & { tick: () => void }>({ timer, onStart, onStale, tick: timer.tick });
+  const handlers = useRef({ timer, ...actions });
   useEffect(() => {
-    handlers.current = { timer, onStart, onStale, tick: timer.tick };
-  }, [timer, onStart, onStale]);
+    handlers.current = { timer, ...actions };
+  }, [timer, actions]);
   useEffect(() => {
     if (!enabled) return;
     const commands = onTrayCommand((value) => {
       const command = readCommand(value);
       if (command) runCommand(command, handlers.current);
     });
-    const due = onTimerDue(() => handlers.current.tick());
+    const due = onTimerDue(() => handlers.current.timer.tick());
     // The panel opening: a window asleep and hidden over midnight may still think it yesterday.
     const shown = onTrayShown(checkToday);
     return () => {

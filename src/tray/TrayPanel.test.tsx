@@ -18,7 +18,7 @@ const AT = new Date(2026, 8, 1, 14, 30).getTime();
 const REVIEW = { path: PATH, day: '2026-09-01', line: 3, label: 'draft the weekly review', category: 'kaizen' };
 
 function setup(timer: TimerState = initialTimer(), now = AT) {
-  const view = panelView({ vault: 'demo', today: new Date(2026, 8, 1), path: PATH, text: TEXT, day: parseDay(TEXT), timer, unwritten: 0 });
+  const view = panelView({ vault: 'demo', navigation: { dailyNote: true, calendar: true }, today: new Date(2026, 8, 1), path: PATH, text: TEXT, day: parseDay(TEXT), timer, unwritten: 0 });
   const send = vi.fn();
   const onOpen = vi.fn();
   const onQuit = vi.fn();
@@ -32,7 +32,7 @@ describe('the menu bar’s panel', () => {
   it('shows today, the day gone, the day’s focus and today’s tasks', () => {
     setup();
     expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
-    expect(screen.getByText('Tuesday, 1 September')).toBeInTheDocument();
+    expect(screen.getByText(/Tue, 1 Sep/)).toHaveTextContent('Tue, 1 Sep · 14:30');
     expect(screen.getByRole('img', { name: '14:30, 60% of the day gone' })).toBeInTheDocument();
     expect(screen.getByText('1h 3m')).toBeInTheDocument();
     expect(screen.getByTestId('tray-now')).toHaveAttribute('data-state', 'idle');
@@ -60,18 +60,17 @@ describe('the menu bar’s panel', () => {
     expect(send).toHaveBeenCalledTimes(4);
   });
 
-  it('shows the round under way on its task, with pause and stop there', async () => {
+  it('marks the current task and shows pause and stop in the timer', async () => {
     const timer = start(initialTimer(), AT, { id: 's', task: REVIEW, mode: 'pomodoro', minutes: 25 });
     const { send, user } = setup(timer, AT + 65_000);
     expect(screen.getByTestId('tray-now')).toHaveAttribute('data-state', 'running');
     expect(screen.getByTestId('tray-time')).toHaveTextContent('23:55');
     const review = cards()[1] as HTMLElement;
     expect(review).toHaveClass('is-current');
-    await user.click(within(review).getByTestId('tray-pause'));
+    await user.click(screen.getByTestId('tray-pause'));
     expect(send).toHaveBeenLastCalledWith({ kind: 'pause' });
-    await user.click(within(review).getByTestId('tray-stop'));
+    await user.click(screen.getByTestId('tray-stop'));
     expect(send).toHaveBeenLastCalledWith({ kind: 'stop' });
-    // Not twice: the round's own card has its buttons.
     expect(screen.getAllByTestId('tray-pause')).toHaveLength(1);
   });
 
@@ -97,16 +96,21 @@ describe('the menu bar’s panel', () => {
     expect(send).toHaveBeenLastCalledWith({ kind: 'rest' });
   });
 
-  it('opens Epizen and quits', async () => {
+  it('opens today’s note, calendar and Epizen, and quits', async () => {
     const { onOpen, onQuit, user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Daily note' }));
+    await user.click(screen.getByRole('button', { name: 'Calendar' }));
     await user.click(screen.getByTestId('tray-open'));
     await user.click(screen.getByTestId('tray-quit'));
-    expect([onOpen.mock.calls.length, onQuit.mock.calls.length]).toEqual([1, 1]);
+    expect(onOpen.mock.calls).toEqual([['daily-note'], ['calendar'], []]);
+    expect(onQuit).toHaveBeenCalledTimes(1);
   });
 
   it('waits for the main window before it shows anything', () => {
     render(<TrayPanel now={AT} send={vi.fn()} onOpen={vi.fn()} onQuit={vi.fn()} />);
     expect(screen.getByText('Epizen is opening…')).toBeInTheDocument();
     expect(screen.getByTestId('tray-open')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Daily note' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Calendar' })).toBeDisabled();
   });
 });

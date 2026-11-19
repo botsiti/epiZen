@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseDay } from './day';
 import { initialTimer, pause, start, startRest, type TimerState, type TimerTask } from './timer';
-import { customMinutes, dayShare, isSessionTask, menuBarLabel, panelNow, panelView, readCommand, startCommand, TIMELINE_MARKS, trayClock, trayTooltip, type PanelView } from './tray';
+import { customMinutes, dayShare, isSessionTask, panelNow, panelView, readCommand, startCommand, TIMELINE_MARKS, trayClock, trayTooltip, type PanelView } from './tray';
 
 // The tasks of demo-vault/Calendar/2026/days 2026/01.09.2026.md, as they are, the last one given a focus-id.
 const TEXT = `### Tasks
@@ -26,19 +26,13 @@ const view = (timer: TimerState, more: Partial<Parameters<typeof panelView>[0]> 
   panelView({ vault: 'demo', today: TODAY, path: PATH, text: TEXT, day: parseDay(TEXT), timer, unwritten: 0, ...more });
 
 describe('the menu bar item', () => {
-  it('names a round by its task’s category, or "focus"', () => {
-    expect(menuBarLabel('Code')).toBe('code');
-    expect(menuBarLabel(undefined)).toBe('focus');
-    expect(menuBarLabel('  ')).toBe('focus');
-  });
-
   it('hands the title’s ticking the round’s timing, not its time', () => {
     const pomodoro = running(REVIEW, 'pomodoro');
-    expect(trayClock(pomodoro)).toEqual({ kind: 'focus', label: 'kaizen', accumulated: 0, since: AT, paused: false, planned: 1500 });
+    expect(trayClock(pomodoro)).toEqual({ kind: 'focus', accumulated: 0, since: AT, paused: false, planned: 1500 });
     const stopwatch = running({ ...REVIEW, category: undefined }, 'stopwatch');
-    expect(trayClock(stopwatch)).toEqual({ kind: 'focus', label: 'focus', accumulated: 0, since: AT, paused: false });
+    expect(trayClock(stopwatch)).toEqual({ kind: 'focus', accumulated: 0, since: AT, paused: false });
     const paused = pause(stopwatch, AT + 37_000);
-    expect(trayClock(paused)).toEqual({ kind: 'focus', label: 'focus', accumulated: 37_000, since: AT, paused: true });
+    expect(trayClock(paused)).toEqual({ kind: 'focus', accumulated: 37_000, since: AT, paused: true });
     expect(trayClock(startRest(initialTimer(), AT, 252))).toEqual({ kind: 'rest', endsAt: AT + 252_000 });
     expect(trayClock(initialTimer())).toEqual({ kind: 'idle' });
   });
@@ -101,7 +95,7 @@ describe('the panel at a moment', () => {
 
   it('shows the round’s time, the day’s focus with the stretch under way, and the day gone', () => {
     const shown = panelNow(view(running(REVIEW, 'pomodoro')), AT + 10 * 60_000 + 30_000);
-    expect(shown.date).toBe('Tuesday, 1 September');
+    expect(shown.date).toBe('Tue, 1 Sep');
     expect(shown.clock).toBe('14:40');
     expect(shown.percent).toBe(61);
     expect(shown.focused).toBe('3h 42m');
