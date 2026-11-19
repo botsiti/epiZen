@@ -31,9 +31,12 @@ function ValueChart({ habit, today, marks }: { habit: Habit; today: Date; marks:
   </figure>;
 }
 
-export function HabitHistory({ habit, marks, today, onOpenDay }: { habit: Habit; marks: HabitMark[]; today: Date; onOpenDay: (date: Date) => void }) {
-  const [view, setView] = useState<'Overview' | 'Calendar'>('Overview');
-  const [month, setMonth] = useState(() => startOfMonth(today));
+export function HabitHistory({ habit, marks, today, selected, onSelect }: { habit: Habit; marks: HabitMark[]; today: Date; selected: Date; onSelect: (date: Date) => void }) {
+  const [view, setView] = useState<'Overview' | 'Calendar'>('Calendar');
+  const selectedKey = dayKey(selected);
+  const [browse, setBrowse] = useState<{ selectedKey: string; month: Date }>();
+  const month = browse?.selectedKey === selectedKey ? browse.month : startOfMonth(selected);
+  const move = (delta: number) => setBrowse({ selectedKey, month: addMonths(month, delta) });
   const byDate = useMemo(() => new Map(marks.map((m) => [dayKey(m.date), m])), [marks]);
   const start = addDays(startOfWeek(today), -7 * 19);
   const inMonth = marks.filter((mark) => mark.date.getFullYear() === month.getFullYear() && mark.date.getMonth() === month.getMonth());
@@ -52,7 +55,7 @@ export function HabitHistory({ habit, marks, today, onOpenDay }: { habit: Habit;
       {(['Overview', 'Calendar'] as const).map((tab) => <button type="button" key={tab} aria-pressed={view === tab} onClick={() => setView(tab)}>{tab}</button>)}
     </div>
     {view === 'Overview' ? <>
-      {habit.tracking && <ValueChart habit={habit} today={today} marks={byDate} />}
+      {habit.tracking && <ValueChart habit={habit} today={selected} marks={byDate} />}
       <div className="habit-history-heading"><strong>Activity</strong><span>{recent} completions · 20 weeks</span></div>
       <div className="habit-heatmap" role="img" aria-label={`${habit.name}, ${recent} completions in the last 20 weeks`}>
         <div className="habit-heatmap-labels" aria-hidden="true"><span>M</span><span>W</span><span>F</span><span>S</span></div>
@@ -64,18 +67,19 @@ export function HabitHistory({ habit, marks, today, onOpenDay }: { habit: Habit;
       </div>
       <div className="habit-chart-axis-labels"><span>{formatDate(start, 'D MMM')}</span><span>{formatDate(today, 'D MMM')}</span></div>
     </> : <>
-      <div className="habits-calendar-head"><button type="button" aria-label="Previous habit month" className="quiet-chip" onClick={() => setMonth(addMonths(month, -1))}>←</button>
+      <div className="habits-calendar-head"><button type="button" aria-label="Previous habit month" className="quiet-chip" onClick={() => move(-1)}>←</button>
         <h3>{formatDate(month, 'MMMM YYYY')}</h3>
-        <button type="button" aria-label="Next habit month" className="quiet-chip" onClick={() => setMonth(addMonths(month, 1))}>→</button></div>
+        <button type="button" aria-label="Next habit month" className="quiet-chip" disabled={month >= startOfMonth(today)} onClick={() => move(1)}>→</button></div>
       <p className="habit-month-count">{monthCount} {monthCount === 1 ? 'completion' : 'completions'} this month</p>
       <div className="habits-calendar" aria-label={`${habit.name} history`}>
-        {weekNames.map((name) => <span className="habits-weekday" key={name}>{name.slice(0, 1)}</span>)}
+        {weekNames.map((name) => <span className="habits-weekday" key={name}>{name}</span>)}
         {monthGrid(month).flat().map((date) => {
           const state = status(date);
-          return <button type="button" key={dayKey(date)} disabled={date > today} data-state={state}
+          return <button type="button" key={dayKey(date)} data-date={dayKey(date)} disabled={date > today} data-state={state}
             aria-current={dayKey(today) === dayKey(date) ? 'date' : undefined} data-outside={date.getMonth() !== month.getMonth()}
-            title={`${formatDate(date, 'D MMM YYYY')} · ${state} · open daily note`} aria-label={`${formatDate(date, 'D MMM YYYY')}: ${state}`}
-            className="habits-calendar-day" onClick={() => onOpenDay(date)}>{date.getDate()}<i /></button>;
+            aria-pressed={dayKey(date) === selectedKey}
+            title={`${formatDate(date, 'D MMM YYYY')} · ${state}`} aria-label={`${formatDate(date, 'D MMM YYYY')}: ${state}`}
+            className="habits-calendar-day" onClick={() => onSelect(date)}><span>{date.getDate()}</span><i aria-hidden="true">{state === 'Completed' ? '✓' : state === 'Partial' ? '·' : ''}</i></button>;
         })}
       </div>
     </>}

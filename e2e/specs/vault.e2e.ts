@@ -1,6 +1,7 @@
 import { $, $$, browser, expect } from '@wdio/globals';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { addDays, formatDate, today as localToday } from '../../src/lib/dates';
 import { diffSnapshots, snapshotVault } from '../../scripts/vault-snapshot.mjs';
 import { DEMO_VAULT, FIXTURES, vaultCopy } from '../paths';
 import {
@@ -2169,6 +2170,7 @@ describe('the demo vault', () => {
     await browser.waitUntil(() => log().includes('[habit_value::1]'));
     await $('[aria-label="Add one to Hydration journey"]').click();
     await browser.waitUntil(() => /\[x\] Hydration journey.*\[habit_value::2\]/.test(log()));
+    await $('.habit-detail-tabs').$('button=Overview').click();
     await expect($('[aria-label="Daily progress, last 14 days in glasses"]')).toBeDisplayed();
     await scrollIntoView('[data-testid="habit-detail"]');
     await screenshot('149-habit-target-history');
@@ -2181,6 +2183,48 @@ describe('the demo vault', () => {
     expect(exported).toContain('Daily goal of 2 glasses');
     expect(exported).toContain('Hydration journey · 2');
     expect(exported).toContain('[habit_value::2]');
+  });
+
+  it('backfills a scheduled day and applies the unlocked habit league to the next check-in', async () => {
+    await $('[data-testid="open-habits"]').click();
+    await $('button*=New habit').click();
+    await $('[aria-label="Habit name"]').setValue('Morning Forest journey');
+    await $('[data-testid="habit-effective-date"]').click();
+    await $('[data-testid="date-picker-yesterday"]').click();
+    await $('button=Save habit').click();
+    const detail = $('[data-testid="habit-detail"]');
+    await expect(detail.$('h2')).toHaveText('Morning Forest journey');
+    await detail.$('button=XP settings').click();
+    await selectOption('[role="dialog"] select', 'health-fitness');
+    await $('[aria-label="League 1 streak days"]').setValue('2');
+    await screenshot('150-habit-xp-leagues');
+    await $('button=Save XP settings').click();
+    await expect(detail).toHaveText(expect.stringContaining('10 XP on completion'));
+    const yesterday = addDays(localToday(), -1);
+    const label = formatDate(yesterday, 'D MMM');
+    const prior = formatDate(yesterday, 'YYYY-MM-DD');
+    if (yesterday.getMonth() !== localToday().getMonth()) await $('[aria-label="Previous habit month"]').click();
+    await $('.habits-calendar-day[data-date="' + prior + '"]').click();
+    await $('button=Mark ' + label + ' complete').click();
+    await expect(detail).toHaveText(expect.stringContaining('10 XP earned'));
+    await expect($('.habits-calendar-day[data-date="' + prior + '"]')).toHaveAttribute('data-state', 'Completed');
+    await screenshot('151-habit-backfilled-calendar');
+    await $('.habits-today').$('button=Today').click();
+    await $('button=Mark today complete').click();
+    await expect(detail).toHaveText(expect.stringContaining('15 XP earned'));
+    await $('.habit-week-chart button[data-date="' + prior + '"]').click();
+    await $('button=Completed ' + label).click();
+    await $('.habits-today').$('button=Today').click();
+    await expect(detail).toHaveText(expect.stringContaining('10 XP earned'));
+    await detail.$('button=Open daily note').click();
+    await showTab('Habits');
+    const checkIn = $('.habit-label=Morning Forest journey').$('..');
+    await checkIn.waitForDisplayed();
+    const description = await checkIn.getAttribute('aria-describedby');
+    await browser.execute((id) => document.querySelector<HTMLElement>('[aria-describedby="' + id + '"]')?.focus(), description);
+    const tooltip = $('[id="' + description + '"]');
+    await expect(tooltip).toHaveText(expect.stringMatching(/Current streak\s+1d\s+Record streak\s+1d/));
+    await screenshot('152-daily-habit-streaks');
   });
 
 });

@@ -1056,59 +1056,81 @@ button.segment:hover {
 
 .habit-pills {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+  width: min(100%, 660px);
+}
+
+.daily-habit-row {
+  position: relative;
+  border-bottom: 1px solid var(--glass-line);
 }
 
 .habit-pill {
   display: flex;
-  gap: var(--space-3);
+  width: 100%;
+  min-height: 54px;
+  gap: 12px;
   align-items: center;
-  padding: 14px 18px;
-  border-radius: 16px;
+  padding: 8px 12px;
+  border-radius: 14px;
   text-align: left;
-  transition:
-    background 240ms ease-out,
-    transform var(--motion-state) var(--snap);
 }
 
-.habit-pill:active {
-  transform: scale(0.98);
+button.habit-pill:hover, .daily-habit-row:focus-within .habit-pill {
+  background: color-mix(in srgb, var(--tone) 9%, transparent);
 }
 
-.habit-pill.is-done {
-  background:
-    linear-gradient(110deg, color-mix(in srgb, var(--tone) 18%, transparent), transparent 60%),
-    var(--glass-face),
-    var(--bg);
+.daily-habit-label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .habit-check {
+  display: grid;
+  place-items: center;
   flex: none;
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid color-mix(in srgb, var(--tone) 70%, transparent);
+  width: 25px;
+  height: 25px;
+  border: 1px solid color-mix(in srgb, var(--tone) 60%, transparent);
   border-radius: 50%;
-  transition:
-    background 200ms ease-out,
-    transform var(--motion-state) var(--snap);
 }
 
-.habit-pill.is-done .habit-check {
+.habit-pill[aria-pressed=true] .habit-check {
   background: var(--tone);
-  box-shadow: 0 0 12px -2px var(--tone);
+  color: var(--bg);
 }
 
 .habit-label {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.habit-streak {
-  color: var(--text-faint);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
+.habit-streak-tooltip {
+  position: absolute;
+  z-index: 4;
+  right: 8px;
+  bottom: calc(100% + 2px);
+  display: grid;
+  gap: 5px;
+  min-width: 145px;
+  padding: 9px 12px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 10px;
+  color: var(--text-muted);
+  background: var(--surface);
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
 }
+
+.habit-streak-tooltip span { display: flex; justify-content: space-between; gap: 12px; }
+.habit-streak-tooltip strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.daily-habit-row:hover .habit-streak-tooltip, .daily-habit-row:focus-within .habit-streak-tooltip { opacity: 1; }
 
 .habit-grid {
   display: grid;
@@ -1712,7 +1734,6 @@ button.heatmap-cell:hover {
 
   .split,
   .task-cards,
-  .habit-pills,
   .week-cards {
     grid-template-columns: minmax(0, 1fr);
   }

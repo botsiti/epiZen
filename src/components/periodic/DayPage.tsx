@@ -1,7 +1,9 @@
 import { PluginAppearance, usePluginDisplay } from '../workspace/PluginDisplay';
-import { useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
+import { useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
+import { HabitIcon } from '../habits/HabitIcon';
 import { HabitValueControl } from '../habits/HabitValueControl';
-import { withHabits } from '../../lib/habits';
+import { habitTone } from '../../lib/habitStyle';
+import { habitNameKey, withHabits } from '../../lib/habits';
 import { metricColor, metricStatus } from '../../lib/metricStatus';
 import { category, habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
@@ -650,53 +652,43 @@ function Composer({ categories, onAdd }: { categories: string[]; onAdd: (categor
   );
 }
 
-/** Days in a row the habit was ticked, up to this day; today counts once it is ticked. */
-function streak(spec: PeriodicSpec, name: string, doneToday: boolean): number {
-  let count = doneToday ? 1 : 0;
-  for (let back = 1; back <= 366; back += 1) {
-    const habit = spec.dayOf(addDays(spec.date, -back)).day?.habits.find((h) => h.label === name);
-    if (!habit?.done) break;
-    count += 1;
-  }
-  return count;
+function DailyHabit({ habit, definition, stats, color, date, actions }: {
+  habit: DayTask; definition?: NonNullable<PeriodicSpec['habits']>[number];
+  stats: { current: number; best: number }; color: string; date: Date; actions: PeriodicActions;
+}) {
+  const description = useId();
+  const label = <><HabitIcon name={habit.label} icon={definition?.icon} kind={definition?.tracking?.kind} />
+    <span className="habit-label">{habit.label}</span></>;
+  const measure = actions.onMeasureHabit;
+  return <div className="daily-habit-row" style={{ '--tone': color } as CSSProperties}>
+    {definition?.tracking && measure ? <div className="habit-pill" data-habit-id={definition.id}>
+      <span className="daily-habit-label" tabIndex={0} aria-describedby={description}>{label}</span>
+      <HabitValueControl habit={definition} value={habit.habitValue} onSave={(value) => measure(date, definition, habit.habitValue, value)} />
+    </div> : <button type="button" className="habit-pill" aria-pressed={habit.done}
+      aria-describedby={description} onClick={() => actions.onToggle(habit)}
+      data-testid="habit-pill" data-habit-id={habit.habitId} data-line={habit.line}>
+      {label}<span className="habit-check" aria-hidden="true">{habit.done ? '✓' : ''}</span>
+    </button>}
+    <div className="habit-streak-tooltip" role="tooltip" id={description}>
+      <span>Current streak <strong>{stats.current}d</strong></span>
+      <span>Record streak <strong>{stats.best}d</strong></span>
+    </div>
+  </div>;
 }
 
 function HabitsTab({ day, spec, actions }: { day: Day; spec: PeriodicSpec; actions: PeriodicActions }) {
-  if (!day.habits.length) return <div className="daily-habit-header"><p>No habits scheduled for this day. Older check-ins stay in history.</p>{actions.onManageHabits && <button type="button" className="quiet-chip" onClick={actions.onManageHabits}>Manage habits</button>}</div>;
-  return (
-    <><div className="daily-habit-header"><p>{day.habits.filter((h) => h.done).length} of {day.habits.length} completed</p>{actions.onManageHabits && <button type="button" className="quiet-chip" onClick={actions.onManageHabits}>Manage habits</button>}</div><div className="habit-pills">
-      {day.habits.map((habit, i) => {
-        const definition = spec.habits?.find((h) => h.id === habit.habitId);
-        const color = definition?.color ?? habitColor(i);
-        const stats = habit.habitId ? spec.habitStats?.[habit.habitId] : undefined;
-        const days = stats?.current ?? streak(spec, habit.label, habit.done);
-        if (definition?.tracking && actions.onMeasureHabit) {
-          const save = actions.onMeasureHabit;
-          return <div key={definition.id} className="habit-pill glass" data-habit-id={definition.id} style={{ '--tone': color } as CSSProperties}>
-            <span className="habit-label">{definition?.icon && <span aria-hidden="true">{definition.icon} </span>}{habit.label}</span>
-            <HabitValueControl habit={definition} value={habit.habitValue} onSave={(value) => save(spec.date, definition, habit.habitValue, value)} />
-          </div>;
-        }
-        return (
-          <button
-            key={habit.habitId ?? habit.line}
-            type="button"
-            className={habit.done ? 'habit-pill glass rise is-done' : 'habit-pill glass rise'}
-            style={{ ...order(i), '--tone': color } as CSSProperties}
-            aria-pressed={habit.done}
-            onClick={() => actions.onToggle(habit)}
-            data-testid="habit-pill"
-            data-habit-id={habit.habitId}
-            data-line={habit.line}
-          >
-            <span className="habit-check" aria-hidden="true" />
-            <span className="habit-label">{definition?.icon && <span aria-hidden="true">{definition.icon} </span>}{habit.label}</span>
-            <span className="habit-streak">{days ? `${days} day${days === 1 ? '' : 's'}` : 'no streak'}{stats ? ` · best ${stats.best}` : ''}</span>
-          </button>
-        );
-      })}
-    </div></>
-  );
+  return <>
+    <div className="daily-habit-header">
+      <p>{day.habits.length ? `${day.totals.habitsDone} of ${day.totals.habits} completed` : 'No habits scheduled for this day.'}{day.habitRewardXp ? ` · +${day.habitRewardXp} XP` : ''}</p>
+      {actions.onManageHabits && <button type="button" className="quiet-chip" onClick={actions.onManageHabits}>Manage habits</button>}
+    </div>
+    <div className="habit-pills">{day.habits.map((habit, i) => {
+      const definition = spec.habits?.find((h) => h.id === habit.habitId);
+      const stats = spec.habitStats?.[habit.habitId ?? habitNameKey(habit.label)] ?? { current: Number(habit.done), best: Number(habit.done) };
+      return <DailyHabit key={habit.habitId ?? habit.line} habit={habit} definition={definition} date={spec.date}
+        stats={stats} color={definition ? habitTone(definition.id, definition.color) : habitColor(i)} actions={actions} />;
+    })}</div>
+  </>;
 }
 
 function StreamTab({ day, actions, onOpen, thoughtRecords }: { day: Day; actions: PeriodicActions; onOpen: (record?: ThoughtRecord) => void; thoughtRecords: boolean }) {

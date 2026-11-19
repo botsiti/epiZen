@@ -39,6 +39,8 @@ export interface DayTotals {
 
 export interface Day {
   exactReward?: ExactXp;
+  habitAreaCredits?: ReadonlyMap<string, ExactXp>;
+  habitRewardXp?: number;
   areaCredits?: ReadonlyMap<string, ExactXp>;
   rewardProblem?: string;
   tasks: DayTask[];

@@ -1,6 +1,6 @@
 # Habits
 
-![The Habits workspace showing four routines and a daily water target](images/habits.png)
+![Habit routines, streaks and check-in calendar](images/habits.png)
 
 Open **Habits** from the sidebar. Add a daily habit with **New habit**, or use **Continue recent
 routine** to carry forward the latest habit set found in your daily notes. The History collection
@@ -50,24 +50,31 @@ than silently edited. If you rename a definition by hand, keep the former name i
 
 ## The daily flow
 
-The Today strip shows how much of the routine is complete. Each active habit has its own direct
-check-in button; selecting the habit opens its history without changing its completion. Overview
-shows the current and best streaks and twenty weeks of check-ins. Calendar opens the detailed
-monthly view, where a date leads to its daily note. Creation and schedule edits open in a compact
-dialog so the current place in the routine stays put.
+Select a day in the seven-day strip or the habit calendar. Use the round check-in button beside a habit, or log a value in the selected day's detail. Choose **Open daily note** to read that day's Markdown. You can fill earlier days within a habit's tracking periods, including days that have no note yet. Opening the calendar alone creates no files.
 
-The visual references studied through Appllama were Productive's dark Today dashboard
-(`983826477/oth_zd2m0`), HabitKit's dashboard and detail (`6443918070/oth_48ehi`,
-`6443918070/oth_pcexw`), and (Not Boring) Habits' statistics and monthly summary
-(`1593891243/oth_8fgk9`, `1593891243/oth_osxyx`). The adopted patterns are direct daily actions,
-compact history grids and clear numerical hierarchy, expressed in Epizen's own palette and type.
+Daily-note habit rows show an illustrated icon. Point at a row or focus its control to see the current and record streaks as of that note's date.
+
+## Habit XP
+
+Open **Settings → Habits → XP settings** beside a routine, or use the same button in the Habits workspace. Choose its base XP, life area, and streak leagues. Starting suggestions are 10 XP per check-in, with 1.5× at 7 days, 2× at 20, 2.5× at 30, and 4× at 100. Edit, remove, or add thresholds and preview the XP each league earns.
+
+The higher rate starts on the completion that reaches its threshold. A missed scheduled day breaks the run. A break outside the schedule pauses it unless you choose to reset on reactivation. Filling or undoing a past completion recalculates affected XP, and saving new reward rules applies them to the habit's whole history. Existing habits earn XP once you save their reward settings.
+
+Habit XP counts in daily, weekly, monthly, and life totals. Assign a life area to credit that area's progress in Home. The habit's Markdown definition stores the rules in a `reward` property with `base`, an optional area ID, and `leagues` entries containing `days` and `percent`.
 
 ## Check-ins, targets and measurements
 
 Choose **Track by** when creating a habit. A daily check-in records completion with one click. A daily target records progress in your chosen unit, with a +1 shortcut and an editable value. Reaching the target completes the day. A measured habit records a value, including zero. Its trend connects consecutive recorded days. Open **Color and icon** during creation, or choose **Personalize** on an existing routine.
 
-The weekly chart counts completions across routines. Each habit has its own 20-week activity grid, monthly calendar, current and best streaks, completion count and consistency. Active routines show the next streak milestone. The fourteen-day goal chart shows progress against the target, while the measured-value chart shows change over time. Recorded values are also available as a text list.
+The seven-day strip shows completion rings across routines. Calendar shows each day’s check-in and Overview shows twenty weeks of activity. The fourteen-day goal chart shows progress against the target, while the measured-value chart shows change over time. Recorded values are also available as a text list.
 
 ## Export and share
 
 Choose **Export journal** to save or copy a Markdown report. The report includes active, archived and historical routines, tracking periods, recorded values, and dated check-ins. Its source archive includes the original definition notes and the daily habit task fields. Other daily-note sections stay in the vault. Saving creates a new file at the chosen destination.
+
+
+## Icon artwork
+
+The nine illustrated icons in `src/components/habits/icons/` were generated with built-in ImageGen from this prompt, then split into 96px transparent assets.
+
+> Use case: stylized-concept. Create a single square sprite sheet for the Epizen desktop habit journal: exactly 3 columns by 3 rows of isolated small habit emblems, equal cell dimensions, icons centered at 1/6, 1/2, 5/6 of each axis with generous transparent gutters. Reading order: sunrise behind a fir tree, crescent moon, teacup with leaf, candle flame, hourglass, open book, simple dumbbell, lotus, new sprout. Refined softly lit enamel pins with subtle bronze rims, distinct muted peach, gold, sage, lavender, and teal colors. Bold readable silhouettes at 32 pixels on dark navy or ivory UI. No circular background tiles, no words, no frames, no grid lines, actual transparent canvas.

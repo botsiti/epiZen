@@ -36,3 +36,18 @@ it('refuses writes after switching vaults and never runs a daily edit for an arc
   await expect(result.current.onComplete(new Date(2026, 9, 31), habit, false, true)).rejects.toThrow('not scheduled');
   expect(p.changeDay).not.toHaveBeenCalled();
 });
+
+it('conditionally saves XP rules in the shown definition and reports a write conflict', async () => {
+  const p = options();
+  const habit = p.habits[0]!;
+  const { result } = renderHook(() => useHabitActions(p));
+  const reward = { base: 10, area: 'health-fitness', leagues: [{ days: 20, percent: 200 }] };
+  vi.mocked(writeNoteScoped).mockRejectedValueOnce(new Error('The note changed outside Epizen.'));
+  await expect(result.current.onSaveReward(habit, reward)).rejects.toThrow('changed outside');
+  expect(p.onSaved).not.toHaveBeenCalled();
+  await act(() => result.current.onSaveReward(habit, reward));
+  const write = vi.mocked(writeNoteScoped).mock.lastCall!;
+  expect(write).toEqual(['/copy', habit.path, expect.any(String), habit.source]);
+  expect(readHabit(habit.path!, write[2])?.reward).toEqual(reward);
+  expect(p.changeDay).not.toHaveBeenCalled();
+});
