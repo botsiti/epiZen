@@ -1,3 +1,4 @@
+import { addHabitRewardDay, readHabitReward, type HabitReward, type HabitRewardDay } from './habitRewards';
 import { parseDocument, isMap, isSeq, isScalar, stringify } from 'yaml';
 import { habitValueField, readHabitTracking, type HabitTracking } from './habitMeasurements';
 import { readHabitStyle, type HabitStyle } from './habitStyle';
@@ -16,6 +17,7 @@ export interface Habit extends HabitStyle {
   name: string;
   aliases: string[];
   tracking?: HabitTracking;
+  reward?: HabitReward;
   periods: HabitPeriod[];
   path?: string;
   source?: string;
@@ -41,7 +43,7 @@ export function readHabit(path: string, source: string): Habit | undefined {
     return { from: period.from, ...(period.until ? { until: period.until } : {}), ...(period.reset ? { reset: true } : {}) };
   });
   for (let i = 1; i < periods.length; i++) if (!periods[i - 1]!.until || periods[i]!.from < periods[i - 1]!.until!) throw new Error('Tracking periods overlap or are out of order.');
-  return { id: p.habit_id, name: p.name.trim(), aliases: p.aliases as string[], periods, path, source, ...readHabitStyle({ color: p.color, icon: p.icon }), tracking: readHabitTracking(p.tracking) };
+  return { id: p.habit_id, name: p.name.trim(), aliases: p.aliases as string[], periods, path, source, ...readHabitStyle({ color: p.color, icon: p.icon }), tracking: readHabitTracking(p.tracking), reward: readHabitReward(p.reward) };
 }
 
 export function collectHabits(notes: ReadonlyMap<string, string>): { habits: Habit[]; problems: HabitProblem[] } {
@@ -124,6 +126,36 @@ export function changeHabit(source: string, shown: Habit, change: HabitLifecycle
   const [from, to] = value.range; const offset = 3 + eol.length; const old = header[1]!.slice(from, to);
   const next = source.slice(0, offset + from) + JSON.stringify(periods) + (old.endsWith(eol) ? eol : '') + source.slice(offset + to);
   readHabit(shown.path!, next);
+  return next;
+}
+
+export function changeHabitReward(habit: Habit, reward: HabitReward): string {
+  if (!habit.path || habit.source === undefined) throw new Error('Continue this habit before editing its XP.');
+  const source = habit.source;
+  const eol = lineEnding(source);
+  const header = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source);
+  if (!eol || !header) throw new Error('The habit note needs consistent Markdown frontmatter.');
+  const yaml = header[1]!;
+  const doc = parseDocument(yaml);
+  if (doc.errors.length || !isMap(doc.contents)) throw new Error('The habit properties cannot be read.');
+  const value = JSON.stringify(readHabitReward(reward));
+  const pair = doc.contents.items.find((item) => isScalar(item.key) && item.key.value === 'reward');
+  const node = pair?.value;
+  const offset = 3 + eol.length;
+  let next: string;
+  if (pair) {
+    const keyEnd = isScalar(pair.key) ? pair.key.range?.[1] : undefined;
+    if (keyEnd === undefined || yaml[keyEnd] !== ':' || !isMap(node) || !node.range) {
+      throw new Error('Open the habit note to edit its reward property.');
+    }
+    const [start, end] = node.range;
+    const newline = yaml.slice(start, end).endsWith(eol) ? eol : '';
+    const keyComment = node.flow ? '' : yaml.slice(keyEnd + 1, start).split(eol)[0]?.trim();
+    next = source.slice(0, offset + keyEnd + 1) + ' ' + value + (keyComment ? ' ' + keyComment : '') + newline + source.slice(offset + end);
+  } else {
+    next = source.slice(0, offset + yaml.length) + eol + 'reward: ' + value + source.slice(offset + yaml.length);
+  }
+  if (!readHabit(habit.path, next)?.reward) throw new Error('The habit reward could not be saved.');
   return next;
 }
 
@@ -228,13 +260,25 @@ export function habitHistory(habit: Habit, days: DayEntry[], today: Date): Habit
   }
   return marks;
 }
-export function habitStats(marks: HabitMark[], today: Date) {
+export function habitStats(marks: HabitMark[], today: Date, onCompletion?: (mark: HabitMark, streak: number) => void) {
   let run = 0; let best = 0; let completed = 0; let due = 0;
   for (const mark of marks) {
+    if (mark.date > today) break;
     if (mark.reset) run = 0;
     if (!mark.due) continue;
-    if (mark.done) { run++; completed++; best = Math.max(best, run); due++; }
+    if (mark.done) { run++; completed++; best = Math.max(best, run); due++; onCompletion?.(mark, run); }
     else if (iso(mark.date) !== iso(today)) { run = 0; due++; }
   }
   return { current: run, best, completed, due, rate: due ? Math.round(completed * 100 / due) : undefined };
+}
+
+
+export function scoreHabitHistory(habits: Habit[], days: DayEntry[], today: Date) {
+  const awards = new Map<string, HabitRewardDay>();
+  for (const habit of habits) {
+    const reward = habit.reward;
+    if (!reward?.base) continue;
+    habitStats(habitHistory(habit, days, today), today, (mark, streak) => addHabitRewardDay(awards, mark.date, reward, streak));
+  }
+  return awards;
 }

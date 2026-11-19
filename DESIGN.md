@@ -162,7 +162,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Day**: tiles for XP, time logged (productive and recovery), tasks and habits; a check-in card
   where mood, energy, focus and social are set with a tap on a segment, and sleep and plan done are
   typed; a donut of time by category; the tasks with clear tick feedback. Further tabs: task
-  cards with a composer, habit pills with their streaks, the quests, and the stream (gratitude,
+  cards with a composer, habit rows with illustrated icons and current and record streaks on hover or focus, the quests, and the stream (gratitude,
   important, the stream itself, and thought-record sessions). No timeline: the calendar draws time.
 - **Thought records**: the Obsidian CBT wizard in five steps, opened from the hero's Thought record
   chip or the Stream tab. A dark sage glass dialog with the bird, serif italic titles, a progress

@@ -1,27 +1,25 @@
-import { addDays, formatDate } from '../../lib/dates';
+import { formatDate, sameDay } from '../../lib/dates';
 
-export function HabitRhythm({ today, due, completed, best, week }: {
-  today: Date; due: number; completed: number; best: number; week: number[];
+export function HabitRhythm({ today, selected, due, completed, week, onSelect }: {
+  today: Date; selected: Date; due: number; completed: number;
+  week: { date: Date; due: number; completed: number }[];
+  onSelect: (date: Date) => void;
 }) {
-  const percent = due ? completed / due * 100 : 0;
-  const total = week.reduce((sum, value) => sum + value, 0);
-  const peak = Math.max(1, ...week);
-  return <section className="habits-today" aria-label="Today's habit progress">
+  return <section className="habits-today" aria-label="Habit check-in dates">
     <div className="habit-today-count">
-      <svg className="habit-ring" viewBox="0 0 68 68" aria-hidden="true">
-        <circle cx="34" cy="34" r="29" />
-        <circle cx="34" cy="34" r="29" pathLength="100" strokeDasharray={`${percent} 100`} opacity={percent ? 1 : 0} />
-        <path d="m25 34 6 6 13-14" />
-      </svg>
-      <div><span className="kicker">Today</span><strong>{completed}<small> / {due}</small></strong>
-        <span>{!due ? 'No habits scheduled' : completed === due ? 'Routine complete' : 'Habits complete'}</span></div>
+      <div><span className="kicker">{sameDay(today, selected) ? 'Today' : formatDate(selected, 'ddd, D MMM')}</span>
+        <strong>{completed}<small> / {due}</small></strong><span>{due ? 'Habits complete' : 'No habits scheduled'}</span></div>
+      {!sameDay(today, selected) && <button type="button" className="quiet-chip" onClick={() => onSelect(today)}>Today</button>}
     </div>
-    <div className="habit-week"><div className="habit-week-title"><span className="kicker">Last 7 days</span><span>{total} completions</span></div>
-      <div className="habit-week-chart">{week.map((value, i) => {
-        const date = addDays(today, i - 6);
-        return <div key={i} data-today={i === 6} title={`${formatDate(date, 'ddd, D MMM')} · ${value} completions`}><div className="habit-bar-track"><i style={{ height: `${100 * value / peak}%` }} /></div><span>{formatDate(date, 'ddd')}</span></div>;
-      })}</div>
-    </div>
-    <div className="habit-best"><span className="kicker">Leading streak</span><strong>{best}<small> {best === 1 ? 'day' : 'days'}</small></strong><span>Across active habits</span></div>
+    <div className="habit-week-chart" role="group" aria-label="Last seven days">{week.map(({ date, completed, due }) =>
+      <button type="button" key={date.getTime()} data-date={formatDate(date, 'YYYY-MM-DD')} aria-pressed={sameDay(date, selected)}
+        aria-label={`${formatDate(date, 'D MMM YYYY')}, ${completed} of ${due} complete`} onClick={() => onSelect(date)}>
+        <span>{formatDate(date, 'ddd')}</span>
+        <svg className="habit-ring" viewBox="0 0 34 34" aria-hidden="true">
+          <circle cx="17" cy="17" r="14" />
+          {completed > 0 && <circle cx="17" cy="17" r="14" pathLength="100" strokeDasharray={`${completed / due * 100} 100`} />}
+          <text x="17" y="17" dominantBaseline="central" textAnchor="middle">{date.getDate()}</text>
+        </svg>
+      </button>)}</div>
   </section>;
 }

@@ -6,7 +6,7 @@ export function HabitDialog({ children, title, busy, onCancel }: { children: Rea
   const node = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
-    node.current?.querySelector<HTMLElement>('input, button')?.focus();
+    node.current?.querySelector<HTMLElement>('input, button, select')?.focus();
     return () => previous?.focus();
   }, []);
   return createPortal(<div className="periodic-layer habits-dialog"><div ref={node} role="dialog" aria-modal="true" aria-label={title} onKeyDown={(event) => {

@@ -100,10 +100,47 @@ it('shows a partial target as recorded progress, accepts a zero measurement, and
   p.habits = [readHabit(note.path, note.text)!];
   p.days = [{ date: TODAY, day: parseDay('> [!habits]\n> - [ ] Drink water [habit::water-daily-001] [habit_value::0]') }];
   render(<HabitsPage {...p} />);
+  await user.click(screen.getByRole('button', { name: 'Overview' }));
   expect(screen.getByRole('img', { name: /Daily progress, last 14 days in glasses/ })).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Add one to Drink water' }));
   expect(p.onMeasure).toHaveBeenCalledWith(TODAY, p.habits[0], 0, 1);
   await user.click(screen.getByRole('button', { name: 'Calendar' }));
   expect(screen.getByRole('button', { name: '2 Nov 2026: Partial' })).toBeVisible();
   expect(screen.getByText('0 completions this month')).toBeVisible();
+});
+
+it('selects a past calendar date and checks in without opening its note', async () => {
+  const user = userEvent.setup();
+  const p = props();
+  p.days = [];
+  render(<HabitsPage {...p} />);
+  await user.click(screen.getByRole('button', { name: '1 Nov 2026: Not completed' }));
+  expect(screen.getByRole('button', { name: '1 Nov 2026, 0 of 1 complete' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: '3 Nov 2026: Future' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Mark 1 Nov complete' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Complete 1 Nov for No sweets' }));
+  expect(p.onComplete).toHaveBeenCalledWith(day(2026, 10, 1), p.habits[0], false, true);
+  expect(p.onOpenDay).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Open daily note' }));
+  expect(p.onOpenDay).toHaveBeenCalledWith(day(2026, 10, 1));
+});
+
+it('keeps a chosen life area and custom league after a failed save', async () => {
+  const user = userEvent.setup();
+  const p = props();
+  const save = vi.fn<NonNullable<HabitsPageProps['onSaveReward']>>().mockRejectedValueOnce(new Error('Changed outside Epizen')).mockResolvedValue(undefined);
+  render(<HabitsPage {...p} onSaveReward={save} />);
+  await user.click(screen.getByRole('button', { name: 'XP settings for No sweets' }));
+  const dialog = within(screen.getByRole('dialog'));
+  await user.selectOptions(dialog.getByLabelText('Life area'), 'personal-growth');
+  await user.clear(dialog.getByLabelText('League 2 streak days'));
+  await user.type(dialog.getByLabelText('League 2 streak days'), '21');
+  await user.click(dialog.getByRole('button', { name: 'Save XP settings' }));
+  expect(dialog.getByRole('alert')).toHaveTextContent('Changed outside Epizen');
+  expect(dialog.getByLabelText('Life area')).toHaveValue('personal-growth');
+  await user.click(dialog.getByRole('button', { name: 'Save XP settings' }));
+  const [habit, reward] = save.mock.lastCall!;
+  expect(habit).toEqual(p.habits[0]);
+  expect(reward).toMatchObject({ base: 10, area: 'personal-growth' });
+  expect(reward.leagues).toContainEqual({ days: 21, percent: 200 });
 });

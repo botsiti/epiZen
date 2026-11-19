@@ -1,3 +1,4 @@
+import { applyHabitRewards } from './lib/habitRewards';
 import { checkWallpaper } from './components/settings/checkWallpaper';
 import { LiveWallpaper } from './components/settings/WallpaperMedia';
 import { useWallpapers } from './components/settings/useWallpapers';
@@ -5,7 +6,7 @@ import { appearanceSettings, type Appearance } from './lib/appearance';
 import { applyColorTheme } from './components/settings/windowTheme';
 import { selectedTheme, themeRgb } from './lib/colorThemes';
 import { applyAppearance } from './lib/api';
-import { collectHabits, withHabits, habitActive, habitHistory, habitStats } from './lib/habits';
+import { collectHabits, withHabits, habitActive, habitHistory, habitStats, discoveredHabits, habitNameKey, scoreHabitHistory } from './lib/habits';
 import { HabitsPage } from './components/habits/HabitsPage';
 import { useHabitActions } from './components/habits/useHabitActions';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -326,6 +327,7 @@ export function App() {
     return date && text !== undefined ? [{ date, path, day: dayFrom(path, text) }] : [];
   }), [periodicNotes, texts]);
   const scoredDays = useMemo(() => plugins.quests && rewards ? questActivity(recordedDays.map(({ date, path, day }) => ({ date: formatDate(date, 'YYYY-MM-DD'), path, day })), rewards) : undefined, [recordedDays, rewards, plugins.quests]);
+  const habitRewards = useMemo(() => scoreHabitHistory(habitCatalog.habits, recordedDays, now), [habitCatalog.habits, recordedDays, now]);
   const scoringIssue = useMemo(() => scoredDays && [...scoredDays].find(([, day]) => day.rewardProblem), [scoredDays]);
   // Everything a daily, weekly or monthly note's page reads from the rest of the vault.
   const dayOf = useCallback(
@@ -334,9 +336,9 @@ export function App() {
       const text = path === undefined ? undefined : texts.get(path);
       const recorded = path === undefined || text === undefined ? undefined : scoredDays?.get(path) ?? dayFrom(path, text);
       const scheduled = date <= now && habitCatalog.habits.some((h) => habitActive(h, date));
-      return { date, path, scheduledOnly: !recorded && scheduled, day: recorded || scheduled ? withHabits(recorded ?? parseDay(''), habitCatalog.habits, date, now) : undefined };
+      return { date, path, scheduledOnly: !recorded && scheduled, day: recorded || scheduled ? withHabits(applyHabitRewards(recorded ?? parseDay(''), habitRewards.get(formatDate(date, 'YYYY-MM-DD'))), habitCatalog.habits, date, now) : undefined };
     },
-    [periodicNotes, texts, habitCatalog.habits, now, scoredDays],
+    [periodicNotes, texts, habitCatalog.habits, now, scoredDays, habitRewards],
   );
   // Every daily note, for the homepage's life XP, streak and spheres.
   const dailyNotes = useMemo(
@@ -347,7 +349,7 @@ export function App() {
       }),
     [periodicNotes, dayOf],
   );
-  const habitSummaries = useMemo(() => Object.fromEntries(habitCatalog.habits.map((h) => [h.id, habitStats(habitHistory(h, recordedDays, now), now)])), [habitCatalog.habits, recordedDays, now]);
+  const habitDefinitions = useMemo(() => [...habitCatalog.habits, ...discoveredHabits(recordedDays, habitCatalog.habits)], [habitCatalog.habits, recordedDays]);
   const lifetimeYears = validLifetimeYears(settings.lifetimeYears) ? settings.lifetimeYears : DEFAULT_LIFETIME_YEARS;
   const birthDate = useMemo(() => parseBirthDate(settings.birthDate), [settings]);
   const dailyFacts = useMemo(() => {
@@ -409,10 +411,15 @@ export function App() {
     if (view.kind !== 'note') return undefined;
     const found = catalog.byPath.get(view.path);
     if (!found) return undefined;
-    const data = scoredDays?.get(view.path);
-    const scoredDay = data && { text: texts.get(view.path)!, day: data };
+    const source = texts.get(view.path);
+    const entry = found.period === 'day' ? dayOf(found.date) : undefined;
+    const scoredDay = entry?.path === view.path && entry.day && source !== undefined ? { text: source, day: entry.day } : undefined;
+    const asOf = found.date > now ? now : found.date;
+    const habitSummaries = found.period === 'day' && features.habits ? Object.fromEntries(habitDefinitions.map((habit) => [
+      habit.path ? habit.id : habitNameKey(habit.name), habitStats(habitHistory(habit, recordedDays, asOf), asOf),
+    ])) : undefined;
     return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, scoredDay, questPresets, questAreas, categories, quests, art, features, habits: habitCatalog.habits, habitStats: habitSummaries };
-  }, [view, catalog, dayOf, weekOf, exists, dailyFacts, texts, scoredDays, categories, questPresets, questAreas, mediaByTitle, quests, art, features, habitCatalog.habits, habitSummaries]);
+  }, [view, catalog, dayOf, weekOf, exists, dailyFacts, texts, categories, questPresets, questAreas, mediaByTitle, quests, art, features, habitCatalog.habits, habitDefinitions, recordedDays, now]);
   const linkTargets = useMemo(() => {
     const titles = new Map<string, number>();
     for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
@@ -1013,7 +1020,7 @@ export function App() {
               />
             )}
             {view.kind === 'quests' && <QuestPage days={dailyNotes} rewards={rewards} quests={quests} art={art} today={todayNote.date} onToggle={onQuestToggle} onProgress={onQuestProgress} onChange={onQuestChange} />}
-            {view.kind === 'habits' && <HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} />}
+            {view.kind === 'habits' && <HabitsPage enabled={features.habits} onOpenSettings={() => go({ kind: 'settings' })} habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} areas={rewards?.areas} {...habitActions} onOpenDay={(date) => openPeriodicOrSay('day', date)} onOpenNote={openNote} />}
             {view.kind === 'statistics' && <StatisticsPage showQuestXp={plugins.quests} rewards={rewards} days={dailyNotes} dayOf={dayOf} today={todayNote.date} showHabits={features.habits} />}
             {view.kind === 'summaries' && <Summaries scales={dailyFacts.scales} today={todayNote.date} days={dailyNotes} lifetimeYears={lifetimeYears} birthDate={birthDate} monthOf={monthOf} onOpenPeriod={openPeriodicOrSay} />}
             {fileActionError && <p className="note-warning" role="alert">{fileActionError}</p>}
@@ -1106,7 +1113,7 @@ export function App() {
             {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
             {view.kind === 'settings' && <SettingsScreen key={status.root}
               menuBarNotice={menuBar.problem && <p className="preferences-error" role="alert">{menuBar.problem} <button type="button" className="quiet-button" onClick={menuBar.retry}>Retry menu bar</button></p>}
-              habitSettings={<HabitPreferences habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} onOpenNote={openNote} {...habitActions} />}
+              habitSettings={<HabitPreferences habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} areas={rewards?.areas} onOpenNote={openNote} {...habitActions} />}
               timerSettings={() => <div className="settings-focus-timer"><TimerCard timer={timer} tasks={taskRefs(todayEntry, todayEntry.path ? texts.get(todayEntry.path) : undefined)} categories={categories}
                 timeZone={calendarTimeZone} onStart={(choice) => void startTimer(choice)} />{startProblem && <p role="alert">{startProblem}</p>}</div>}
               wallpaperLibrary={wallpaperLibrary} calendarTimeZone={calendarTimeZone} rewardDocument={rewardDocument} rewardError={rewardError} retryRewards={retryRewards} rewardDate={rewardDate} observedTags={dailyFacts.categories} appearance={appearance} onSaveAppearance={saveAppearance} appearanceError={appearanceError} spikeSettings={(onBack) => <AssistantConfiguration value={assistantSettings} pluginEnabled={plugins.spike} profileExists={files.some((file) => file.path === assistantSettings.profilePath)} onSave={saveAssistantSettings} onOpenProfile={() => openNote(assistantSettings.profilePath)} onBack={onBack} />} pluginDisplay={pluginDisplay} initialSection={view.section} plugins={configuredPlugins} homeSections={homeSections} sources={sources} fileDefaults={preferences.fileDefaults} periodic={periodic} recognition={recognition} files={files} texts={texts} lifetimeYears={lifetimeYears} birthDate={typeof settings.birthDate === 'string' ? settings.birthDate : ''} podcasts={podcasts} features={features} folders={folders} onSave={saveSettings} />}

@@ -1,5 +1,5 @@
 import { addXp, exactXp, sumXp, xpNumber, ZERO_XP, type ExactXp } from './xp';
-import { rewardArea, type RewardSettings } from './rewardRules';
+import { defaultAreaId, rewardArea, type RewardSettings } from './rewardRules';
 import { metricColor } from './metricStatus';
 import { category, METRICS, SPHERES, type Category, type Sphere } from './categories';
 import { addDays, day, parseDate, startOfMonth, startOfWeek } from './dates';
@@ -185,6 +185,11 @@ export function sphereXp(days: DayEntry[], extra: ReadonlyMap<string, number> = 
   }
   for (const [name, amount] of extra) credit(name, amount);
   for (const { day } of days) {
+    for (const [id, amount] of day?.habitAreaCredits ?? []) {
+      const name = settings?.areas.find((area) => area.id === id)?.name
+        ?? SPHERES.find((area) => defaultAreaId(area.name) === id)?.name ?? 'Unassigned';
+      dated.set(name, addXp(dated.get(name) ?? ZERO_XP, amount));
+    }
     if (day?.areaCredits) {
       for (const [name, amount] of day.areaCredits) dated.set(name, addXp(dated.get(name) ?? ZERO_XP, amount));
       continue;

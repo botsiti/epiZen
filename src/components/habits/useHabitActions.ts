@@ -1,7 +1,8 @@
+import type { HabitReward } from '../../lib/habitRewards';
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import { createNote, readNote, vaultStatus, writeNoteScoped } from '../../lib/api';
 import { readHabitStyle, writeHabitStyle, type HabitStyle } from '../../lib/habitStyle';
-import { changeHabit, habitActive, habitNameKey, newHabit, readHabit, setHabitCompletion, setHabitValue, type HabitTracking, type Habit, type HabitLifecycle } from '../../lib/habits';
+import { changeHabit, changeHabitReward, habitActive, habitNameKey, newHabit, readHabit, setHabitCompletion, setHabitValue, type HabitTracking, type Habit, type HabitLifecycle } from '../../lib/habits';
 
 interface Options {
   root?: string;
@@ -52,6 +53,14 @@ export function useHabitActions({ root, habits, onSaved, refresh, changeDay }: O
     await writeNoteScoped(openRoot, habit.path, next, habit.source);
     if (current.current.root === root) onSaved(habit.path, next);
   }), [serialize, checkRoot, root, onSaved]);
+  const onSaveReward = useCallback((habit: Habit, reward: HabitReward) => serialize(async () => {
+    if (!habit.path || habit.source === undefined) throw new Error('Continue this habit before editing its XP.');
+    const openRoot = await checkRoot();
+    const next = changeHabitReward(habit, reward);
+    if (next === habit.source) return;
+    await writeNoteScoped(openRoot, habit.path, next, habit.source);
+    if (current.current.root === root) onSaved(habit.path, next);
+  }), [serialize, checkRoot, root, onSaved]);
   const editDay = useCallback((date: Date, habit: Habit, edit: (text: string, fresh: Habit) => string) => serialize(async () => {
     await checkRoot();
     if (!habit.path) throw new Error('Continue this historical habit to track it.');
@@ -65,5 +74,5 @@ export function useHabitActions({ root, habits, onSaved, refresh, changeDay }: O
     editDay(date, habit, (text, fresh) => setHabitCompletion(text, fresh, expected, done));
   const onMeasure = (date: Date, habit: Habit, expected: number | undefined, value: number) =>
     editDay(date, habit, (text, fresh) => setHabitValue(text, fresh, expected, value));
-  return { onCreate, onLifecycle, onComplete, onMeasure, onPersonalize };
+  return { onCreate, onLifecycle, onComplete, onMeasure, onPersonalize, onSaveReward };
 }
