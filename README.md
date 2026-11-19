@@ -17,8 +17,8 @@ Built with Tauri 2, Rust, React and TypeScript.
   reveal in Finder, or move a note to recoverable trash from the sidebar. Saves check for external
   edits, and failed saves preserve your text.
 - **Choose your plugins.** New vaults start with Markdown. Enable Homepage, epiBase, Library,
-  Graph, Spike, Periodic notes, Habits, CBT, check-ins, Quests, Statistics and planning tools in Settings → Plugins. Existing users
-  keep their workflows on upgrade; plugin choices belong to each vault.
+  Graph, Spike, Periodic notes, Habits, CBT, Check-ins, Quests, Statistics, Calendar, Focus timer and Menu bar in
+  Settings → Plugins. Existing vaults keep their workflow choices on upgrade.
 - **Use your Obsidian Bases with epiBase.** Open or import `.base` files and embed named views in notes.
   Configure tables, cards and lists with properties, nested filters, sorting, grouping, formulas
   and summaries. Edits remain ordinary YAML and Markdown with conflict-checked saves.
@@ -41,7 +41,8 @@ Built with Tauri 2, Rust, React and TypeScript.
   metadata, advanced filters, paginated covers and a calendar view. Mixed shelves identify each kind with a small cover badge.
   Add notes, find covers, suggest existing genres, and keep favorite album tracks and thoughts.
 - **Plan and focus.** Built-in daily, weekly and monthly pages, local Apple Calendar integration,
-  and a focus timer with a menu-bar panel. Logged time stays in your daily notes.
+  and a focus timer. Calendar can use a different time zone from the Mac. The optional menu-bar
+  panel opens your daily note or calendar and plays white or brown noise. Logged time stays in your daily notes.
 - **Talk to Spike anywhere.** Enable the Spike plugin and click the desktop companion to open
   a compact text or voice prompt directly below him. Right-click hides Spike; ⇧⌘Space shows or hides him and the prompt. A separate shortcut opens dictation;
   **⌘8** opens and closes the full conversation sidebar. Choose on-device, OpenAI or OpenRouter

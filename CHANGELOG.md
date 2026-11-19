@@ -3,6 +3,13 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.14.0 — 2026-11-19
+
+Configure tracked habits, daily task categories and life-sphere rewards from the rebuilt Settings.
+Choose a calendar time zone, chat with Spike inline, and use animated wallpapers with Liquid Glass.
+The independent Menu bar plugin adds daily-note and calendar shortcuts and local focus sounds.
+[Full release notes](releases/0.14.0.md).
+
 ## 0.13.0 — 2026-11-18
 
 Set a personal lifetime horizon, choose which sections appear on Home, and configure Library and
