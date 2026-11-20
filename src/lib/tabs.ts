@@ -7,7 +7,7 @@ export type View =
   | { kind: 'home' }
   | { kind: 'note'; path: string; editing?: boolean; baseView?: string }
   | { kind: 'missing'; target: string }
-  | { kind: 'new'; folder: string; item?: 'folder' | 'base' }
+  | { kind: 'new'; folder: string; item?: 'base' }
   | { kind: 'unsaved'; path: string; text: string; message: string }
   | { kind: 'settings'; section?: PluginSetupPage | 'plugins' | 'files' | 'hotkeys' | 'appearance' }
   | { kind: 'graph' }
@@ -184,6 +184,13 @@ export function closeActive(ws: Workspace): Workspace {
   return activeTab(ws).pinned ? ws : close(ws, ws.active);
 }
 
+/** Keep the chosen tab, pinned tabs, and tabs holding unsaved recovery text. */
+export function closeOtherTabs(ws: Workspace, id = ws.active): Workspace {
+  if (!ws.tabs.some((tab) => tab.id === id)) return ws;
+  const tabs = ws.tabs.filter((tab) => tab.id === id || tab.pinned || tab.history.some((view) => view.kind === 'unsaved'));
+  return tabs.length === ws.tabs.length && ws.active === id ? ws : { ...ws, tabs, active: id };
+}
+
 /** Pins or unpins a tab; pinned tabs move to the left, in the order they were in. */
 export function setPinned(ws: Workspace, id: number, pinned: boolean): Workspace {
   const next = updateTab(ws, id, (tab) => (tab.pinned === pinned ? tab : { ...tab, pinned }));
@@ -200,7 +207,7 @@ export function tabTitle(view: View): string {
     case 'missing':
       return view.target;
     case 'new':
-      return view.item === 'folder' ? 'New folder' : view.item === 'base' ? 'New base' : 'New note';
+      return view.item === 'base' ? 'New base' : 'New note';
     case 'unsaved':
       return 'Not saved';
     case 'settings':

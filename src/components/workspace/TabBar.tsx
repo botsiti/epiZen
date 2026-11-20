@@ -8,6 +8,7 @@ interface Props {
   ws: Workspace;
   onActivate: (id: number) => void;
   onClose: (id: number) => void;
+  onCloseOthers?: (id: number) => void;
   onPin: (id: number, pinned: boolean) => void;
   onNewTab: () => void;
   onBack: () => void;
@@ -25,7 +26,7 @@ interface Props {
  * the tabs (pinned ones first, with a pin where the × would be), + for a new one, and at the right
  * the right sidebar's switch. A right-click on a tab pins or unpins it, or closes it.
  */
-export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onForward, leftOpen, onToggleLeft, rightOpen, onToggleRight, onAssistant, assistantOpen }: Props) {
+export function TabBar({ ws, onActivate, onClose, onCloseOthers, onPin, onNewTab, onBack, onForward, leftOpen, onToggleLeft, rightOpen, onToggleRight, onAssistant, assistantOpen }: Props) {
   const [menu, setMenu] = useState<{ id: number; x: number; y: number }>();
   const front = ws.tabs.find((tab) => tab.id === ws.active);
   const menuTab = menu && ws.tabs.find((tab) => tab.id === menu.id);
@@ -96,6 +97,7 @@ export function TabBar({ ws, onActivate, onClose, onPin, onNewTab, onBack, onFor
           pinned={menuTab.pinned}
           onPin={() => onPin(menuTab.id, !menuTab.pinned)}
           onClose={() => onClose(menuTab.id)}
+          onCloseOthers={onCloseOthers && (() => onCloseOthers(menuTab.id))}
           onDismiss={() => setMenu(undefined)}
         />
       )}
@@ -178,7 +180,7 @@ function TabItem({ tab, active, onActivate, onClose, onUnpin, onMenu }: ItemProp
   );
 }
 
-function TabMenu({ at, pinned, onPin, onClose, onDismiss }: { at: { x: number; y: number }; pinned: boolean; onPin: () => void; onClose: () => void; onDismiss: () => void }) {
+function TabMenu({ at, pinned, onPin, onClose, onCloseOthers, onDismiss }: { at: { x: number; y: number }; pinned: boolean; onPin: () => void; onClose: () => void; onCloseOthers?: () => void; onDismiss: () => void }) {
   useEscape(onDismiss);
   const menu = useRef<HTMLDivElement>(null);
   // Kept inside the window, like a system menu.
@@ -206,6 +208,7 @@ function TabMenu({ at, pinned, onPin, onClose, onDismiss }: { at: { x: number; y
             <span className="tab-menu-key">⌘W</span>
           </button>
         )}
+        {onCloseOthers && <button type="button" role="menuitem" onClick={pick(onCloseOthers)}>Close other unpinned tabs<span className="tab-menu-key">⌃⇧O</span></button>}
       </div>
     </div>
   );

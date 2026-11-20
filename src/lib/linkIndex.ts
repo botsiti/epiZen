@@ -1,5 +1,6 @@
 import type { NoteText, VaultFile } from './api';
-import { findWikilinks, linkResolver } from './links';
+import { findWikilinks, linkResolver, markdownLinkTarget } from './links';
+import { linkSpans } from './linkSpans';
 
 export interface Backlink {
   /** The note that links. */
@@ -24,13 +25,14 @@ const blank = (match: string) => match.replace(/[^\n]/g, ' ');
 export function plainLine(line: string): string {
   return line
     .replace(/!?\[\[([^[\]|#]*)(?:#[^[\]|]*)?(?:\|([^[\]]*))?\]\]/g, (_, target: string, alias?: string) => (alias ?? target).trim())
+    .replace(/!?\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/^\s*(?:>\s*)*(?:#{1,6}\s+|[-*+]\s+(?:\[.\]\s+)?|\d+[.)]\s+)?/, '')
     .replace(/(\*\*|__|~~|==)(.+?)\1/g, '$2')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/** Every [[link]] and ![[embed]] between notes. Links to images and to missing notes are left out. */
+/** Wikilinks and Markdown links between notes. Links to images and missing files are left out. */
 export function buildLinkIndex(notes: NoteText[], files: VaultFile[]): LinkIndex {
   const resolve = linkResolver(files);
   const outgoing = new Map<string, string[]>();
@@ -43,7 +45,16 @@ export function buildLinkIndex(notes: NoteText[], files: VaultFile[]): LinkIndex
     // The line each link is on, found by walking line ends alongside the links.
     let line = 0;
     let lineEnd = (lines[0] ?? '').length;
-    for (const link of findWikilinks(source)) {
+    const links = findWikilinks(source);
+    if (/\][ \t]*[:(]/.test(text)) {
+      for (const { from, to } of linkSpans(text).urls) {
+        const raw = text.slice(from, to);
+        const target = markdownLinkTarget(raw.startsWith('<') && raw.endsWith('>') ? raw.slice(1, -1) : raw, path);
+        if (target) links.push({ index: from, length: to - from, target, embed: false });
+      }
+      links.sort((a, b) => a.index - b.index);
+    }
+    for (const link of links) {
       while (link.index > lineEnd && line < lines.length - 1) {
         line += 1;
         lineEnd += 1 + (lines[line] ?? '').length;

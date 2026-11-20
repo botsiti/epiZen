@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { VaultFile } from './api';
 import { buildLinkIndex, plainLine } from './linkIndex';
 
+it('indexes generated relative and root Markdown links alongside wikilinks', () => {
+  const files = ['Folder/Source.md', 'Target with spaces.md', 'Folder/Sibling.md', 'Sibling.md'].map((path) => ({ path, kind: 'note' as const }));
+  const text = '[Plan](../Target%20with%20spaces.md)\n[[./Sibling]]\n[Root](/Sibling.md)\n`[Code](../Target%20with%20spaces.md)`';
+  const index = buildLinkIndex([{ path: 'Folder/Source.md', text }], files);
+  expect(index.outgoing.get('Folder/Source.md')).toEqual(['Target with spaces.md', 'Folder/Sibling.md', 'Sibling.md']);
+  expect(index.backlinks.get('Target with spaces.md')).toEqual([{ from: 'Folder/Source.md', context: 'Plan' }]);
+});
+
 const files: VaultFile[] = [
   { path: 'Calendar/2026/days 2026/10.08.2026.md', kind: 'note' },
   { path: 'Calendar/2026/months 2026/08.26 RPG.md', kind: 'note' },

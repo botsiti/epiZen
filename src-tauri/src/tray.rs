@@ -61,6 +61,7 @@ pub enum Clock {
         paused: bool,
         #[serde(default)]
         planned: Option<i64>,
+        category: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     Rest { ends_at: i64 },
@@ -77,14 +78,22 @@ fn padded(seconds: i64) -> String {
     if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m:02}:{s:02}") }
 }
 
-/// Time left on a countdown or time counted on the stopwatch. Idle shows the icon alone.
+/// A compact focus time with its category, or the rest time. Idle shows the icon alone.
 pub fn title(clock: &Clock, now: i64) -> Option<String> {
     match clock {
         Clock::Idle => None,
-        Clock::Focus { accumulated, since, paused, planned } => {
+        Clock::Focus { accumulated, since, paused, planned, category } => {
             let seconds = focused(*accumulated, *since, *paused, now).max(0) / 1000;
             let shown = planned.map_or(seconds, |planned| (planned - seconds).max(0));
-            Some(padded(shown))
+            let time = padded(shown);
+            let category = category.as_deref().map(str::trim).filter(|name| !name.is_empty());
+            Some(match category {
+                Some(name) => match name.char_indices().nth(24) {
+                    Some((end, _)) => format!("{time}  {}…", &name[..end]),
+                    None => format!("{time}  {name}"),
+                },
+                None => time,
+            })
         }
         Clock::Rest { ends_at } => {
             let left = ((ends_at - now).max(0) + 999) / 1000;
@@ -251,7 +260,7 @@ fn next_wake(clock: &Clock, now: i64, visible: bool) -> Option<Duration> {
     if visible { return next_change(clock, now); }
     let remaining = match clock {
         Clock::Rest { ends_at } => ends_at.saturating_sub(now),
-        Clock::Focus { accumulated, since, paused: false, planned: Some(seconds) } =>
+        Clock::Focus { accumulated, since, paused: false, planned: Some(seconds), .. } =>
             seconds.saturating_mul(1000).saturating_sub(focused(*accumulated, *since, false, now)),
         _ => return None,
     };
@@ -561,11 +570,11 @@ mod tests {
     const AT: i64 = 1_798_000_000_000;
 
     fn stopwatch(accumulated: i64, since: i64, paused: bool) -> Clock {
-        Clock::Focus { accumulated, since, paused, planned: None }
+        Clock::Focus { accumulated, since, paused, planned: None, category: None }
     }
 
     fn pomodoro(minutes: i64, since: i64) -> Clock {
-        Clock::Focus { accumulated: 0, since, paused: false, planned: Some(minutes * 60) }
+        Clock::Focus { accumulated: 0, since, paused: false, planned: Some(minutes * 60), category: None }
     }
 
     #[test]
@@ -586,10 +595,10 @@ mod tests {
 
     #[test]
     fn reads_the_clock_the_main_window_publishes() {
-        let focus: Clock = serde_json::from_str(r#"{"kind":"focus","label":"code","accumulated":5000,"since":10,"paused":false,"planned":1500}"#).unwrap();
-        assert_eq!(focus, Clock::Focus { accumulated: 5000, since: 10, paused: false, planned: Some(1500) });
-        let stopwatch: Clock = serde_json::from_str(r#"{"kind":"focus","label":"focus","accumulated":0,"since":10,"paused":true}"#).unwrap();
-        assert!(matches!(stopwatch, Clock::Focus { planned: None, paused: true, .. }));
+        let focus: Clock = serde_json::from_str(r#"{"kind":"focus","category":"код","accumulated":5000,"since":10,"paused":false,"planned":1500}"#).unwrap();
+        assert_eq!(title(&focus, 10).as_deref(), Some("24:55  код"));
+        let stopwatch: Clock = serde_json::from_str(r#"{"kind":"focus","accumulated":0,"since":10,"paused":true}"#).unwrap();
+        assert!(matches!(stopwatch, Clock::Focus { planned: None, paused: true, category: None, .. }));
         assert_eq!(serde_json::from_str::<Clock>(r#"{"kind":"rest","endsAt":42}"#).unwrap(), Clock::Rest { ends_at: 42 });
         assert_eq!(serde_json::from_str::<Clock>(r#"{"kind":"idle"}"#).unwrap(), Clock::Idle);
     }
@@ -634,7 +643,7 @@ mod tests {
         assert!(!due(&pomodoro(25, AT), AT + 25 * 60_000 - 1));
         assert!(due(&pomodoro(25, AT), AT + 25 * 60_000));
         assert!(!due(&stopwatch(0, AT, false), AT + 10 * 3_600_000));
-        let paused = Clock::Focus { accumulated: 0, since: AT, paused: true, planned: Some(60) };
+        let paused = Clock::Focus { accumulated: 0, since: AT, paused: true, planned: Some(60), category: None };
         assert!(!due(&paused, AT + 120_000));
         assert!(due(&Clock::Rest { ends_at: AT }, AT));
         assert!(!due(&Clock::Idle, AT));

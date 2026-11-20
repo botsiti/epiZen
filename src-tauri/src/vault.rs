@@ -190,13 +190,7 @@ impl Vault {
         let relative = Path::new(path);
         if relative.components().any(|part| !matches!(part, Component::Normal(_))) { return Err(invalid()); }
         let parent = relative.parent().ok_or_else(invalid)?;
-        let mut checked = self.root.clone();
-        for part in parent.components() {
-            checked.push(part);
-            let metadata = fs::symlink_metadata(&checked)?;
-            if !metadata.is_dir() || metadata.file_type().is_symlink() { return Err(invalid()); }
-        }
-        let target = self.new_path(path, None)?;
+        let target = self.existing_folder(parent)?.join(relative.file_name().ok_or_else(invalid)?);
         match fs::create_dir(target) {
             Ok(()) => Ok(()),
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => Err(VaultError::Exists(path.to_owned())),
@@ -276,7 +270,9 @@ impl Vault {
         }
         // Check the file actually moved, not just the earlier read. Restore a conflicting
         // version without ever replacing a note another writer created in the meantime.
-        if !fs::read(&target).is_ok_and(|bytes| bytes == expected.as_bytes()) {
+        if !fs::symlink_metadata(&target).is_ok_and(|metadata| metadata.is_file())
+            || !fs::read(&target).is_ok_and(|bytes| bytes == expected.as_bytes())
+        {
             if fs::hard_link(&target, &real).is_ok() {
                 fs::remove_file(&target)?;
                 fs::remove_dir(&folder)?;
@@ -294,7 +290,7 @@ impl Vault {
             .into_owned())
     }
 
-    /// Renames one note within its folder without replacing a destination. The moved file is
+    /// Renames or moves one note to an existing folder. The moved file is
     /// checked after the atomic move, so an outside edit between the read and move survives.
     pub fn rename_note(
         &self,
@@ -314,10 +310,7 @@ impl Vault {
     ) -> Result<(), VaultError> {
         let source = self.resolve(path, FileKind::Note)?;
         let from = plain_path(path, FileKind::Note)?;
-        let to = plain_path(destination, FileKind::Note)?;
-        if from.parent() != to.parent() || path == destination {
-            return Err(VaultError::InvalidPath(destination.to_owned()));
-        }
+        let target = self.rename_target(path, destination)?;
         let mut checked = self.root.clone();
         for part in from.components() {
             checked.push(part);
@@ -328,8 +321,9 @@ impl Vault {
         if fs::read(&source)? != expected.as_bytes() {
             return Err(VaultError::Changed(path.to_owned()));
         }
-        let target = self.new_path(destination, Some(FileKind::Note))?;
         before_move();
+        // Recheck the destination folder after the edit/validation window.
+        self.rename_target(path, destination)?;
         rename_exclusive(&source, &target).map_err(|err| match err.kind() {
             io::ErrorKind::AlreadyExists => VaultError::Exists(destination.to_owned()),
             _ => VaultError::Io(err),
@@ -353,10 +347,7 @@ impl Vault {
 
     fn rename_note_and_links_with(&self, path: &str, destination: &str, expected: &str, edits: &[NoteEdit], before_step: impl FnMut(usize)) -> Result<(), VaultError> {
         let source = self.resolve(path, FileKind::Note)?;
-        if path == destination || plain_path(path, FileKind::Note)?.parent() != plain_path(destination, FileKind::Note)?.parent() {
-            return Err(VaultError::InvalidPath(destination.to_owned()));
-        }
-        let target = self.new_path(destination, Some(FileKind::Note))?;
+        let target = self.rename_target(path, destination)?;
         if let Ok(meta) = fs::symlink_metadata(&target)
             && (meta.file_type().is_symlink() || target.canonicalize()? != source)
         {
@@ -366,6 +357,27 @@ impl Vault {
         self.edit_before_move(&source, Some(path), expected, edits, before_step, || {
             self.rename_note(path, destination, renamed_text)
         })
+    }
+
+    fn rename_target(&self, path: &str, destination: &str) -> Result<PathBuf, VaultError> {
+        let from = plain_path(path, FileKind::Note)?;
+        let to = plain_path(destination, FileKind::Note)?;
+        let invalid = || VaultError::InvalidPath(destination.to_owned());
+        if path == destination || (from.parent() != to.parent() && from.file_name() != to.file_name()) {
+            return Err(invalid());
+        }
+        Ok(self.existing_folder(to.parent().ok_or_else(invalid)?)?.join(to.file_name().ok_or_else(invalid)?))
+    }
+
+    fn existing_folder(&self, relative: &Path) -> Result<PathBuf, VaultError> {
+        let mut path = self.root.clone();
+        for part in relative.components() {
+            path.push(part);
+            if !fs::symlink_metadata(&path)?.is_dir() {
+                return Err(VaultError::InvalidPath(relative.display().to_string()));
+            }
+        }
+        Ok(path)
     }
 
     /// Move a definition to trash only after all its companion edits succeed.
@@ -438,7 +450,7 @@ impl Vault {
     }
 
     fn create(&self, path: &str, kind: FileKind, bytes: &[u8]) -> Result<(), VaultError> {
-        let target = self.new_path(path, Some(kind))?;
+        let target = self.new_path(path, kind)?;
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -606,9 +618,8 @@ impl Vault {
 
     /// Where a new note or image goes: a plain path whose existing folders all lie inside the
     /// vault (a symlinked folder can't carry it out), with the missing folders created.
-    /// `None` validates a directory name without requiring a file extension.
-    fn new_path(&self, path: &str, kind: Option<FileKind>) -> Result<PathBuf, VaultError> {
-        let relative = match kind { Some(kind) => plain_path(path, kind)?, None => plain_relative(path)? };
+    fn new_path(&self, path: &str, kind: FileKind) -> Result<PathBuf, VaultError> {
+        let relative = plain_path(path, kind)?;
         let invalid = || VaultError::InvalidPath(path.to_owned());
         let name = relative.file_name().ok_or_else(invalid)?;
         let folder = self.root.join(relative.parent().ok_or_else(invalid)?);
@@ -892,6 +903,22 @@ mod tests {
         symlink(dir.path().join("original.md"), dir.path().join("alias.md")).unwrap();
         assert!(vault.rename_note("alias.md", "new.md", "keep").is_err());
         assert_eq!(fs::read_to_string(dir.path().join("original.md")).unwrap(), "keep");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn move_refuses_missing_hidden_and_symlinked_folders() {
+        use std::os::unix::fs::symlink;
+        let (dir, vault) = vault_with(&[("Folder/a.md", "keep"), ("Other/c.md", "unrelated")]);
+        let outside = tempfile::tempdir().unwrap();
+        symlink(outside.path(), dir.path().join("Outside")).unwrap();
+        symlink(dir.path().join("Other"), dir.path().join("Alias")).unwrap();
+        let before = snapshot(dir.path());
+        for target in ["Missing/a.md", "Outside/a.md", "Alias/a.md", ".hidden/a.md", "Folder/../a.md"] {
+            assert!(vault.rename_note_and_links("Folder/a.md", target, "keep", &[]).is_err());
+        }
+        assert_eq!(snapshot(dir.path()), before);
+        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
     }
 
     #[test]

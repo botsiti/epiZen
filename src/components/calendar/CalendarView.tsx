@@ -38,6 +38,7 @@ interface Props {
   dayOf: (date: Date) => DayEntry;
   /** A note's text as the app last read or wrote it. */
   textOf: (path: string) => string | undefined;
+  resolveTaskPath?: (path: string, focusId: string) => string;
   /** The task categories the vault uses, most used first. */
   categories: string[];
   timer: TimerApi;
@@ -63,7 +64,7 @@ type Mode = 'week' | 'day';
 // Where the calendar was, so coming back to it shows the same week or day. Kept for the session.
 let remembered: { mode: Mode; date?: string } = { mode: 'week' };
 
-function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], events: CalendarEvent[], taskOf: (link?: TaskLink) => DayTaskRef | undefined, zone: string): Column {
+function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], events: CalendarEvent[], taskOf: (link?: TaskLink) => DayTaskRef | undefined, zone: string, resolveLink?: (link: TaskLink) => TaskLink): Column {
   const entry = dayOf(date);
   const text = entry.path === undefined ? undefined : textOf(entry.path);
   const tasks = taskRefs(entry, text);
@@ -73,7 +74,10 @@ function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], even
     key: dayKey(date),
     allDay: allDayOn(events, date),
     // A plan's task is its own day's when its note is this day's: only then can it be edited or timed from here.
-    plans: plans.map((plan) => ({ ...plan, task: taskOf(plan.link), here: plan.link !== undefined && plan.link.note === entry.path })),
+    plans: plans.map((plan) => {
+      const link = plan.link && (resolveLink?.(plan.link) ?? plan.link);
+      return { ...plan, link, task: taskOf(link), here: link !== undefined && link.note === entry.path };
+    }),
     tasks,
     total: entry.day?.totals.logged ?? 0,
   };
@@ -85,7 +89,7 @@ function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], even
  * Calendar, never minutes in the note. The note's time blocks aren't drawn: they are the timer's
  * record, and the minutes are what counts.
  */
-export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate, dayOf, textOf, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onOpenLinkedNote, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
+export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate, dayOf, textOf, resolveTaskPath, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onOpenLinkedNote, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
   const display = usePluginDisplay('calendar');
   const [mode, setMode] = useState<Mode>(display.defaultView === 'Week' ? 'week' : display.defaultView === 'Day' ? 'day' : remembered.mode);
   const clock = useNow(true, 30_000);
@@ -135,8 +139,9 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
   const columns = useMemo(() => {
     const day = new Date(time);
     const days = mode === 'week' ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(day), i)) : [day];
-    return days.map((d) => column(d, dayOf, textOf, planEvents, taskOf, zone));
-  }, [mode, time, dayOf, textOf, planEvents, taskOf, zone]);
+    const follow = (link: TaskLink) => resolveTaskPath && link.vault === vault ? { ...link, note: resolveTaskPath(link.note, link.id) } : link;
+    return days.map((d) => column(d, dayOf, textOf, planEvents, taskOf, zone, follow));
+  }, [mode, time, dayOf, textOf, planEvents, taskOf, zone, resolveTaskPath, vault]);
   const localDayKey = localToday.getTime();
   const todayTasks = useMemo(() => column(new Date(localDayKey), dayOf, textOf, [], taskOf, zone).tasks, [dayOf, textOf, taskOf, localDayKey, zone]);
   const total = columns.reduce((sum, col) => sum + col.total, 0);

@@ -48,7 +48,9 @@ import { MissingNote, NoVault, Problem, Unsaved } from './components/Screens';
 import { VaultSetup } from './components/workspace/VaultSetup';
 import { createStarterVault, starterNotes, vaultPreferences, vaultPreferencesPatch } from './lib/vaultSetup';
 import { librarySources } from './lib/librarySources';
-import { creationFolder } from './lib/filePreferences';
+import { attachmentLocation, creationFolder } from './lib/filePreferences';
+import { noteLinkTargets } from './lib/fileLinks';
+import { relocatedNoteSettings, taskPathResolver } from './lib/noteRelocation';
 import { SettingsScreen, type SettingsDraft } from './components/SettingsScreen';
 import { Sidebar } from './components/Sidebar';
 import { NoteActionDialog, NoteMenu, type NoteAction } from './components/workspace/NoteActions';
@@ -85,7 +87,6 @@ import {
   type VaultFile,
   type VaultStatus,
 } from './lib/api';
-import type { LinkTarget } from './lib/completion';
 import { METRICS } from './lib/categories';
 import { addDays, addMonths, formatDate, parseDate, startOfMonth, today } from './lib/dates';
 import { parseDay, type Day } from './lib/day';
@@ -100,7 +101,7 @@ import { collectLibrary, DEFAULT_FILTERS, genreCounts, hiddenColumns, isLibraryL
 import type { LibraryFilters } from './lib/library';
 import { collectMedia } from './lib/media';
 import { podcastSettings } from './lib/podcasts';
-import { noteFolder, noteTitle, resolveLink } from './lib/links';
+import { noteFolder, noteTitle, resolveLink, vaultLinkPath } from './lib/links';
 import {
   builtInPeriodicText,
   assertPeriodicNote,
@@ -124,6 +125,7 @@ import {
   back as goBack,
   close as closeTab,
   closeActive,
+  closeOtherTabs,
   currentView,
   cycle,
   forward as goForward,
@@ -169,6 +171,8 @@ export function App() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
+  const fileOperation = useRef(false);
+  const [fileBusy, setFileBusy] = useState(false);
   const [settings, setSettings] = useState<Settings>({});
   const appearance = useMemo(() => appearanceSettings(settings.appearance), [settings.appearance]);
   const wallpaperLibrary = useWallpapers(status?.state === 'open', (id) => setSettings((previous) => {
@@ -421,23 +425,11 @@ export function App() {
     ])) : undefined;
     return { period: found.period, date: found.date, dayOf, weekOf, exists, scales: dailyFacts.scales, media: mediaByTitle, scoredDay, questPresets, questAreas, categories, quests, art, features, habits: habitCatalog.habits, habitStats: habitSummaries };
   }, [view, catalog, dayOf, weekOf, exists, dailyFacts, texts, categories, questPresets, questAreas, mediaByTitle, quests, art, features, habitCatalog.habits, habitDefinitions, recordedDays, now]);
-  const linkTargets = useMemo(() => {
-    const titles = new Map<string, number>();
-    for (const path of notes) titles.set(noteTitle(path), (titles.get(noteTitle(path)) ?? 0) + 1);
-    const targets: LinkTarget[] = notes.map((path) => ({
-      label: noteTitle(path),
-      detail: noteFolder(path) || undefined,
-      // Two notes with one name: link by path, as Obsidian does.
-      insert: (titles.get(noteTitle(path)) ?? 0) > 1 ? path : undefined,
-    }));
-    // Daily notes that don't exist yet can be linked too; following the link creates them.
-    if (!plugins.periodic) return targets;
-    for (const [offset, detail] of [[0, 'today'], [-1, 'yesterday'], [1, 'tomorrow']] as const) {
-      const path = periodicPath('day', addDays(now, offset), periodic).replace(/\.md$/i, '');
-      if (!titles.has(noteTitle(path))) targets.push({ label: noteTitle(path), detail });
-    }
-    return targets;
-  }, [notes, periodic, now, plugins.periodic]);
+  const currentNote = notePath(view);
+  const linkTargets = useMemo(() => noteLinkTargets(notes, currentNote ?? '', preferences.fileDefaults, plugins.periodic
+    ? ([[0, 'today'], [-1, 'yesterday'], [1, 'tomorrow']] as const).map(([offset, detail]) => ({
+      path: periodicPath('day', addDays(now, offset), periodic).replace(/\.md$/i, ''), detail,
+    })) : []), [notes, currentNote, preferences.fileDefaults, periodic, now, plugins.periodic]);
   // Reads the vault's files and texts again after the app created a note.
   const refresh = useCallback(async () => {
     if (status?.state !== 'open') return;
@@ -536,14 +528,20 @@ export function App() {
   const newTab = useCallback(() => update((prev) => openTab(prev, HOME)), [update]);
   const explorer = useExplorer(tree, view.kind === 'note' ? view.path : undefined);
   const resetExplorer = explorer.reset;
+  const revealExplorerFolder = explorer.reveal;
   const toggleLeft = () => {
     setLeftOpen(!leftOpen);
     void updateSettings({ leftSidebarOpen: !leftOpen }).catch(() => undefined);
   };
   const newNote = () => go({ kind: 'new', folder: creationFolder(preferences.fileDefaults, 'note', view.kind === 'note' ? view.path : undefined) });
-  const newFolder = () => go({ kind: 'new', item: 'folder', folder: creationFolder(preferences.fileDefaults, 'folder', view.kind === 'note' ? view.path : undefined) });
+  const createExplorerFolder = async (path: string) => {
+    if (!vault) throw new Error('The open vault is unavailable.');
+    await createFolder(path, vault);
+    setFolders((previous) => [...new Set([...previous, path])]);
+  };
 
   const chooseFolder = useCallback(async (create = false) => {
+    if (fileOperation.current) return;
     setFolderError(undefined);
     try {
       if ((await flushAll()).length) throw new Error('Save or recover your unsaved notes before switching vaults.');
@@ -617,6 +615,8 @@ export function App() {
   useShortcuts({
     newTab,
     closeTab: () => update(closeActive),
+    closeOthers: () => update((previous) => closeOtherTabs(previous)),
+    editNote: () => { if (view.kind === 'note' && /\.md$/i.test(view.path)) setEditing(tab.id, !view.editing); },
     toggleLeftSidebar: toggleLeft,
     toggleRightSidebar: toggleRight,
     toggleAssistant: () => { if (plugins.spike) setAssistantOpen((open) => !open); else go({ kind: 'settings', section: 'plugins' }); },
@@ -633,14 +633,16 @@ export function App() {
       const target = prev.tabs[Math.min(at, prev.tabs.length - 1)];
       return target ? activate(prev, target.id) : prev;
     }),
-  }, status?.state === 'open' && !setup);
+  }, status?.state === 'open' && !setup && !fileBusy);
   // A link to a missing day, week or month creates that note, like the calendar; any other
   // missing note is only explained, never created.
   const openLink = useCallback(
     (target: string, fromPath: string, newTab?: boolean) => {
       const [destination, baseView] = target.split('#');
-      const file = resolveLink(destination ?? target, files, fromPath);
-      const named = file || !plugins.periodic ? undefined : periodOfName(target, periodic);
+      const file = resolveLink(target, files, fromPath) ?? (baseView ? resolveLink(destination ?? target, files, fromPath) : undefined);
+      const explicit = /^(?:\.{1,2}\/|\/)/.test(target) ? vaultLinkPath(target, fromPath) : undefined;
+      const candidate = file || !plugins.periodic ? undefined : periodOfName(explicit ? noteTitle(explicit) : target, periodic);
+      const named = candidate && (!explicit || periodicPath(candidate.period, candidate.date, periodic).replace(/\.md$/i, '') === explicit.replace(/\.md$/i, '')) ? candidate : undefined;
       if (named) openPeriodicOrSay(named.period, named.date, newTab);
       else if (!file) go({ kind: 'missing', target }, newTab);
       else go({ kind: 'note', path: file.path, ...(file.kind === 'base' && baseView ? { baseView } : {}) }, newTab);
@@ -761,61 +763,88 @@ export function App() {
     else setNoteAction({ path, action });
   }, []);
   const runNoteAction = useCallback(async (action: Exclude<NoteAction, 'reveal'>, path: string, name: string) => {
-    const unsaved = await flushAll();
-    if (unsaved.length) throw new Error('Save or recover the unsaved notes before changing files.');
-    await edits.current;
-    const isDaily = catalog.byPath.get(path)?.period === 'day';
-    const timerOwnsNote = timer.state.session?.task.path === path || timer.state.pending.some((block) => block.task.path === path);
-    if (action !== 'duplicate' && (timerOwnsNote || (isDaily && (timer.state.session || timer.state.pending.length)))) {
-      throw new Error('Finish the focus timer and save its pending time before changing this note.');
-    }
-    const expected = await readNote(path);
-    if (action === 'delete') {
-      await trashNote(path, expected);
-      update((previous) => previous.tabs.filter((item) => notePath(currentView(item)) === path).reduce((next, item) => closeTab(next, item.id), previous));
-      setFiles((previous) => previous.filter((file) => file.path !== path));
-      setTexts((previous) => { const next = new Map(previous); next.delete(path); return next; });
-      return;
-    }
-    const base = name.replace(/\.md$/i, '').trim();
-    if (!base || base.startsWith('.')) throw new Error('Give the note a valid name.');
-    const folder = noteFolder(path);
-    const destination = `${folder ? `${folder}/` : ''}${base}.md`;
-    if (action === 'duplicate') {
-      await createNote(destination, expected);
-      setFiles((previous) => [...previous, { path: destination, kind: 'note' }]);
-      setTexts((previous) => new Map(previous).set(destination, expected));
-      go({ kind: 'note', path: destination }, true);
-      return;
-    }
-    if (destination === path) return;
-    const [snapshot, found] = await Promise.all([readAllNotes(), listFiles()]);
-    const source = snapshot.find((note) => note.path === path);
-    if (!source) throw new Error('The note could not be read. Nothing was renamed.');
-    const linkEdits = renameLinkEdits(snapshot, found, path, destination);
+    if (!vault || fileOperation.current) throw new Error('Wait for the current file action to finish.');
+    fileOperation.current = true;
+    setFileBusy(true);
     try {
-      await renameNote(path, destination, source.text, linkEdits);
-    } catch (err) {
-      // A conflicting external edit remains authoritative, including a failed rollback.
-      try { await refresh(); }
-      catch (refreshError) { throw new Error(`${reason(err)}. Could not refresh the file list: ${reason(refreshError)}`, { cause: refreshError }); }
-      finally { setNoteVersion((version) => version + 1); }
-      throw err;
+      const unsaved = await flushAll();
+      if (unsaved.length) throw new Error('Save or recover the unsaved notes before changing files.');
+      await edits.current;
+      const isDaily = catalog.byPath.get(path)?.period === 'day';
+      const timerOwnsNote = timer.state.session?.task.path === path || timer.state.pending.some((block) => block.task.path === path);
+      if (action !== 'duplicate' && (timerOwnsNote || (isDaily && (timer.state.session || timer.state.pending.length)))) {
+        throw new Error('Finish the focus timer and save its pending time before changing this note.');
+      }
+      if (action === 'delete') {
+        const expected = await readNote(path, vault);
+        await trashNote(path, expected);
+        update((previous) => previous.tabs.filter((item) => notePath(currentView(item)) === path).reduce((next, item) => closeTab(next, item.id), previous));
+        setFiles((previous) => previous.filter((file) => file.path !== path));
+        setTexts((previous) => { const next = new Map(previous); next.delete(path); return next; });
+        return;
+      }
+      const folder = action === 'move' ? name : noteFolder(path);
+      const base = name.replace(/\.md$/i, '').trim();
+      if (action !== 'move' && (!base || base.startsWith('.'))) throw new Error('Give the note a valid name.');
+      const filename = action === 'move' ? path.slice(path.lastIndexOf('/') + 1) : `${base}.md`;
+      const destination = folder ? `${folder}/${filename}` : filename;
+      if (destination === path) return;
+      if (action === 'duplicate') {
+        const expected = await readNote(path, vault);
+        await createNote(destination, expected, vault);
+        setFiles((previous) => [...previous, { path: destination, kind: 'note' }]);
+        setTexts((previous) => new Map(previous).set(destination, expected));
+        go({ kind: 'note', path: destination }, true);
+        return;
+      }
+      const [snapshot, found, latest] = await Promise.all([readAllNotes(), listFiles(), getSettings()]);
+      const source = snapshot.find((note) => note.path === path);
+      if (!source) throw new Error('This note is no longer in the vault.');
+      const scoped = vaultPreferences(latest, vault);
+      const linkEdits = renameLinkEdits(scoped.fileDefaults.updateLinks ? snapshot : [source], found, path, destination);
+      const patch = relocatedNoteSettings(latest, vault, path, destination, source.text, scoped.periodic, scoped.recognition);
+      try {
+        await renameNote(path, destination, source.text, linkEdits, vault);
+      } catch (err) {
+        // A conflicting external edit remains authoritative, including a failed rollback.
+        try { await refresh(); }
+        catch (refreshError) { throw new Error(`${reason(err)}. Could not refresh the file list: ${reason(refreshError)}`, { cause: refreshError }); }
+        finally { setNoteVersion((version) => version + 1); }
+        throw err;
+      }
+      if (patch) {
+        try { setSettings(await updateSettings(patch)); }
+        catch (err) {
+          setSettings((previous) => ({ ...previous, ...patch }));
+          setFileActionError(`The file changed, but its calendar links could not be saved to settings. ${reason(err)}`);
+        }
+      }
+      update((previous) => renameNoteViews(previous, path, destination));
+      setFiles((previous) => previous.map((file) => file.path === path ? { ...file, path: destination } : file));
+      setTexts((previous) => {
+        const next = new Map(previous);
+        for (const edit of linkEdits) next.set(edit.path, edit.text);
+        const renamedText = linkEdits.find((edit) => edit.path === path)?.text ?? source.text;
+        next.delete(path);
+        next.set(destination, renamedText);
+        return next;
+      });
+      // Editors were flushed above. Reload their rewritten links before accepting new edits.
+      setNoteVersion((version) => version + 1);
+      if (action === 'move') revealExplorerFolder(folder);
+    } finally {
+      fileOperation.current = false;
+      setFileBusy(false);
     }
-    update((previous) => renameNoteViews(previous, path, destination));
-    setFiles(found.map((file) => file.path === path ? { ...file, path: destination } : file));
-    setTexts((previous) => {
-      const next = new Map(previous);
-      for (const edit of linkEdits) next.set(edit.path, edit.text);
-      const renamedText = linkEdits.find((edit) => edit.path === path)?.text ?? source.text;
-      next.delete(path); next.set(destination, renamedText);
-      return next;
-    });
-    // Editors were flushed above. Reload their rewritten links before accepting new edits.
-    setNoteVersion((version) => version + 1);
-  }, [timer.state.session, timer.state.pending, catalog, update, go, refresh]);
+  }, [vault, timer.state.session, timer.state.pending, catalog, update, go, refresh, revealExplorerFolder]);
+  const moveFromExplorer = (path: string, folder: string) => {
+    if (fileOperation.current) return;
+    setFileActionError(undefined);
+    void runNoteAction('move', path, folder).catch((err: unknown) => setFileActionError(`Could not move “${noteTitle(path)}”. ${reason(err)}`));
+  };
   const vaultName = status?.state === 'open' ? status.name : undefined;
-  const followTaskPlans = useTaskPlans(plugins.calendar ? vault : undefined, vaultName);
+  const resolveTaskPath = useMemo(() => taskPathResolver(settings, vault ?? ''), [settings, vault]);
+  const followTaskPlans = useTaskPlans(plugins.calendar ? vault : undefined, vaultName, resolveTaskPath);
   // A task edited or deleted from a menu: the timer follows it, and so do its plans in Calendar.
   const taskChanged = useCallback(
     (change: TaskChange) => {
@@ -940,7 +969,9 @@ export function App() {
   </ErrorBoundary>;
 
   return (
-    <PluginDisplayProvider value={pluginDisplay}><div className={['app', right.open && !assistantOpen && 'has-right', assistantOpen && 'has-assistant', !leftOpen && 'without-left'].filter(Boolean).join(' ')}>
+    <PluginDisplayProvider value={pluginDisplay}><div className={['app', right.open && !assistantOpen && 'has-right', assistantOpen && 'has-assistant', !leftOpen && 'without-left'].filter(Boolean).join(' ')}
+      onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
+      onDrop={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}>
       {wallpaper && <LiveWallpaper item={wallpaper} still={appearance.wallpaperStill} />}
       {leftOpen && <Sidebar
         plugins={plugins}
@@ -953,7 +984,10 @@ export function App() {
         onOpenNote={openNote}
         onHome={(newTab) => go(HOME, newTab)}
         onNewNote={newNote}
-        onNewFolder={newFolder}
+        folderParent={creationFolder(preferences.fileDefaults, 'folder', currentNote)}
+        onCreateFolder={createExplorerFolder}
+        onRevealFolder={revealExplorerFolder}
+        onMoveNote={moveFromExplorer}
         onNewBase={plugins.bases ? () => go({ kind: 'new', item: 'base', folder: creationFolder(preferences.fileDefaults, 'note', view.kind === 'note' ? view.path : undefined) }) : undefined}
         onOpenFolder={() => void chooseFolder()}
         onSettings={(newTab) => go({ kind: 'settings' }, newTab)}
@@ -983,6 +1017,7 @@ export function App() {
           ws={ws}
           onActivate={(id) => update((prev) => activate(prev, id))}
           onClose={(id) => update((prev) => closeTab(prev, id))}
+          onCloseOthers={(id) => update((prev) => closeOtherTabs(prev, id))}
           onPin={(id, pinned) => update((prev) => setPinned(prev, id, pinned))}
           onNewTab={newTab}
           onBack={() => update((prev) => goBack(prev))}
@@ -994,7 +1029,7 @@ export function App() {
           onAssistant={plugins.spike ? () => setAssistantOpen((open) => !open) : undefined}
           assistantOpen={assistantOpen}
         />
-        <main className={view.kind === 'graph' ? 'main is-graph' : view.kind === 'settings' ? 'main is-preferences' : 'main'} ref={main} onScroll={onScroll}>
+        <main className={view.kind === 'graph' ? 'main is-graph' : view.kind === 'settings' ? 'main is-preferences' : 'main'} ref={main} onScroll={onScroll} inert={fileBusy}>
           {/* Only the tab in front is drawn, afresh for each tab: an editor leaving saves as it goes. */}
           <Fragment key={tab.id}>
             {plugins.quests && ['home', 'quests', 'statistics', 'summaries', 'note'].includes(view.kind) && (rewardError || scoringIssue) && <p className="note-warning" role="status">{rewardError ? 'Custom XP settings are unavailable. Check Settings → Quests.' : `XP excluded for ${scoringIssue?.[0]} · ${scoringIssue?.[1].rewardProblem}`}</p>}
@@ -1049,6 +1084,7 @@ export function App() {
                 key={`${view.path}:${noteVersion}`}
                 path={view.path}
                 vaultRoot={status.root}
+                expenseAttachmentFolder={attachmentLocation(preferences.fileDefaults, view.path)}
                 basesEnabled={plugins.bases}
                 onImageAdded={(path) => setFiles((previous) => previous.some((file) => file.path === path) ? previous : [...previous, { path, kind: 'image' }])}
                 files={files}
@@ -1085,6 +1121,7 @@ export function App() {
                 timerEnabled={plugins.timer}
                 dayOf={dayOf}
                 textOf={textOf}
+                resolveTaskPath={resolveTaskPath}
                 categories={categories}
                 timer={timer}
                 onStartTimer={(choice, how) => void startTimer(choice, how)}
@@ -1123,7 +1160,7 @@ export function App() {
             {view.kind === 'missing' && <MissingNote target={view.target} onBack={back} />}
             {view.kind === 'unsaved' && <Unsaved path={view.path} text={view.text} message={view.message} />}
             {view.kind === 'new' && view.item === 'base' && <NewBase root={status.root} folder={view.folder} folders={folders} onCreated={async (path) => { await refresh(); openNote(path); }} />}
-            {view.kind === 'new' && view.item !== 'base' && <NewNote key={`${tab.index}-${view.item ?? 'note'}`} kind={view.item ?? 'note'} folders={folders} folder={view.folder} onNewNote={(folder) => go({ kind: 'new', folder })} onCreate={view.item === 'folder' ? async (path) => { await createFolder(path); setFolders((previous) => [...new Set([...previous, path])]); } : create} />}
+            {view.kind === 'new' && view.item !== 'base' && <NewNote key={tab.index} folders={folders} folder={view.folder} onCreate={create} />}
             {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
             {view.kind === 'settings' && <SettingsScreen key={status.root}
               menuBarNotice={menuBar.problem && <p className="preferences-error" role="alert">{menuBar.problem} <button type="button" className="quiet-button" onClick={menuBar.retry}>Retry menu bar</button></p>}
@@ -1137,7 +1174,7 @@ export function App() {
         </main>
       </div>
       {noteMenu && <NoteMenu {...noteMenu} onClose={() => setNoteMenu(undefined)} onPick={(action) => chooseNoteAction(noteMenu.path, action)} />}
-      {noteAction && <NoteActionDialog key={`${noteAction.action}:${noteAction.path}`} {...noteAction} onClose={() => setNoteAction(undefined)} onRun={runNoteAction} />}
+      {noteAction && <NoteActionDialog key={`${noteAction.action}:${noteAction.path}`} {...noteAction} folders={folders} updateLinks={preferences.fileDefaults.updateLinks} onClose={() => setNoteAction(undefined)} onRun={runNoteAction} />}
       {right.open && !assistantOpen && (
         <RightSidebar
           graphEnabled={plugins.graph}

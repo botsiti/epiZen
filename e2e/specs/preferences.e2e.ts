@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { snapshotVault, diffSnapshots } from '../../scripts/vault-snapshot.mjs';
 import { vaultCopy } from '../paths';
-import { prepareWindow, screenshot, scrollIntoView } from '../support';
+import { prepareWindow, pressCommand, screenshot, scrollIntoView } from '../support';
 
 const root = join(dirname(vaultCopy()), 'preferences-vault');
 async function select(css: string, value: string) {
@@ -157,19 +157,24 @@ describe('focused preferences and file creation', () => {
     await $('[data-testid="new-folder-button"]').click();
     await $('[data-testid="new-folder-name"]').setValue('Fresh ideas');
     await screenshot('166-new-folder');
-    await $('[data-testid="new-folder-create"]').click();
-    await expect($('.creation-complete')).toHaveText(expect.stringContaining('Folder created.'));
+    await browser.keys('Enter');
+    await expect($('[data-testid="new-folder-name"]')).not.toBeExisting();
     expect(existsSync(join(root, 'Fresh ideas'))).toBe(true);
     await expect($('[data-testid="tree-folder"][data-path="Fresh ideas"]')).toBeDisplayed();
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await $('[data-testid="open-settings"]').click(); await section('files');
     await select('[aria-label="Location for new notes"]', 'folder');
     await $('label=Notes folder').$('input').setValue('Fresh ideas');
+    await select('[aria-label="New link paths"]', 'relative');
+    await $('[aria-label="Use wikilinks"]').click();
     await save();
     await screenshot('167-settings-files');
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await browser.refresh(); await prepareWindow();
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
+    await $('[data-testid="open-settings"]').click(); await section('files');
+    await expect($('[aria-label="New link paths"]')).toHaveValue('relative');
+    await expect($('[aria-label="Use wikilinks"]')).not.toBeSelected();
     await $('[data-testid="new-note-button"]').click();
     expect(diffSnapshots(before, snapshotVault(root))).toEqual([]);
     await expect($('[data-testid="new-note-folder"]')).toHaveValue('Fresh ideas');
@@ -188,5 +193,43 @@ describe('focused preferences and file creation', () => {
     // An unaffected consumer remains available after the rejected create.
     await $('[data-testid="open-library"]').click();
     await expect($('[data-testid="library"]')).toBeDisplayed();
+  });
+
+  it('moves an open note by dropping it on the explorer and keeps editor shortcuts scoped', async () => {
+    const before = snapshotVault(root);
+    const folder = $('[data-testid="tree-folder"][data-path="Fresh ideas"]');
+    if (await folder.getAttribute('data-open') !== 'true') await folder.click();
+    const source = '[data-testid="tree-note"][data-path="Fresh ideas/First thought.md"]';
+    await $(source).click();
+    await pressCommand('e');
+    const target = '[data-testid="editor"] .cm-content';
+    await $(target).waitForDisplayed();
+    await pressCommand('b', { target });
+    await browser.keys('A thought');
+    await pressCommand('s', { target });
+    await expect($('[data-testid="save-state"]')).toHaveText('Saved');
+    await pressCommand('e', { target });
+    await $(source).click({ button: 'right' });
+    await $('[role="menuitem"]=Move to folder…').click();
+    await $('[role="dialog"] input[type="search"]').setValue('vault');
+    await expect($('[role="dialog"] button=Top of the vault')).toBeDisplayed();
+    await screenshot('175-move-note');
+    await browser.keys('Escape');
+    await browser.execute((selector) => {
+      const note = document.querySelector(selector), rootDrop = document.querySelector('[data-testid="tree-root-drop"]');
+      if (!note || !rootDrop) throw new Error('The note or drop target is missing');
+      const dataTransfer = new DataTransfer();
+      const event = (type: string) => new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer });
+      note.dispatchEvent(event('dragstart'));
+      rootDrop.dispatchEvent(event('dragover'));
+      rootDrop.dispatchEvent(event('drop'));
+    }, source);
+    await expect($('[data-testid="tree-note"][data-path="First thought.md"]')).toBeExisting();
+    expect(readFileSync(join(root, 'First thought.md'), 'utf8')).toBe('**A thought**');
+    expect(diffSnapshots(before, snapshotVault(root)).sort()).toEqual(['added: First thought.md', 'removed: Fresh ideas/First thought.md']);
+    await expect($('[role="tab"][data-active="true"]')).toHaveAttribute('data-title', 'First thought');
+    await pressCommand('t'); await pressCommand('t');
+    await pressCommand('o', { control: true, shift: true });
+    expect(await $$('[role="tab"][data-pinned="false"]').length).toBe(1);
   });
 });

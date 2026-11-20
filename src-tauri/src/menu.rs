@@ -12,6 +12,7 @@ pub const MENU_EVENT: &str = "epizen://menu";
 
 const NEW_TAB: &str = "new-tab";
 const CLOSE_TAB: &str = "close-tab";
+const CLOSE_OTHER_TABS: &str = "close-other-tabs";
 const RIGHT_SIDEBAR: &str = "right-sidebar";
 const SPIKE_SIDEBAR: &str = "spike-sidebar";
 const LEFT_SIDEBAR: &str = "left-sidebar";
@@ -66,6 +67,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                     &MenuItem::with_id(app, NEW_TAB, "New Tab", true, Some("CmdOrCtrl+T"))?,
                     &separator()?,
                     &MenuItem::with_id(app, CLOSE_TAB, "Close Tab", true, Some("CmdOrCtrl+W"))?,
+                    &MenuItem::with_id(app, CLOSE_OTHER_TABS, "Close Other Tabs", true, Some("Ctrl+Shift+O"))?,
                     &MenuItem::with_id(
                         app,
                         CLOSE_WINDOW,
@@ -157,7 +159,7 @@ pub fn handle<R: Runtime>(app: &AppHandle<R>, id: &str) {
         return;
     }
     match id {
-        NEW_TAB | CLOSE_TAB | LEFT_SIDEBAR | RIGHT_SIDEBAR | SPIKE_SIDEBAR | COLLAPSE_FOLDERS | NEW_NOTE
+        NEW_TAB | CLOSE_TAB | CLOSE_OTHER_TABS | LEFT_SIDEBAR | RIGHT_SIDEBAR | SPIKE_SIDEBAR | COLLAPSE_FOLDERS | NEW_NOTE
         | SETTINGS | HOME | LIBRARY | TODAY => {
             // A shortcut in the timer panel must not navigate the workspace behind it.
             if let Some(window) = app.get_webview_window("main")

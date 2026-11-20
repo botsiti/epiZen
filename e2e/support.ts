@@ -181,11 +181,13 @@ export async function clickInPage(selector: string) {
 }
 
 /** Presses a workspace key, with Command by default or Control when requested. */
-export async function pressCommand(key: string, options: { alt?: boolean; shift?: boolean; control?: boolean } = {}) {
+export async function pressCommand(key: string, options: { alt?: boolean; shift?: boolean; control?: boolean; target?: string } = {}) {
   await browser.execute(
     (letter, modifiers) => {
       const code = /^\d$/.test(letter) ? `Digit${letter}` : letter === ',' ? 'Comma' : `Key${letter.toUpperCase()}`;
-      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: modifiers.alt ? '∫' : letter, code, metaKey: !modifiers.control, ctrlKey: Boolean(modifiers.control), altKey: Boolean(modifiers.alt), shiftKey: Boolean(modifiers.shift), bubbles: true, cancelable: true }));
+      const element = modifiers.target ? document.querySelector(modifiers.target) : document.body;
+      if (!element) throw new Error(`Missing shortcut target: ${modifiers.target}`);
+      element.dispatchEvent(new KeyboardEvent('keydown', { key: modifiers.alt ? '∫' : letter, code, metaKey: !modifiers.control, ctrlKey: Boolean(modifiers.control), altKey: Boolean(modifiers.alt), shiftKey: Boolean(modifiers.shift), bubbles: true, cancelable: true }));
     },
     key,
     options,

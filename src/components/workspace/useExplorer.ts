@@ -19,5 +19,14 @@ export function useExplorer(tree: TreeNode[], selected?: string) {
     setToggled(closed);
   }, [tree]);
   const reset = useCallback(() => setToggled(new Map()), []);
-  return { isOpen, toggle, collapseAll, reset };
+  const reveal = useCallback((folder: string) => {
+    if (!folder) return;
+    setToggled((previous) => {
+      const next = new Map(previous);
+      let path = '';
+      for (const part of folder.split('/')) { path = path ? `${path}/${part}` : part; next.set(path, true); }
+      return next;
+    });
+  }, []);
+  return { isOpen, toggle, collapseAll, reset, reveal };
 }

@@ -11,13 +11,14 @@ import { CUSTOM_MINUTES, dayKey, dayOfKey, elapsed, formatSeconds, restLeft, sho
 export type TrayClock =
   | { kind: 'idle' }
   /** Focus counted is `accumulated`, plus the time since `since` unless paused; a pomodoro counts down from `planned` seconds. */
-  | { kind: 'focus'; accumulated: number; since: number; paused: boolean; planned?: number }
+  | { kind: 'focus'; accumulated: number; since: number; paused: boolean; planned?: number; category?: string }
   | { kind: 'rest'; endsAt: number };
 
 export function trayClock({ session, rest }: TimerState): TrayClock {
   if (session) {
     const { accumulated, segmentStartedAt: since, planned } = session;
-    return { kind: 'focus', accumulated, since, paused: session.pausedAt !== undefined, ...(planned ? { planned } : {}) };
+    const category = session.task.category?.trim();
+    return { kind: 'focus', accumulated, since, paused: session.pausedAt !== undefined, ...(planned ? { planned } : {}), ...(category ? { category } : {}) };
   }
   return rest ? { kind: 'rest', endsAt: rest.startedAt + rest.seconds * 1000 } : { kind: 'idle' };
 }

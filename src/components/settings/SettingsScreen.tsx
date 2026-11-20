@@ -116,7 +116,7 @@ export function SettingsScreen({ menuBarNotice, habitSettings, timerSettings, wa
     const born = parseBirthDate(birth);
     if (birth.trim() && (!born || born > today())) { setSection('home'); setState({ error: 'Enter a birth date in the past, such as 1990-04-21.' }); return; }
     if (!validLifetimeYears(Number(years))) { setSection('home'); setState({ error: 'Enter a positive whole number of years within the calendar range.' }); return; }
-    const invalidFolder = folderProblem(fileDraft.noteFolder) ?? folderProblem(fileDraft.folderParent);
+    const invalidFolder = folderProblem(fileDraft.noteFolder) ?? folderProblem(fileDraft.folderParent) ?? folderProblem(fileDraft.attachmentFolder);
     if (invalidFolder) { setSection('files'); setState({ error: invalidFolder }); return; }
     let rewards: SettingsDraft['rewards'];
     if (rulesDraft) {

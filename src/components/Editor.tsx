@@ -7,6 +7,7 @@ import { EditorView, keymap, placeholder } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { useEffect, useRef } from 'react';
 import { wikilinkSource, type LinkTarget } from '../lib/completion';
+import { MARKDOWN_KEYS } from './workspace/markdownKeys';
 
 interface Props {
   /** The text the editor starts with. Later changes to it are ignored; remount to load another note. */
@@ -87,7 +88,7 @@ export function Editor({ initial, lineSeparator, onChange, linkTargets = [], ext
         doc,
         extensions: [
           history(),
-          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          keymap.of([...MARKDOWN_KEYS, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown(),
           syntaxHighlighting(highlight),
           EditorView.lineWrapping,

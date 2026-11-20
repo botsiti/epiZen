@@ -1,3 +1,5 @@
+import { MARKDOWN_KEYS } from './markdownKeys';
+
 /** Shared by the keyboard handler and the reference in Settings. */
 export const SHORTCUTS = [
   { action: 'collapseFolders', label: 'Collapse all folders', key: '3', control: true, keys: '⌃3' },
@@ -12,6 +14,8 @@ export const SHORTCUTS = [
   { action: 'today', label: 'Open today’s daily note', key: 'd', shift: true, keys: '⇧⌘D' },
   { action: 'newTab', label: 'New tab', key: 't', keys: '⌘T' },
   { action: 'closeTab', label: 'Close current tab', key: 'w', keys: '⌘W' },
+  { action: 'closeOthers', label: 'Close all other unpinned tabs', key: 'o', control: true, shift: true, keys: '⌃⇧O' },
+  { action: 'editNote', label: 'Switch between reading and editing', key: 'e', keys: '⌘E' },
 ] as const satisfies readonly { action: string; label: string; key: string; keys: string; control?: boolean; alt?: boolean; shift?: boolean }[];
 
 export type ShortcutAction = typeof SHORTCUTS[number]['action'];
@@ -19,7 +23,7 @@ export type ShortcutAction = typeof SHORTCUTS[number]['action'];
 const shortcutGroup: Record<ShortcutAction, string> = {
   collapseFolders: 'Workspace', toggleLeftSidebar: 'Workspace', toggleRightSidebar: 'Workspace', toggleAssistant: 'Spike',
   newNote: 'Workspace', settings: 'Navigation', home: 'Navigation', library: 'Navigation', today: 'Navigation',
-  newTab: 'Tabs', closeTab: 'Tabs',
+  newTab: 'Tabs', closeTab: 'Tabs', closeOthers: 'Tabs', editNote: 'Markdown',
 };
 export const SHORTCUT_REFERENCE = [
   ...SHORTCUTS.map((item) => ({ ...item, group: shortcutGroup[item.action] })),
@@ -32,4 +36,8 @@ export const SHORTCUT_REFERENCE = [
   { group: 'Tabs', label: 'Go to tab 1–6 (alternate)', keys: '⌘1–6' },
   { group: 'Navigation', label: 'Back in tab history (outside text fields)', keys: '⌘[' },
   { group: 'Navigation', label: 'Forward in tab history (outside text fields)', keys: '⌘]' },
+  ...MARKDOWN_KEYS.map(({ label, keys }) => ({ group: 'Markdown', label, keys })),
+  { group: 'Markdown', label: 'Save note now', keys: '⌘S' },
+  { group: 'Markdown', label: 'Save and finish editing', keys: '⌘↵' },
+  { group: 'Markdown', label: 'Undo / redo', keys: '⌘Z / ⇧⌘Z' },
 ];

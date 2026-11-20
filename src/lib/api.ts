@@ -28,7 +28,7 @@ export const vaultStatus = () => invoke<VaultStatus>('vault_status');
 export const pickVault = () => invoke<VaultStatus | null>('pick_vault');
 export const listFiles = () => invoke<VaultFile[]>('list_files');
 export const listFolders = () => invoke<string[]>('list_folders');
-export const createFolder = (path: string) => invoke<void>('create_folder', { path });
+export const createFolder = (path: string, root: string) => invoke<void>('create_folder', { path, root });
 export const readNote = (path: string, root?: string) => invoke<string>('read_note', { path, root });
 export const readBase = (root: string, path: string) => invoke<string>('read_base', { root, path });
 export const createBase = (root: string, path: string, text: string) => invoke<void>('create_base', { root, path, text });
@@ -36,9 +36,9 @@ export const writeBase = (root: string, path: string, text: string, expected: st
 export const writeNoteScoped = (root: string, path: string, text: string, expected: string) => invoke<void>('write_note_scoped', { root, path, text, expected });
 export const readImage = (path: string) => invoke<ArrayBuffer>('read_image', { path });
 export const revealFile = (root: string, path: string) => invoke<void>('reveal_file', { root, path });
-/** Saves a selected image beside this note without replacing any existing file. */
-export const saveExpensePhoto = (root: string, notePath: string, bytes: Uint8Array) =>
-  invoke<string>('save_expense_photo', { root, notePath, bytes: Array.from(bytes) });
+/** Saves a selected image without replacing any existing file. */
+export const saveExpensePhoto = (root: string, notePath: string, bytes: Uint8Array, folder?: string) =>
+  invoke<string>('save_expense_photo', { root, notePath, bytes: Array.from(bytes), folder });
 
 /** Mirrors `NoteText` in src-tauri/src/vault.rs. */
 export interface NoteText {
@@ -53,7 +53,7 @@ export const readAllNotes = () => invoke<NoteText[]>('read_all_notes');
 export const createNote = (path: string, text: string, root?: string) => invoke<void>('create_note', { path, text, root });
 export interface NoteEdit { path: string; expected: string; text: string }
 /** Renames the file and conditionally updates its incoming links, rolling back on a conflict. */
-export const renameNote = (path: string, destination: string, expected: string, edits: NoteEdit[]) => invoke<void>('rename_note', { path, destination, expected, edits });
+export const renameNote = (path: string, destination: string, expected: string, edits: NoteEdit[], root: string) => invoke<void>('rename_note', { path, destination, expected, edits, root });
 export const revealNote = (path: string) => invoke<void>('reveal_note', { path });
 export const trashNote = (path: string, expected: string) => invoke<string>('trash_note', { path, expected });
 export const trashNoteWithEdits = (root: string, path: string, expected: string, edits: NoteEdit[]) =>
@@ -174,7 +174,7 @@ export const hideTray = () => invoke<void>('tray_hide');
 export const quitApp = () => invoke<void>('tray_quit');
 
 /** An item of the menu bar the page acts on (src-tauri/src/menu.rs). */
-export type MenuItemId = 'new-tab' | 'close-tab' | 'left-sidebar' | 'right-sidebar' | 'spike-sidebar' | 'collapse-folders' | 'new-note' | 'settings' | 'home' | 'library' | 'today';
+export type MenuItemId = 'new-tab' | 'close-tab' | 'close-other-tabs' | 'left-sidebar' | 'right-sidebar' | 'spike-sidebar' | 'collapse-folders' | 'new-note' | 'settings' | 'home' | 'library' | 'today';
 
 /** Calls `handler` when one of those items is chosen. Returns a function that stops listening. */
 export async function onMenu(handler: (item: MenuItemId) => void): Promise<() => void> {
