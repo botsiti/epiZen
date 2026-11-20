@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import type { CalendarEvent, CalendarInfo } from '../../lib/api';
 import { formatDate } from '../../lib/dates';
 import { clock, formatMinutes } from '../../lib/day';
 import { clip, dragged, drawn, lanes, snapDown, type DragEdge, type Hours } from '../../lib/schedule';
-import type { PlanBlock } from '../../lib/plans';
+import { planText, type PlanBlock } from '../../lib/plans';
 import { dayKey, type Session } from '../../lib/timer';
 import { FocusMenu, type FocusHow } from './FocusMenu';
 import { TaskPicker } from './TaskPicker';
@@ -15,7 +15,7 @@ import type { PlansApi } from './usePlans';
 /** A plan on a day: its event in Calendar, and the task it is bound to, when Epizen finds it. */
 export interface GridPlan extends PlanBlock {
   task?: DayTaskRef;
-  /** The task's note is this day's, so the task can be edited or timed from here. */
+  /** The task's note is this day's, so the task can be timed from here. */
   here: boolean;
 }
 
@@ -40,7 +40,6 @@ interface Props {
   early: boolean;
   late: boolean;
   onFold: (edge: 'early' | 'late') => void;
-  hourHeight: number;
   categories: string[];
   session?: Session;
   /** One wide day rather than a week. */
@@ -56,8 +55,7 @@ interface Props {
   onDeletePlan: (plan: GridPlan) => Promise<unknown>;
   /** A focus round on a plan's task, from the right-click menu. */
   onFocus: (date: Date, item: DayTaskRef, how: FocusHow) => void;
-  /** Edits a plan's task, from the right-click menu. */
-  onEditTask: (date: Date, item: DayTaskRef) => void;
+  onEditPlan: (plan: GridPlan) => void;
   /** A block's title: opens the day's page. */
   onOpenDay: (date: Date) => void;
   onOpenLinkedNote?: (path: string) => void;
@@ -74,13 +72,30 @@ const NO_FOCUS = 'Focus runs on today’s tasks: the timer logs into today’s n
 
 const GUTTER = 56;
 const POPOVER_WIDTH = 300;
+const MIN_HOUR_HEIGHT = 26;
+
+const wordsOf = (plan: GridPlan) => plan.task
+  ? planText(plan.task.task.category?.name, plan.task.task.label)
+  : plan.event;
+
 /**
  * Days side by side, hours down: Apple Calendar's events, as Calendar and Senioro draw them. A
  * plan is drawn on empty time; events are moved, resized and deleted in place, in Calendar.
  */
 export function TimeGrid(props: Props) {
-  const { columns, hours, early, late, onFold, hourHeight, categories, session, wide, highlight, plans, calendarFor, onPlan, onMovePlan, onDeletePlan, onFocus, onEditTask, onOpenDay, onHead } = props;
+  const { columns, hours, early, late, onFold, categories, session, wide, highlight, plans, calendarFor, onPlan, onMovePlan, onDeletePlan, onFocus, onEditPlan, onOpenDay, onHead } = props;
   const body = useRef<HTMLDivElement>(null);
+  const [measuredHeight, setMeasuredHeight] = useState(0);
+  useLayoutEffect(() => {
+    const element = body.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    setMeasuredHeight(element.clientHeight);
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setMeasuredHeight(entry.contentRect.height);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const clicked = useRef(false);
   const endGesture = useRef<() => void>(undefined);
   useEffect(() => () => endGesture.current?.(), []);
@@ -108,6 +123,8 @@ export function TimeGrid(props: Props) {
   const timerDayKey = dayKey(new Date(props.now));
   const nowMinute = now.hour * 60 + now.minute + now.second / 60;
 
+  const hourCount = (hours.last - hours.first) / 60;
+  const hourHeight = measuredHeight ? Math.max(MIN_HOUR_HEIGHT, measuredHeight / hourCount) : wide ? 52 : 44;
   const y = (minutes: number) => ((minutes - hours.first) / 60) * hourHeight;
   const height = y(hours.last);
   const minuteAt = (clientY: number) => {
@@ -196,6 +213,11 @@ export function TimeGrid(props: Props) {
     if (plan.task && plan.link && props.onOpenLinkedNote) props.onOpenLinkedNote(plan.link.note);
     else if (plan.here && columns[col]) onOpenDay(columns[col].date);
   };
+  const openEditor = (plan: GridPlan) => {
+    if (clicked.current || held.has(plan.key) || (!plan.task && !plan.event.writable)) return;
+    close();
+    onEditPlan(plan);
+  };
   const askDeletePlan = (col: number, plan: GridPlan) => setPopover({ kind: 'delete-plan', col, plan, ...placeAt(col, plan.start) });
 
   const save = (choice: TaskChoice, calendar: string) => {
@@ -209,12 +231,12 @@ export function TimeGrid(props: Props) {
   const colorOf = (id: string) => plans.calendars.find((calendar) => calendar.id === id)?.color;
   // Each event in its calendar's colour, as Calendar and Senioro draw it.
   const toneOf = (event: CalendarEvent) => colorOf(event.calendar) ?? 'var(--accent)';
-  const hourMarks = Array.from({ length: (hours.last - hours.first) / 60 + 1 }, (_, i) => hours.first + i * 60);
+  const hourMarks = Array.from({ length: hourCount + 1 }, (_, i) => hours.first + i * 60);
   const foldCounts = (edge: 'early' | 'late') =>
     columns.map((col) => col.plans.filter((plan) => (edge === 'early' ? plan.start < hours.first : plan.end > hours.last)).map((plan) => ({ key: plan.key, tone: toneOf(plan.event) })));
 
   return (
-    <div className={wide ? 'cal-grid glass rise is-day' : 'cal-grid glass rise'} style={{ '--hour': `${hourHeight}px`, '--cols': columns.length, '--gutter': `${GUTTER}px` } as CSSProperties} data-testid="cal-grid">
+    <div className={wide ? 'cal-grid glass rise is-day' : 'cal-grid glass rise'} style={{ '--cols': columns.length, '--gutter': `${GUTTER}px` } as CSSProperties} data-testid="cal-grid">
       <div className="cal-head">
         <span className="cal-gutter" />
         {columns.map((col) => {
@@ -254,7 +276,7 @@ export function TimeGrid(props: Props) {
 
       <Fold edge="early" open={early} from={0} to={hours.first || 7 * 60} hidden={early ? [] : foldCounts('early')} onToggle={() => onFold('early')} />
 
-      <div className="cal-body" ref={body} style={{ height }}>
+      <div className="cal-body" ref={body} style={{ minHeight: hourCount * MIN_HOUR_HEIGHT }}>
         <div className="cal-hours" aria-hidden="true">
           {hourMarks.map((minute) => (
             <span key={minute} className={minute % 180 === 0 ? 'cal-hour is-third' : 'cal-hour'} style={{ top: y(minute) }}>
@@ -287,7 +309,8 @@ export function TimeGrid(props: Props) {
                   const tall = y(visible.end) - top;
                   const { start, end } = item.range;
                   const fixed = plan.cut || !plan.event.writable;
-                  const notes = plan.event.notes?.split('\n')[0];
+                  const words = wordsOf(plan);
+                  const notes = words.notes?.split('\n')[0];
                   const calendar = plans.calendars.find((one) => one.id === plan.event.calendar)?.title;
                   const classes = ['cal-block'];
                   if (plan.event.end <= props.now) classes.push('is-past');
@@ -302,11 +325,14 @@ export function TimeGrid(props: Props) {
                       className={classes.join(' ')}
                       style={{ top, height: Math.max(4, tall - 2), '--lane': lane, '--lanes': count, '--tone': toneOf(plan.event) } as CSSProperties}
                       onPointerDown={(event) => itemDown(event, plan, fixed, (next, edge) => onMovePlan(col.date, plan, next.start, next.end, edge))}
+                      onDoubleClick={(event) => {
+                        if (!(event.target as Element).closest('.cal-block-x')) openEditor(plan);
+                      }}
                       onContextMenu={(event) => {
                         event.preventDefault();
                         setPopover({ kind: 'plan-menu', col: c, plan, x: event.clientX, y: event.clientY });
                       }}
-                      title={`${plan.event.title} · ${clock(start)}–${clock(end)}${notes ? ` · ${notes}` : ''}${calendar ? ` · ${calendar}` : ''}${plan.event.writable ? '' : ' · read-only'}`}
+                      title={`${words.title} · ${clock(start)}–${clock(end)}${notes ? ` · ${notes}` : ''}${calendar ? ` · ${calendar}` : ''}${plan.event.writable ? '' : ' · read-only'}`}
                       data-testid="cal-plan"
                       data-start={start}
                       data-end={end}
@@ -317,18 +343,16 @@ export function TimeGrid(props: Props) {
                           <button
                             type="button"
                             className="cal-block-title"
-                            onClick={() => {
-                              if (!clicked.current) openLinkedDay(c, plan);
-                            }}
+                            onClick={(event) => { if (event.detail === 0) openEditor(plan); }}
                           >
-                            {plan.event.title || 'untitled'}
+                            {words.title || 'untitled'}
                           </button>
                           <span className="cal-block-time">
                             {clock(start)}–{clock(end)}
                           </span>
                         </span>
                       )}
-                      {tall >= 34 && notes && <span className="cal-block-notes">{notes}</span>}
+                      {tall >= 25 && notes && <span className="cal-block-notes">{notes}</span>}
                       {tall >= 22 && plan.event.writable && (
                         <button type="button" className="cal-block-x" aria-label="Delete this event" title="Delete this event from Calendar" onClick={() => askDeletePlan(c, plan)} data-testid="cal-plan-delete">
                           ×
@@ -372,7 +396,7 @@ export function TimeGrid(props: Props) {
             running={Boolean(session)}
             onFocus={(item, how) => onFocus(columns[popover.col]?.date ?? new Date(), item, how)}
             onOpenDay={popover.plan.here || (popover.plan.task && props.onOpenLinkedNote) ? () => openLinkedDay(popover.col, popover.plan) : undefined}
-            onEdit={(item) => onEditTask(columns[popover.col]?.date ?? new Date(), item)}
+            onEdit={() => openEditor(popover.plan)}
             onDelete={() => askDeletePlan(popover.col, popover.plan)}
             onClose={close}
           />
@@ -383,7 +407,7 @@ export function TimeGrid(props: Props) {
             label="Delete the plan"
             words={
               <>
-                Delete <strong>{clock(popover.plan.start)}–{clock(popover.plan.end)}</strong> “{popover.plan.event.title}”{popover.plan.event.notes ? `, ${popover.plan.event.notes.split('\n')[0]},` : ''} from Calendar?
+                Delete <strong>{clock(popover.plan.start)}–{clock(popover.plan.end)}</strong> “{wordsOf(popover.plan).title}”{wordsOf(popover.plan).notes ? `, ${wordsOf(popover.plan).notes?.split('\n')[0]},` : ''} from Calendar?
               </>
             }
             note={popover.plan.task ? 'The task stays in its note, with its minutes.' : 'It goes from Calendar on every device.'}
@@ -516,7 +540,7 @@ function NewPlan({
   );
 }
 
-/** A plan's right-click menu: its task's focus and edit when the task is this day's, and deleting the event. */
+/** A plan's right-click menu, with focus restricted to tasks from the current day. */
 function PlanMenu({
   focusEnabled,
   at,
@@ -536,22 +560,24 @@ function PlanMenu({
   running: boolean;
   onFocus: (item: DayTaskRef, how: FocusHow) => void;
   onOpenDay?: () => void;
-  onEdit: (item: DayTaskRef) => void;
+  onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const item = plan.here ? plan.task : undefined;
+  const words = wordsOf(plan);
   const noFocus = !plan.task ? 'An event from Calendar, not one of your tasks.' : !item ? 'Its task is in another day’s note.' : today ? undefined : NO_FOCUS;
   return (
     <FocusMenu
       focusEnabled={focusEnabled}
       at={at}
-      label={plan.event.notes?.split('\n')[0] ?? plan.event.title}
+      label={words.notes?.split('\n')[0] ?? words.title}
       noFocus={noFocus}
       running={running}
       onFocus={(how) => item && onFocus(item, how)}
       onOpenDay={onOpenDay}
-      onEdit={item ? () => onEdit(item) : undefined}
+      onEdit={plan.task || plan.event.writable ? onEdit : undefined}
+      editLabel={plan.task ? undefined : 'Edit event…'}
       onDelete={plan.event.writable ? onDelete : undefined}
       deleteLabel="Delete from Calendar…"
       onClose={onClose}

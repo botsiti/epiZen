@@ -241,7 +241,7 @@ Apple Calendar, on a week or a day, as Calendar and Senioro show it, with Senior
 is a periodic page in its look (the same glass, hero, chips and restrained motion), opened
 from "Calendar" in the sidebar.
 
-- **Top**: the week's dates (or the day's) in the serif display face, a kicker with the ISO week, the
+- **Top**: a compact header with the week's dates (or the day's) in the serif display face, the ISO week, the
   minutes the daily notes log counting up with their categories, how many events Calendar has on
   show, ‹ › and Today, and a Week | Day switch. The timer's card sits beside it. Until Epizen may use
   Calendar, a chip asks for it (or opens System Settings once it was refused).
@@ -249,12 +249,17 @@ from "Calendar" in the sidebar.
 - **Grid**: hours down, 07–22, with the night before and after folded into a thin striped band that
   unfolds on a click and marks each event it hides. All-day events sit in a row above the hours. A
   hairline every hour, a slightly stronger one every three hours, small mono hour labels. Today's
-  column is faintly lit, and a glowing sage line with a dot marks now.
+  column is faintly lit, and a glowing sage line with a dot marks now. Hour heights follow the
+  available space. Small windows and expanded night hours can scroll to keep the grid legible.
 - **Events**: soft rounded fills in their calendar's colour with a solid rail down the left, side by
   side where they overlap: the title and time on one line, the notes under them (Senioro puts the
   task's words there). Past events recede (the colour steps down, the words only one notch). An
   event lifts under the pointer and shows its edges. Calendar colours are data here, like the
   categories on the periodic pages.
+- **Editing**: double-click a timed block or use its context menu to open the editor with the
+  occurrence's scheduled date and time. Linked tasks show their current description, category and
+  logged minutes, and save to their source note even after the event moves to another day. Writable
+  events without a linked task save their title and description to Apple Calendar.
 - **Not drawn**: the time blocks under the notes' tasks. They are the timer's record; the minutes
   are what counts, and the calendar is Calendar.
 - **Day**: one wide column and, beside it, the day's tasks with their minutes; pointing at one

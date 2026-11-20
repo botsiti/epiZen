@@ -37,10 +37,10 @@ vi.mock(import('../../lib/api'), async (original) => ({
     calendar.events.push(made);
     return Promise.resolve(made);
   },
-  updateEvent: (occurrence: Occurrence, change: { start?: number; end?: number }) => {
+  updateEvent: (occurrence: Occurrence, change: Partial<CalendarEvent>) => {
     const event = calendar.events.find((e) => e.id === occurrence.id);
     if (!event) return Promise.reject(new Error('gone'));
-    Object.assign(event, change);
+    Object.assign(event, JSON.parse(JSON.stringify(change)));
     return Promise.resolve({ ...event });
   },
   deleteEvent: (occurrence: Occurrence) => {
@@ -90,7 +90,7 @@ const timer = (): TimerApi => ({
 const HOUR = 44;
 const y = (h: number, m = 0) => ((h * 60 + m - 7 * 60) / 60) * HOUR;
 
-function setup() {
+function setup(source = TEXT) {
   // Runs the edit on the day's text, as the app's writer does, and answers with the note's path.
   const onWrite = vi.fn<(date: Date, edit: (text: string) => string, failed: string) => Promise<string | undefined>>((_, edit) => {
     edit(TEXT);
@@ -99,20 +99,29 @@ function setup() {
   const onStartTimer = vi.fn();
   const onOpenDay = vi.fn();
   const onChooseCalendar = vi.fn();
-  render(
-    <CalendarView
+  const onTaskChanged = vi.fn();
+  const onWriteTask = vi.fn<(path: string, edit: (text: string) => string) => Promise<string>>();
+  const view = () => <CalendarView
       dayOf={dayOf}
-      textOf={textOf}
+      textOf={(path) => path === 'day.md' ? source : undefined}
       categories={['code', 'sport', 'book']}
       timer={timer()}
       onStartTimer={onStartTimer}
       onOpenDay={onOpenDay}
       onWrite={onWrite}
-      onTaskChanged={vi.fn()}
+      onWriteTask={onWriteTask}
+      onTaskChanged={onTaskChanged}
       vault="demo-vault"
       planCalendars={{}}
       onChooseCalendar={onChooseCalendar}
-    />,
+    />;
+  const { rerender } = render(view());
+  onWriteTask.mockImplementation((_, edit) =>
+    Promise.resolve().then(() => {
+      source = edit(source);
+      rerender(view());
+      return source;
+    }),
   );
   // The calendar remembers where it was; start from this week and go back one.
   const back = screen.queryByTestId('cal-today');
@@ -126,7 +135,7 @@ function setup() {
     expect(call?.[0]).toEqual(DAY);
     return call?.[1](TEXT);
   };
-  return { onWrite, onStartTimer, onOpenDay, onChooseCalendar, column, written };
+  return { onWrite, onWriteTask, onTaskChanged, onStartTimer, onOpenDay, onChooseCalendar, column, written, source: () => source };
 }
 
 /** Draws from one time to another on the day's column, as a mouse would. */
@@ -254,7 +263,7 @@ describe('the calendar', () => {
     await userEvent.click(screen.getByTestId('cal-mode-week'));
   });
 
-  it('opens a menu on a right-click: an event that isn’t a task can only be deleted', async () => {
+  it('offers event editing and deletion on a right-click without task actions', async () => {
     calendar.events = [{ id: 'dentist', calendar: 'home', title: 'Dentist', notes: 'check-up', start: at(DAY, 15 * 60), end: at(DAY, 16 * 60), allDay: false, writable: true }];
     const user = userEvent.setup();
     const { column, onStartTimer } = setup();
@@ -263,10 +272,78 @@ describe('the calendar', () => {
     const menu = screen.getByTestId('focus-menu');
     expect(menu).toHaveTextContent('An event from Calendar, not one of your tasks.');
     expect(within(menu).queryByTestId('focus-start')).not.toBeInTheDocument();
-    expect(within(menu).queryByTestId('focus-menu-edit')).not.toBeInTheDocument();
+    expect(within(menu).getByTestId('focus-menu-edit')).toHaveTextContent('Edit event');
     await user.click(within(menu).getByTestId('focus-menu-delete'));
     expect(screen.getByTestId('plan-delete-popover')).toHaveTextContent('Delete 15:00–16:00 “Dentist”, check-up, from Calendar?');
     expect(onStartTimer).not.toHaveBeenCalled();
+  });
+
+  it('opens the current task from a moved plan and updates the grid after saving its original note', async () => {
+    const moved = addDays(DAY, 1);
+    const event = {
+      id: 'code', calendar: 'home', title: 'business', notes: 'An old task name',
+      start: at(moved, 13 * 60), end: at(moved, 14 * 60), allDay: false, writable: true,
+      url: taskUrl({ vault: 'demo-vault', note: 'day.md', id: 'work' }),
+    };
+    calendar.events = [event];
+    const text = TEXT.replace('[minutes::58]', '[minutes::58] <!-- focus-id: work -->');
+    const { onWrite, onWriteTask, onTaskChanged, onOpenDay, source } = setup(text);
+    const block = await screen.findByTestId('cal-plan');
+    expect(block.closest('[data-date]')).toHaveAttribute('data-date', dayKey(moved));
+    expect(block).toHaveTextContent('code13:00–14:00refactor the settings screen');
+    expect(block).not.toHaveTextContent('An old task name');
+    const user = userEvent.setup();
+    await user.dblClick(within(block).getByRole('button', { name: 'code' }));
+    expect(onOpenDay).not.toHaveBeenCalled();
+    const editor = screen.getByRole('dialog', { name: 'Edit task' });
+    expect(editor).toHaveTextContent(/13:00\s*[–-]\s*14:00/);
+    expect(editor).toHaveTextContent('day.md');
+    expect(within(editor).getByLabelText('Minutes spent')).toHaveValue('58');
+    const description = within(editor).getByLabelText('Description');
+    await user.clear(description);
+    await user.type(description, 'review the calendar');
+    onWriteTask.mockRejectedValueOnce(new Error('The note changed on disk'));
+    await user.click(within(editor).getByRole('button', { name: 'Save' }));
+    expect(await within(editor).findByRole('alert')).toHaveTextContent('The note changed on disk');
+    expect(description).toHaveValue('review the calendar');
+    expect(onTaskChanged).not.toHaveBeenCalled();
+    await user.click(within(editor).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(editor).not.toBeInTheDocument());
+    expect(onWriteTask).toHaveBeenLastCalledWith('day.md', expect.any(Function));
+    expect(onWrite).not.toHaveBeenCalled();
+    expect(source()).toBe(text.replace('refactor the settings screen', 'review the calendar'));
+    expect(onTaskChanged).toHaveBeenCalledWith(expect.objectContaining({ path: 'day.md', date: moved, focusId: 'work' }));
+    expect(screen.getByTestId('cal-plan')).toHaveTextContent('review the calendar');
+    expect(screen.getByTestId('cal-plan').closest('[data-date]')).toHaveAttribute('data-date', dayKey(moved));
+  });
+
+  it('edits an unlinked event in Calendar, preserving its date and untouched multiline description', async () => {
+    const event = { id: 'legacy', calendar: 'home', title: 'code', notes: 'plan\nExtra details', start: at(DAY, 13 * 60), end: at(DAY, 15 * 60), allDay: false, writable: true };
+    calendar.events = [{ ...event }];
+    const { onWrite, onWriteTask } = setup();
+    const user = userEvent.setup();
+    await user.dblClick(await screen.findByTestId('cal-plan'));
+    const editor = screen.getByRole('dialog', { name: 'Edit event' });
+    expect(within(editor).getByLabelText('Description')).toHaveValue(event.notes);
+    const title = within(editor).getByLabelText('Title');
+    await user.clear(title);
+    await user.type(title, 'planning');
+    await user.click(within(editor).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(editor).not.toBeInTheDocument());
+    expect(screen.getByTestId('cal-plan')).toHaveTextContent('planning');
+    expect(calendar.events).toEqual([{ ...event, title: 'planning' }]);
+    expect(onWrite).not.toHaveBeenCalled();
+    expect(onWriteTask).not.toHaveBeenCalled();
+
+    // A reschedule in Apple Calendar replaces the occurrence in Epizen when it returns to focus.
+    const next = addDays(DAY, 1);
+    calendar.events = [{ ...event, title: 'planning', start: at(next, 11 * 60), end: at(next, 13 * 60) }];
+    fireEvent(window, new Event('focus'));
+    await waitFor(() => {
+      const moved = screen.getByTestId('cal-plan');
+      expect(moved.closest('[data-date]')).toHaveAttribute('data-date', dayKey(next));
+      expect(moved).toHaveTextContent('11:00–13:00');
+    });
   });
 
   it('adds a task to a day of the week, with no time yet', async () => {
@@ -288,7 +365,7 @@ describe('the calendar', () => {
 
 it('reveals an assistant block date once without taking over later calendar navigation', async () => {
   const onFocusDate = vi.fn();
-  const props = { dayOf, textOf, categories: ['code'], timer: timer(), onStartTimer: vi.fn(), onOpenDay: vi.fn(), onWrite: vi.fn().mockResolvedValue(undefined), onTaskChanged: vi.fn(), vault: 'copy', planCalendars: {}, onChooseCalendar: vi.fn(), onFocusDate };
+  const props = { dayOf, textOf, categories: ['code'], timer: timer(), onStartTimer: vi.fn(), onOpenDay: vi.fn(), onWrite: vi.fn().mockResolvedValue(undefined), onWriteTask: vi.fn(), onTaskChanged: vi.fn(), vault: 'copy', planCalendars: {}, onChooseCalendar: vi.fn(), onFocusDate };
   const view = render(<CalendarView {...props} focusDate={{ time: new Date(2026, 11, 1, 9).getTime(), token: 1 }} />);
   expect(screen.getByTestId('cal-view')).toHaveAttribute('data-mode', 'day');
   expect(screen.getByTestId('cal-view')).toHaveAttribute('data-start', '2026-12-01');
@@ -309,7 +386,7 @@ it('changes the calendar zone, places an event in its new day, and saves a newly
     const [zone, setZone] = useState<string | undefined>('America/Los_Angeles');
     return <CalendarView timeZone={zone} onSaveTimeZone={async (next) => { await save(next); setZone(next); }}
       focusDate={{ time: anchor, token: 1 }} dayOf={dayOf} textOf={textOf} categories={['code']} timer={timer()} onStartTimer={vi.fn()} onOpenDay={vi.fn()}
-      onWrite={write} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />;
+      onWrite={write} onWriteTask={vi.fn()} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />;
   }
   render(<Display />);
   expect(await screen.findByTestId('cal-plan')).toHaveTextContent('18:00–19:00');
@@ -350,7 +427,7 @@ it('highlights today in the display zone while focus stays attached to the Mac d
     const data = (date: Date) => ({ date, path: dayKey(date), day: parseDay(note(date)) });
     const text = (path: string) => path === dayKey(local) ? note(local) : note(viewed);
     render(<CalendarView timeZone={zone} focusDate={{ time: instant, token: 1 }} dayOf={data} textOf={text} categories={['code']}
-      timer={timer()} onStartTimer={vi.fn()} onOpenDay={vi.fn()} onWrite={vi.fn()} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />);
+      timer={timer()} onStartTimer={vi.fn()} onOpenDay={vi.fn()} onWrite={vi.fn()} onWriteTask={vi.fn()} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />);
     expect(screen.getByTestId('cal-view')).toHaveAttribute('data-start', dayKey(viewed));
     expect(screen.getByTestId('cal-day-head')).toHaveClass('is-today');
     expect(screen.getByTestId('cal-day-task')).toHaveTextContent(dayKey(viewed));
@@ -364,7 +441,7 @@ it('rejects a plan in a skipped hour before creating its task or event', async (
   const write = vi.fn(), zone = 'America/Los_Angeles';
   render(<CalendarView timeZone={zone} focusDate={{ time: Date.parse('2026-03-08T18:00:00Z'), token: 1 }}
     dayOf={dayOf} textOf={textOf} categories={['code']} timer={timer()} onStartTimer={vi.fn()} onOpenDay={vi.fn()}
-    onWrite={write} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />);
+    onWrite={write} onWriteTask={vi.fn()} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />);
   await waitFor(() => expect(screen.getByTestId('cal-planned')).toBeVisible());
   fireEvent.click(screen.getByTestId('cal-fold-early'));
   fireEvent.pointerDown(screen.getByTestId('cal-col'), { button: 0, clientY: 2.5 * 52 });
