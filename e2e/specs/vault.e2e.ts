@@ -1394,7 +1394,11 @@ describe('the demo vault', () => {
     // The time logged is the notes' minutes; the time blocks under their tasks aren't drawn.
     await expect($('[data-testid="cal-col"][data-date="2026-08-14"]')).not.toHaveText(expect.stringContaining('refactor the settings screen'));
     await expect($('[data-testid="cal-planned"]')).toHaveText(expect.stringContaining('2 events in Calendar'));
-    await browser.execute(() => document.querySelector('.main')?.scrollTo(0, 0));
+    await browser.waitUntil(() => browser.execute(() => {
+      const pane = document.querySelector('.main');
+      const late = document.querySelector('[data-testid="cal-fold-late"]');
+      return Boolean(pane && late && late.getBoundingClientRect().bottom <= pane.getBoundingClientRect().bottom && pane.scrollHeight <= pane.clientHeight + 1);
+    }), { timeoutMsg: 'the default week must fit through the late-hours control' });
     await screenshot('44-calendar-week');
     // Noon UTC on Friday becomes 02:00 Saturday across the date line.
     await $('[data-testid="cal-time-zone"]').click();
@@ -1431,8 +1435,8 @@ describe('the demo vault', () => {
     await browser.execute((date) => {
       const column = document.querySelector(`[data-testid="cal-col"][data-date="${date}"]`);
       if (!column) throw new Error(`no column for ${date}`);
-      const top = column.getBoundingClientRect().top;
-      const at = (minutes: number) => ({ bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, clientY: top + ((minutes - 7 * 60) / 60) * 44 });
+      const { top, height } = column.getBoundingClientRect();
+      const at = (minutes: number) => ({ bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, clientY: top + ((minutes - 7 * 60) / (15 * 60)) * height });
       column.dispatchEvent(new PointerEvent('pointerdown', at(19 * 60 + 2)));
       window.dispatchEvent(new PointerEvent('pointermove', at(19 * 60 + 30)));
       window.dispatchEvent(new PointerEvent('pointermove', at(20 * 60)));
@@ -1463,6 +1467,17 @@ describe('the demo vault', () => {
     await expect($('[data-testid="cal-planned"]')).toHaveText(expect.stringContaining('3 events in Calendar'));
     await browser.execute(() => document.querySelector('[data-testid="cal-col"][data-date="2026-08-12"] [data-testid="cal-plan"]')?.scrollIntoView({ block: 'center' }));
     await screenshot('56-calendar-plans');
+    const beforeEdit = snapshotVault(vaultCopy());
+    await plan.$('.cal-block-title').doubleClick();
+    await expect($('[data-testid="edit-task-text"]')).toHaveValue('evening run');
+    await expect($('[data-testid="edit-task"]')).toHaveText(expect.stringContaining('12 Aug'));
+    await screenshot('56-calendar-edit-task');
+    await $('[data-testid="edit-task-text"]').setValue('evening intervals');
+    await $('[data-testid="edit-task-save"]').click();
+    await expect(plan).toHaveText(expect.stringContaining('evening intervals'));
+    await expect(plan).toHaveAttribute('data-start', String(19 * 60));
+    expect(readFileSync(file, 'utf8')).toBe(added.replace('evening run', 'evening intervals'));
+    expect(diffSnapshots(beforeEdit, snapshotVault(vaultCopy()))).toEqual([`changed: ${DAYS}/12.08.2026.md`]);
   });
 
   it('keeps the periodic notes setup in Settings', async () => {

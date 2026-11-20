@@ -15,10 +15,10 @@ import { dayKey } from '../../lib/timer';
 import { followPointer } from '../periodic/effects';
 import { CountUp } from '../periodic/motion';
 import { primeChime } from './chime';
-import { TimeGrid, type Column } from './TimeGrid';
+import { TimeGrid, type Column, type GridPlan } from './TimeGrid';
 import { FocusMenu, type FocusHow } from './FocusMenu';
 import { NewTask } from './NewTask';
-import { DeleteTask, EditTask } from './TaskDialogs';
+import { DeleteTask, EditEvent, EditTask } from './TaskDialogs';
 import { taskRefs } from './taskRefs';
 import { TimerCard } from './Timer';
 import type { DayTaskRef, TaskChange, TaskChoice } from './types';
@@ -49,8 +49,9 @@ interface Props {
   onOpenLinkedNote?: (path: string) => void;
   /** Changes a day's note, creating it with built-in starting text first. The note's path once the change is in it. */
   onWrite: (date: Date, edit: (text: string) => string, failed: string) => Promise<string | undefined>;
+  onWriteTask: (path: string, edit: (text: string) => string) => Promise<unknown>;
   /** A task edited or deleted here, once its note holds the change. */
-  onTaskChanged: (change: TaskChange) => void;
+  onTaskChanged: (change: TaskChange) => void | Promise<void>;
   /** The open vault's name, which a plan's link in Calendar carries. */
   vault: string;
   /** The Apple Calendar last chosen for each category's plans, by calendar id. */
@@ -73,10 +74,11 @@ function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], even
     date,
     key: dayKey(date),
     allDay: allDayOn(events, date),
-    // A plan's task is its own day's when its note is this day's: only then can it be edited or timed from here.
+    // Focus runs on this day's tasks; a linked task can also be edited from a rescheduled block.
     plans: plans.map((plan) => {
       const link = plan.link && (resolveLink?.(plan.link) ?? plan.link);
-      return { ...plan, link, task: taskOf(link), here: link !== undefined && link.note === entry.path };
+      const task = taskOf(link);
+      return { ...plan, link, task, here: task !== undefined && link?.note === entry.path };
     }),
     tasks,
     total: entry.day?.totals.logged ?? 0,
@@ -89,7 +91,7 @@ function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], even
  * Calendar, never minutes in the note. The note's time blocks aren't drawn: they are the timer's
  * record, and the minutes are what counts.
  */
-export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate, dayOf, textOf, resolveTaskPath, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onOpenLinkedNote, onWrite, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
+export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate, dayOf, textOf, resolveTaskPath, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onOpenLinkedNote, onWrite, onWriteTask, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
   const display = usePluginDisplay('calendar');
   const [mode, setMode] = useState<Mode>(display.defaultView === 'Week' ? 'week' : display.defaultView === 'Day' ? 'day' : remembered.mode);
   const clock = useNow(true, 30_000);
@@ -112,7 +114,10 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
   const [highlight, setHighlight] = useState<number>();
   const [menu, setMenu] = useState<{ x: number; y: number; date: Date; item: DayTaskRef }>();
   const [adding, setAdding] = useState(false);
-  const [dialog, setDialog] = useState<{ kind: 'edit' | 'delete'; date: Date; item: DayTaskRef }>();
+  const [dialog, setDialog] = useState<
+    | { kind: 'edit' | 'delete'; date: Date; item: DayTaskRef }
+    | { kind: 'plan'; plan: GridPlan }
+  >();
   const show = (nextMode: Mode, nextDate: Date) => {
     setMode(nextMode);
     setDate(sameDay(nextDate, now) ? undefined : dayKey(nextDate));
@@ -131,8 +136,10 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
       const text = link && link.vault === vault ? textOf(link.note) : undefined;
       if (!link || text === undefined) return undefined;
       const lines = text.split('\n').map((line) => line.replace(/\r$/, ''));
-      const task = parseDay(text).tasks.find((t) => focusIdOf(lines[t.line] ?? '') === link.id);
-      return task && { task, ref: { line: task.line, text: lines[task.line] ?? '' } };
+      const matches = parseDay(text).tasks.filter((t) => focusIdOf(lines[t.line] ?? '') === link.id);
+      const [task] = matches;
+      if (!task || matches.length !== 1) return undefined;
+      return { task, ref: { line: task.line, text: lines[task.line] ?? '' } };
     },
     [textOf, vault],
   );
@@ -201,17 +208,33 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
   const addTo = (day: Date, category: string, words: string) =>
     onWrite(day, (text) => syncPlanDone(addTask(text, category, words)), 'The task wasn’t added');
   // An edited or deleted task takes the timer and its plans with it.
-  const editOn = (day: Date, { task, ref }: DayTaskRef, edit: TaskEdit) =>
-    void onWrite(day, (text) => editTask(text, ref, edit), 'The task wasn’t changed').then((path) => {
-      const after = { label: newTaskLabel(edit.words), category: edit.category?.toLowerCase() };
-      if (path) onTaskChanged({ kind: 'edited', path, date: day, focusId: focusIdOf(ref.text), before: { label: task.label, category: task.category?.name }, after });
-    });
+  const editOn = async (day: Date, { task, ref }: DayTaskRef, edit: TaskEdit, link?: TaskLink) => {
+    const apply = (text: string) => editTask(text, ref, edit);
+    let path = link?.note;
+    if (path) await onWriteTask(path, apply);
+    else path = await onWrite(day, apply, 'The task wasn’t changed');
+    if (!path) throw new Error('The task couldn’t be saved. Close this editor to see the note’s error.');
+    const after = { label: newTaskLabel(edit.words), category: edit.category?.toLowerCase() };
+    try {
+      await onTaskChanged({ kind: 'edited', path, date: day, focusId: focusIdOf(ref.text), before: { label: task.label, category: task.category?.name }, after });
+    } finally {
+      plans.refresh();
+    }
+  };
   const deleteOn = (day: Date, { ref }: DayTaskRef) =>
-    void onWrite(day, (text) => syncPlanDone(deleteTask(text, ref)), 'The task wasn’t deleted').then((path) => {
-      if (path) onTaskChanged({ kind: 'deleted', path, date: day, focusId: focusIdOf(ref.text) });
+    void onWrite(day, (text) => syncPlanDone(deleteTask(text, ref)), 'The task wasn’t deleted').then(async (path) => {
+      if (!path) return;
+      await onTaskChanged({ kind: 'deleted', path, date: day, focusId: focusIdOf(ref.text) });
+      plans.refresh();
     });
 
   const single = mode === 'day' ? columns[0] : undefined;
+  const editingPlan = dialog?.kind === 'plan' ? dialog.plan : undefined;
+  const linkedTask = editingPlan?.task;
+  const taskLink = editingPlan?.link;
+  const planRange = editingPlan && new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatRange(editingPlan.event.start, editingPlan.event.end);
   return (
     <div className="periodic-frame cal-frame" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)} data-testid="cal-view" data-mode={mode} data-start={columns[0]?.key}>
       {(warning || plans.error || timeError) && (
@@ -227,24 +250,15 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
                 await onSaveTimeZone(next); setTimeError(undefined); setHighlight(undefined);
               }} />}
             </div>
-            <h1 className="hero-title cal-title" data-testid="cal-title">
-              {title}
-            </h1>
-            <p className="cal-summary">
-              {total ? (
-                <>
-                  <CountUp value={total} format={formatMinutes} /> logged
-                </>
-              ) : (
-                'Nothing logged yet'
-              )}
-              {plans.access === 'allowed' && (
-                <span data-testid="cal-planned">
-                  {' '}
-                  · {events} event{events === 1 ? '' : 's'} in Calendar
-                </span>
-              )}
-            </p>
+            <div className="cal-hero-period">
+              <h1 className="hero-title cal-title" data-testid="cal-title">{title}</h1>
+              <p className="cal-summary">
+                {total ? <><CountUp value={total} format={formatMinutes} /> logged</> : 'Nothing logged yet'}
+                {plans.access === 'allowed' && (
+                  <span data-testid="cal-planned"> · {events} event{events === 1 ? '' : 's'} in Calendar</span>
+                )}
+              </p>
+            </div>
             {byCategory.length > 0 && (
               <ul className="cal-legend" data-testid="cal-legend">
                 {byCategory.slice(0, 7).map(([name, { color, minutes }]) => (
@@ -320,7 +334,6 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
           early={early}
           late={late}
           onFold={(edge) => (edge === 'early' ? setEarly((open) => !open) : setLate((open) => !open))}
-          hourHeight={single ? 52 : 44}
           categories={categories}
           session={timer.state.session}
           wide={Boolean(single)}
@@ -337,7 +350,7 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
           }}
           onDeletePlan={(item) => plans.remove(item.event)}
           onFocus={(_, item, how) => focus(item.ref, item.task, how)}
-          onEditTask={(day, item) => setDialog({ kind: 'edit', date: day, item })}
+          onEditPlan={(plan) => setDialog({ kind: 'plan', plan })}
           onOpenDay={onOpenDay}
           onOpenLinkedNote={onOpenLinkedNote}
           onHead={(day) => (single ? onOpenDay(day) : show('day', day))}
@@ -362,6 +375,9 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
                     }}
                     onPointerEnter={() => setHighlight(task.line)}
                     onPointerLeave={() => setHighlight(undefined)}
+                    onDoubleClick={(event) => {
+                      if (!(event.target as Element).closest('button')) setDialog({ kind: 'edit', date: single.date, item: { task, ref } });
+                    }}
                     data-testid="cal-day-task"
                   >
                     <span className="chip-dot" />
@@ -409,12 +425,21 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
           task={dialog.item.task}
           categories={categories}
           onCancel={() => setDialog(undefined)}
-          onSave={(edit) => {
-            setDialog(undefined);
-            editOn(dialog.date, dialog.item, edit);
-          }}
+          onSave={(edit) => editOn(dialog.date, dialog.item, edit)}
         />
       )}
+      {editingPlan && planRange && (linkedTask && taskLink ? (
+        <EditTask
+          task={linkedTask.task}
+          categories={categories}
+          when={planRange}
+          note={taskLink.note}
+          onCancel={() => setDialog(undefined)}
+          onSave={(edit) => editOn(calendarDay(editingPlan.event.start, zone), linkedTask, edit, taskLink)}
+        />
+      ) : (
+        <EditEvent event={editingPlan.event} when={planRange} onCancel={() => setDialog(undefined)} onSave={(fields) => plans.edit(editingPlan.event, fields)} />
+      ))}
       {dialog?.kind === 'delete' && (
         <DeleteTask
           task={dialog.item.task}

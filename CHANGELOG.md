@@ -3,6 +3,12 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.19.0 — 2026-11-20
+
+Double-click a timed calendar block to edit it. Linked tasks show the current description and
+scheduled date, including after a block moves to another day. The weekly grid fits the window at
+normal desktop sizes. [Full release notes](releases/0.19.0.md).
+
 ## 0.18.0 — 2026-11-20
 
 See the task category beside the menu-bar timer. Create folders in the sidebar, move notes by

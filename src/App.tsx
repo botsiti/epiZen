@@ -847,9 +847,13 @@ export function App() {
   const followTaskPlans = useTaskPlans(plugins.calendar ? vault : undefined, vaultName, resolveTaskPath);
   // A task edited or deleted from a menu: the timer follows it, and so do its plans in Calendar.
   const taskChanged = useCallback(
-    (change: TaskChange) => {
+    async (change: TaskChange) => {
       if (plugins.timer && change.kind === 'edited') timer.retask(change.path, change.before, change.after);
-      void followTaskPlans(change).catch((err: unknown) => setCalendarWarning(`The task’s plans in Calendar didn’t follow it: ${reason(err)}`));
+      try {
+        await followTaskPlans(change);
+      } catch (err) {
+        setCalendarWarning(`The task’s plans in Calendar didn’t follow it: ${reason(err)}`);
+      }
     },
     [timer, plugins.timer, followTaskPlans],
   );
@@ -1029,7 +1033,7 @@ export function App() {
           onAssistant={plugins.spike ? () => setAssistantOpen((open) => !open) : undefined}
           assistantOpen={assistantOpen}
         />
-        <main className={view.kind === 'graph' ? 'main is-graph' : view.kind === 'settings' ? 'main is-preferences' : 'main'} ref={main} onScroll={onScroll} inert={fileBusy}>
+        <main className={view.kind === 'graph' ? 'main is-graph' : view.kind === 'settings' ? 'main is-preferences' : view.kind === 'calendar' ? 'main is-calendar' : 'main'} ref={main} onScroll={onScroll} inert={fileBusy}>
           {/* Only the tab in front is drawn, afresh for each tab: an editor leaving saves as it goes. */}
           <Fragment key={tab.id}>
             {plugins.quests && ['home', 'quests', 'statistics', 'summaries', 'note'].includes(view.kind) && (rewardError || scoringIssue) && <p className="note-warning" role="status">{rewardError ? 'Custom XP settings are unavailable. Check Settings → Quests.' : `XP excluded for ${scoringIssue?.[0]} · ${scoringIssue?.[1].rewardProblem}`}</p>}
@@ -1111,7 +1115,7 @@ export function App() {
                 onOpenNote={openNote}
                 onOpenPeriod={openPeriodicOrSay}
                 onStartTimer={(choice, how) => void startTimer(choice, how)}
-                onTaskChanged={taskChanged}
+                onTaskChanged={(change) => void taskChanged(change)}
                 known={texts.get(view.path)}
               />}
               </BasesProvider>
@@ -1127,6 +1131,7 @@ export function App() {
                 onStartTimer={(choice, how) => void startTimer(choice, how)}
                 onOpenDay={(date) => openPeriodicOrSay('day', date)}
                 onWrite={writeDay}
+                onWriteTask={changeNote}
                 onTaskChanged={taskChanged}
                 vault={status.name}
                 planCalendars={planCalendars}

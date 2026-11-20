@@ -1,48 +1,71 @@
 /* The calendar and the focus timer. DESIGN.md, "Calendar and timer", says why they look like
    this. The glass, the hero, the chips and the tokens come from ../periodic/periodic.css. */
 
+.main.is-calendar {
+  padding: 8px 12px;
+}
+
 .cal-frame {
-  max-width: 1160px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 /* The top: the period's name, and the timer beside it */
 
 .cal-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) minmax(245px, 28%);
+  gap: var(--space-2);
   align-items: stretch;
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.cal-top:has(> :only-child) {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .cal-hero {
   grid-template-columns: minmax(0, 1fr);
   align-content: space-between;
-  padding: 36px 40px 22px;
+  gap: var(--space-2);
+  padding: 10px 16px;
   /* Not hidden: the aurora overflows the card, and a focused chip would scroll the text away. */
   overflow: clip;
 }
 
 .cal-title {
-  font-size: 52px;
+  margin: 2px 0;
+  font-size: 30px;
 }
+
+.cal-hero-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+}
+
+.cal-hero .nav-chip { padding-block: 4px; }
 
 .cal-summary {
   margin: 0;
   color: var(--text-muted);
-  font: italic 18px/1.5 var(--display);
+  font: italic 14px/1.4 var(--display);
 }
 
 .cal-summary .count {
   color: var(--text);
-  font: 600 18px var(--numbers);
+  font: 600 14px var(--numbers);
 }
 
 .cal-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
-  margin: var(--space-4) 0 0;
+  gap: 4px 12px;
+  margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
   font-size: 12.5px;
@@ -116,6 +139,31 @@
   align-self: flex-start;
   margin: 0;
 }
+
+.cal-top .timer-card {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  align-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 12px;
+}
+
+.cal-top .timer-card > :not(.dial, .timer-setup) { grid-column: 2; }
+.cal-top .timer-card > :is(.timer-actions, .timer-problem) { grid-column: 1 / -1; }
+
+.cal-top .dial {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  align-self: start;
+  max-width: 68px;
+  max-height: 68px;
+}
+
+.cal-top .dial-time { font-size: 24px; }
+.cal-top .dial-label { margin-top: 2px; font-size: 8px; letter-spacing: 0; }
+.cal-top .timer-actions { flex-wrap: wrap; }
+.cal-top .timer-presets { justify-content: flex-start; }
 
 .timer-card.is-rest {
   background:
@@ -326,17 +374,24 @@
 /* The grid: days across, hours down */
 
 .cal-main {
+  flex: 1 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
-  align-items: start;
 }
 
 .cal-main.is-day {
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 24%);
+}
+
+.cal-main.is-day .cal-side {
+  contain: size;
+  overflow: auto;
 }
 
 .cal-grid {
+  display: flex;
+  flex-direction: column;
   padding: 6px 14px 8px 0;
   border-radius: 22px;
 }
@@ -351,8 +406,10 @@
 /* Calendar's all-day events, in a row above the hours. */
 .cal-allday {
   align-items: start;
-  padding: 6px 0;
+  padding: 4px 0;
   border-bottom: 1px solid var(--glass-line);
+  max-height: 76px;
+  overflow: auto;
 }
 
 .cal-allday-label {
@@ -386,16 +443,18 @@
 }
 
 .cal-head {
-  padding: 8px 0 10px;
+  padding: 2px 0 4px;
   border-bottom: 1px solid var(--glass-line);
 }
 
 .cal-day-head {
   display: grid;
-  justify-items: center;
-  gap: 3px;
+  grid-template-columns: auto auto;
+  place-content: center;
+  align-items: center;
+  column-gap: 2px;
   min-width: 0;
-  padding: 6px 2px 4px;
+  padding: 2px;
   border-radius: 12px;
   transition: background 160ms ease-out;
 }
@@ -420,7 +479,7 @@
   min-width: 36px;
   padding: 1px 8px;
   border-radius: 999px;
-  font: 500 23px/1.15 var(--display);
+  font: 500 19px/1.15 var(--display);
 }
 
 .cal-day-head.is-today .cal-date {
@@ -430,14 +489,16 @@
 }
 
 .cal-total {
+  grid-column: 1 / -1;
   min-height: 15px;
   color: var(--text-faint);
   font: 11px var(--font-mono);
 }
 
 .cal-body {
+  flex: 1 0 auto;
   position: relative;
-  margin: 12px 0;
+  margin: 6px 0;
 }
 
 .cal-hours {
@@ -611,6 +672,16 @@
 .cal-block.is-thin .cal-block-title {
   font-size: 11px;
   line-height: 1.15;
+}
+
+.cal-block.is-thin:has(.cal-block-notes) {
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.cal-block.is-thin .cal-block-notes {
+  font-size: 10px;
+  line-height: 1.05;
 }
 
 .cal-block-time {
@@ -809,7 +880,7 @@
 }
 
 .cal-fold.is-early {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .cal-fold:hover {
@@ -1174,14 +1245,19 @@
 /* Narrow panes */
 
 @container (max-width: 760px) {
-  .cal-top,
   .cal-main.is-day {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(min-content, 1fr) auto;
   }
 
-  .cal-title {
-    font-size: 40px;
+  .cal-main.is-day .cal-side {
+    contain: none;
+    max-height: 160px;
   }
+}
+
+@container (max-width: 560px) {
+  .cal-top { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Motion off: the end state, at once. */
@@ -1338,7 +1414,8 @@
   font: 500 20px var(--display);
 }
 
-.new-task input {
+.new-task input,
+.cal-editor textarea {
   padding: 9px 12px;
   border: 1px solid var(--glass-line);
   border-radius: 10px;
@@ -1349,11 +1426,51 @@
   font-size: 14.5px;
 }
 
-.new-task input:focus {
+.new-task input:focus,
+.cal-editor textarea:focus {
   border-color: var(--accent);
 }
 
-/* A task edited or deleted from a right-click. */
+/* Task and event editors. */
+
+.cal-editor {
+  max-height: calc(100dvh - 40px);
+  overflow: hidden auto;
+}
+
+.cal-editor::after { inset: 0; }
+
+.cal-editor h2 {
+  margin: 0 0 4px;
+  font: 500 25px var(--display);
+}
+
+.cal-editor-meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cal-editor fieldset {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cal-editor-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cal-editor textarea {
+  resize: vertical;
+}
 
 .new-task.is-small {
   width: min(400px, calc(100vw - 48px));
@@ -1363,7 +1480,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  align-items: center;
+  align-items: end;
   color: var(--text-muted);
   font-size: 13px;
 }
@@ -1378,11 +1495,13 @@
   border-color: var(--glass-line-strong);
 }
 
-.edit-task-minutes .faint {
+.edit-task-minutes .cal-editor-meta {
+  align-self: end;
+  margin-bottom: 9px;
   margin-right: auto;
 }
 
-.cal-hero-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 8px; }
+.cal-hero-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
 .cal-hero-heading .kicker { margin: 0; }
 .cal-hero .cal-zone-trigger { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 26px; padding: 3px 9px; color: var(--text-muted); font-size: 12px; }
 .cal-zone-trigger small { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
