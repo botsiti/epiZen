@@ -1,9 +1,12 @@
 import { PreferenceIcon } from './settings/icons';
 import './workspace/creation.css';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { TreeNode } from '../lib/tree';
+import { noteTitle } from '../lib/links';
 import { openClicks } from './workspace/clicks';
 import type { PluginSettings } from '../lib/plugins';
+import { InlineFolder } from './workspace/InlineFolder';
+import { useNoteDrag } from './workspace/useNoteDrag';
 
 /** Opens a view; `newTab` for a ⌘-click or a middle click. */
 type Open = (newTab: boolean) => void;
@@ -19,7 +22,10 @@ interface Props {
   onOpenNote: (path: string, newTab: boolean) => void;
   onHome: Open;
   onNewNote: () => void;
-  onNewFolder?: () => void;
+  folderParent?: string;
+  onCreateFolder?: (path: string) => Promise<void>;
+  onRevealFolder?: (folder: string) => void;
+  onMoveNote?: (path: string, folder: string) => void;
   onNewBase?: () => void;
   onOpenFolder: () => void;
   onSettings: Open;
@@ -40,9 +46,23 @@ interface Props {
 
 export function Sidebar(props: Props) {
   const { vaultName, tree, selected, isFolderOpen, onToggleFolder, onCollapseFolders, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, onCalendar, onLibrary, onQuests, onStatistics, onHabits, onNoteMenu, timer, folderError, calendar } = props;
+  const [creating, setCreating] = useState<string>();
+  const newFolder = useRef<HTMLButtonElement>(null);
+  const drag = useNoteDrag(props.onMoveNote);
+  const reveal = props.onRevealFolder;
+  useEffect(() => {
+    if (!drag.over || !reveal) return;
+    const folder = drag.over;
+    const timer = setTimeout(() => reveal(folder), 650);
+    return () => clearTimeout(timer);
+  }, [drag.over, reveal]);
+  const visibleTree = tree.filter((node) => node.kind !== 'folder' || (node.path !== 'Habits' && node.path !== 'Templates'));
+  const parentVisible = (nodes: TreeNode[], path: string): boolean => nodes.some((node) => node.kind === 'folder' && (node.path === path || (path.startsWith(`${node.path}/`) && parentVisible(node.children, path))));
+  const closeFolder = () => { setCreating(undefined); newFolder.current?.focus(); };
+  const folderDraft = (depth: number) => creating !== undefined && props.onCreateFolder && <InlineFolder key={creating} parent={creating} depth={depth} onCreate={props.onCreateFolder} onClose={closeFolder} />;
 
   return (
-    <nav className="sidebar" aria-label="Notes">
+    <nav className="sidebar" aria-label="Notes" onDragEnd={drag.cancel}>
       <div className="sidebar-head">
         <button type="button" className="vault-name" {...openClicks(onHome)} data-testid="sidebar-vault">
           <img className="app-mark" src="/brand/epizen.png" alt="" />
@@ -51,16 +71,24 @@ export function Sidebar(props: Props) {
       </div>
       {timer}
       {calendar}
-      <div className="explorer-tools" role="toolbar" aria-label="File actions"><span>Files</span>        <button type="button" className="icon-button" onClick={onCollapseFolders} title="Collapse all folders (⌃3)" aria-label="Collapse all folders" aria-keyshortcuts="Control+3" data-testid="collapse-folders">
+      <div className="explorer-tools" role="toolbar" aria-label="File actions"><span className={drag.over === '' ? 'tree-drop-root is-drop-target' : 'tree-drop-root'} {...drag.dropTarget('')} data-testid="tree-root-drop">{drag.dragged ? 'Vault root' : 'Files'}</span>
+        <button type="button" className="icon-button" onClick={onCollapseFolders} title="Collapse all folders (⌃3)" aria-label="Collapse all folders" aria-keyshortcuts="Control+3" data-testid="collapse-folders">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4-3 4 3M4 10l4 3 4-3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <button type="button" className="icon-button" onClick={onNewNote} title="New note (⌘N)" aria-label="New note" aria-keyshortcuts="Meta+N" data-testid="new-note-button">
           <PreferenceIcon name="note" />
         </button>
         {props.onNewBase && <button type="button" className="icon-button" onClick={props.onNewBase} title="New base or import an Obsidian Base" aria-label="New base" data-testid="new-base-button"><PreferenceIcon name="bases" /></button>}
-{props.onNewFolder && <button type="button" className="icon-button" onClick={props.onNewFolder} title="New folder" aria-label="New folder" data-testid="new-folder-button"><PreferenceIcon name="folder" /></button>}</div>
+        {props.onCreateFolder && <button ref={newFolder} type="button" className="icon-button" onClick={() => {
+          if (creating !== undefined) return;
+          const parent = props.folderParent ?? '';
+          props.onRevealFolder?.(parent);
+          setCreating(parent);
+        }} title="New folder" aria-label="New folder" data-testid="new-folder-button"><PreferenceIcon name="folder" /></button>}
+      </div>
       <ul className="tree" role="tree">
-        <TreeItems nodes={tree.filter((node) => node.kind !== 'folder' || (node.path !== 'Habits' && node.path !== 'Templates'))} depth={0} selected={selected} isOpen={isFolderOpen} toggle={onToggleFolder} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} />
+        {creating !== undefined && (!creating || !parentVisible(visibleTree, creating)) && folderDraft(0)}
+        <TreeItems nodes={visibleTree} depth={0} selected={selected} isOpen={isFolderOpen} toggle={onToggleFolder} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} drag={drag} canMove={Boolean(props.onMoveNote)} draftParent={creating} folderDraft={folderDraft} />
       </ul>
       <div className="sidebar-foot">
         {props.plugins?.calendar !== false && <button type="button" className="sidebar-action" {...openClicks(onCalendar)} data-testid="open-calendar">
@@ -95,13 +123,17 @@ interface ItemsProps {
   toggle: (path: string) => void;
   onOpenNote: (path: string, newTab: boolean) => void;
   onNoteMenu: (path: string, x: number, y: number) => void;
+  drag: ReturnType<typeof useNoteDrag>;
+  canMove: boolean;
+  draftParent?: string;
+  folderDraft: (depth: number) => ReactNode;
 }
 
 // Each level indents one chevron's width, so a folder's notes sit under its name.
 const STEP = 16;
 const CHEVRON = 20;
 
-function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote, onNoteMenu }: ItemsProps) {
+function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote, onNoteMenu, drag, canMove, draftParent, folderDraft }: ItemsProps) {
   const indent = { paddingLeft: `${12 + depth * STEP}px` };
   return nodes.map((node) => {
     if (node.kind === 'note') {
@@ -115,6 +147,8 @@ function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote, onNoteM
             title={node.name}
             {...openClicks((newTab) => onOpenNote(node.path, newTab))}
             onContextMenu={(event) => { event.preventDefault(); onNoteMenu(node.path, event.clientX, event.clientY); }}
+            draggable={canMove && /\.md$/i.test(node.path)}
+            onDragStart={(event) => drag.start(event, node.path)}
             data-testid="tree-note"
             data-path={node.path}
           >
@@ -123,14 +157,16 @@ function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote, onNoteM
         </li>
       );
     }
-    const open = isOpen(node.path);
+    const open = isOpen(node.path) || draftParent === node.path || Boolean(draftParent?.startsWith(`${node.path}/`));
     return (
       <li key={node.path} role="treeitem" aria-expanded={open} aria-selected={false}>
         <button
           type="button"
-          className="tree-row tree-folder"
+          className={drag.over === node.path ? 'tree-row tree-folder is-drop-target' : 'tree-row tree-folder'}
           style={indent}
           onClick={() => toggle(node.path)}
+          {...drag.dropTarget(node.path)}
+          title={drag.over === node.path ? `${drag.label} into ${noteTitle(node.path)}` : node.name}
           data-testid="tree-folder"
           data-path={node.path}
           data-open={open}
@@ -140,6 +176,7 @@ function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote, onNoteM
         </button>
         {open && (
           <ul role="group">
+            {draftParent === node.path && folderDraft(depth + 1)}
             <TreeItems
               nodes={node.children}
               depth={depth + 1}
@@ -148,6 +185,10 @@ function TreeItems({ nodes, depth, selected, isOpen, toggle, onOpenNote, onNoteM
               toggle={toggle}
               onOpenNote={onOpenNote}
               onNoteMenu={onNoteMenu}
+              drag={drag}
+              canMove={canMove}
+              draftParent={draftParent}
+              folderDraft={folderDraft}
             />
           </ul>
         )}

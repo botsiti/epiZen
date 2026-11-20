@@ -28,7 +28,7 @@ const view = (timer: TimerState, more: Partial<Parameters<typeof panelView>[0]> 
 describe('the menu bar item', () => {
   it('hands the title’s ticking the round’s timing, not its time', () => {
     const pomodoro = running(REVIEW, 'pomodoro');
-    expect(trayClock(pomodoro)).toEqual({ kind: 'focus', accumulated: 0, since: AT, paused: false, planned: 1500 });
+    expect(trayClock(pomodoro)).toEqual({ kind: 'focus', accumulated: 0, since: AT, paused: false, planned: 1500, category: 'kaizen' });
     const stopwatch = running({ ...REVIEW, category: undefined }, 'stopwatch');
     expect(trayClock(stopwatch)).toEqual({ kind: 'focus', accumulated: 0, since: AT, paused: false });
     const paused = pause(stopwatch, AT + 37_000);

@@ -80,6 +80,7 @@ export function useShortcuts(actions: ShortcutActions, enabled = true) {
       const action = {
         'new-tab': act.newTab,
         'close-tab': act.closeTab,
+        'close-other-tabs': act.closeOthers,
         'left-sidebar': act.toggleLeftSidebar,
         'right-sidebar': act.toggleRightSidebar,
         'spike-sidebar': act.toggleAssistant,

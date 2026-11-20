@@ -72,9 +72,12 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
   order. A note indents one step past its folder's name. Long names end in "…". The selected
   note gets an accent bar and a soft accent background.
 - **File actions**: a note or media title opens a filename editor. A right-click on a note in the
-  sidebar offers Duplicate, Reveal in Finder, Rename and Delete. Rename updates open tabs and links to the note across the vault, preserving link labels,
+  sidebar offers Duplicate, Reveal in Finder, Rename, Move to folder and Delete. Drag a note to a
+  folder or to the Files header to move it to the vault root. Folder targets highlight and expand
+  briefly after hover. Rename and move update open tabs and, by default, links to the note, preserving link labels,
   headings, block references and all text outside the link destinations. Conflicts keep outside
-  edits and roll back completed link updates where they still match. Delete asks once and moves
+  edits and roll back completed link updates where they still match. Moving also keeps outgoing
+  relative links pointing to their original targets. Delete asks once and moves
   only the Markdown file to the vault’s recoverable `.trash`.
 - **Properties**: a two-column list with faint labels. An empty value shows as a faint "—".
 - **Callouts**: a surface block with a small uppercase title, no icon, no colour by type.
@@ -273,7 +276,8 @@ from "Calendar" in the sidebar.
 The menu bar shows the main window’s focus timer and gives quick access to the workspace.
 
 - **Item**. An analog clock face drawn as a monochrome template so macOS tints it. During a focus
-  round or rest, compact tabular digits show elapsed or remaining time. The tooltip carries
+  round or rest, compact tabular digits show elapsed or remaining time. The current task’s category
+  sits beside the focus time, including when paused. The tooltip carries
   the round’s name and paused or resting state. The clock keeps time while the workspace is hidden.
 - **Panel**. Clicking the item opens a 360 × 502 point panel under it. Escape, a second click,
   or loss of focus dismisses it. Dark glass and a sage accent carry Epizen’s look into the menu bar.
@@ -457,7 +461,10 @@ Obsidian's workspace in Epizen's own chrome: the sidebar's dark, hairlines, no g
 note's ancestors, without closing the note. Folder expansion survives hiding the sidebar.
 ⌘N opens New note, ⌘, opens Settings, and ⇧⌘H, ⇧⌘L and ⇧⌘D open Home, Library and today's
 daily note. Today creates its note if needed, just as the calendar does. Existing tab and
-history shortcuts remain; ⌥⌘1–8 select a tab and ⌥⌘9 selects the last. Workspace commands
+history shortcuts remain. ⌥⌘1–8 select a tab and ⌥⌘9 selects the last. ⌃⇧O closes other tabs
+while keeping pinned tabs and recovery drafts. ⌘E switches between reading and editing.
+In the editor ⌘B and ⌘I format the selection, ⌘K starts a Markdown link, ⇧⌘X strikes text,
+⌥⌘C marks inline code, ⌘S saves, and ⌘Return saves and leaves editing. Workspace commands
 pause in modal dialogs. Settings includes a searchable shortcut reference with macOS key symbols.
 
 ### Sleep entry
@@ -541,11 +548,11 @@ Daily notes offers a folder-scoped preview of existing notes before connecting t
 The date-order choice uses an actual example. Duplicate-date choices and individual date corrections
 sit behind Review existing notes. Connecting saves only app preferences; it never moves or edits notes.
 
-The explorer has distinct New note, New folder and Collapse actions. Creation previews the full
-vault-relative destination, retains failed drafts and refuses existing destinations. Empty folders
-remain visible after reopening. Files & folders stores per-vault defaults for notes and folder
-parents: the current note's folder, the vault root or a specified folder. Periodic notes retain their
-own locations.
+The explorer has distinct New note, New folder and Collapse actions. A folder gets an inline name
+field with Enter to create and Escape to cancel. Failed creation retains its draft. Empty folders
+remain visible after reopening. Files & links stores per-vault defaults for notes, folder parents and
+photos added to monthly notes. Periodic notes retain their own locations. Autocomplete supports
+shortest, relative and vault paths, with a choice of wikilink or Markdown syntax.
 
 ### Markdown core and built-in plugins
 

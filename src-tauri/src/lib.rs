@@ -247,11 +247,11 @@ async fn reveal_file(state: Shared<'_>, root: String, path: String) -> Result<()
 
 /// Saves only a user-selected local image, into the vault that was open when it was selected.
 #[tauri::command]
-async fn save_expense_photo(state: Shared<'_>, root: String, note_path: String, bytes: Vec<u8>) -> Result<String, String> {
+async fn save_expense_photo(state: Shared<'_>, root: String, note_path: String, bytes: Vec<u8>, folder: Option<String>) -> Result<String, String> {
     let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
     let vault = guard.vault()?;
     if vault.root() != root { return Err("The open vault changed. Choose the photo again.".to_owned()); }
-    photos::store_expense_photo(vault, &note_path, &bytes)
+    photos::store_expense_photo(vault, &note_path, &bytes, folder.as_deref())
 }
 
 #[tauri::command]
@@ -262,8 +262,9 @@ async fn create_note(state: Shared<'_>, path: String, text: String, root: Option
 }
 
 #[tauri::command]
-async fn create_folder(state: Shared<'_>, path: String) -> Result<(), String> {
-    with_vault(state, |vault| vault.create_folder(&path))
+async fn create_folder(state: Shared<'_>, path: String, root: String) -> Result<(), String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.vault_for_note(Some(&root))?.create_folder(&path).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -295,6 +296,7 @@ async fn trash_note_with_edits(
 #[tauri::command]
 async fn rename_note(
     state: Shared<'_>,
+    root: String,
     path: String,
     destination: String,
     expected: String,
@@ -302,7 +304,7 @@ async fn rename_note(
 ) -> Result<(), String> {
     // Keep other Epizen commands out until the rename and its link updates settle.
     let guard = state.write().unwrap_or_else(|poisoned| poisoned.into_inner());
-    guard.vault()?.rename_note_and_links(&path, &destination, &expected, &edits).map_err(|err| err.to_string())
+    guard.vault_for_note(Some(&root))?.rename_note_and_links(&path, &destination, &expected, &edits).map_err(|err| err.to_string())
 }
 
 #[tauri::command]

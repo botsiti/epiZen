@@ -26,8 +26,8 @@ Built with Tauri 2, Rust, React and TypeScript.
   See streak milestones, consistency, and charts for each habit. Export their definitions and history as Markdown.
 - **Make the workspace your own.** Preview 24 color themes or paste your own in Settings → Appearance.
   Dedicated settings pages for periodic notes, Homepage,
-  Library, Quests, files and Hotkeys. Preview existing daily notes before connecting them, choose library lookup
-  sources, and set default locations for new notes and folders.
+  Library, Quests, Files & links and Hotkeys. Create folders inline and drag notes between them.
+  Choose where new notes go, how links are inserted, and whether links follow moved notes.
 - **Keep Home focused.** A compact overview of your day, life spheres, eight quests at a time and
   ten recent library entries, with dedicated views for the full collections. Choose which sections
   to display and set a lifetime horizon for Home and Summaries.
@@ -45,7 +45,8 @@ Built with Tauri 2, Rust, React and TypeScript.
   Add notes, find covers, suggest existing genres, and keep favorite album tracks and thoughts.
 - **Plan and focus.** Built-in daily, weekly and monthly pages, local Apple Calendar integration,
   and a focus timer. Calendar can use a different time zone from the Mac. The optional menu-bar
-  panel opens your daily note or calendar and plays white or brown noise. Logged time stays in your daily notes.
+  timer shows the active category beside the time. Its panel opens your daily note or calendar
+  and plays white or brown noise. Logged time stays in your daily notes.
 - **Talk to Spike anywhere.** Enable the Spike plugin and click the desktop companion to open
   a compact text or voice prompt. Drag Spike to move him. The prompt follows and fits above him near the bottom edge. Right-click hides Spike; ⇧⌘Space shows or hides him and the prompt. A separate shortcut opens dictation;
   **⌘8** opens and closes the full conversation sidebar. Choose on-device, OpenAI or OpenRouter

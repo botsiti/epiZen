@@ -7,6 +7,7 @@ import {
   canGoForward,
   close,
   closeActive,
+  closeOtherTabs,
   currentView,
   cycle,
   forward,
@@ -33,6 +34,16 @@ const DAY = 'Calendar/2026/days 2026/14.08.2026.md';
 const ALBUM = 'Rating/music/Glasshouse Weather.md';
 const INBOX = 'Inbox idea.md';
 const note = (path: string): View => ({ kind: 'note', path });
+
+it('closes other ordinary tabs and preserves pinned and recovery tabs', () => {
+  let ws = setPinned(newWorkspace(), 1, true);
+  ws = openTab(ws, note(DAY));
+  ws = openTab(ws, { kind: 'unsaved', path: DAY, text: 'Draft', message: 'Conflict' });
+  ws = openTab(ws, note(INBOX));
+  const next = closeOtherTabs(ws);
+  expect(next.active).toBe(4);
+  expect(next.tabs.map((tab) => tab.id)).toEqual([1, 3, 4]);
+});
 
 /** Each tab as what it shows, `*` before the one in front and `^` before pinned ones. */
 function shown(ws: Workspace): string[] {

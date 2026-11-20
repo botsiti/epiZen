@@ -7,6 +7,8 @@ export interface LinkTarget {
   detail?: string;
   /** What goes between the brackets, when the name alone would be ambiguous. */
   insert?: string;
+  /** Replace the opening brackets too when autocomplete inserts a Markdown link. */
+  markdown?: string;
 }
 
 /**
@@ -22,7 +24,12 @@ export function wikilinkSource(targets: () => LinkTarget[]): CompletionSource {
     const options: Completion[] = targets().map((target) => ({
       label: target.label,
       detail: target.detail,
-      apply: `${target.insert ?? target.label}${close}`,
+      apply: target.markdown ? (view, _, from, to) => {
+        const insert = target.markdown!;
+        const start = from - 2;
+        const end = view.state.sliceDoc(to, to + 2) === ']]' ? to + 2 : to;
+        view.dispatch({ changes: { from: start, to: end, insert }, selection: { anchor: start + insert.length }, userEvent: 'input.complete' });
+      } : `${target.insert ?? target.label}${close}`,
     }));
     return { from: before.from + 2, options, validFor: /^[^[\]|#\n]*$/ };
   };

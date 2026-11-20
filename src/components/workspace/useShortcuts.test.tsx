@@ -12,7 +12,7 @@ beforeEach(() => {
 });
 function actions(): ShortcutActions {
   return {
-    newTab: vi.fn(), closeTab: vi.fn(), toggleLeftSidebar: vi.fn(), toggleRightSidebar: vi.fn(), toggleAssistant: vi.fn(), collapseFolders: vi.fn(),
+    newTab: vi.fn(), closeTab: vi.fn(), closeOthers: vi.fn(), editNote: vi.fn(), toggleLeftSidebar: vi.fn(), toggleRightSidebar: vi.fn(), toggleAssistant: vi.fn(), collapseFolders: vi.fn(),
     newNote: vi.fn(), settings: vi.fn(), home: vi.fn(), library: vi.fn(), today: vi.fn(), back: vi.fn(), forward: vi.fn(), cycle: vi.fn(), showTab: vi.fn(),
   };
 }
@@ -27,6 +27,18 @@ describe('workspace shortcuts', () => {
     command('7'); command('t');
     expect(callbacks.toggleLeftSidebar).toHaveBeenCalledOnce();
     expect(callbacks.newTab).toHaveBeenCalledOnce();
+  });
+
+  it('closes other tabs via the exact chord or native menu and opens editing with Command E', () => {
+    const callbacks = actions();
+    renderHook(() => useShortcuts(callbacks));
+    command('o', { metaKey: false, ctrlKey: true });
+    command('o', { metaKey: false, ctrlKey: true, shiftKey: true });
+    command('e');
+    expect(callbacks.closeOthers).toHaveBeenCalledOnce();
+    expect(callbacks.editNote).toHaveBeenCalledOnce();
+    act(() => menu('close-other-tabs'));
+    expect(callbacks.closeOthers).toHaveBeenCalledTimes(2);
   });
 
   it('reserves Command 7, 8 and 9 for sidebars, Control 3 for folders, and keeps all tabs reachable', () => {

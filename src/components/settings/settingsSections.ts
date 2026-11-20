@@ -6,7 +6,7 @@ export const SECTIONS = [
   { id: 'timer', title: 'Focus timer', words: 'pomodoro stopwatch minutes rest recovery' },
   { id: 'library', title: 'Library', words: 'books podcasts movies films music albums library sources artwork' },
   { id: 'quests', title: 'Quests', words: 'task categories life spheres rewards points productivity focus timer' },
-  { id: 'files', title: 'Files & folders', words: 'new note create folder location' },
+  { id: 'files', title: 'Files & links', words: 'new note create folder location attachments wikilinks markdown move rename' },
   { id: 'spike', title: 'Spike', words: 'assistant voice connection api companion desktop microphone' },
   { id: 'appearance', title: 'Appearance', words: 'glass transparent opacity animation background theme' },
   { id: 'hotkeys', title: 'Hotkeys', words: 'keyboard shortcuts commands' },

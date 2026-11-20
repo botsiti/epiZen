@@ -3,6 +3,12 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.18.0 — 2026-11-20
+
+See the task category beside the menu-bar timer. Create folders in the sidebar, move notes by
+dragging or from their context menu, and configure file locations and link behavior. New editing
+and tab shortcuts are listed in Settings. [Full release notes](releases/0.18.0.md).
+
 ## 0.17.0 — 2026-11-19
 
 Search 41 illustrated habit icons by name or activity. Delete an active habit and its check-ins

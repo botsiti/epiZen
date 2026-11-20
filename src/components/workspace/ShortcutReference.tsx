@@ -9,7 +9,7 @@ export function ShortcutReference() {
   return <section className="workspace-shortcuts" aria-label="Keyboard shortcuts" data-testid="keyboard-shortcuts">
     <div className="shortcuts-tools"><label>Filter shortcuts<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Find a command or key…" /></label>
       <p>⌘ Command · ⌃ Control · ⌥ Option · ⇧ Shift</p></div>
-    <div className="shortcut-groups">{['Workspace', 'Navigation', 'Spike', 'Tabs'].map((group) => {
+    <div className="shortcut-groups">{['Workspace', 'Navigation', 'Spike', 'Tabs', 'Markdown'].map((group) => {
       const commands = matches.filter((item) => item.group === group);
       return commands.length > 0 && <section key={group}><h3>{group}</h3><dl>
         {commands.map(({ label, keys }) => <div className="workspace-shortcut" key={label}><dt>{label}</dt><dd><kbd>{keys}</kbd></dd></div>)}

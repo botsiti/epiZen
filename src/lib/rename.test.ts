@@ -43,4 +43,13 @@ describe('renaming note links', () => {
   it('emits only changed notes with their original text for conflict checks', () => {
     expect(renameLinkEdits([{ path: 'Index.md', text: '[[Notes/Old]]' }, { path: 'Plain.md', text: 'Old is a word.' }], files, 'Notes/Old.md', 'Notes/New.md')).toEqual([{ path: 'Index.md', expected: '[[Notes/Old]]', text: '[[Notes/New]]' }]);
   });
+
+  it('moves note links while preserving relative outgoing links and embeds', () => {
+    const relocate = (text: string, from: string) => renameLinks(text, from, 'Notes/Old.md', 'Journal/Old.md', [
+      ...files, { path: 'Notes/image.png', kind: 'image' },
+    ]);
+    expect(relocate('[[Notes/Old#H|alias]] [[/Notes/Old]] [Old](Notes/Old.md)', 'Index.md')).toBe('[[Journal/Old#H|alias]] [[/Journal/Old]] [Old](Journal/Old.md)');
+    expect(relocate('[[./Other]] ![[./image.png|220]] ![Picture](./image.png) [self](./Old.md)', 'Notes/Old.md')).toBe('[[../Notes/Other]] ![[../Notes/image.png|220]] ![Picture](../Notes/image.png) [self](./Old.md)');
+    expect(relocate('[Other](Other.md)', 'Notes/Old.md')).toBe('[Other](../Notes/Other.md)');
+  });
 });

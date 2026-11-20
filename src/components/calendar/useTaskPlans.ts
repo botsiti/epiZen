@@ -4,7 +4,7 @@ import { parseTaskUrl, planText, planWindow, sameLink } from '../../lib/plans';
 import type { TaskChange } from './types';
 
 /** The Calendar plugin follows linked task edits only while it owns this vault's subscription. */
-export function useTaskPlans(root?: string, vaultName?: string) {
+export function useTaskPlans(root?: string, vaultName?: string, resolveTaskPath?: (path: string, focusId: string) => string) {
   const subscription = useRef<{ root: string; signal: AbortSignal }>(undefined);
   useLayoutEffect(() => {
     if (!root) return;
@@ -23,12 +23,13 @@ export function useTaskPlans(root?: string, vaultName?: string) {
     const link = { vault: vaultName, note: change.path, id: change.focusId };
     for (const event of events) {
       if (signal.aborted) return;
-      if (!sameLink(parseTaskUrl(event.url), link)) continue;
+      const target = parseTaskUrl(event.url);
+      if (!target || target.vault !== vaultName || !sameLink({ ...target, note: resolveTaskPath?.(target.note, target.id) ?? target.note }, link)) continue;
       if (change.kind === 'deleted') await deleteEvent(event);
       else {
         const text = planText(change.after.category, change.after.label);
         if (event.title !== text.title || event.notes !== text.notes) await updateEvent(event, text);
       }
     }
-  }, [root, vaultName]);
+  }, [root, vaultName, resolveTaskPath]);
 }

@@ -17,12 +17,3 @@ it('previews the configured location and retains the name after a collision', as
   await user.click(screen.getByTestId('new-note-create'));
   expect(onCreate).toHaveBeenLastCalledWith('Inbox/Another.md');
 });
-it('creates a folder once and offers a note inside it', async () => {
-  const user = userEvent.setup(), onCreate = vi.fn().mockResolvedValue(undefined), onNewNote = vi.fn();
-  render(<NewNote kind="folder" folders={['Projects']} folder="Projects" onCreate={onCreate} onNewNote={onNewNote} />);
-  await user.type(screen.getByTestId('new-folder-name'), 'Writing');
-  await user.dblClick(screen.getByTestId('new-folder-create'));
-  expect(onCreate).toHaveBeenCalledExactlyOnceWith('Projects/Writing');
-  await user.click(screen.getByRole('button', { name: 'Create a note here' }));
-  expect(onNewNote).toHaveBeenCalledWith('Projects/Writing');
-});

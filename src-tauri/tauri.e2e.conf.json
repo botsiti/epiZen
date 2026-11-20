@@ -8,6 +8,7 @@
       {
         "label": "main",
         "title": "Epizen",
+        "dragDropEnabled": false,
         "width": 1280,
         "height": 820,
         "minWidth": 720,

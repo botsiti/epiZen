@@ -34,6 +34,36 @@ const normalize = (path: string) => path.normalize('NFC').toLowerCase();
 const folderOf = (path: string) => path.slice(0, path.lastIndexOf('/') + 1);
 const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
+/** Resolve an explicit vault-root or note-relative path without escaping the vault. */
+export function vaultLinkPath(target: string, fromPath: string): string | undefined {
+  const parts = target.startsWith('/') ? [] : noteFolder(fromPath).split('/').filter(Boolean);
+  for (const part of target.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      if (!parts.length) return undefined;
+      parts.pop();
+    } else parts.push(part);
+  }
+  return parts.join('/');
+}
+
+export function relativeLinkPath(fromPath: string, target: string): string {
+  const from = noteFolder(fromPath).split('/').filter(Boolean);
+  const to = target.split('/');
+  while (from[0] && to[0] && normalize(from[0]) === normalize(to[0])) {
+    from.shift();
+    to.shift();
+  }
+  return [...from.map(() => '..'), ...to].join('/');
+}
+
+export const encodeLinkPath = (path: string) => path.split('/').map((part) =>
+  encodeURIComponent(part).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`)
+).join('/');
+
+const explicit = /^(?:\.{1,2}\/|\/)/;
+const withExtension = (target: string, exact: boolean) => normalize(KNOWN_EXTENSION.test(target) || exact ? target : `${target}.md`);
+
 /**
  * Finds the file a wikilink points at, the way Obsidian does: by file name anywhere in
  * the vault (or by path when the link has a `/`), case-insensitive, `.md` implied.
@@ -41,6 +71,12 @@ const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
  */
 export function resolveLink(target: string, files: VaultFile[], fromPath?: string): VaultFile | undefined {
   if (!target) return files.find((file) => file.path === fromPath);
+  if (explicit.test(target)) {
+    const path = vaultLinkPath(target, fromPath ?? '');
+    if (!path) return undefined;
+    return files.find((file) => normalize(file.path) === normalize(path))
+      ?? files.find((file) => normalize(file.path) === withExtension(path, false));
+  }
 
   const exactFile = files.some((file) => normalize(file.path) === normalize(target) || normalize(baseName(file.path)) === normalize(target));
   const wanted = normalize(KNOWN_EXTENSION.test(target) || exactFile ? target : `${target}.md`);
@@ -83,6 +119,10 @@ export function linkResolver(files: VaultFile[]): (target: string, fromPath: str
   }
   return (target, fromPath) => {
     if (!target) return original.get(fromPath);
+    if (explicit.test(target)) {
+      const path = vaultLinkPath(target, fromPath);
+      return path ? byPath.get(normalize(path)) ?? byPath.get(withExtension(path, false)) : undefined;
+    }
     const normalized = normalize(target);
     const wanted = KNOWN_EXTENSION.test(target) || byPath.has(normalized) || byName.has(normalized) ? normalized : `${normalized}.md`;
     if (wanted.includes('/') && byPath.has(wanted)) return byPath.get(wanted);
@@ -96,6 +136,18 @@ export function linkResolver(files: VaultFile[]): (target: string, fromPath: str
       return order < 0 ? candidate : best;
     });
   };
+}
+
+/** A regular Markdown URL is relative to the note with a leading slash for the vault root. */
+export function markdownLinkTarget(href: string | undefined, fromPath: string): string | undefined {
+  if (!href || /^(?:[a-z][a-z\d+.-]*:|\/\/|#|\?)/i.test(href)) return undefined;
+  const raw = href.split(/[?#]/, 1)[0] ?? '';
+  try {
+    const path = vaultLinkPath(decodeURIComponent(raw), fromPath);
+    return path ? `/${path}` : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** A note's title is its file name without `.md`, as in Obsidian. */

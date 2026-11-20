@@ -2,7 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { VaultFile } from '../lib/api';
-import { resolveLink } from '../lib/links';
+import { markdownLinkTarget, resolveLink } from '../lib/links';
 import { highlightInk, remarkHighlights } from '../lib/highlights';
 import { parseVaultUrl, remarkCallouts, remarkWikilinks, urlTransform } from '../lib/markdown';
 import { VaultImage } from './VaultImage';
@@ -47,10 +47,13 @@ const components: Components = {
   span({ node, children, className }) { const color = node?.properties?.dataHighlightColor; return <span className={className} style={typeof color === 'string' ? { color } : undefined}>{children}</span>; },
   a: function MarkdownLink({ href, children }) {
     const { path, files, onOpenLink } = useNote(); const link = parseVaultUrl(href);
-    if (link?.kind === 'link') {
-      const found = resolveLink(link.target.split('#')[0]!, files, path);
+    const markdown = markdownLinkTarget(href, path);
+    const local = markdown ? resolveLink(markdown, files, path) : undefined;
+    if (link?.kind === 'link' || local || /\.(md|base)$/i.test(markdown ?? '')) {
+      const target = link?.target ?? markdown!;
+      const found = link ? resolveLink(target.split('#')[0]!, files, path) : local;
       if (found?.kind === 'image') return <span className="wikilink-file">{children}</span>;
-      return <a href="#" className={found ? 'wikilink' : 'wikilink is-missing'} data-wikilink={link.target} {...openClicks((newTab) => onOpenLink(link.target, path, newTab))}>{children}</a>;
+      return <a href="#" className={found ? 'wikilink' : 'wikilink is-missing'} data-wikilink={target} {...openClicks((newTab) => onOpenLink(target, path, newTab))}>{children}</a>;
     }
     return <a href={href} className="external" title={href} onClick={(event) => event.preventDefault()}>{children}</a>;
   },
@@ -58,7 +61,11 @@ const components: Components = {
     const { path, files, onOpenLink, onRecoverBase } = useNote();
     const bases = useBases();
     const embed = parseVaultUrl(typeof src === 'string' ? src : undefined);
-    if (embed?.kind !== 'embed') return <span className="embed-missing">{alt}</span>;
+    if (embed?.kind !== 'embed') {
+      const target = markdownLinkTarget(typeof src === 'string' ? src : undefined, path);
+      const local = target && resolveLink(target, files, path);
+      return local && local.kind === 'image' ? <VaultImage path={local.path} alt={alt ?? local.path} /> : <span className="embed-missing">{alt}</span>;
+    }
     const file = resolveLink(embed.target, files, path);
     if (file?.kind === 'image') return <VaultImage path={file.path} alt={alt ?? embed.target} width={width ? Number(width) : undefined} />;
     if (file?.kind === 'base') return <ErrorBoundary label="This base"><BaseDocument key={file.path} embedded path={file.path} from={path} defaultView={typeof node?.properties.dataBaseView === 'string' ? node.properties.dataBaseView : undefined} onOpenLink={onOpenLink} onRecover={onRecoverBase ?? bases?.onRecover} /></ErrorBoundary>;

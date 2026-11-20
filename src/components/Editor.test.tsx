@@ -1,5 +1,5 @@
 import { EditorView } from '@codemirror/view';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Editor } from './Editor';
 
@@ -24,5 +24,20 @@ describe('Editor', () => {
     render(<Editor initial={'# Day\n'} lineSeparator={'\n'} onChange={onChange} />);
     paste('a\r\nb');
     expect(onChange).toHaveBeenLastCalledWith('# Day\na\nb');
+  });
+
+  it('toggles bold around selected text and inserts a Markdown link with the old selection as its label', () => {
+    const onChange = vi.fn();
+    render(<Editor initial="Before words after" lineSeparator={'\n'} onChange={onChange} />);
+    const view = EditorView.findFromDOM(screen.getByTestId('editor').querySelector<HTMLElement>('.cm-editor')!)!;
+    act(() => view.dispatch({ selection: { anchor: 7, head: 12 } }));
+    const mod = /Mac/.test(navigator.platform) ? { metaKey: true } : { ctrlKey: true };
+    fireEvent.keyDown(view.contentDOM, { key: 'b', ...mod });
+    expect(onChange).toHaveBeenLastCalledWith('Before **words** after');
+    fireEvent.keyDown(view.contentDOM, { key: 'b', ...mod });
+    expect(onChange).toHaveBeenLastCalledWith('Before words after');
+    fireEvent.keyDown(view.contentDOM, { key: 'k', ...mod });
+    expect(onChange).toHaveBeenLastCalledWith('Before [words]() after');
+    expect(view.state.selection.main.head).toBe(15);
   });
 });

@@ -219,6 +219,34 @@ fn renaming_and_duplicating_a_note_changes_only_the_requested_paths() {
 }
 
 #[test]
+fn moving_a_note_changes_only_the_requested_paths_and_links() {
+    let (_dir, copy) = copy_of_demo_vault();
+    let vault = Vault::open(&copy).unwrap();
+    let source = "Rating/music/Glasshouse Weather.md";
+    let destination = "Review/Glasshouse Weather.md";
+    let text = vault.read_note(source).unwrap();
+    vault.create_folder("Review").unwrap();
+    vault.create_note(destination, "Existing").unwrap();
+    let conflict = snapshot(&copy);
+    assert!(vault.rename_note_and_links(source, destination, &text, &[]).is_err());
+    assert_eq!(snapshot(&copy), conflict);
+    let other_destination = "Review/Archive/Glasshouse Weather.md";
+    vault.create_folder("Review/Archive").unwrap();
+    let before = snapshot(&copy);
+    let edits: Vec<NoteEdit> = vault.read_all_notes().unwrap().into_iter().filter_map(|note| {
+        let next = note.text.replace("[[Glasshouse Weather", "[[Review/Archive/Glasshouse Weather");
+        (next != note.text).then_some(NoteEdit { path: note.path, expected: note.text, text: next })
+    }).collect();
+    assert!(!edits.is_empty());
+    vault.rename_note_and_links(source, other_destination, &text, &edits).unwrap();
+    let mut expected = before;
+    for edit in edits { expected.insert(PathBuf::from(edit.path), edit.text.into_bytes()); }
+    let bytes = expected.remove(Path::new(source)).unwrap();
+    expected.insert(PathBuf::from(other_destination), bytes);
+    assert_eq!(snapshot(&copy), expected);
+}
+
+#[test]
 fn deleting_a_habit_changes_only_its_checkins_and_moves_its_definition() {
     let (_dir, copy) = copy_of_demo_vault();
     let vault = Vault::open(&copy).unwrap();
