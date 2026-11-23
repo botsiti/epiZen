@@ -238,22 +238,22 @@ draft recoverable and leaves any newly copied attachment available in the vault.
 ## Calendar and timer
 
 Apple Calendar, on a week or a day, as Calendar and Senioro show it, with Senioro's focus timer. It
-is a periodic page in its look (the same glass, hero, chips and restrained motion), opened
-from "Calendar" in the sidebar.
+opens from "Calendar" in the sidebar. A single toolbar sits above an edge-to-edge schedule.
 
 - **Top**: a compact header with the week's dates (or the day's) in the serif display face, the ISO week, the
   minutes the daily notes log counting up with their categories, how many events Calendar has on
-  show, ‹ › and Today, and a Week | Day switch. The timer's card sits beside it. Until Epizen may use
+  show, ‹ › and Today, and a Week | Day switch. The timer sits alongside the date controls. Until Epizen may use
   Calendar, a chip asks for it (or opens System Settings once it was refused).
 - **Time zone**: the city and UTC offset beside the date open a searchable zone picker. The app follows the Mac by default. A saved zone applies to timed events, scheduling and the current-time line across vaults. All-day entries stay on their calendar dates and daily tasks stay with their Markdown notes.
 - **Grid**: hours down, 07–22, with the night before and after folded into a thin striped band that
   unfolds on a click and marks each event it hides. All-day events sit in a row above the hours. A
   hairline every hour, a slightly stronger one every three hours, small mono hour labels. Today's
   column is faintly lit, and a glowing sage line with a dot marks now. Hour heights follow the
-  available space. Small windows and expanded night hours can scroll to keep the grid legible.
+  available height of the workspace below the toolbar. Small windows and expanded night hours can scroll to keep the grid legible.
 - **Events**: soft rounded fills in their calendar's colour with a solid rail down the left, side by
   side where they overlap: the title and time on one line, the notes under them (Senioro puts the
-  task's words there). Past events recede (the colour steps down, the words only one notch). An
+  task's words there). Even a short event gets one line for its title. When labels would overlap,
+  they share the column side by side. Past events recede (the colour steps down, the words only one notch). An
   event lifts under the pointer and shows its edges. Calendar colours are data here, like the
   categories on the periodic pages.
 - **Editing**: double-click a timed block or use its context menu to open the editor with the

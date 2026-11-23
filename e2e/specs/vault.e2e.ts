@@ -1397,8 +1397,10 @@ describe('the demo vault', () => {
     await browser.waitUntil(() => browser.execute(() => {
       const pane = document.querySelector('.main');
       const late = document.querySelector('[data-testid="cal-fold-late"]');
-      return Boolean(pane && late && late.getBoundingClientRect().bottom <= pane.getBoundingClientRect().bottom && pane.scrollHeight <= pane.clientHeight + 1);
-    }), { timeoutMsg: 'the default week must fit through the late-hours control' });
+      if (!pane || !late) return false;
+      const gap = pane.getBoundingClientRect().bottom - late.getBoundingClientRect().bottom;
+      return Math.abs(gap) <= 2 && pane.scrollHeight <= pane.clientHeight + 1;
+    }), { timeoutMsg: 'the time grid must fill the calendar pane through the late-hours control' });
     await screenshot('44-calendar-week');
     // Noon UTC on Friday becomes 02:00 Saturday across the date line.
     await $('[data-testid="cal-time-zone"]').click();

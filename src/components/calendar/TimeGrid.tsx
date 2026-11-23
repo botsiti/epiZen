@@ -72,7 +72,8 @@ const NO_FOCUS = 'Focus runs on today’s tasks: the timer logs into today’s n
 
 const GUTTER = 56;
 const POPOVER_WIDTH = 300;
-const MIN_HOUR_HEIGHT = 26;
+const MIN_HOUR_HEIGHT = 28;
+const MIN_EVENT_HEIGHT = 16;
 
 const wordsOf = (plan: GridPlan) => plan.task
   ? planText(plan.task.task.category?.name, plan.task.task.label)
@@ -236,7 +237,7 @@ export function TimeGrid(props: Props) {
     columns.map((col) => col.plans.filter((plan) => (edge === 'early' ? plan.start < hours.first : plan.end > hours.last)).map((plan) => ({ key: plan.key, tone: toneOf(plan.event) })));
 
   return (
-    <div className={wide ? 'cal-grid glass rise is-day' : 'cal-grid glass rise'} style={{ '--cols': columns.length, '--gutter': `${GUTTER}px` } as CSSProperties} data-testid="cal-grid">
+    <div className={wide ? 'cal-grid is-day' : 'cal-grid'} style={{ '--cols': columns.length, '--gutter': `${GUTTER}px` } as CSSProperties} data-testid="cal-grid">
       <div className="cal-head">
         <span className="cal-gutter" />
         {columns.map((col) => {
@@ -291,8 +292,15 @@ export function TimeGrid(props: Props) {
         </div>
         <div className="cal-cols">
           {columns.map((col, c) => {
-            const shown = col.plans.map((plan) => ({ plan, range: (drag?.key === plan.key ? drag : held.get(plan.key)) ?? plan }));
-            const placed = lanes(shown.map((item) => ({ ...item, start: item.range.start, end: item.range.end })));
+            // Place by the visible footprint so two short, adjacent labels both stay reachable.
+            const placed = lanes(col.plans.flatMap((plan) => {
+              const range = (drag?.key === plan.key ? drag : held.get(plan.key)) ?? plan;
+              const visible = clip(range, hours);
+              if (!visible) return [];
+              const start = Math.min(y(visible.start), height - MIN_EVENT_HEIGHT);
+              const end = Math.max(y(visible.end), start + MIN_EVENT_HEIGHT);
+              return [{ plan, range, start, end }];
+            }));
             return (
               <div
                 key={col.key}
@@ -303,10 +311,8 @@ export function TimeGrid(props: Props) {
               >
                 {placed.map(({ item, lane, lanes: count }) => {
                   const { plan } = item;
-                  const visible = clip(item.range, hours);
-                  if (!visible) return null;
-                  const top = y(visible.start);
-                  const tall = y(visible.end) - top;
+                  const top = item.start;
+                  const tall = item.end - top;
                   const { start, end } = item.range;
                   const fixed = plan.cut || !plan.event.writable;
                   const words = wordsOf(plan);
@@ -316,14 +322,14 @@ export function TimeGrid(props: Props) {
                   if (plan.event.end <= props.now) classes.push('is-past');
                   if (drag?.key === plan.key) classes.push('is-dragging');
                   if (held.has(plan.key)) classes.push('is-saving');
-                  if (tall < 30) classes.push('is-thin');
+                  if (tall < 40) classes.push('is-thin');
                   if (fixed) classes.push('is-fixed');
                   if (highlight !== undefined && plan.here && plan.task?.task.line === highlight) classes.push('is-lit');
                   return (
                     <div
                       key={plan.key}
                       className={classes.join(' ')}
-                      style={{ top, height: Math.max(4, tall - 2), '--lane': lane, '--lanes': count, '--tone': toneOf(plan.event) } as CSSProperties}
+                      style={{ top, height: tall - 1, '--lane': lane, '--lanes': count, '--tone': toneOf(plan.event) } as CSSProperties}
                       onPointerDown={(event) => itemDown(event, plan, fixed, (next, edge) => onMovePlan(col.date, plan, next.start, next.end, edge))}
                       onDoubleClick={(event) => {
                         if (!(event.target as Element).closest('.cal-block-x')) openEditor(plan);
@@ -338,21 +344,19 @@ export function TimeGrid(props: Props) {
                       data-end={end}
                     >
                       {!fixed && <span className="cal-edge is-top" data-edge="top" />}
-                      {tall >= 16 && (
-                        <span className="cal-block-head">
-                          <button
-                            type="button"
-                            className="cal-block-title"
-                            onClick={(event) => { if (event.detail === 0) openEditor(plan); }}
-                          >
-                            {words.title || 'untitled'}
-                          </button>
-                          <span className="cal-block-time">
-                            {clock(start)}–{clock(end)}
-                          </span>
+                      <span className="cal-block-head">
+                        <button
+                          type="button"
+                          className="cal-block-title"
+                          onClick={(event) => { if (event.detail === 0) openEditor(plan); }}
+                        >
+                          {words.title || 'untitled'}
+                        </button>
+                        <span className="cal-block-time">
+                          {clock(start)}–{clock(end)}
                         </span>
-                      )}
-                      {tall >= 25 && notes && <span className="cal-block-notes">{notes}</span>}
+                      </span>
+                      {tall >= 28 && notes && <span className="cal-block-notes">{notes}</span>}
                       {tall >= 22 && plan.event.writable && (
                         <button type="button" className="cal-block-x" aria-label="Delete this event" title="Delete this event from Calendar" onClick={() => askDeletePlan(c, plan)} data-testid="cal-plan-delete">
                           ×

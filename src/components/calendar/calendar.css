@@ -2,7 +2,12 @@
    this. The glass, the hero, the chips and the tokens come from ../periodic/periodic.css. */
 
 .main.is-calendar {
-  padding: 8px 12px;
+  padding: 0;
+}
+
+/* Give the route a definite height. Its frame can still grow and scroll in a short pane. */
+.main.is-calendar > [data-plugin-display="calendar"] {
+  height: 100%;
 }
 
 .cal-frame {
@@ -17,10 +22,12 @@
 
 .cal-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(245px, 28%);
+  grid-template-columns: minmax(0, 1fr) clamp(245px, 24%, 380px);
   gap: var(--space-2);
   align-items: stretch;
-  margin-bottom: var(--space-2);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .cal-top:has(> :only-child) {
@@ -28,17 +35,46 @@
 }
 
 .cal-hero {
-  grid-template-columns: minmax(0, 1fr);
-  align-content: space-between;
-  gap: var(--space-2);
-  padding: 10px 16px;
-  /* Not hidden: the aurora overflows the card, and a focused chip would scroll the text away. */
-  overflow: clip;
+  display: grid;
+  align-content: center;
+  gap: 8px 16px;
+  min-width: 0;
 }
 
 .cal-title {
-  margin: 2px 0;
-  font-size: 30px;
+  margin: 0;
+  color: var(--text);
+  font: 550 clamp(23px, 2cqi, 30px)/1.15 var(--display);
+  letter-spacing: -0.025em;
+}
+
+.cal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.cal-toolbar .nav-chip { border-radius: var(--radius); }
+
+.cal-toolbar .cal-step {
+  min-width: 30px;
+  font-size: 18px;
+  line-height: 20px;
+}
+
+.cal-toolbar .cal-add-task {
+  padding-inline: 12px;
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+@container (min-width: 1180px) {
+  .cal-hero { grid-template-columns: minmax(0, 1fr) auto; }
+  .cal-legend { grid-column: 1 / -1; }
+  .cal-toolbar .nav-space { flex: none; width: 8px; }
 }
 
 .cal-hero-period {
@@ -53,19 +89,19 @@
 .cal-summary {
   margin: 0;
   color: var(--text-muted);
-  font: italic 14px/1.4 var(--display);
+  font: 12px/1.4 var(--numbers);
 }
 
 .cal-summary .count {
   color: var(--text);
-  font: 600 14px var(--numbers);
+  font: 600 12px var(--numbers);
 }
 
 .cal-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
-  margin: var(--space-2) 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   font-size: 12.5px;
@@ -146,11 +182,19 @@
   align-content: center;
   align-items: center;
   gap: var(--space-2);
-  padding: 10px 12px;
+  padding: 0 0 0 16px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
 
+.cal-top .timer-card::before,
+.cal-top .timer-card::after { display: none; }
+
 .cal-top .timer-card > :not(.dial, .timer-setup) { grid-column: 2; }
-.cal-top .timer-card > :is(.timer-actions, .timer-problem) { grid-column: 1 / -1; }
+.cal-top .timer-card > .timer-problem { grid-column: 1 / -1; }
 
 .cal-top .dial {
   grid-column: 1;
@@ -162,7 +206,7 @@
 
 .cal-top .dial-time { font-size: 24px; }
 .cal-top .dial-label { margin-top: 2px; font-size: 8px; letter-spacing: 0; }
-.cal-top .timer-actions { flex-wrap: wrap; }
+.cal-top .timer-actions { flex-wrap: wrap; justify-content: flex-start; }
 .cal-top .timer-presets { justify-content: flex-start; }
 
 .timer-card.is-rest {
@@ -382,6 +426,7 @@
 
 .cal-main.is-day {
   grid-template-columns: minmax(0, 1fr) minmax(210px, 24%);
+  gap: 0;
 }
 
 .cal-main.is-day .cal-side {
@@ -392,8 +437,9 @@
 .cal-grid {
   display: flex;
   flex-direction: column;
-  padding: 6px 14px 8px 0;
-  border-radius: 22px;
+  position: relative;
+  min-width: 0;
+  background: var(--bg);
 }
 
 .cal-head,
@@ -443,7 +489,7 @@
 }
 
 .cal-head {
-  padding: 2px 0 4px;
+  padding: 4px 0;
   border-bottom: 1px solid var(--glass-line);
 }
 
@@ -455,7 +501,7 @@
   column-gap: 2px;
   min-width: 0;
   padding: 2px;
-  border-radius: 12px;
+  border-radius: 0;
   transition: background 160ms ease-out;
 }
 
@@ -485,7 +531,10 @@
 .cal-day-head.is-today .cal-date {
   background: var(--accent);
   color: #0e1012;
-  box-shadow: 0 0 22px -6px var(--accent);
+}
+
+.cal-day-head.is-today {
+  background: var(--accent-soft);
 }
 
 .cal-total {
@@ -510,14 +559,14 @@
 
 .cal-hour {
   position: absolute;
-  right: 12px;
-  color: var(--text-faint);
-  font: 10.5px var(--font-mono);
+  right: 10px;
+  color: var(--text-muted);
+  font: 11px var(--font-mono);
   transform: translateY(-50%);
 }
 
 .cal-hour.is-third {
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .cal-lines,
@@ -560,7 +609,7 @@
 /* A block: a soft fill in its task's colour, a solid rail down its left edge. */
 
 .cal-block {
-  --inset: 3px;
+  --inset: 2px;
 
   position: absolute;
   z-index: 1;
@@ -571,13 +620,12 @@
   width: calc(100% / var(--lanes, 1) - var(--inset) * 2);
   min-width: 0;
   overflow: hidden;
-  padding: 5px 8px 4px 11px;
-  border-radius: 9px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 26%, transparent), color-mix(in srgb, var(--tone) 16%, transparent));
+  padding: 4px 6px 3px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--tone) 26%, var(--bg));
   box-shadow:
-    inset 3px 0 0 var(--tone),
-    inset 0 0 0 1px color-mix(in srgb, var(--tone) 24%, transparent),
-    0 8px 18px -12px rgb(0 0 0 / 80%);
+    inset 2px 0 0 var(--tone),
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 32%, transparent);
   cursor: grab;
   user-select: none;
   transition:
@@ -598,14 +646,14 @@
 
 /* Past blocks recede: the colour steps down, the words only one notch. */
 .cal-block.is-past {
-  background: color-mix(in srgb, var(--tone) 12%, transparent);
+  background: color-mix(in srgb, var(--tone) 16%, var(--bg));
   box-shadow:
-    inset 3px 0 0 color-mix(in srgb, var(--tone) 65%, transparent),
+    inset 2px 0 0 color-mix(in srgb, var(--tone) 65%, transparent),
     inset 0 0 0 1px color-mix(in srgb, var(--tone) 14%, transparent);
 }
 
 .cal-block.is-past .cal-block-title {
-  color: color-mix(in srgb, var(--text) 80%, transparent);
+  color: color-mix(in srgb, var(--text) 92%, transparent);
 }
 
 .cal-block.is-past:hover {
@@ -674,6 +722,8 @@
   line-height: 1.15;
 }
 
+.cal-block.is-thin .cal-edge { height: 3px; }
+
 .cal-block.is-thin:has(.cal-block-notes) {
   justify-content: flex-start;
   gap: 0;
@@ -686,22 +736,18 @@
 
 .cal-block-time {
   overflow: hidden;
-  color: color-mix(in srgb, var(--text) 55%, transparent);
+  color: color-mix(in srgb, var(--text) 72%, transparent);
   font: 10.5px var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/*
- * An event as Senioro draws one: its title and time on one line, its notes under them. The title
- * has the line; the time sits beside it when there is room, and otherwise wraps onto a second
- * line that is cut off, as Calendar does in a narrow column.
- */
+/* Reserve the first line for the title; add the time when its lane has room. */
 .cal-block-head {
   display: flex;
   flex-wrap: wrap;
-  column-gap: 6px;
-  align-items: baseline;
+  gap: 4px 6px;
+  align-items: center;
   min-width: 0;
   max-height: 15px;
   overflow: hidden;
@@ -710,16 +756,17 @@
 .cal-block-head .cal-block-title {
   flex: 0 1 auto;
   min-width: 0;
+  line-height: 15px;
 }
 
 .cal-block-head .cal-block-time {
-  flex: 0 0 auto;
+  flex: none;
 }
 
 .cal-block-notes {
   overflow: hidden;
-  color: color-mix(in srgb, var(--text) 72%, transparent);
-  font-size: 11.5px;
+  color: color-mix(in srgb, var(--text) 84%, transparent);
+  font-size: 12px;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -871,8 +918,8 @@
   width: 100%;
   min-height: 22px;
   padding: 0;
-  border-radius: 10px;
-  background: repeating-linear-gradient(135deg, rgb(255 255 255 / 2.2%) 0 6px, transparent 6px 12px);
+  border-radius: 0;
+  background: repeating-linear-gradient(135deg, rgb(255 255 255 / 3%) 0 1px, transparent 1px 6px);
   color: var(--text-faint);
   transition:
     background-color 160ms ease-out,
@@ -1108,8 +1155,9 @@
 /* The day view's side list */
 
 .cal-side {
-  padding: 18px 20px;
-  border-radius: 22px;
+  padding: 16px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .cal-side-total {
@@ -1253,11 +1301,15 @@
   .cal-main.is-day .cal-side {
     contain: none;
     max-height: 160px;
+    border-left: 0;
+    border-top: 1px solid var(--border);
   }
 }
 
 @container (max-width: 560px) {
+  .cal-grid:not(.is-day) .cal-day-head { grid-template-columns: minmax(0, 1fr); justify-items: center; }
   .cal-top { grid-template-columns: minmax(0, 1fr); }
+  .cal-top .timer-card { border-left: 0; border-top: 1px solid var(--border); padding: 8px 0 0; }
 }
 
 /* Motion off: the end state, at once. */

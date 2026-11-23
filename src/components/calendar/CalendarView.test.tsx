@@ -167,6 +167,20 @@ describe('the calendar', () => {
     expect(screen.getByTestId('cal-view')).toHaveTextContent('1h 28m logged · 2 events in Calendar');
   });
 
+  it('keeps adjacent short events labelled and reachable at the evening fold', async () => {
+    calendar.events = ['Review', 'Call'].map((title, index) => ({
+      id: title, calendar: 'home', title, start: at(DAY, 21 * 60 + 50 + index * 5),
+      end: at(DAY, 21 * 60 + 55 + index * 5), allDay: false, writable: true,
+    }));
+    const { column } = setup();
+    const [review, call] = await within(column).findAllByTestId('cal-plan');
+    expect(review).toHaveTextContent('Review21:50–21:55');
+    expect(call).toHaveTextContent('Call21:55–22:00');
+    expect(review?.style.getPropertyValue('--lane')).not.toBe(call?.style.getPropertyValue('--lane'));
+    await userEvent.dblClick(within(column).getByRole('button', { name: 'Call' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('21:55');
+  });
+
   it('plans a task of the day in Calendar: its line gets a focus-id and no minutes, Calendar gets the event', async () => {
     const { column, written } = setup();
     await screen.findByTestId('cal-grid');

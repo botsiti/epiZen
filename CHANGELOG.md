@@ -3,6 +3,12 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.19.1 — 2026-11-23
+
+Week and Day fill the calendar pane down to its last row. Short events keep their titles and
+can be selected individually even when they are only a few minutes apart.
+[Full release notes](releases/0.19.1.md).
+
 ## 0.19.0 — 2026-11-20
 
 Double-click a timed calendar block to edit it. Linked tasks show the current description and
