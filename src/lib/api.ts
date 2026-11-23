@@ -67,7 +67,9 @@ export const lookupJson = (url: string) => invoke<unknown>('lookup_json', { url 
 /** A cover to show in the search results; nothing is saved. */
 export const lookupImage = (url: string) => invoke<ArrayBuffer>('lookup_image', { url });
 /** Saves a cover as a new image in the vault, never over a file. Returns the path it got (its extension is what the image is). */
-export const fetchImageIntoVault = (url: string, path: string) => invoke<string>('fetch_image_into_vault', { url, path });
+export const fetchImageIntoVault = (url: string, path: string, root?: string) => invoke<string>('fetch_image_into_vault', { url, path, root });
+export const saveMediaCover = (root: string, path: string, bytes: Uint8Array) =>
+  invoke<string>('save_media_cover', { root, path, bytes: Array.from(bytes) });
 
 export const getSettings = () => invoke<Settings>('get_settings');
 /** Merges by top-level key; `null` removes a key. Returns every setting. */

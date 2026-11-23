@@ -20,7 +20,7 @@ const files: VaultFile[] = notes.map(({ path }) => ({ path, kind: 'note' }));
 const library = collectLibrary(notes, files);
 function Harness({ initial = { period: 'all' } }: { initial?: LibraryFilters }) {
   const [filters, setFilters] = useState<LibraryFilters>(initial);
-  return <LibraryView library={library} files={files} tab="all" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} filters={filters} onFilters={setFilters} today={new Date(2026, 10, 9)} onOpenNote={vi.fn()} onCreated={() => Promise.resolve()} onChanged={() => Promise.resolve()} />;
+  return <LibraryView vaultRoot="/demo" library={library} files={files} tab="all" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} filters={filters} onFilters={setFilters} today={new Date(2026, 10, 9)} onOpenNote={vi.fn()} onCreated={() => Promise.resolve()} onChanged={() => Promise.resolve()} />;
 }
 const paths = () => screen.queryAllByTestId('library-card').map((card) => card.getAttribute('data-path'));
 
@@ -72,7 +72,7 @@ it('keeps quick year choices and visible filter pills in sync when reset', async
 });
 it('keeps notes accessible when saving filters fails and offers an explicit retry', async () => {
   const user = userEvent.setup(), retry = vi.fn(), open = vi.fn();
-  render(<LibraryView library={library} files={files} tab="all" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} filters={{ period: 'all' }} onFilters={vi.fn()} filterError="Disk unavailable" onRetryFilters={retry} today={new Date(2026, 10, 9)} onOpenNote={open} onCreated={() => Promise.resolve()} onChanged={() => Promise.resolve()} />);
+  render(<LibraryView vaultRoot="/demo" library={library} files={files} tab="all" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} filters={{ period: 'all' }} onFilters={vi.fn()} filterError="Disk unavailable" onRetryFilters={retry} today={new Date(2026, 10, 9)} onOpenNote={open} onCreated={() => Promise.resolve()} onChanged={() => Promise.resolve()} />);
   expect(screen.getByRole('alert')).toHaveTextContent('Disk unavailable');
   await user.click(screen.getAllByTestId('library-card')[0]!);
   expect(open).toHaveBeenCalledOnce();

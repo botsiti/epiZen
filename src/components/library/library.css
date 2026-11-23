@@ -2545,3 +2545,7 @@
 .genre-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .genre-suggestions button { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-muted); padding: 6px 10px; cursor: pointer; }
 .genre-suggestions button:hover, .genre-suggestions button:focus-visible { color: var(--text); border-color: var(--accent); }
+
+.media-cover-picker { display: grid; align-content: start; justify-items: center; gap: 8px; min-width: 0; }
+.media-cover-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.add-fields .field textarea { resize: vertical; min-height: 64px; background: var(--surface); border: 1px solid var(--glass-line); border-radius: 8px; padding: 8px 12px; color: var(--text); font: inherit; }

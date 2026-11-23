@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { createNote, fetchImageIntoVault, lookupJson, type VaultFile } from '../../lib/api';
+import { createNote, fetchImageIntoVault, lookupJson, saveMediaCover, type VaultFile } from '../../lib/api';
 import {
   coverPath,
   draftProblem,
@@ -36,9 +36,11 @@ import { useEscape } from '../calendar/useEscape';
 import { DateField } from '../DateField';
 import { order } from '../periodic/effects';
 import { LookupCover, RatingRing } from './parts';
+import { MediaCoverPicker } from './MediaCoverPicker';
 import { GenreSuggestions } from './GenreSuggestions';
 
 interface Props {
+  vaultRoot: string;
   spec: KindSpec & { source: NonNullable<KindSpec['source']> };
   files: VaultFile[];
   today: Date;
@@ -89,7 +91,8 @@ function details(result: LookupResult): Promise<LookupResult> {
  * filled in, set the rating and the date, save. Saving downloads the cover into the kind's
  * `_attachments` folder and writes the note in the vault's format.
  */
-export function AddMedia({ spec, files, today, genreSuggestions = [], podcastArtwork = 'show', onClose, onCreated }: Props) {
+export function AddMedia({ vaultRoot, spec, files, today, genreSuggestions = [], podcastArtwork = 'show', onClose, onCreated }: Props) {
+  const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [answer, setAnswer] = useState<Answers>();
   // A podcast's show, picked: its episodes are listed to pick one from.
@@ -149,6 +152,7 @@ export function AddMedia({ spec, files, today, genreSuggestions = [], podcastArt
   };
   // Escape steps back: from the form to the list it came from, from a show's episodes to the shows, then out.
   useEscape(() => {
+    if (saving) return;
     if (form) return back();
     if (show) return setShow(undefined);
     onClose();
@@ -156,7 +160,7 @@ export function AddMedia({ spec, files, today, genreSuggestions = [], podcastArt
   const episode = spec.kind === 'podcast';
 
   return (
-    <div className="add-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()} data-testid="media-add">
+    <div className="add-backdrop" onMouseDown={(event) => !saving && event.target === event.currentTarget && onClose()} data-testid="media-add">
       <div className="add-sheet" role="dialog" aria-modal="true" aria-label={`Add ${a(episode ? 'episode' : spec.one)}`}>
         <div className="add-top">
           <div>
@@ -165,12 +169,14 @@ export function AddMedia({ spec, files, today, genreSuggestions = [], podcastArt
             </p>
             <h2 className="add-title">{form ? 'Rate it' : show ? 'Pick the episode' : episode ? 'Find the show' : `Find ${a(spec.one)}`}</h2>
           </div>
-          <button type="button" className="wizard-round is-small" onClick={onClose} aria-label="Close" title="Close (Esc)">
+          <button type="button" className="wizard-round is-small" disabled={saving} onClick={onClose} aria-label="Close" title="Close (Esc)">
             ×
           </button>
         </div>
         {form ? (
           <AddForm
+            saving={saving} setSaving={setSaving}
+            vaultRoot={vaultRoot}
             key={picked?.id ?? 'manual'}
             spec={spec}
             files={files}
@@ -265,6 +271,7 @@ function ResultCard({ spec, result, mixed, onPick }: { spec: KindSpec; result: L
 }
 
 function AddForm({
+  saving, setSaving, vaultRoot,
   spec,
   files,
   genreSuggestions,
@@ -274,6 +281,9 @@ function AddForm({
   onBack,
   onCreated,
 }: {
+  saving: boolean;
+  setSaving: (saving: boolean) => void;
+  vaultRoot: string;
   spec: KindSpec;
   files: VaultFile[];
   genreSuggestions: string[];
@@ -297,9 +307,10 @@ function AddForm({
     active.current = true;
     return () => { active.current = false; };
   }, []);
+  const [coverFile, setCoverFile] = useState<File>();
+  const [trackText, setTrackText] = useState('');
   const [genre, setGenre] = useState('');
   const [error, setError] = useState<string>();
-  const [saving, setSaving] = useState(false);
   // A cover that couldn't be downloaded: the next Save goes on without it.
   const [noCover, setNoCover] = useState(!result?.cover);
   const set = (patch: Partial<MediaDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
@@ -318,14 +329,25 @@ function AddForm({
     setSaving(true);
     setError(undefined);
     // Tracks are optional enrichment. The album can still be saved offline and filled in later.
-    const trackList = spec.kind === 'album'
-      ? await lookupAlbumTracks(draft.title, draft.maker, result, lookupJson).catch(() => [])
-      : undefined;
+    let trackList = trackText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (spec.kind === 'album' && !trackList.length) {
+      trackList = await lookupAlbumTracks(draft.title, draft.maker, result, lookupJson).catch(() => []);
+    }
     if (!active.current) return;
     let cover: string | undefined;
-    if (result?.cover && !noCover) {
+    const imagePath = coverPath(spec, draft.title, files);
+    if (coverFile) {
       try {
-        cover = await fetchImageIntoVault(result.cover, coverPath(spec, draft.title, files));
+        const bytes = new Uint8Array(await coverFile.arrayBuffer());
+        if (!active.current) return;
+        cover = await saveMediaCover(vaultRoot, imagePath, bytes);
+      } catch (err) {
+        setSaving(false);
+        return setError(`The selected cover couldn't be saved: ${reason(err)}`);
+      }
+    } else if (result?.cover && !noCover) {
+      try {
+        cover = await fetchImageIntoVault(result.cover, imagePath, vaultRoot);
       } catch (err) {
         setSaving(false);
         setNoCover(true);
@@ -336,19 +358,21 @@ function AddForm({
     const year = Number((draft.date || isoDate(today)).slice(0, 4));
     const text = mediaNoteText(spec, { ...draft, trackList }, { overview: findOverview(spec, files, year), cover });
     try {
-      await createNote(target.path, text);
+      await createNote(target.path, text, vaultRoot);
     } catch (err) {
       setSaving(false);
       return setError(`The note wasn't created: ${reason(err)}.${cover ? ` Its cover was saved as ${cover}.` : ''}`);
     }
-    await onCreated(target.path);
+    if (active.current) await onCreated(target.path);
   };
 
   const rating = /^\d{1,3}$/.test(draft.rating) ? Math.min(100, Number(draft.rating)) : undefined;
   return (
     <form className="add-body add-form" inert={saving} aria-busy={saving} onSubmit={(event) => void save(event)} data-testid="add-form">
       <div className="add-form-cover">
-        <LookupCover url={noCover ? undefined : result?.cover} title={draft.title || 'No cover'} className={`add-cover is-${spec.kind}`} onFound={(found) => !found && setNoCover(true)} />
+        <MediaCoverPicker kind={spec.kind} onChange={setCoverFile}>
+          <LookupCover url={noCover ? undefined : result?.cover} title={draft.title || 'No cover'} className={`add-cover is-${spec.kind}`} onFound={(found) => !found && setNoCover(true)} />
+        </MediaCoverPicker>
         <RatingRing value={rating} onSet={(value) => set({ rating: String(value) })} size={136} />
       </div>
       <div className="add-fields">
@@ -408,11 +432,16 @@ function AddForm({
             </label>
           )}
         </div>
+        {spec.kind === 'album' && <label className="field">
+          <span>Track list</span>
+          <textarea value={trackText} rows={3} onChange={(event) => setTrackText(event.currentTarget.value)}
+            placeholder="One title per line. Leave blank to look up tracks on Wikipedia." />
+        </label>}
         {noteFileName(draft.title) && (
           <p className={target.taken ? 'add-where is-taken' : 'add-where'} data-testid="add-where">
             {target.taken ? 'Taken: ' : 'Saves '}
             <code>{target.path}</code>
-            {!noCover && result?.cover && <> and its cover in _attachments</>}
+            {(coverFile || (!noCover && result?.cover)) && <> and its cover in _attachments</>}
           </p>
         )}
         {error && (

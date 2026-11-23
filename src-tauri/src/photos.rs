@@ -1,9 +1,33 @@
-//! Local images selected by the user for a monthly expense note.
+//! Local images selected for expense notes and library covers.
 
 use crate::{NetError, Vault, VaultError, net};
 use std::path::Path;
 
 pub const MAX_PHOTO_BYTES: usize = 10 * 1024 * 1024;
+
+/// The cover name can be taken between the form opening and Save. Reuse identical
+/// bytes on retry, or create a numbered sibling without replacing an existing file.
+pub fn store_media_cover(vault: &Vault, path: &str, bytes: &[u8]) -> Result<String, String> {
+    if bytes.len() > MAX_PHOTO_BYTES {
+        return Err("Choose a cover up to 10 MB.".into());
+    }
+    let format = net::ImageFormat::sniff(bytes).ok_or("Choose a PNG, JPEG, GIF or WebP cover.")?;
+    let path = net::image_path(path, format).map_err(|error| error.to_string())?;
+    let (stem, ext) = path.rsplit_once('.').ok_or("The cover needs an image extension.")?;
+    for number in 1..=10_000 {
+        let name = if number == 1 { path.clone() } else { format!("{stem}-{number}.{ext}") };
+        match vault.create_file(&name, bytes) {
+            Ok(()) => return Ok(name),
+            Err(VaultError::Exists(_)) => {
+                if vault.read_image(&name).map_err(|error| error.to_string())? == bytes {
+                    return Ok(name);
+                }
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Err("Couldn't find an available cover name.".into())
+}
 
 /// Creates a new attachment in the configured folder, defaulting to _attachments beside the note.
 pub fn store_expense_photo(vault: &Vault, note_path: &str, bytes: &[u8], folder: Option<&str>) -> Result<String, String> {

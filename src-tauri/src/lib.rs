@@ -344,6 +344,12 @@ async fn lookup_image(net: State<'_, Net>, url: String) -> Result<Response, Stri
     net.image(&url).await.map(Response::new).map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+async fn save_media_cover(state: Shared<'_>, root: String, path: String, bytes: Vec<u8>) -> Result<String, String> {
+    let guard = state.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    photos::store_media_cover(guard.vault_for_note(Some(&root))?, &path, &bytes)
+}
+
 /// Downloads a cover and saves it as a new file at `path` (its extension set by what the image
 /// is), never over an existing one. Returns the path it was saved at.
 #[tauri::command]
@@ -352,12 +358,13 @@ async fn fetch_image_into_vault(
     state: Shared<'_>,
     url: String,
     path: String,
+    root: Option<String>,
 ) -> Result<String, String> {
     let bytes = net.image(&url).await.map_err(|err| err.to_string())?;
     let guard = state
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    net::store_image(guard.vault()?, &path, &bytes).map_err(|err| err.to_string())
+    net::store_image(guard.vault_for_note(root.as_deref())?, &path, &bytes).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -567,6 +574,7 @@ pub fn run() {
             read_image,
             reveal_file,
             save_expense_photo,
+            save_media_cover,
             create_note,
             create_folder,
             list_folders,

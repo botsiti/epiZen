@@ -34,7 +34,7 @@ function renderLibrary(tab: LibraryTab = 'all', layout: LibraryLayout = 'covers'
   const onHidden = vi.fn();
   const onOpenNote = vi.fn();
   const props = { library: shelved, files, tab, onTab, layout, onLayout, hidden, onHidden, today: new Date(2026, 9, 28), onOpenNote, onCreated: vi.fn(() => Promise.resolve()), onChanged: vi.fn(() => Promise.resolve()) };
-  const view = render(<LibraryView {...props} />);
+  const view = render(<LibraryView vaultRoot="/demo" {...props} />);
   return { onTab, onLayout, onHidden, onOpenNote, view, props };
 }
 
@@ -162,7 +162,7 @@ describe("the library's All tab", () => {
       ['book', '+ Book', false],
       ['podcast', '+ Episode', false],
     ]);
-    view.rerender(<LibraryView {...props} tab="film" />);
+    view.rerender(<LibraryView vaultRoot="/demo" {...props} tab="film" />);
     expect(screen.getByTestId('library')).toHaveAttribute('data-tab', 'film');
     expect(adds()).toEqual([
       ['film', '+ Add film', true],
@@ -387,9 +387,9 @@ describe('a long library', () => {
     await openTool(user, 'library-view-menu');
     await user.click(byData('library-view', 'data-view', 'covers'));
     expect(onLayout).toHaveBeenLastCalledWith('covers');
-    view.rerender(<LibraryView {...props} layout="covers" />);
+    view.rerender(<LibraryView vaultRoot="/demo" {...props} layout="covers" />);
     expect(screen.getByTestId('library-see-all')).toHaveTextContent('See all 40 in the list');
-    view.rerender(<LibraryView {...props} layout="list" />);
+    view.rerender(<LibraryView vaultRoot="/demo" {...props} layout="list" />);
     expect(screen.getByTestId('library-count')).toHaveTextContent('Showing 10 of 40');
     expect(screen.queryByTestId('library-search')).not.toBeInTheDocument();
   });
@@ -410,14 +410,14 @@ describe('library controls', () => {
     const user = userEvent.setup();
     const { view, props, onOpenNote } = renderLibrary('album');
     const onDelete = vi.fn(() => Promise.resolve('.trash/test.md'));
-    view.rerender(<LibraryView {...props} onDelete={onDelete} />);
+    view.rerender(<LibraryView vaultRoot="/demo" {...props} onDelete={onDelete} />);
     fireEvent.click(screen.getAllByTestId('library-card')[0]!, { metaKey: true });
     expect(onOpenNote).toHaveBeenLastCalledWith(expect.any(String), true);
     fireEvent.contextMenu(screen.getAllByTestId('library-card')[0]!, { clientX: 30, clientY: 40 });
     await user.click(screen.getByTestId('library-delete'));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onDelete).not.toHaveBeenCalled();
-    view.rerender(<LibraryView {...props} layout="list" onDelete={onDelete} />);
+    view.rerender(<LibraryView vaultRoot="/demo" {...props} layout="list" onDelete={onDelete} />);
     fireEvent.click(screen.getAllByTestId('library-row')[0]!, { metaKey: true });
     expect(onOpenNote).toHaveBeenLastCalledWith(expect.any(String), true);
   });

@@ -2307,4 +2307,33 @@ describe('the demo vault', () => {
   });
 
 
+  it('adds a custom album with local artwork and an ordered track list', async () => {
+    const before = snapshotVault(vaultCopy());
+    const bytes = [...readFileSync(join(FIXTURES, 'cover-1.png'))];
+    await $('[data-testid="open-library"]').click();
+    await $('[data-testid="library-add"][data-kind="album"]').click();
+    await $('[data-testid="add-manual"]').click();
+    await $('[data-testid="add-title"]').setValue('Custom sessions');
+    await $('[data-testid="add-maker"]').setValue('Demo artist');
+    await $('.add-form textarea').setValue('Opening\nReprise\nOpening');
+    await browser.execute((data) => {
+      const file = new File([new Uint8Array(data)], 'Artwork.png', { type: 'image/png' });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      const input = document.querySelector<HTMLInputElement>('[aria-label="Cover image"]')!;
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, bytes);
+    await expect($('img[alt="Selected cover"]')).toBeDisplayed();
+    await screenshot('57-custom-album-cover-and-tracks');
+    await $('[data-testid="add-save"]').click();
+    const path = 'Rating/music/Custom sessions.md';
+    const cover = 'Rating/music/_attachments/custom-sessions.png';
+    await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
+    expect(readFileSync(join(vaultCopy(), path), 'utf8')).toContain('tracks:\n  - Opening\n  - Reprise\n  - Opening\n');
+    expect(readFileSync(join(vaultCopy(), path), 'utf8')).toContain('![[custom-sessions.png|240]]');
+    expect(readFileSync(join(vaultCopy(), cover))).toEqual(Buffer.from(bytes));
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`added: ${path}`, `added: ${cover}`].sort());
+  });
+
 });
