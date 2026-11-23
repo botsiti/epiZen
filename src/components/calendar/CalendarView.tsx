@@ -207,12 +207,15 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
   const addTo = (day: Date, category: string, words: string) =>
     onWrite(day, (text) => syncPlanDone(addTask(text, category, words)), 'The task wasn’t added');
   // An edited or deleted task takes the timer and its plans with it.
-  const editOn = async (day: Date, { task, ref }: DayTaskRef, edit: TaskEdit, link?: TaskLink) => {
-    const apply = (text: string) => editTask(text, ref, edit);
+  const editOn = async (day: Date, { task, ref }: DayTaskRef, edit: TaskEdit, done?: boolean, link?: TaskLink) => {
+    const renamed = edit.words !== task.label || edit.category !== task.category?.name;
+    const fieldsChanged = renamed || edit.minutes !== (task.minutes ?? 0);
+    const apply = (text: string) => editTask(text, ref, fieldsChanged ? edit : undefined, done);
     let path = link?.note;
     if (path) await onWriteTask(path, apply);
     else path = await onWrite(day, apply, 'The task wasn’t changed');
     if (!path) throw new Error('The task couldn’t be saved. Close this editor to see the note’s error.');
+    if (!renamed) return;
     const after = { label: newTaskLabel(edit.words), category: edit.category?.toLowerCase() };
     try {
       await onTaskChanged({ kind: 'edited', path, date: day, focusId: focusIdOf(ref.text), before: { label: task.label, category: task.category?.name }, after });
@@ -421,20 +424,22 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
       )}
       {dialog?.kind === 'edit' && (
         <EditTask
+          showCompletion
           task={dialog.item.task}
           categories={categories}
           onCancel={() => setDialog(undefined)}
-          onSave={(edit) => editOn(dialog.date, dialog.item, edit)}
+          onSave={(edit, done) => editOn(dialog.date, dialog.item, edit, done)}
         />
       )}
       {editingPlan && planRange && (linkedTask && taskLink ? (
         <EditTask
+          showCompletion
           task={linkedTask.task}
           categories={categories}
           when={planRange}
           note={taskLink.note}
           onCancel={() => setDialog(undefined)}
-          onSave={(edit) => editOn(calendarDay(editingPlan.event.start, zone), linkedTask, edit, taskLink)}
+          onSave={(edit, done) => editOn(calendarDay(editingPlan.event.start, zone), linkedTask, edit, done, taskLink)}
         />
       ) : (
         <EditEvent event={editingPlan.event} when={planRange} onCancel={() => setDialog(undefined)} onSave={(fields) => plans.edit(editingPlan.event, fields)} />

@@ -1480,6 +1480,22 @@ describe('the demo vault', () => {
     await expect(plan).toHaveAttribute('data-start', String(19 * 60));
     expect(readFileSync(file, 'utf8')).toBe(added.replace('evening run', 'evening intervals'));
     expect(diffSnapshots(beforeEdit, snapshotVault(vaultCopy()))).toEqual([`changed: ${DAYS}/12.08.2026.md`]);
+    const renamed = readFileSync(file, 'utf8');
+    await plan.$('.cal-block-title').doubleClick();
+    const completed = $('[data-testid="edit-task"] input[type="checkbox"]');
+    await expect(completed).not.toBeSelected();
+    await completed.click();
+    await $('[data-testid="edit-task-save"]').click();
+    await expect(plan.$('[aria-label="Completed"]')).toExist();
+    expect(readFileSync(file, 'utf8')).toContain('- [x] #daily/sport — evening intervals');
+    await plan.$('.cal-block-title').doubleClick();
+    await expect(completed).toBeSelected();
+    await screenshot('56-calendar-completed-task');
+    await completed.click();
+    await $('[data-testid="edit-task-save"]').click();
+    await expect(plan.$('[aria-label="Completed"]')).not.toExist();
+    expect(readFileSync(file, 'utf8')).toBe(renamed);
+    expect(diffSnapshots(beforeEdit, snapshotVault(vaultCopy()))).toEqual([`changed: ${DAYS}/12.08.2026.md`]);
   });
 
   it('keeps the periodic notes setup in Settings', async () => {

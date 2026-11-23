@@ -1520,6 +1520,23 @@
   font-size: 12px;
 }
 
+.cal-task-completed {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  cursor: pointer;
+}
+
+.cal-task-completed input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.cal-block.is-complete .cal-block-notes { text-decoration: line-through; }
+
 .cal-editor textarea {
   resize: vertical;
 }

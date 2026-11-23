@@ -323,6 +323,7 @@ export function TimeGrid(props: Props) {
                   if (drag?.key === plan.key) classes.push('is-dragging');
                   if (held.has(plan.key)) classes.push('is-saving');
                   if (tall < 40) classes.push('is-thin');
+                  if (plan.task?.task.done) classes.push('is-complete');
                   if (fixed) classes.push('is-fixed');
                   if (highlight !== undefined && plan.here && plan.task?.task.line === highlight) classes.push('is-lit');
                   return (
@@ -350,6 +351,7 @@ export function TimeGrid(props: Props) {
                           className="cal-block-title"
                           onClick={(event) => { if (event.detail === 0) openEditor(plan); }}
                         >
+                          {plan.task?.task.done && <span aria-label="Completed" role="img">✓ </span>}
                           {words.title || 'untitled'}
                         </button>
                         <span className="cal-block-time">

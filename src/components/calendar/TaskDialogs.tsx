@@ -64,14 +64,16 @@ function CalendarEditor({ kind, when, onCancel, save, valid, children }: {
 }
 
 /** A task's description, category and logged minutes. */
-export function EditTask({ task, categories, when, note, onCancel, onSave }: {
+export function EditTask({ task, categories, when, note, showCompletion, onCancel, onSave }: {
   task: DayTask;
   categories: string[];
   when?: string;
   note?: string;
+  showCompletion?: boolean;
   onCancel: () => void;
-  onSave: (edit: TaskEdit) => void | Promise<void>;
+  onSave: (edit: TaskEdit, done?: boolean) => void | Promise<void>;
 }) {
+  const [done, setDone] = useState(task.done);
   const [words, setWords] = useState(task.label);
   const [chosen, setChosen] = useState(task.category?.name);
   const [minutes, setMinutes] = useState(String(task.minutes ?? 0));
@@ -79,9 +81,13 @@ export function EditTask({ task, categories, when, note, onCancel, onSave }: {
   // The task's own category stays on offer when it isn't among the vault's most used.
   const options = chosen && !categories.includes(chosen) ? [chosen, ...categories] : categories;
   return (
-    <CalendarEditor kind="task" when={when} onCancel={onCancel} valid={Boolean(words.trim()) && number !== undefined} save={() => {
-      if (number !== undefined) return onSave({ words, category: chosen, minutes: number });
+    <CalendarEditor kind="task" when={when} onCancel={onCancel} valid={number !== undefined && (Boolean(words.trim()) || (done !== task.done && words === task.label))} save={() => {
+      if (number !== undefined) return onSave({ words, category: chosen, minutes: number }, showCompletion ? done : undefined);
     }}>
+      {showCompletion && <label className="cal-task-completed">
+        <input type="checkbox" checked={done} onChange={(event) => setDone(event.currentTarget.checked)} />
+        Completed
+      </label>}
       <label className="cal-editor-field">Description
         <input autoFocus value={words} onChange={(event) => setWords(event.target.value)} placeholder="What the task is" data-testid="edit-task-text" />
       </label>

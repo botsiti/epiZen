@@ -258,7 +258,8 @@ opens from "Calendar" in the sidebar. A single toolbar sits above an edge-to-edg
   categories on the periodic pages.
 - **Editing**: double-click a timed block or use its context menu to open the editor with the
   occurrence's scheduled date and time. Linked tasks show their current description, category and
-  logged minutes, and save to their source note even after the event moves to another day. Writable
+  logged minutes and completion checkbox. Saving completion updates the source note and its plan
+  percentage, even after the event moves to another day. Completed blocks show a check beside the title. Writable
   events without a linked task save their title and description to Apple Calendar.
 - **Not drawn**: the time blocks under the notes' tasks. They are the timer's record; the minutes
   are what counts, and the calendar is Calendar.

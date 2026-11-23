@@ -331,6 +331,45 @@ describe('the calendar', () => {
     expect(screen.getByTestId('cal-plan').closest('[data-date]')).toHaveAttribute('data-date', dayKey(moved));
   });
 
+  it('finishes and reopens a moved task from the calendar without rewriting its scheduled event', async () => {
+    const moved = addDays(DAY, 1);
+    const event = { id: 'plan', calendar: 'home', title: 'code', notes: 'planned',
+      start: at(moved, 13 * 60), end: at(moved, 14 * 60), allDay: false, writable: false,
+      url: taskUrl({ vault: 'demo-vault', note: 'day.md', id: 'work' }) };
+    calendar.events = [event];
+    const original = '---\ndone: 50\n---\n' + TEXT.replace('[minutes::58]', '[due::today]  [minutes::58] <!-- focus-id: work -->');
+    const { source, onWrite, onWriteTask, onTaskChanged } = setup(original);
+    const user = userEvent.setup();
+    const open = async () => {
+      await user.dblClick(await screen.findByTestId('cal-plan'));
+      return screen.getByRole('checkbox', { name: 'Completed' });
+    };
+    const check = await open();
+    expect(check).not.toBeChecked();
+    await user.click(check);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onWriteTask).not.toHaveBeenCalled();
+
+    await user.click(await open());
+    onWriteTask.mockRejectedValueOnce(new Error('The note changed on disk'));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The note changed on disk');
+    expect(source()).toBe(original);
+    expect(screen.getByRole('checkbox', { name: 'Completed' })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('img', { name: 'Completed' })).toBeInTheDocument();
+    expect(source()).toBe(original.replace('done: 50', 'done: 100').replace('- [ ]', '- [x]'));
+    const completed = await open();
+    expect(completed).toBeChecked();
+    await user.click(completed);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(source()).toBe(original);
+    expect(screen.queryByRole('img', { name: 'Completed' })).not.toBeInTheDocument();
+    expect(onWrite).not.toHaveBeenCalled();
+    expect(onTaskChanged).not.toHaveBeenCalled();
+    expect(calendar.events).toEqual([event]);
+  });
+
   it('edits an unlinked event in Calendar, preserving its date and untouched multiline description', async () => {
     const event = { id: 'legacy', calendar: 'home', title: 'code', notes: 'plan\nExtra details', start: at(DAY, 13 * 60), end: at(DAY, 15 * 60), allDay: false, writable: true };
     calendar.events = [{ ...event }];
@@ -338,6 +377,7 @@ describe('the calendar', () => {
     const user = userEvent.setup();
     await user.dblClick(await screen.findByTestId('cal-plan'));
     const editor = screen.getByRole('dialog', { name: 'Edit event' });
+    expect(within(editor).queryByRole('checkbox', { name: 'Completed' })).not.toBeInTheDocument();
     expect(within(editor).getByLabelText('Description')).toHaveValue(event.notes);
     const title = within(editor).getByLabelText('Title');
     await user.clear(title);
