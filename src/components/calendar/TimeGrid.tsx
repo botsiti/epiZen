@@ -238,42 +238,44 @@ export function TimeGrid(props: Props) {
 
   return (
     <div className={wide ? 'cal-grid is-day' : 'cal-grid'} style={{ '--cols': columns.length, '--gutter': `${GUTTER}px` } as CSSProperties} data-testid="cal-grid">
-      <div className="cal-head">
-        <span className="cal-gutter" />
-        {columns.map((col) => {
-          const weekend = col.date.getDay() === 0 || col.date.getDay() === 6;
-          return (
-            <button
-              key={col.key}
-              type="button"
-              className={`cal-day-head${col.key === todayKey ? ' is-today' : ''}${weekend ? ' is-weekend' : ''}`}
-              onClick={() => onHead(col.date)}
-              title={wide ? 'Open the day’s page' : 'Show this day'}
-              data-testid="cal-day-head"
-              data-date={col.key}
-            >
-              <span className="cal-weekday">{formatDate(col.date, wide ? 'dddd' : 'ddd')}</span>
-              <span className="cal-date">{col.date.getDate()}</span>
-              <span className="cal-total">{col.total ? formatMinutes(col.total) : ''}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {columns.some((col) => col.allDay.length > 0) && (
-        <div className="cal-allday" data-testid="cal-allday">
-          <span className="cal-allday-label">all-day</span>
-          {columns.map((col) => (
-            <div key={col.key} className="cal-allday-day">
-              {col.allDay.map((event) => (
-                <span key={`${event.id}@${event.start}`} className="cal-allday-event" style={{ '--tone': toneOf(event) } as CSSProperties} title={event.notes ? `${event.title} · ${event.notes}` : event.title}>
-                  {event.title}
-                </span>
-              ))}
-            </div>
-          ))}
+      <div className="cal-days">
+        <div className="cal-head">
+          <span className="cal-gutter" />
+          {columns.map((col) => {
+            const weekend = col.date.getDay() === 0 || col.date.getDay() === 6;
+            return (
+              <button
+                key={col.key}
+                type="button"
+                className={`cal-day-head${col.key === todayKey ? ' is-today' : ''}${weekend ? ' is-weekend' : ''}`}
+                onClick={() => onHead(col.date)}
+                title={wide ? 'Open the day’s page' : 'Show this day'}
+                data-testid="cal-day-head"
+                data-date={col.key}
+              >
+                <span className="cal-weekday">{formatDate(col.date, wide ? 'dddd' : 'ddd')}</span>
+                <span className="cal-date">{col.date.getDate()}</span>
+                <span className="cal-total">{col.total ? formatMinutes(col.total) : ''}</span>
+              </button>
+            );
+          })}
         </div>
-      )}
+
+        {columns.some((col) => col.allDay.length > 0) && (
+          <div className="cal-allday" data-testid="cal-allday">
+            <span className="cal-allday-label">all-day</span>
+            {columns.map((col) => (
+              <div key={col.key} className="cal-allday-day">
+                {col.allDay.map((event) => (
+                  <span key={`${event.id}@${event.start}`} className="cal-allday-event" style={{ '--tone': toneOf(event) } as CSSProperties} title={event.notes ? `${event.title} · ${event.notes}` : event.title}>
+                    {event.title}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <Fold edge="early" open={early} from={0} to={hours.first || 7 * 60} hidden={early ? [] : foldCounts('early')} onToggle={() => onFold('early')} />
 

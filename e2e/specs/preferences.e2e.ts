@@ -157,7 +157,8 @@ describe('focused preferences and file creation', () => {
     await $('[data-testid="new-folder-button"]').click();
     await $('[data-testid="new-folder-name"]').setValue('Fresh ideas');
     await screenshot('166-new-folder');
-    await browser.keys('Enter');
+    // The embedded driver synthesizes key events without WebKit's native form submission.
+    await $('[data-testid="new-folder-create"]').click();
     await expect($('[data-testid="new-folder-name"]')).not.toBeExisting();
     expect(existsSync(join(root, 'Fresh ideas'))).toBe(true);
     await expect($('[data-testid="tree-folder"][data-path="Fresh ideas"]')).toBeDisplayed();

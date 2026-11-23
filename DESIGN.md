@@ -249,7 +249,8 @@ opens from "Calendar" in the sidebar. A single toolbar sits above an edge-to-edg
   unfolds on a click and marks each event it hides. All-day events sit in a row above the hours. A
   hairline every hour, a slightly stronger one every three hours, small mono hour labels. Today's
   column is faintly lit, and a glowing sage line with a dot marks now. Hour heights follow the
-  available height of the workspace below the toolbar. Small windows and expanded night hours can scroll to keep the grid legible.
+  available height of the workspace below the toolbar. In a short window or with night hours
+  expanded, the hours scroll inside the grid with the dates and late-hours control pinned.
 - **Events**: soft rounded fills in their calendar's colour with a solid rail down the left, side by
   side where they overlap: the title and time on one line, the notes under them (Senioro puts the
   task's words there). Even a short event gets one line for its title. When labels would overlap,
