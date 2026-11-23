@@ -498,8 +498,10 @@ describe('the demo vault', () => {
     const path = 'Rating/music/Dog Man Star.md';
     await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
     expect(readFileSync(join(vaultCopy(), path), 'utf8')).toBe(
-      '---\nArtist: Suede\nYear: 1994\nlistened: 2026-10-07\ngenre:\n  - britpop\n  - glam rock\n  - art rock\nrating: 86\nfavorite tracks:\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[dog-man-star.png|240]]\n',
+      '---\nArtist: Suede\nYear: 1994\nlistened: 2026-10-07\ngenre:\n  - britpop\n  - glam rock\n  - art rock\nrating: 86\nfavorite tracks:\ntracks:\n  - Introducing the Band\n  - We Are the Pigs\n  - Heroine\n  - The Wild Ones\n  - Daddy\'s Speeding\n  - The Power\n  - New Generation\n  - This Hollywood Life\n  - The 2 of Us\n  - Black or Blue\n  - The Asphalt World\n  - Still Life\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[dog-man-star.png|240]]\n',
     );
+    await expect($('[data-testid="media-tracks"] [aria-label="Favorite Still Life"]')).toBeDisplayed();
+    await screenshot('53-album-auto-tracks');
     // The recorded cover is a PNG, so it was saved as .png though asked for as .jpg.
     const saved = readFileSync(join(vaultCopy(), 'Rating/music/_attachments/dog-man-star.png'));
     expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);
@@ -1480,6 +1482,22 @@ describe('the demo vault', () => {
     await expect(plan).toHaveAttribute('data-start', String(19 * 60));
     expect(readFileSync(file, 'utf8')).toBe(added.replace('evening run', 'evening intervals'));
     expect(diffSnapshots(beforeEdit, snapshotVault(vaultCopy()))).toEqual([`changed: ${DAYS}/12.08.2026.md`]);
+    const renamed = readFileSync(file, 'utf8');
+    await plan.$('.cal-block-title').doubleClick();
+    const completed = $('[data-testid="edit-task"] input[type="checkbox"]');
+    await expect(completed).not.toBeSelected();
+    await completed.click();
+    await $('[data-testid="edit-task-save"]').click();
+    await expect(plan.$('[aria-label="Completed"]')).toExist();
+    expect(readFileSync(file, 'utf8')).toContain('- [x] #daily/sport — evening intervals');
+    await plan.$('.cal-block-title').doubleClick();
+    await expect(completed).toBeSelected();
+    await screenshot('56-calendar-completed-task');
+    await completed.click();
+    await $('[data-testid="edit-task-save"]').click();
+    await expect(plan.$('[aria-label="Completed"]')).not.toExist();
+    expect(readFileSync(file, 'utf8')).toBe(renamed);
+    expect(diffSnapshots(beforeEdit, snapshotVault(vaultCopy()))).toEqual([`changed: ${DAYS}/12.08.2026.md`]);
   });
 
   it('keeps the periodic notes setup in Settings', async () => {
@@ -2288,5 +2306,34 @@ describe('the demo vault', () => {
     await expect($('[data-testid="habits-page"]')).toHaveText(expect.stringContaining('Morning Forest journey'));
   });
 
+
+  it('adds a custom album with local artwork and an ordered track list', async () => {
+    const before = snapshotVault(vaultCopy());
+    const bytes = [...readFileSync(join(FIXTURES, 'cover-1.png'))];
+    await $('[data-testid="open-library"]').click();
+    await $('[data-testid="library-add"][data-kind="album"]').click();
+    await $('[data-testid="add-manual"]').click();
+    await $('[data-testid="add-title"]').setValue('Custom sessions');
+    await $('[data-testid="add-maker"]').setValue('Demo artist');
+    await $('.add-form textarea').setValue('Opening\nReprise\nOpening');
+    await browser.execute((data) => {
+      const file = new File([new Uint8Array(data)], 'Artwork.png', { type: 'image/png' });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      const input = document.querySelector<HTMLInputElement>('[aria-label="Cover image"]')!;
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, bytes);
+    await expect($('img[alt="Selected cover"]')).toBeDisplayed();
+    await screenshot('57-custom-album-cover-and-tracks');
+    await $('[data-testid="add-save"]').click();
+    const path = 'Rating/music/Custom sessions.md';
+    const cover = 'Rating/music/_attachments/custom-sessions.png';
+    await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
+    expect(readFileSync(join(vaultCopy(), path), 'utf8')).toContain('tracks:\n  - Opening\n  - Reprise\n  - Opening\n');
+    expect(readFileSync(join(vaultCopy(), path), 'utf8')).toContain('![[custom-sessions.png|240]]');
+    expect(readFileSync(join(vaultCopy(), cover))).toEqual(Buffer.from(bytes));
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([`added: ${path}`, `added: ${cover}`].sort());
+  });
 
 });

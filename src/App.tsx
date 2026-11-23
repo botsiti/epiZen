@@ -1141,6 +1141,7 @@ export function App() {
             )}
             {view.kind === 'library' && (
               <LibraryView
+                vaultRoot={status.root}
                 library={library}
                 files={files}
                 tab={view.tab}

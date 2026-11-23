@@ -33,3 +33,15 @@ describe('favorite tracks', () => {
     expect(screen.getByRole('button', { name: 'Favorite Two' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+it('shows legacy imported titles cleanly and preserves a saved star and its conflict check', async () => {
+  const raw = '.mw-parser-output .frac{white-space:nowrap}8+1⁄2 Minutes';
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<AlbumTracks title="Emergency & I" tracks={[raw]} favorites={[raw]} favoriteKey="favorite tracks" onSave={onSave} />);
+  expect(screen.getByTestId('media-tracks')).not.toHaveTextContent('.mw-parser-output');
+  const star = screen.getByRole('button', { name: 'Favorite 8 1⁄2 Minutes' });
+  expect(star).toHaveAttribute('aria-pressed', 'true');
+  expect(onSave).not.toHaveBeenCalled();
+  await userEvent.click(star);
+  expect(onSave).toHaveBeenCalledWith([{ key: 'favorite tracks', before: [raw], after: [] }]);
+});

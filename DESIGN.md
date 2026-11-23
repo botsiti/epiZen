@@ -249,7 +249,8 @@ opens from "Calendar" in the sidebar. A single toolbar sits above an edge-to-edg
   unfolds on a click and marks each event it hides. All-day events sit in a row above the hours. A
   hairline every hour, a slightly stronger one every three hours, small mono hour labels. Today's
   column is faintly lit, and a glowing sage line with a dot marks now. Hour heights follow the
-  available height of the workspace below the toolbar. Small windows and expanded night hours can scroll to keep the grid legible.
+  available height of the workspace below the toolbar. In a short window or with night hours
+  expanded, the hours scroll inside the grid with the dates and late-hours control pinned.
 - **Events**: soft rounded fills in their calendar's colour with a solid rail down the left, side by
   side where they overlap: the title and time on one line, the notes under them (Senioro puts the
   task's words there). Even a short event gets one line for its title. When labels would overlap,
@@ -258,7 +259,8 @@ opens from "Calendar" in the sidebar. A single toolbar sits above an edge-to-edg
   categories on the periodic pages.
 - **Editing**: double-click a timed block or use its context menu to open the editor with the
   occurrence's scheduled date and time. Linked tasks show their current description, category and
-  logged minutes, and save to their source note even after the event moves to another day. Writable
+  logged minutes and completion checkbox. Saving completion updates the source note and its plan
+  percentage, even after the event moves to another day. Completed blocks show a check beside the title. Writable
   events without a linked task save their title and description to Apple Calendar.
 - **Not drawn**: the time blocks under the notes' tasks. They are the timer's record; the minutes
   are what counts, and the calendar is Calendar.
@@ -436,8 +438,13 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   vault's hidden `.trash` folder, where it can be restored. Attachments remain available.
 - Genres and tags have an add/edit chip on the media page. Their values are ordinary YAML lists;
   each save checks that the edited property still matches what the dialog opened with.
-- Albums can look up track listings on Wikipedia. Choose the album page and track listing, then
-  star favorites. Stars use the sage accent. The full `tracks` list and `favorite tracks` are
+- The add form accepts local PNG, JPEG, GIF or WebP covers for albums, movies, books and podcast
+  episodes. The chosen image previews in the form and is copied beside the note on save. Albums
+  accept an ordered list of titles, one per line, which takes precedence over a lookup.
+- Saving an album in Library looks up its Wikipedia track listing. The selected Wikipedia album
+  page or a unique album-title and artist match supplies the standard listing. An unavailable
+  lookup or ambiguous match leaves the manual picker available. Existing albums can choose a
+  page and edition, then star favorites. Stars use the sage accent. The full `tracks` list and `favorite tracks` are
   saved together in the Markdown frontmatter; the free-text Thoughts section stays editable below.
 
 ## Tabs and the right sidebar

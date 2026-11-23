@@ -13,7 +13,7 @@
 .cal-frame {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  height: 100%;
   max-width: none;
   margin: 0;
 }
@@ -21,6 +21,7 @@
 /* The top: the period's name, and the timer beside it */
 
 .cal-top {
+  flex: none;
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(245px, 24%, 380px);
   gap: var(--space-2);
@@ -418,7 +419,8 @@
 /* The grid: days across, hours down */
 
 .cal-main {
-  flex: 1 0 auto;
+  flex: 1 0 240px;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
@@ -439,7 +441,25 @@
   flex-direction: column;
   position: relative;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   background: var(--bg);
+}
+
+.cal-grid > :not(.cal-body) { flex: none; }
+
+.cal-days {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  background: var(--bg);
+}
+
+.cal-fold.is-late {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  background-color: var(--bg);
 }
 
 .cal-head,
@@ -1295,7 +1315,7 @@
 @container (max-width: 760px) {
   .cal-main.is-day {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(min-content, 1fr) auto;
+    grid-template-rows: minmax(220px, 1fr) auto;
   }
 
   .cal-main.is-day .cal-side {
@@ -1519,6 +1539,23 @@
   color: var(--text-muted);
   font-size: 12px;
 }
+
+.cal-task-completed {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  cursor: pointer;
+}
+
+.cal-task-completed input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.cal-block.is-complete .cal-block-notes { text-decoration: line-through; }
 
 .cal-editor textarea {
   resize: vertical;

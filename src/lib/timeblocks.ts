@@ -1,6 +1,6 @@
-import { parseTasks } from './dashboard';
+import { parseTasks, toggleTask, type Task } from './dashboard';
 import { blocksUnder, clock, parseDay, taskLabel, type TimeBlock } from './day';
-import { addTask } from './edits';
+import { addTask, syncPlanDone } from './edits';
 import { lineEnding, textIdentity } from './text';
 
 // The timer's, the calendar's and the task menu's writes: a time block added under a task, a
@@ -49,12 +49,13 @@ function span(start: number, end: number): { start: number; end: number } | unde
  * one other line that reads exactly the same (lines above it came or went). Anything else is
  * refused rather than guessed: the task was changed, or two tasks read the same.
  */
-function findLine(text: string, lines: string[], task: LineRef): number {
-  const tasks = new Set(parseTasks(text).filter((t) => !t.habit).map((t) => t.line));
-  if (tasks.has(task.line) && lines[task.line] === task.text) return task.line;
-  const same = [...tasks].filter((line) => lines[line] === task.text);
-  if (same.length === 1 && same[0] !== undefined) return same[0];
-  throw new Error(same.length ? 'Two tasks in the note read the same, so Epizen can’t tell which one is meant' : 'That task has changed in the note');
+function taskAtRef(text: string, lines: string[], task: LineRef): Task {
+  const matches = parseTasks(text).filter((t) => !t.habit && lines[t.line] === task.text);
+  const original = matches.find((t) => t.line === task.line);
+  if (original) return original;
+  const [only] = matches;
+  if (matches.length === 1 && only) return only;
+  throw new Error(matches.length ? 'Two tasks in the note read the same, so Epizen can’t tell which one is meant' : 'That task has changed in the note');
 }
 
 /**
@@ -88,7 +89,7 @@ export function addBlock(text: string, task: LineRef, start: number, end: number
   const block = span(start, end);
   if (!block) return text;
   const { lines, eol } = split(text);
-  const at = findLine(text, lines, task);
+  const at = taskAtRef(text, lines, task).line;
   const blocks = blocksUnder(lines, at);
   if (blocks.some((b) => b.start === block.start && b.end === block.end)) return text;
   const line = lines[at] ?? '';
@@ -106,7 +107,7 @@ export function addBlock(text: string, task: LineRef, start: number, end: number
 export function setMinutes(text: string, task: LineRef, minutes: number): string {
   if (!Number.isInteger(minutes) || minutes < 0 || minutes > 24 * 60) throw new Error('Minutes are a whole number from 0 to 1440.');
   const { lines, eol } = split(text);
-  const at = findLine(text, lines, task);
+  const at = taskAtRef(text, lines, task).line;
   const line = lines[at] ?? '';
   minutesOf(line, blocksUnder(lines, at));
   lines[at] = withMinutes(line, minutes);
@@ -125,31 +126,29 @@ const TASK_HEAD = /^([ \t]*(?:>[ \t]*)*(?:[-*+]|\d+[.)])[ \t]+\[[ xX]\][ \t]+)(.
 const FIELD = /\[[\w-]+::[^\]]*\]/g;
 const COMMENT = /<!--[\s\S]*?-->/g;
 
-/**
- * Rewrites a task's line with new words, category and minutes, as Senioro writes a task:
- * `- [ ] #daily/<category> — <words> [minutes::N]`. The rest of the line stays: the tick, the
- * indent, its other `[key::value]` fields and comments (Senioro's focus-id), a trailing block id.
- * The blocks and subtasks under it stay as they are.
- */
-export function editTask(text: string, task: LineRef, edit: TaskEdit): string {
+/** Saves task fields and completion in one conditional note write. A checkbox-only edit
+ * preserves the original task line, including its formatting and inline fields. */
+export function editTask(text: string, task: LineRef, edit: TaskEdit | undefined, done?: boolean): string {
+  const { lines, eol } = split(text);
+  const target = taskAtRef(text, lines, task);
+  if (edit) lines[target.line] = editedTaskLine(task.text, blocksUnder(lines, target.line), edit);
+  const next = edit ? lines.join(eol) : text;
+  return done === undefined || done === target.done ? next : syncPlanDone(toggleTask(next, target));
+}
+
+function editedTaskLine(line: string, blocks: TimeBlock[], edit: TaskEdit): string {
   const label = newTaskLabel(edit.words);
   if (!label) throw new Error('Say what the task is.');
   const category = edit.category === undefined ? undefined : textIdentity(edit.category);
   if (category !== undefined && !/^[\p{L}\p{M}\p{N}_-]+$/u.test(category)) throw new Error('A category is one word, like code or sport.');
   if (!Number.isInteger(edit.minutes) || edit.minutes < 0 || edit.minutes > 24 * 60) throw new Error('Minutes are a whole number from 0 to 1440.');
-  const { lines, eol } = split(text);
-  const at = findLine(text, lines, task);
-  const line = lines[at] ?? '';
   const [, head = '', body = ''] = TASK_HEAD.exec(line) ?? [];
-  const { field } = minutesOf(line, blocksUnder(lines, at));
+  const { field } = minutesOf(line, blocks);
   const blockId = /[ \t](\^[\w-]+)[ \t]*$/.exec(body)?.[1];
   const fields = (body.match(FIELD) ?? []).filter((f) => !/^\[minutes::/.test(f));
   const minutes = field || edit.minutes ? [`[minutes::${edit.minutes}]`] : [];
   const parts = [category ? `#daily/${category} — ${label}` : label, ...minutes, ...fields, ...(body.match(COMMENT) ?? []), ...(blockId ? [blockId] : [])];
-  const next = head + parts.join(' ');
-  if (next === line) return text;
-  lines[at] = next;
-  return lines.join(eol);
+  return head + parts.join(' ');
 }
 
 /**
@@ -158,7 +157,7 @@ export function editTask(text: string, task: LineRef, edit: TaskEdit): string {
  */
 export function deleteTask(text: string, task: LineRef): string {
   const { lines, eol } = split(text);
-  const at = findLine(text, lines, task);
+  const at = taskAtRef(text, lines, task).line;
   const depth = (/^[ \t]*/.exec(lines[at] ?? '')?.[0] ?? '').replace(/\t/g, '    ').length;
   let last = at;
   for (let i = at + 1; i < lines.length; i += 1) {
@@ -237,7 +236,7 @@ export function nextFocusId(text: string, day: Date): string {
  */
 export function withFocusId(text: string, task: LineRef, day: Date): { text: string; focusId: string } {
   const { lines, eol } = split(text);
-  const at = findLine(text, lines, task);
+  const at = taskAtRef(text, lines, task).line;
   const line = lines[at] ?? '';
   const own = focusIdOf(line);
   if (own) return { text, focusId: own };

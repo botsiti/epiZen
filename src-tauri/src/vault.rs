@@ -1475,6 +1475,35 @@ mod tests {
     }
 
     #[test]
+    fn local_media_covers_in_a_demo_copy_are_scoped_and_retryable() {
+        use crate::photos::{MAX_PHOTO_BYTES, store_media_cover};
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../demo-vault");
+        let copy = tempfile::tempdir().unwrap();
+        let mut expected = snapshot(&demo);
+        for (path, bytes) in &expected {
+            let target = copy.path().join(path);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(target, bytes).unwrap();
+        }
+        let vault = Vault::open(copy.path()).unwrap();
+        let png = include_bytes!("../../test/fixtures/lookup/cover-1.png");
+        let other = include_bytes!("../../test/fixtures/lookup/cover-2.png");
+        let path = "Rating/music/_attachments/my-cover.jpg";
+        let saved = store_media_cover(&vault, path, png).unwrap();
+        assert_eq!(saved, "Rating/music/_attachments/my-cover.png");
+        assert_eq!(store_media_cover(&vault, path, png).unwrap(), saved);
+        let next = store_media_cover(&vault, path, other).unwrap();
+        assert_eq!(next, "Rating/music/_attachments/my-cover-2.png");
+        expected.insert(PathBuf::from(saved), png.to_vec());
+        expected.insert(PathBuf::from(next), other.to_vec());
+        assert!(store_media_cover(&vault, "../outside.jpg", png).is_err());
+        assert!(store_media_cover(&vault, "note.md", png).is_err());
+        assert!(store_media_cover(&vault, path, b"not an image").is_err());
+        assert!(store_media_cover(&vault, path, &vec![0; MAX_PHOTO_BYTES + 1]).is_err());
+        assert_eq!(snapshot(copy.path()), expected);
+    }
+
+    #[test]
     fn creating_folders_preserves_every_file_in_a_demo_copy() {
         let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../demo-vault");
         let copy = tempfile::tempdir().unwrap();

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createNote, fetchImageIntoVault, lookupJson, type VaultFile } from '../../lib/api';
+import { createNote, fetchImageIntoVault, lookupJson, saveMediaCover, type VaultFile } from '../../lib/api';
 import { kindSpec } from '../../lib/library';
 import { podcastSettings, type PodcastArtwork } from '../../lib/podcasts';
 import { AddMedia } from './AddMedia';
@@ -30,6 +30,7 @@ vi.mock('../../lib/api', () => ({
   // Every cover is one of the recorded ones.
   lookupImage: vi.fn(() => Promise.resolve(new Uint8Array(readFileSync(join(process.cwd(), 'test/fixtures/lookup/cover-1.png'))).buffer)),
   fetchImageIntoVault: vi.fn(),
+  saveMediaCover: vi.fn(),
   createNote: vi.fn(() => Promise.resolve()),
 }));
 
@@ -48,6 +49,7 @@ const TITLE = 'Jensen Huang: NVIDIA – The $4 Trillion Company & the AI Revolut
 
 beforeAll(() => {
   // jsdom draws no blobs; a cover only has to be found.
+  URL.revokeObjectURL = vi.fn();
   URL.createObjectURL = vi.fn(() => 'blob:cover');
 });
 
@@ -63,7 +65,7 @@ async function toEpisodes() {
   const user = userEvent.setup();
   const onCreated = vi.fn(() => Promise.resolve());
   const onClose = vi.fn();
-  render(<AddMedia spec={podcast} files={files} today={new Date(2026, 9, 28)} onClose={onClose} onCreated={onCreated} />);
+  render(<AddMedia vaultRoot="/demo" spec={podcast} files={files} today={new Date(2026, 9, 28)} onClose={onClose} onCreated={onCreated} />);
   await user.type(screen.getByTestId('add-search'), 'lex fridman');
   await screen.findAllByTestId('add-result', {}, { timeout: 2000 });
   await user.click(document.querySelector('[data-testid="add-result"][data-id="1434243584"]')!);
@@ -80,7 +82,7 @@ describe('adding a podcast episode', () => {
     vi.mocked(lookupJson).mockImplementation((url) => Promise.resolve({ results: url.includes('/lookup')
       ? [{ kind: 'podcast-episode', trackId: 2, trackName: 'Sleep', collectionName: 'Huberman Lab', artworkUrl600: episodeArt }]
       : [{ kind: 'podcast', collectionId: 1, collectionName: 'Huberman Lab', artworkUrl600: showArt }] }));
-    render(<LibraryView library={new Map()} files={files} tab="podcast" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} today={new Date(2026, 9, 28)}
+    render(<LibraryView vaultRoot="/demo" library={new Map()} files={files} tab="podcast" onTab={vi.fn()} layout="covers" onLayout={vi.fn()} hidden={[]} onHidden={vi.fn()} today={new Date(2026, 9, 28)}
       podcastArtwork={podcastSettings({ artwork }).artwork} onOpenNote={vi.fn()} onCreated={onCreated} onChanged={vi.fn(() => Promise.resolve())} />);
     await user.click(screen.getAllByTestId('library-add').find((button) => button.getAttribute('data-kind') === 'podcast')!);
     await user.type(screen.getByTestId('add-search'), 'Huberman');
@@ -88,7 +90,7 @@ describe('adding a podcast episode', () => {
     await user.click(await screen.findByTestId('add-episode'));
     await user.click(screen.getByTestId('add-save'));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
-    expect(fetchImageIntoVault).toHaveBeenCalledWith(artwork === 'show' ? showArt : episodeArt, 'Rating/podcasts/_attachments/sleep.jpg');
+    expect(fetchImageIntoVault).toHaveBeenCalledWith(artwork === 'show' ? showArt : episodeArt, 'Rating/podcasts/_attachments/sleep.jpg', '/demo');
   });
 
   it('finds the show, lists its episodes newest first, and narrows them by what is typed', async () => {
@@ -134,10 +136,12 @@ describe('adding a podcast episode', () => {
     expect(fetchImageIntoVault).toHaveBeenCalledWith(
       'https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/ea/42/d7/ea42d7b1-8d4e-dd97-da5d-c508756550ca/mza_16782152345430036863.jpg/600x600bb.jpg',
       'Rating/podcasts/_attachments/jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.jpg',
+      '/demo',
     );
     expect(createNote).toHaveBeenCalledWith(
       path,
       '---\nAuthor: Lex Fridman Podcast\nRating: 77\nYear: 2026\nGenre:\n  - technology\nListened: 2026-09-21\n---\n[[00. Podcast 2026]]\n\n![[jensen-huang-nvidia-the-4-trillion-company-and-the-ai-revolution.png|240]]\n',
+      '/demo',
     );
     expect(onCreated).toHaveBeenCalledWith(path);
   });
@@ -170,6 +174,7 @@ describe('adding a podcast episode', () => {
     expect(fetchImageIntoVault).toHaveBeenCalledWith(
       'https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/ea/42/d7/ea42d7b1-8d4e-dd97-da5d-c508756550ca/mza_16782152345430036863.jpg/600x600bb.jpg',
       'Rating/podcasts/_attachments/an-older-episode.jpg',
+      '/demo',
     );
   });
 });
@@ -181,7 +186,7 @@ describe('adding a film from Wikipedia', () => {
   it('lists the films found, reads Wikidata while one is pointed at, and fills the form with its director, year and genre', async () => {
     const user = userEvent.setup();
     const onCreated = vi.fn(() => Promise.resolve());
-    render(<AddMedia spec={film} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={onCreated} />);
+    render(<AddMedia vaultRoot="/demo" spec={film} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={onCreated} />);
     await user.type(screen.getByTestId('add-search'), 'american fiction');
     await screen.findAllByTestId('add-result', {}, { timeout: 2000 });
     expect(lookupJson).toHaveBeenCalledWith(expect.stringContaining('gsrsearch=american%20fiction%20film&'));
@@ -212,10 +217,11 @@ describe('adding a film from Wikipedia', () => {
     await user.keyboard('{Escape}');
     await user.click(screen.getByTestId('add-save'));
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith('Rating/kino/American Fiction.md'));
-    expect(fetchImageIntoVault).toHaveBeenCalledWith('https://upload.wikimedia.org/wikipedia/en/d/d7/American_fiction_xxlg.jpg', 'Rating/kino/_attachments/american-fiction.jpg');
+    expect(fetchImageIntoVault).toHaveBeenCalledWith('https://upload.wikimedia.org/wikipedia/en/d/d7/American_fiction_xxlg.jpg', 'Rating/kino/_attachments/american-fiction.jpg', '/demo');
     expect(createNote).toHaveBeenCalledWith(
       'Rating/kino/American Fiction.md',
       '---\nDirector: Cord Jefferson\nYear: 2023\nWatched: 2026-10-07\nGenre:\n  - drama\nRating: 80\n---\n[[00. Kino 2026]]\n\n![[american-fiction.png|200]]\n',
+      '/demo',
     );
   });
 });
@@ -227,7 +233,7 @@ describe('adding a book from Wikipedia and Open Library', () => {
     vi.mocked(lookupJson).mockImplementation((url: string) =>
       url.includes('openlibrary.org') ? new Promise((resolve) => (openLibrary = resolve)) : Promise.resolve(recorded(answerFor(url))),
     );
-    render(<AddMedia spec={book} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} />);
+    render(<AddMedia vaultRoot="/demo" spec={book} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} />);
     expect(screen.getByTestId('add-hint')).toHaveTextContent('Searches Wikipedia and Open Library as you type.');
     await user.type(screen.getByTestId('add-search'), 'life 3.0');
     await screen.findAllByTestId('add-result', {}, { timeout: 2000 });
@@ -250,7 +256,7 @@ describe('adding a book from Wikipedia and Open Library', () => {
   it('shows one service\'s books when the other doesn\'t answer, and says so', async () => {
     const user = userEvent.setup();
     vi.mocked(lookupJson).mockImplementation((url: string) => (url.includes('openlibrary.org') ? Promise.reject(new Error('the service is busy')) : Promise.resolve(recorded(answerFor(url)))));
-    render(<AddMedia spec={book} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} />);
+    render(<AddMedia vaultRoot="/demo" spec={book} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn(() => Promise.resolve())} />);
     await user.type(screen.getByTestId('add-search'), 'life 3.0');
     await waitFor(() => expect(screen.getByTestId('add-hint')).toHaveTextContent("Open Library didn't answer; these are from Wikipedia."));
     expect(screen.getAllByTestId('add-result')).toHaveLength(1);
@@ -260,7 +266,7 @@ describe('adding a book from Wikipedia and Open Library', () => {
 it('offers library genre matches in the add form and saves the selection', async () => {
   const user = userEvent.setup();
   const album = kindSpec('album') as ReturnType<typeof kindSpec> & { source: 'musicbrainz' };
-  render(<AddMedia spec={album} files={files} today={new Date(2026, 9, 28)} genreSuggestions={['psychedelic', 'psychedelic rock', 'ambient']} onClose={vi.fn()} onCreated={vi.fn().mockResolvedValue(undefined)} />);
+  render(<AddMedia vaultRoot="/demo" spec={album} files={files} today={new Date(2026, 9, 28)} genreSuggestions={['psychedelic', 'psychedelic rock', 'ambient']} onClose={vi.fn()} onCreated={vi.fn().mockResolvedValue(undefined)} />);
   await user.click(screen.getByTestId('add-manual'));
   await user.type(screen.getByTestId('add-title'), 'New album');
   await user.type(screen.getByTestId('add-genre'), 'psycho');
@@ -270,13 +276,13 @@ it('offers library genre matches in the add form and saves the selection', async
   await user.click(suggestion);
   expect(screen.getByTestId('add-genre')).toHaveValue('');
   await user.click(screen.getByTestId('add-save'));
-  await waitFor(() => expect(createNote).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('  - psychedelic\n')));
+  await waitFor(() => expect(createNote).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('  - psychedelic\n'), '/demo'));
 });
 
 it('uses a selected Wikipedia podcast source with the same episode form, preserving the show as author', async () => {
   const user = userEvent.setup();
   vi.mocked(lookupJson).mockResolvedValue({ query: { pages: [{ pageid: 42, title: 'Quiet conversations (podcast)', description: 'Interview podcast' }] } });
-  render(<AddMedia spec={{ ...podcast, source: 'wikipedia-podcast' }} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn()} />);
+  render(<AddMedia vaultRoot="/demo" spec={{ ...podcast, source: 'wikipedia-podcast' }} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn()} />);
   await user.type(screen.getByTestId('add-search'), 'quiet');
   await user.click(await screen.findByTestId('add-result'));
   expect(screen.getByTestId('add-title')).toHaveValue('');
@@ -287,7 +293,7 @@ it('uses a selected Wikipedia podcast source with the same episode form, preserv
 it('keeps manual entry available when the selected catalogue fails and can recover on a new search', async () => {
   const user = userEvent.setup();
   vi.mocked(lookupJson).mockRejectedValue(new Error('Offline'));
-  render(<AddMedia spec={{ ...book, source: 'wikipedia-book' }} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn()} />);
+  render(<AddMedia vaultRoot="/demo" spec={{ ...book, source: 'wikipedia-book' }} files={files} today={new Date(2026, 9, 28)} onClose={vi.fn()} onCreated={vi.fn()} />);
   await user.type(screen.getByTestId('add-search'), 'life');
   await waitFor(() => expect(screen.getByTestId('add-hint')).toHaveTextContent("Wikipedia didn't answer"));
   await user.click(screen.getByTestId('add-manual'));
@@ -296,4 +302,55 @@ it('keeps manual entry available when the selected catalogue fails and can recov
   vi.mocked(lookupJson).mockResolvedValue(recorded('wikipedia-book.json'));
   await user.type(screen.getByTestId('add-search'), ' 3.0');
   expect(await screen.findByTestId('add-result')).toHaveTextContent('Life 3.0');
+});
+
+it.each([true, false])('saves a new album and its available Wikipedia listing (online=%s)', async (online) => {
+  vi.mocked(lookupJson).mockImplementation((url) => {
+    if (!online) return Promise.reject(new Error('offline'));
+    const file = url.includes('action=parse') ? 'wikipedia-album-tracks' : 'wikipedia-dog-man-star';
+    return Promise.resolve(JSON.parse(readFileSync(`test/fixtures/lookup/${file}.json`, 'utf8')) as unknown);
+  });
+  const user = userEvent.setup();
+  const spec = { ...kindSpec('album'), source: 'musicbrainz' as const };
+  render(<AddMedia vaultRoot="/demo" spec={spec} files={files} today={new Date(2026, 10, 23)} onClose={vi.fn()} onCreated={vi.fn().mockResolvedValue(undefined)} />);
+  await user.click(screen.getByTestId('add-manual'));
+  await user.type(screen.getByTestId('add-title'), 'Dog Man Star');
+  await user.type(screen.getByTestId('add-maker'), 'Suede');
+  expect(lookupJson).not.toHaveBeenCalled();
+  await user.click(screen.getByTestId('add-save'));
+  await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+  const text = vi.mocked(createNote).mock.calls[0]![1];
+  expect(text).toContain('favorite tracks:\n');
+  if (online) expect(text).toContain('tracks:\n  - Introducing the Band\n  - We Are the Pigs');
+  else expect(text).not.toContain('\ntracks:');
+});
+
+it.each(['album', 'film', 'book', 'podcast'] as const)('saves a user-chosen cover for a custom %s', async (kind) => {
+  const user = userEvent.setup();
+  const spec = kindSpec(kind);
+  const onCreated = vi.fn().mockResolvedValue(undefined);
+  vi.mocked(saveMediaCover).mockClear().mockResolvedValue(`Rating/${spec.folder}/_attachments/my-entry.png`);
+  render(<AddMedia vaultRoot="/demo" spec={{ ...spec, source: spec.source! }} files={files} today={new Date(2026, 10, 23)} onClose={vi.fn()} onCreated={onCreated} />);
+  await user.click(screen.getByTestId('add-manual'));
+  await user.type(screen.getByTestId('add-title'), 'My entry');
+  const bytes = Uint8Array.from(readFileSync('test/fixtures/lookup/cover-1.png'));
+  const file = new File([bytes], 'My cover.png', { type: 'image/png' });
+  Object.defineProperty(file, 'arrayBuffer', { value: () => Promise.resolve(bytes.buffer) });
+  await user.upload(screen.getByLabelText('Cover image'), file);
+  expect(screen.getByAltText('Selected cover')).toBeInTheDocument();
+  if (kind === 'album') {
+    await user.type(screen.getByTestId('add-maker'), 'An artist');
+    await user.type(screen.getByRole('textbox', { name: 'Track list' }), 'Prelude{Enter}8 1/2 Minutes{Enter}Prelude');
+  }
+  expect(saveMediaCover).not.toHaveBeenCalled();
+  await user.click(screen.getByTestId('add-save'));
+  await waitFor(() => expect(onCreated).toHaveBeenCalled());
+  expect(fetchImageIntoVault).not.toHaveBeenCalled();
+  expect(saveMediaCover).toHaveBeenCalledWith('/demo', `Rating/${spec.folder}/_attachments/my-entry.jpg`, bytes);
+  const text = vi.mocked(createNote).mock.calls[0]![1];
+  expect(text).toContain('![[my-entry.png|');
+  if (kind === 'album') {
+    expect(lookupJson).not.toHaveBeenCalled();
+    expect(text).toContain('tracks:\n  - Prelude\n  - 8 1/2 Minutes\n  - Prelude\n');
+  }
 });

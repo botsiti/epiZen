@@ -458,6 +458,9 @@ mod e2e {
             {
                 include_bytes!("../../test/fixtures/covers/musicbrainz-antics.json")
             }
+            "en.wikipedia.org" if param("gsrsearch") == "Dog Man Star Suede album" => {
+                include_bytes!("../../test/fixtures/lookup/wikipedia-dog-man-star.json")
+            }
             "en.wikipedia.org" if param("gsrsearch") == "Antics Interpol album" => {
                 include_bytes!("../../test/fixtures/covers/wikipedia-album.json")
             }
@@ -484,7 +487,7 @@ mod e2e {
             "en.wikipedia.org" if param("gsrsearch").ends_with(" film") => {
                 include_bytes!("../../test/fixtures/lookup/wikipedia-film.json")
             }
-            "en.wikipedia.org" if param("action") == "parse" => {
+            "en.wikipedia.org" if param("action") == "parse" && param("pageid") == "302094" => {
                 include_bytes!("../../test/fixtures/lookup/wikipedia-album-tracks.json")
             }
             "en.wikipedia.org" if param("list") == "search" => {

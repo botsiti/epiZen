@@ -11,6 +11,7 @@ import { useVaultImage } from '../useVaultImage';
 import { FindCover } from './FindCover';
 import { RatingRing, ValueField } from './parts';
 import { MediaLabels } from './MediaLabels';
+import { readableTrackTitle } from '../../lib/albumTracks';
 import { AlbumTracks } from './AlbumTracks';
 import { propertyList, type ListChange } from '../../lib/mediaProperties';
 import { Thoughts } from './Thoughts';
@@ -159,7 +160,7 @@ export function MediaPage(props: Props) {
         </nav>
       </header>
 
-      {spec.kind === 'album' && onSaveLists ? <AlbumTracks title={entry.title} maker={entry.maker} tracks={propertyList(field(properties, 'tracks'))} favorites={entry.tracks} favoriteKey={key(keys.tracks ?? 'favorite tracks')} onSave={onSaveLists} /> : entry.tracks.length > 0 && <section className="card glass media-tracks" data-testid="media-tracks"><p className="tile-label">Favorite tracks</p><ol>{entry.tracks.map((track) => <li key={track}><span>{/^\d+$/.test(track) ? `Track ${track}` : track}</span><span className="track-star">★</span></li>)}</ol></section>}
+      {spec.kind === 'album' && onSaveLists ? <AlbumTracks title={entry.title} maker={entry.maker} tracks={propertyList(field(properties, 'tracks'))} favorites={entry.tracks} favoriteKey={key(keys.tracks ?? 'favorite tracks')} onSave={onSaveLists} /> : entry.tracks.length > 0 && <section className="card glass media-tracks" data-testid="media-tracks"><p className="tile-label">Favorite tracks</p><ol>{entry.tracks.map((track) => <li key={track}><span>{/^\d+$/.test(track) ? `Track ${track}` : readableTrackTitle(track)}</span><span className="track-star">★</span></li>)}</ol></section>}
 
       <Thoughts
         spec={spec}

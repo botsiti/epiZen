@@ -86,6 +86,19 @@ describe('time block writes on a copy of the demo vault', () => {
     }
   });
 
+  it('completes and reopens a scheduled task without changing its metadata or other vault files', () => {
+    const path = `${DAYS}/12.08.2026.md`;
+    const original = read(path);
+    const task = parseDay(original).tasks.find((item) => !item.done)!;
+    const source = ref(original, task.line);
+    const { differ } = run(path, (text) => editTask(text, source, undefined, true));
+    expect(differ).toEqual([path]);
+    const completed = readFileSync(join(copy, path), 'utf8');
+    expect(completed).toBe(original.replace(source.text, source.text.replace('[ ]', '[x]')).replace('done: 83', 'done: 100'));
+    expect(() => editTask(completed, source, undefined, false)).toThrow(/changed/);
+    expect(run(path, (text) => editTask(text, ref(completed, task.line), undefined, false)).differ).toEqual([]);
+  });
+
   it('deleting a task removes its line and its blocks only', () => {
     for (const { path, text, task } of trackedTasks()) {
       const { differ, old, now } = run(path, (t) => deleteTask(t, ref(text, task.line)));

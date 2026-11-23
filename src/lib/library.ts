@@ -559,6 +559,7 @@ export function isDate(value: string): boolean {
 // ---------------------------------------------------------------- a new note
 
 export interface MediaDraft {
+  trackList?: string[];
   title: string;
   maker: string;
   year: string;
@@ -706,6 +707,9 @@ export function mediaNoteText(spec: KindSpec, draft: MediaDraft, links: { overvi
       const written = value && (BARE[name]?.test(value) ? value : yamlText(value));
       lines.push(written ? `${key}: ${written}` : `${key}:`);
     }
+  }
+  if (spec.kind === 'album' && draft.trackList?.length) {
+    lines.push('tracks:', ...draft.trackList.map((title) => `  - ${yamlText(title)}`));
   }
   lines.push('---');
   const body: string[] = [];
