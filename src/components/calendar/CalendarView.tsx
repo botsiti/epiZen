@@ -1,5 +1,5 @@
 import { usePluginDisplay } from '../workspace/PluginDisplay';
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { addDays, formatDate, isoWeek, parseDate, sameDay, startOfWeek } from '../../lib/dates';
 import { formatMinutes, parseDay } from '../../lib/day';
 import type { CalendarEvent } from '../../lib/api';
@@ -12,7 +12,6 @@ import { shownHours } from '../../lib/schedule';
 import { addTask, syncPlanDone } from '../../lib/edits';
 import { addTaskWithFocusId, deleteTask, editTask, focusIdOf, newTaskLabel, withFocusId, type TaskEdit } from '../../lib/timeblocks';
 import { dayKey } from '../../lib/timer';
-import { followPointer } from '../periodic/effects';
 import { CountUp } from '../periodic/motion';
 import { primeChime } from './chime';
 import { TimeGrid, type Column, type GridPlan } from './TimeGrid';
@@ -236,22 +235,22 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
     timeZone: zone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatRange(editingPlan.event.start, editingPlan.event.end);
   return (
-    <div className="periodic-frame cal-frame" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)} data-testid="cal-view" data-mode={mode} data-start={columns[0]?.key}>
+    <div className="periodic-frame cal-frame" data-testid="cal-view" data-mode={mode} data-start={columns[0]?.key}>
       {(warning || plans.error || timeError) && (
         <p className="note-warning" data-testid="cal-warning">
           {[warning, plans.error, timeError].filter(Boolean).join(' ')}
         </p>
       )}
       <div className="cal-top">
-        <header className="hero glass cal-hero" data-testid="hero">
-          <div className="hero-main">
+        <header className="cal-hero" data-testid="hero">
+          <div>
             <div className="cal-hero-heading"><p className="kicker">{kicker}</p>
               {onSaveTimeZone && <CalendarZonePicker value={timeZone} instant={shown ? clock : calendarDayStart(first, zone)} onSave={async (next) => {
                 await onSaveTimeZone(next); setTimeError(undefined); setHighlight(undefined);
               }} />}
             </div>
             <div className="cal-hero-period">
-              <h1 className="hero-title cal-title" data-testid="cal-title">{title}</h1>
+              <h1 className="cal-title" data-testid="cal-title">{title}</h1>
               <p className="cal-summary">
                 {total ? <><CountUp value={total} format={formatMinutes} /> logged</> : 'Nothing logged yet'}
                 {plans.access === 'allowed' && (
@@ -259,23 +258,12 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
                 )}
               </p>
             </div>
-            {byCategory.length > 0 && (
-              <ul className="cal-legend" data-testid="cal-legend">
-                {byCategory.slice(0, 7).map(([name, { color, minutes }]) => (
-                  <li key={name} style={{ '--tone': color } as CSSProperties}>
-                    <span className="chip-dot" />
-                    <span className="cal-legend-name">{name}</span>
-                    <span className="cal-legend-time">{formatMinutes(minutes)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
-          <nav className="hero-nav">
-            <button type="button" className="nav-chip" onClick={() => step(-1)} title={mode === 'week' ? 'The week before' : 'The day before'} data-testid="cal-prev">
+          <nav className="cal-toolbar" aria-label="Calendar controls">
+            <button type="button" className="nav-chip cal-step" aria-label={`Previous ${mode}`} onClick={() => step(-1)} title={mode === 'week' ? 'The week before' : 'The day before'} data-testid="cal-prev">
               ‹
             </button>
-            <button type="button" className="nav-chip" onClick={() => step(1)} title={mode === 'week' ? 'The week after' : 'The day after'} data-testid="cal-next">
+            <button type="button" className="nav-chip cal-step" aria-label={`Next ${mode}`} onClick={() => step(1)} title={mode === 'week' ? 'The week after' : 'The day after'} data-testid="cal-next">
               ›
             </button>
             {!shown && (
@@ -300,7 +288,7 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
                 {plans.access === 'denied' ? 'Calendar is off ›' : 'Connect Apple Calendar'}
               </button>
             )}
-            <button type="button" className="nav-chip is-action" onClick={() => setAdding(true)} data-testid="cal-new-task">
+            <button type="button" className="nav-chip cal-add-task" onClick={() => setAdding(true)} data-testid="cal-new-task">
               + New task
             </button>
             <div className="switch" role="radiogroup" aria-label="Show">
@@ -319,6 +307,17 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
               ))}
             </div>
           </nav>
+          {byCategory.length > 0 && (
+            <ul className="cal-legend" data-testid="cal-legend">
+              {byCategory.slice(0, 7).map(([name, { color, minutes }]) => (
+                <li key={name} style={{ '--tone': color } as CSSProperties}>
+                  <span className="chip-dot" />
+                  <span className="cal-legend-name">{name}</span>
+                  <span className="cal-legend-time">{formatMinutes(minutes)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </header>
         {timerEnabled && <TimerCard timeZone={zone} timer={timer} tasks={todayTasks} categories={categories} onStart={onStartTimer} />}
       </div>
@@ -356,7 +355,7 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
           onHead={(day) => (single ? onOpenDay(day) : show('day', day))}
         />
         {single && (
-          <aside className="cal-side glass rise" data-testid="cal-day-tasks">
+          <aside className="cal-side" data-testid="cal-day-tasks">
             <p className="tile-label">The day’s tasks</p>
             <p className="cal-side-total">
               <CountUp value={single.total} format={formatMinutes} />
