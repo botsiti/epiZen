@@ -1282,6 +1282,10 @@
   font: italic 17px/1.4 var(--display);
 }
 
+.media-tracks li, .track-choices li { min-width: 0; }
+.media-tracks li > span, .track-choices li > span { overflow-wrap: anywhere; }
+.media-track-number, .track-star { flex-shrink: 0; }
+
 .media-track-number {
   color: var(--accent);
   font: 600 11.5px var(--numbers);

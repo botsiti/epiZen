@@ -6,7 +6,8 @@ with its app archive and validation notes.
 ## 0.20.0 — 2026-11-23
 
 Complete or reopen a linked daily task directly in Calendar. Its scheduled block shows a check
-and the daily note reflects the change. [Full release notes](releases/0.20.0.md).
+and the daily note reflects the change. New albums can import their Wikipedia track list on save.
+Previously imported titles with fraction formatting are readable again. [Full release notes](releases/0.20.0.md).
 
 ## 0.19.1 — 2026-11-23
 

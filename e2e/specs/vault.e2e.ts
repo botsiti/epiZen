@@ -498,8 +498,10 @@ describe('the demo vault', () => {
     const path = 'Rating/music/Dog Man Star.md';
     await $(`[data-testid="media-page"][data-path="${path}"]`).waitForDisplayed();
     expect(readFileSync(join(vaultCopy(), path), 'utf8')).toBe(
-      '---\nArtist: Suede\nYear: 1994\nlistened: 2026-10-07\ngenre:\n  - britpop\n  - glam rock\n  - art rock\nrating: 86\nfavorite tracks:\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[dog-man-star.png|240]]\n',
+      '---\nArtist: Suede\nYear: 1994\nlistened: 2026-10-07\ngenre:\n  - britpop\n  - glam rock\n  - art rock\nrating: 86\nfavorite tracks:\ntracks:\n  - Introducing the Band\n  - We Are the Pigs\n  - Heroine\n  - The Wild Ones\n  - Daddy\'s Speeding\n  - The Power\n  - New Generation\n  - This Hollywood Life\n  - The 2 of Us\n  - Black or Blue\n  - The Asphalt World\n  - Still Life\n---\n[[00. Music 2026 MOC|music 2026]]\n\n![[dog-man-star.png|240]]\n',
     );
+    await expect($('[data-testid="media-tracks"] [aria-label="Favorite Still Life"]')).toBeDisplayed();
+    await screenshot('53-album-auto-tracks');
     // The recorded cover is a PNG, so it was saved as .png though asked for as .jpg.
     const saved = readFileSync(join(vaultCopy(), 'Rating/music/_attachments/dog-man-star.png'));
     expect(['cover-1.png', 'cover-2.png', 'cover-3.png'].some((name) => readFileSync(join(FIXTURES, name)).equals(saved))).toBe(true);

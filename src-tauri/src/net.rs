@@ -458,6 +458,9 @@ mod e2e {
             {
                 include_bytes!("../../test/fixtures/covers/musicbrainz-antics.json")
             }
+            "en.wikipedia.org" if param("gsrsearch") == "Dog Man Star Suede album" => {
+                include_bytes!("../../test/fixtures/lookup/wikipedia-dog-man-star.json")
+            }
             "en.wikipedia.org" if param("gsrsearch") == "Antics Interpol album" => {
                 include_bytes!("../../test/fixtures/covers/wikipedia-album.json")
             }

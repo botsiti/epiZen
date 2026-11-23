@@ -297,3 +297,24 @@ it('keeps manual entry available when the selected catalogue fails and can recov
   await user.type(screen.getByTestId('add-search'), ' 3.0');
   expect(await screen.findByTestId('add-result')).toHaveTextContent('Life 3.0');
 });
+
+it.each([true, false])('saves a new album and its available Wikipedia listing (online=%s)', async (online) => {
+  vi.mocked(lookupJson).mockImplementation((url) => {
+    if (!online) return Promise.reject(new Error('offline'));
+    const file = url.includes('action=parse') ? 'wikipedia-album-tracks' : 'wikipedia-dog-man-star';
+    return Promise.resolve(JSON.parse(readFileSync(`test/fixtures/lookup/${file}.json`, 'utf8')) as unknown);
+  });
+  const user = userEvent.setup();
+  const spec = { ...kindSpec('album'), source: 'musicbrainz' as const };
+  render(<AddMedia spec={spec} files={files} today={new Date(2026, 10, 23)} onClose={vi.fn()} onCreated={vi.fn().mockResolvedValue(undefined)} />);
+  await user.click(screen.getByTestId('add-manual'));
+  await user.type(screen.getByTestId('add-title'), 'Dog Man Star');
+  await user.type(screen.getByTestId('add-maker'), 'Suede');
+  expect(lookupJson).not.toHaveBeenCalled();
+  await user.click(screen.getByTestId('add-save'));
+  await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+  const text = vi.mocked(createNote).mock.calls[0]![1];
+  expect(text).toContain('favorite tracks:\n');
+  if (online) expect(text).toContain('tracks:\n  - Introducing the Band\n  - We Are the Pigs');
+  else expect(text).not.toContain('\ntracks:');
+});

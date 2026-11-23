@@ -437,8 +437,10 @@ Letterboxd's film page; their palette is Epizen's. The covers bring the colour.
   vault's hidden `.trash` folder, where it can be restored. Attachments remain available.
 - Genres and tags have an add/edit chip on the media page. Their values are ordinary YAML lists;
   each save checks that the edited property still matches what the dialog opened with.
-- Albums can look up track listings on Wikipedia. Choose the album page and track listing, then
-  star favorites. Stars use the sage accent. The full `tracks` list and `favorite tracks` are
+- Saving an album in Library looks up its Wikipedia track listing. The selected Wikipedia album
+  page or a unique album-title and artist match supplies the standard listing. An unavailable
+  lookup or ambiguous match leaves the manual picker available. Existing albums can choose a
+  page and edition, then star favorites. Stars use the sage accent. The full `tracks` list and `favorite tracks` are
   saved together in the Markdown frontmatter; the free-text Thoughts section stays editable below.
 
 ## Tabs and the right sidebar

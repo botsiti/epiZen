@@ -18,7 +18,8 @@ export function setMediaLists(text: string, changes: readonly ListChange[]): str
     if (doc.errors.length || !isMap(doc.contents)) throw new Error('The note’s properties are not readable.');
     const current = propertyList(field(parseNote(text).properties, change.key));
     if (JSON.stringify(current) !== JSON.stringify(change.before)) throw new Error(`${change.key} changed while editing. Reopen the editor to use the latest values.`);
-    const values = [...new Set(change.after.map((value) => value.trim()).filter(Boolean))];
+    const items = change.after.map((value) => value.trim()).filter(Boolean);
+    const values = change.key === 'tracks' ? items : [...new Set(items)];
     if (values.some((value) => /[\r\n]/.test(value))) throw new Error('Each value must be a single line.');
     if (JSON.stringify(current) === JSON.stringify(values)) continue;
     const pairs = doc.contents.items.filter((pair) => isScalar(pair.key) && String(pair.key.value).toLowerCase() === change.key.toLowerCase());

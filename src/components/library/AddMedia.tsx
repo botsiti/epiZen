@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createNote, fetchImageIntoVault, lookupJson, type VaultFile } from '../../lib/api';
 import {
   coverPath,
@@ -12,6 +12,7 @@ import {
   type KindSpec,
   type MediaDraft,
 } from '../../lib/library';
+import { lookupAlbumTracks } from '../../lib/albumTracks';
 import { formatDate } from '../../lib/dates';
 import { readDay } from '../../lib/datePicker';
 import type { PodcastArtwork } from '../../lib/podcasts';
@@ -291,6 +292,11 @@ function AddForm({
     date: isoDate(today),
     started: '',
   }));
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
   const [genre, setGenre] = useState('');
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -306,10 +312,16 @@ function AddForm({
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
+    if (saving) return;
     const problem = draftProblem(draft) ?? (target.taken ? `There is a note called “${target.path.split('/').pop()}” already. Change the title to keep both.` : undefined);
     if (problem) return setError(problem);
     setSaving(true);
     setError(undefined);
+    // Tracks are optional enrichment. The album can still be saved offline and filled in later.
+    const trackList = spec.kind === 'album'
+      ? await lookupAlbumTracks(draft.title, draft.maker, result, lookupJson).catch(() => [])
+      : undefined;
+    if (!active.current) return;
     let cover: string | undefined;
     if (result?.cover && !noCover) {
       try {
@@ -320,8 +332,9 @@ function AddForm({
         return setError(`The cover couldn't be downloaded: ${reason(err)}. Save again to add the ${spec.one} without it.`);
       }
     }
+    if (!active.current) return;
     const year = Number((draft.date || isoDate(today)).slice(0, 4));
-    const text = mediaNoteText(spec, draft, { overview: findOverview(spec, files, year), cover });
+    const text = mediaNoteText(spec, { ...draft, trackList }, { overview: findOverview(spec, files, year), cover });
     try {
       await createNote(target.path, text);
     } catch (err) {
@@ -333,7 +346,7 @@ function AddForm({
 
   const rating = /^\d{1,3}$/.test(draft.rating) ? Math.min(100, Number(draft.rating)) : undefined;
   return (
-    <form className="add-body add-form" onSubmit={(event) => void save(event)} data-testid="add-form">
+    <form className="add-body add-form" inert={saving} aria-busy={saving} onSubmit={(event) => void save(event)} data-testid="add-form">
       <div className="add-form-cover">
         <LookupCover url={noCover ? undefined : result?.cover} title={draft.title || 'No cover'} className={`add-cover is-${spec.kind}`} onFound={(found) => !found && setNoCover(true)} />
         <RatingRing value={rating} onSet={(value) => set({ rating: String(value) })} size={136} />
