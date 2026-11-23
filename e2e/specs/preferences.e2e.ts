@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { snapshotVault, diffSnapshots } from '../../scripts/vault-snapshot.mjs';
 import { vaultCopy } from '../paths';
-import { prepareWindow, pressCommand, screenshot, scrollIntoView } from '../support';
+import { clickAs, prepareWindow, pressCommand, screenshot, scrollIntoView } from '../support';
 
 const root = join(dirname(vaultCopy()), 'preferences-vault');
 async function select(css: string, value: string) {
@@ -205,15 +205,17 @@ describe('focused preferences and file creation', () => {
     await pressCommand('e');
     const target = '[data-testid="editor"] .cm-content';
     await $(target).waitForDisplayed();
+    await $(target).click();
     await pressCommand('b', { target });
-    await browser.keys('A thought');
+    // Keep the caret between the Markdown markers. Driver keys don't insert contenteditable text.
+    await browser.execute(() => document.execCommand('insertText', false, 'A thought'));
     await pressCommand('s', { target });
     await expect($('[data-testid="save-state"]')).toHaveText('Saved');
     await pressCommand('e', { target });
-    await $(source).click({ button: 'right' });
-    await $('[role="menuitem"]=Move to folder…').click();
+    await clickAs(source, 'right');
+    await $('[data-testid="note-menu"]').$('button=Move to folder…').click();
     await $('[role="dialog"] input[type="search"]').setValue('vault');
-    await expect($('[role="dialog"] button=Top of the vault')).toBeDisplayed();
+    await expect($('[role="dialog"]').$('button=Top of the vault')).toBeDisplayed();
     await screenshot('175-move-note');
     await browser.keys('Escape');
     await browser.execute((selector) => {
