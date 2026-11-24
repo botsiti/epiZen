@@ -2,7 +2,6 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type InputHTMLAttr
 import { addDays, day, formatDate, sameDay, startOfMonth, today as currentDay } from '../lib/dates';
 import { dayValue, moveDay, openingMonth, pickerWeeks, readDay, shiftMonths } from '../lib/datePicker';
 import { Layer } from './Layer';
-import { followPointer } from './periodic/effects';
 import './periodic/periodic.css';
 import './DateField.css';
 
@@ -242,7 +241,6 @@ function Calendar({ id, anchor, panelRef, value, today, label, keyboard, onPick,
         aria-label={`${label}: pick a day`}
         // The field keeps the focus while the calendar is pressed, so typing goes on there.
         onMouseDown={(event) => event.preventDefault()}
-        onPointerMove={followPointer}
         onKeyDown={keys}
         data-testid="date-picker"
       >

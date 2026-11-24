@@ -1,4 +1,4 @@
-import { useMemo, type PointerEvent, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { formatMinutes } from '../../lib/day';
 import { addMonths, formatDate, startOfMonth } from '../../lib/dates';
 import { lifeXp, progress, rankOf, sphereXp, streak } from '../../lib/home';
@@ -6,7 +6,7 @@ import { questsIn, questSphereXp, questXp, type Quest, type QuestChange, type Qu
 import type { MediaEntry } from '../../lib/library';
 import type { Period } from '../../lib/periodic';
 import type { DayEntry } from '../../lib/rollup';
-import { followPointer, order } from '../periodic/effects';
+import { order } from '../periodic/effects';
 import { CountUp } from '../periodic/motion';
 import { Bar, Section } from '../periodic/parts';
 import { QuestBoard } from '../periodic/Quests';
@@ -73,7 +73,7 @@ export function Home(props: HomeProps) {
   const thisMonth = useMemo(() => questsIn(props.quests, month, addMonths(month, 1)), [props.quests, month]);
   const todayEntry = dayOf(today);
   return (
-    <div className="periodic-frame home-frame" data-testid="home" onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}>
+    <div className="periodic-frame home-frame" data-testid="home">
       {sections.profile ? <Hero {...props} xp={xp} streak={run} todayEntry={todayEntry} /> : <header className="insights-header"><p className="kicker">{props.vaultName}</p><h1>Home</h1></header>}
       {sections.memento && <Memento today={today} birth={props.birthDate} years={props.lifetimeYears} i={1} />}
       {props.statisticsEnabled !== false && <div className="home-shortcuts"><button className="shelf-all" onClick={props.onSeeSummaries} data-testid="open-summaries">Summaries →</button><button className="shelf-all" onClick={props.onSeeStatistics}>Statistics →</button></div>}

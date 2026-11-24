@@ -105,3 +105,11 @@ it('balances new and removed destinations to the hundredth of a percent', () => 
   expect(removeRewardShare(split, 2)).toEqual(shares);
   expect(addRewardShare([{ area: 'social', percent: '80' }], 'finance')[1]?.percent).toBe('20');
 });
+
+it('offers routine by default but honors a configured archived routine', () => {
+  expect(taskTags([])).toContain('routine');
+  const draft = editQuestPreferences(undefined, 0, first);
+  expect(taskTags([], saveQuestPreferences(draft))).toContain('routine');
+  draft.categories.push({ ...newTaskRule('routine', first, 1), tag: 'routine', archived: true });
+  expect(taskTags(['routine'], saveQuestPreferences(draft))).not.toContain('routine');
+});
