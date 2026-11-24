@@ -1476,6 +1476,13 @@ describe('the demo vault', () => {
     await expect($('[data-testid="edit-task-text"]')).toHaveValue('evening run');
     await expect($('[data-testid="edit-task"]')).toHaveText(expect.stringContaining('12 Aug'));
     await screenshot('56-calendar-edit-task');
+    await $('[data-testid="edit-task-category"][data-category="routine"]').click();
+    await $('[data-testid="edit-task-save"]').click();
+    await expect(plan).toHaveText(expect.stringContaining('routine'));
+    expect(readFileSync(file, 'utf8')).toBe(added.replace('#daily/sport', '#daily/routine'));
+    await plan.$('.cal-block-title').doubleClick();
+    await expect($('[data-testid="edit-task-category"][data-category="routine"]')).toHaveAttribute('aria-checked', 'true');
+    await $('[data-testid="edit-task-category"][data-category="sport"]').click();
     await $('[data-testid="edit-task-text"]').setValue('evening intervals');
     await $('[data-testid="edit-task-save"]').click();
     await expect(plan).toHaveText(expect.stringContaining('evening intervals'));

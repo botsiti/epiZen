@@ -38,10 +38,11 @@ export function questActivity(days: RecordedDay[], settings: RewardSettings) {
 }
 
 export function taskTags(observed: string[], settings?: RewardSettings): string[] {
-  if (!settings) return [...new Set([...observed, 'code', ...DEFAULT_TASK_TAGS])];
+  if (!settings) return [...new Set([...observed, 'code', 'routine', ...DEFAULT_TASK_TAGS])];
   const recognized = observed.map((name) => {
     const item = rewardCategory(settings, name);
     return item ? item.archived ? [] : [item.tag] : [name];
   });
-  return [...new Set([...recognized.flat(), ...settings.categories.filter((item) => !item.archived).map((item) => item.tag)])];
+  const routine = rewardCategory(settings, 'routine');
+  return [...new Set([...recognized.flat(), ...settings.categories.filter((item) => !item.archived).map((item) => item.tag), ...(!routine ? ['routine'] : [])])];
 }

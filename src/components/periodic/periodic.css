@@ -41,8 +41,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Glass: a card lit from above. A soft light follows the pointer across it, and lights the edge
-   nearest the pointer (after react-bits' SpotlightCard and BorderGlow). */
+/* Glass cards keep their stationary top light. */
 
 .glass {
   position: relative;
@@ -51,38 +50,6 @@
   border: 1px solid var(--glass-line);
   border-radius: 18px;
   box-shadow: var(--glass-top), var(--glass-shadow);
-}
-
-.glass::before,
-.glass::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity var(--motion-fast) ease-out;
-}
-
-.glass::before {
-  z-index: -1;
-  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 6%), transparent 65%);
-}
-
-.glass::after {
-  inset: -1px;
-  padding: 1px;
-  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, 50%), rgb(var(--accent-rgb) / 55%), transparent 70%);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-
-.glass:hover::before,
-.glass:hover::after {
-  opacity: 1;
 }
 
 .card {

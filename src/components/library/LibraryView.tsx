@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type PointerEvent } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { VaultFile } from '../../lib/api';
 import { formatDate, monthGrid } from '../../lib/dates';
@@ -28,7 +28,7 @@ import {
   type SortOrder,
 } from '../../lib/library';
 import { DEFAULT_SOURCES, type LibrarySources } from '../../lib/librarySources';
-import { followPointer, order } from '../periodic/effects';
+import { order } from '../periodic/effects';
 import { CountUp } from '../periodic/motion';
 import { Section, Tabs } from '../periodic/parts';
 import { ErrorBoundary } from '../ErrorBoundary';
@@ -178,7 +178,7 @@ export function LibraryView({ vaultRoot, library, files, tab, onTab, layout, onL
   const filterGenres = genreCounts(filterEntries(entries, activeFilters, shownTab, today, 'genres'));
 
   return (
-    <div className="periodic-frame library-frame" data-testid="library" data-tab={shownTab} data-layout={layout} onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)} onContextMenu={(event) => {
+    <div className="periodic-frame library-frame" data-testid="library" data-tab={shownTab} data-layout={layout} onContextMenu={(event) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>('[data-path]');
       const entry = everything.find((entry) => entry.path === target?.dataset.path);
       if (!entry) return;

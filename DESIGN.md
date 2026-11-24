@@ -149,8 +149,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 
 - **Width**: up to 1000px, wider than a note. Under 760px of pane the grids fold to one or two columns.
 - **Glass**: cards are a faint top-lit gradient over the page, a 1px hairline, an inner top light
-  and a soft drop shadow, radius 18px (24px for the hero). A soft light follows the pointer across
-  a card and lights its nearest edge in sage.
+  and a soft drop shadow, radius 18px (24px for the hero).
 - **Hero**: the period's name in the system serif (New York) at 58px, a kicker above it (weekday,
   ISO week, year) and the note's file name faint beside it. A quiet neutral surface keeps the day's summary readable immediately.
   A ring on the right shows the plan done. Below, chips to the day, week or month before and after
@@ -198,7 +197,7 @@ Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96. Pick from it.
 - **Motion**: shared tokens in `src/styles.css` set feedback to 140ms, state transitions to 200ms,
   entrances to 280ms and data changes to 420ms, with a smooth ease-out and no overshoot. Reading
   content appears in place; heroes and tab changes use a short fade. Charts draw briefly with
-  capped delays. Pointer-following light is coalesced to one update per frame; routine task and
+  capped delays. Routine task and
   habit ticks use their control's feedback, while a completed quest may give a small spark.
   Decorative light and foil stay still; the running timer keeps its useful activity pulse.
   Hover targets never shift layout. System reduced motion and the e2e

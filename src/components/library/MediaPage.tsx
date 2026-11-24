@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { VaultFile } from '../../lib/api';
 import type { LinkTarget } from '../../lib/completion';
@@ -6,7 +6,7 @@ import { parseNote } from '../../lib/frontmatter';
 import { coverEmbed, field, keyIn, readEntry, type KindSpec } from '../../lib/library';
 import { linkResolver } from '../../lib/links';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { followPointer, order } from '../periodic/effects';
+import { order } from '../periodic/effects';
 import { useVaultImage } from '../useVaultImage';
 import { FindCover } from './FindCover';
 import { RatingRing, ValueField } from './parts';
@@ -82,7 +82,7 @@ export function MediaPage(props: Props) {
       data-testid="media-page"
       data-path={path}
       data-kind={spec.kind}
-      onPointerMove={(event: PointerEvent<HTMLDivElement>) => followPointer(event)}
+
     >
       {warning && (
         <p className="note-warning" data-testid="media-warning">

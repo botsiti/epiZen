@@ -1,4 +1,4 @@
-import type { CSSProperties, PointerEvent } from 'react';
+import type { CSSProperties } from 'react';
 
 // The non-component half of the periodic pages' motion (motion.tsx has the components).
 
@@ -21,27 +21,6 @@ export function spark(x: number, y: number, color: string) {
   }
   document.body.append(burst);
   setTimeout(() => burst.remove(), 700);
-}
-
-let lightFrame: number | undefined;
-let lightTarget: { card: HTMLElement; x: number; y: number } | undefined;
-
-/** Coalesce pointer updates to one measurement and paint per frame. */
-export function followPointer(event: PointerEvent<HTMLElement>) {
-  if (still()) return;
-  const card = (event.target as Element).closest<HTMLElement>('.glass');
-  if (!card) return;
-  lightTarget = { card, x: event.clientX, y: event.clientY };
-  if (lightFrame !== undefined) return;
-  lightFrame = requestAnimationFrame(() => {
-    lightFrame = undefined;
-    const target = lightTarget;
-    lightTarget = undefined;
-    if (!target?.card.isConnected || still()) return;
-    const box = target.card.getBoundingClientRect();
-    target.card.style.setProperty('--mx', `${target.x - box.left}px`);
-    target.card.style.setProperty('--my', `${target.y - box.top}px`);
-  });
 }
 
 /** The entrance order of a card, for its staggered rise. */
