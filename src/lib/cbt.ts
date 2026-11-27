@@ -1,3 +1,4 @@
+import { dailySections } from './dailySections';
 import { lineEnding } from './text';
 
 // Thought records (CBT), as the vault's Obsidian wizard keeps them (Templates/Scripts/rpg-day.js):
@@ -70,7 +71,6 @@ export interface RecordInput {
 
 const HEADER = /^\|\s*\*\*situation/i;
 const SEPARATOR = /^\|[\s:|-]+\|\s*$/;
-const STREAM = /^#{1,6}\s+stream of consc/i;
 
 /** A table row's cells; `\|` (as in a [[link\|alias]]) stays inside its cell. */
 export const cells = (row: string) =>
@@ -151,10 +151,12 @@ export function addRecord(text: string, input: RecordInput, time: string): strin
     lines.splice(found.end, 0, row);
     return lines.join(eol);
   }
-  const stream = lines.findIndex((line) => STREAM.test(line));
+  const { stream, habits } = dailySections(lines);
   if (stream >= 0) {
     let end = lines.findIndex((line, i) => i > stream && /^#{1,6}\s/.test(line));
     if (end < 0) end = lines.length;
+    const nextHabit = habits.find(({ start }) => start > stream);
+    if (nextHabit) end = Math.min(end, nextHabit.start);
     // After the section's last line with text, then a blank line before the table.
     let at = end;
     while (at > stream + 1 && !(lines[at - 1] ?? '').trim()) at -= 1;

@@ -61,7 +61,7 @@
 .base-tool.is-active { color: var(--accent); background: var(--accent-soft); }
 .base-tool:disabled { opacity: .5; cursor: default; }
 .base-tool small { color: var(--accent); font-size: 10px; }
-.base-controls { display: flex; gap: 1px; position: relative; }
+.base-controls { display: flex; flex-wrap: wrap; max-width: 100%; gap: 1px; position: relative; }
 .base-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: min(520px, calc(100vw - 64px)); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px #0005; font-size: 12px; }
 .base-popover header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .base-popover header strong { font-weight: 550; }

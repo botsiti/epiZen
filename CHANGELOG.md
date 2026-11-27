@@ -3,6 +3,14 @@
 Each delivered version has a matching [GitHub Release](https://github.com/botsiti/epiZen/releases)
 with its app archive and validation notes.
 
+## 0.21.0 — 2026-11-27
+
+Calendar puts the daily or weekly activity breakdown behind the logged-time total and lets you
+choose the visible hours. New daily notes can follow Obsidian's naming and folder settings.
+Habits keep their order and stay out of the CBT stream. Sleep charts and day rows display hours
+and minutes. The File menu adds search, reveal, and other configurable shortcuts.
+[Full release notes](releases/0.21.0.md).
+
 ## 0.20.0 — 2026-11-23
 
 Complete or reopen a linked daily task directly in Calendar. Its scheduled block shows a check

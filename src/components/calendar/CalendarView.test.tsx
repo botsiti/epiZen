@@ -8,6 +8,7 @@ import { calendarDay } from '../../lib/calendarZone';
 import { parseDay } from '../../lib/day';
 import { at, taskUrl } from '../../lib/plans';
 import type { DayEntry } from '../../lib/rollup';
+import { DEFAULT_HOURS, type Hours } from '../../lib/schedule';
 import { dayKey, initialTimer } from '../../lib/timer';
 import { CalendarView } from './CalendarView';
 import type { TimerApi } from './useTimer';
@@ -164,7 +165,11 @@ describe('the calendar', () => {
     expect(within(column).getAllByTestId('cal-plan-delete')).toHaveLength(1);
     // The time logged is the tasks' minutes; the blocks under them aren't drawn.
     expect(within(column).queryByText('refactor the settings screen')).not.toBeInTheDocument();
-    expect(screen.getByTestId('cal-view')).toHaveTextContent('1h 28m logged · 2 events in Calendar');
+    const activity = screen.getByTestId('cal-activity');
+    expect(activity).toHaveTextContent('1h 28m logged');
+    expect(screen.queryByTestId('cal-planned')).toBeNull();
+    await userEvent.click(activity);
+    expect(screen.getByTestId('cal-planned')).toHaveTextContent('2 events in Calendar');
   });
 
   it('keeps adjacent short events labelled and reachable at the evening fold', async () => {
@@ -204,6 +209,7 @@ describe('the calendar', () => {
       url: taskUrl({ vault: 'demo-vault', note: 'day.md', id }),
     });
     expect(await within(column).findByTestId('cal-plan')).toHaveTextContent('code19:00–20:00refactor the settings screen');
+    await userEvent.click(screen.getByTestId('cal-activity'));
     expect(screen.getByTestId('cal-planned')).toHaveTextContent('1 event in Calendar');
   });
 
@@ -496,7 +502,9 @@ it('rejects a plan in a skipped hour before creating its task or event', async (
   render(<CalendarView timeZone={zone} focusDate={{ time: Date.parse('2026-03-08T18:00:00Z'), token: 1 }}
     dayOf={dayOf} textOf={textOf} categories={['code']} timer={timer()} onStartTimer={vi.fn()} onOpenDay={vi.fn()}
     onWrite={write} onWriteTask={vi.fn()} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />);
-  await waitFor(() => expect(screen.getByTestId('cal-planned')).toBeVisible());
+  fireEvent.click(screen.getByTestId('cal-activity'));
+  expect(await screen.findByTestId('cal-planned')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Close daily activity' }));
   fireEvent.click(screen.getByTestId('cal-fold-early'));
   fireEvent.pointerDown(screen.getByTestId('cal-col'), { button: 0, clientY: 2.5 * 52 });
   fireEvent.pointerUp(window, { clientY: 2.5 * 52 });
@@ -506,4 +514,70 @@ it('rejects a plan in a skipped hour before creating its task or event', async (
   expect(screen.getByTestId('cal-warning')).toHaveTextContent('does not exist');
   expect(write).not.toHaveBeenCalled();
   expect(calendar.events).toHaveLength(0);
+});
+
+it('shows the logged total in the header and opens a complete weekly breakdown on demand', async () => {
+  const week = 'Calendar/Week.md';
+  const open = vi.fn();
+  render(<CalendarView
+    timeZone="UTC" focusDate={{ time: DAY.getTime(), token: 2 }}
+    dayOf={dayOf} textOf={textOf} categories={['code', 'sport']} timer={timer()} timerEnabled={false}
+    onStartTimer={vi.fn()} onOpenDay={vi.fn()} onOpenLinkedNote={open} weekNote={() => week}
+    onWrite={vi.fn()} onWriteTask={vi.fn()} onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />);
+  const user = userEvent.setup();
+  if (screen.getByTestId('cal-view').dataset.mode === 'day') await user.click(screen.getByTestId('cal-mode-week'));
+  const trigger = screen.getByRole('button', { name: 'Show weekly activity' });
+  expect(trigger).toHaveTextContent('1h 28m logged');
+  expect(screen.queryByText('Productive')).toBeNull();
+  await user.click(trigger);
+  const summary = within(screen.getByRole('dialog', { name: 'Weekly activity' }));
+  expect(summary.getByText('code').parentElement).toHaveTextContent('code58m');
+  expect(summary.getByText('sport')).toBeVisible();
+  expect(summary.getByText('1 of 2 tasks done')).toBeVisible();
+  await user.click(summary.getByRole('button', { name: 'Close weekly activity' }));
+  expect(trigger).toHaveFocus();
+  await user.click(trigger);
+  await user.click(screen.getByRole('button', { name: 'Open weekly note' }));
+  expect(open).toHaveBeenCalledWith(week);
+});
+
+it('sets both day boundaries, preserves a failed draft, and temporarily unfolds the saved range', async () => {
+  const save = vi.fn<(value: Hours) => Promise<void>>().mockRejectedValueOnce(new Error('Settings busy')).mockResolvedValue(undefined);
+  function Display() {
+    const [hours, setHours] = useState(DEFAULT_HOURS);
+    return <CalendarView dayHours={hours} onSaveDayHours={async (next) => { await save(next); setHours(next); }}
+      dayOf={dayOf} textOf={textOf} categories={['code']} timer={timer()} timerEnabled={false}
+      onStartTimer={vi.fn()} onOpenDay={vi.fn()} onWrite={vi.fn()} onWriteTask={vi.fn()}
+      onTaskChanged={vi.fn()} vault="copy" planCalendars={{}} onChooseCalendar={vi.fn()} />;
+  }
+  render(<Display />);
+  const user = userEvent.setup();
+  const early = screen.getByTestId('cal-fold-early');
+  const late = screen.getByTestId('cal-fold-late');
+  fireEvent.contextMenu(late);
+  const end = screen.getByLabelText('Day ends');
+  expect(end).toHaveFocus();
+  await user.selectOptions(screen.getByLabelText('Day starts'), '480');
+  await user.selectOptions(end, '1380');
+  await user.click(screen.getByRole('button', {name: 'Save hours'}));
+  expect(screen.getByRole('alert')).toHaveTextContent('Settings busy');
+  expect(end).toHaveValue('1380');
+  expect(early).toHaveAttribute('title', 'Show 00:00–07:00');
+  await user.click(screen.getByRole('button', {name: 'Save hours'}));
+  expect(save).toHaveBeenLastCalledWith({ first: 480, last: 1380 });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(early).toHaveAttribute('title', 'Show 00:00–08:00');
+  expect(late).toHaveAttribute('title', 'Show 23:00–24:00');
+  await user.click(early);
+  expect(early).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByText('00:00')).toBeVisible();
+  await user.click(early);
+  expect(screen.queryByText('00:00')).toBeNull();
+  await user.click(screen.getByTestId('cal-day-hours'));
+  await user.selectOptions(screen.getByLabelText('Day starts'), '0');
+  await user.selectOptions(screen.getByLabelText('Day ends'), '1440');
+  await user.click(screen.getByRole('button', {name: 'Save hours'}));
+  expect(screen.queryByTestId('cal-fold-early')).toBeNull();
+  expect(screen.queryByTestId('cal-fold-late')).toBeNull();
+  expect(screen.getByTestId('cal-day-hours')).toHaveAttribute('aria-label', 'Day hours, 00:00 to 24:00');
 });

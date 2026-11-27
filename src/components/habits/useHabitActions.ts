@@ -14,7 +14,7 @@ interface Options {
   onDeleted?: (path: string, edits: NoteEdit[]) => void;
   onSaved: (path: string, text: string) => void;
   refresh: () => Promise<void>;
-  changeDay: (date: Date, edit: (text: string) => string | undefined) => Promise<{ path: string; text: string }>;
+  changeDay: (date: Date, edit: (text: string) => string | undefined, shownPath?: string) => Promise<{ path: string; text: string }>;
 }
 
 /** I/O stays here: definitions and completions use the existing conditional vault writes. */
@@ -87,18 +87,18 @@ export function useHabitActions({ root, habits, dailyPaths, onDeleted, onSaved, 
     }
     if (current.current.root === root) onDeleted?.(habit.path, updates);
   }), [serialize, checkRoot, root, onDeleted, refresh]);
-  const editDay = useCallback((date: Date, habit: Habit, edit: (text: string, fresh: Habit) => string) => serialize(async () => {
+  const editDay = useCallback((date: Date, habit: Habit, edit: (text: string, fresh: Habit) => string, shownPath?: string) => serialize(async () => {
     await checkRoot();
     if (!habit.path) throw new Error('Continue this historical habit to track it.');
     const source = await readNote(habit.path, root); const fresh = readHabit(habit.path, source);
     if (!fresh || !habitActive(fresh, date)) throw new Error('This habit is not scheduled on that date. Refresh its schedule.');
     if (fresh.id !== habit.id || fresh.source !== habit.source) throw new Error('The habit definition changed. Reopen it before logging.');
     await checkRoot();
-    await changeDay(date, (text) => edit(text, fresh));
+    await changeDay(date, (text) => edit(text, fresh), shownPath);
   }), [serialize, checkRoot, changeDay, root]);
-  const onComplete = (date: Date, habit: Habit, expected: boolean, done: boolean) =>
-    editDay(date, habit, (text, fresh) => setHabitCompletion(text, fresh, expected, done));
-  const onMeasure = (date: Date, habit: Habit, expected: number | undefined, value: number) =>
-    editDay(date, habit, (text, fresh) => setHabitValue(text, fresh, expected, value));
+  const onComplete = (date: Date, habit: Habit, expected: boolean, done: boolean, shownPath?: string) =>
+    editDay(date, habit, (text, fresh) => setHabitCompletion(text, fresh, expected, done), shownPath);
+  const onMeasure = (date: Date, habit: Habit, expected: number | undefined, value: number, shownPath?: string) =>
+    editDay(date, habit, (text, fresh) => setHabitValue(text, fresh, expected, value), shownPath);
   return { onCreate, onLifecycle, onComplete, onMeasure, onPersonalize, onSaveReward, onDelete };
 }

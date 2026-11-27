@@ -1,6 +1,6 @@
 import { PreferenceIcon } from './settings/icons';
 import './workspace/creation.css';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
 import type { TreeNode } from '../lib/tree';
 import { noteTitle } from '../lib/links';
 import { openClicks } from './workspace/clicks';
@@ -11,7 +11,14 @@ import { useNoteDrag } from './workspace/useNoteDrag';
 /** Opens a view; `newTab` for a ⌘-click or a middle click. */
 type Open = (newTab: boolean) => void;
 
+export interface SidebarCommands {
+  newFolder: () => void;
+  focusFiles: (selected?: boolean) => void;
+}
+
 interface Props {
+  ref?: Ref<SidebarCommands>;
+  revealedFile?: string;
   plugins?: PluginSettings;
   vaultName: string;
   tree: TreeNode[];
@@ -44,10 +51,20 @@ interface Props {
   calendar?: ReactNode;
 }
 
-export function Sidebar(props: Props) {
+export function Sidebar({ ref, ...props }: Props) {
   const { vaultName, tree, selected, isFolderOpen, onToggleFolder, onCollapseFolders, onOpenNote, onHome, onNewNote, onOpenFolder, onSettings, onGraph, onCalendar, onLibrary, onQuests, onStatistics, onHabits, onNoteMenu, timer, folderError, calendar } = props;
   const [creating, setCreating] = useState<string>();
   const newFolder = useRef<HTMLButtonElement>(null);
+  const fileTree = useRef<HTMLUListElement>(null);
+  useImperativeHandle(ref, () => ({
+    newFolder: () => newFolder.current?.click(),
+    focusFiles: (selected) => {
+      const row = selected && fileTree.current?.querySelector<HTMLButtonElement>('[aria-selected="true"] > button');
+      const target = row || fileTree.current?.querySelector('button') || fileTree.current;
+      target?.focus();
+      target?.scrollIntoView?.({ block: 'nearest' });
+    },
+  }), []);
   const drag = useNoteDrag(props.onMoveNote);
   const reveal = props.onRevealFolder;
   useEffect(() => {
@@ -56,7 +73,7 @@ export function Sidebar(props: Props) {
     const timer = setTimeout(() => reveal(folder), 650);
     return () => clearTimeout(timer);
   }, [drag.over, reveal]);
-  const visibleTree = tree.filter((node) => node.kind !== 'folder' || (node.path !== 'Habits' && node.path !== 'Templates'));
+  const visibleTree = tree.filter((node) => node.kind !== 'folder' || props.revealedFile?.startsWith(`${node.path}/`) || (node.path !== 'Habits' && node.path !== 'Templates'));
   const parentVisible = (nodes: TreeNode[], path: string): boolean => nodes.some((node) => node.kind === 'folder' && (node.path === path || (path.startsWith(`${node.path}/`) && parentVisible(node.children, path))));
   const closeFolder = () => { setCreating(undefined); newFolder.current?.focus(); };
   const folderDraft = (depth: number) => creating !== undefined && props.onCreateFolder && <InlineFolder key={creating} parent={creating} depth={depth} onCreate={props.onCreateFolder} onClose={closeFolder} />;
@@ -86,7 +103,7 @@ export function Sidebar(props: Props) {
           setCreating(parent);
         }} title="New folder" aria-label="New folder" data-testid="new-folder-button"><PreferenceIcon name="folder" /></button>}
       </div>
-      <ul className="tree" role="tree">
+      <ul className="tree" role="tree" aria-label="Files" tabIndex={-1} ref={fileTree}>
         {creating !== undefined && (!creating || !parentVisible(visibleTree, creating)) && folderDraft(0)}
         <TreeItems nodes={visibleTree} depth={0} selected={selected} isOpen={isFolderOpen} toggle={onToggleFolder} onOpenNote={onOpenNote} onNoteMenu={onNoteMenu} drag={drag} canMove={Boolean(props.onMoveNote)} draftParent={creating} folderDraft={folderDraft} />
       </ul>

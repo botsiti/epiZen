@@ -46,6 +46,15 @@ pub struct VaultFile {
     pub size: Option<u64>,
 }
 
+/// Only the naming fields of Obsidian's core daily notes configuration cross the bridge.
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct DailyNaming {
+    #[serde(default)]
+    pub folder: String,
+    #[serde(default)]
+    pub format: String,
+}
+
 /// A note's path and text, for reading the whole vault at once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NoteText {
@@ -121,6 +130,27 @@ impl Vault {
     /// The vault's canonical folder: which vault this is, when two share a name.
     pub fn root(&self) -> String {
         self.root.display().to_string()
+    }
+
+    pub fn daily_naming(&self) -> Option<DailyNaming> {
+        use std::io::Read;
+        let path = self.root.join(".obsidian/daily-notes.json");
+        if path.canonicalize().ok()? != path { return None; }
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(target_os = "macos")]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW_ANY | libc::O_NONBLOCK);
+        }
+        let file = options.open(path).ok()?;
+        const LIMIT: u64 = 16 * 1024;
+        let meta = file.metadata().ok()?;
+        if !meta.is_file() || meta.len() > LIMIT { return None; }
+        let mut bytes = Vec::new();
+        file.take(LIMIT + 1).read_to_end(&mut bytes).ok()?;
+        if bytes.len() > LIMIT as usize { return None; }
+        serde_json::from_slice(&bytes).ok()
     }
 
     /// Every note and image, sorted by path. Hidden files and folders (`.obsidian`,
@@ -792,6 +822,28 @@ mod tests {
         }
         let vault = Vault::open(dir.path()).unwrap();
         (dir, vault)
+    }
+
+    #[test]
+    fn daily_naming_ignores_malformed_oversized_and_linked_configuration() {
+        let (dir, vault) = vault_with(&[(".obsidian/daily-notes.json", "broken")]);
+        let file = dir.path().join(".obsidian/daily-notes.json");
+        assert!(vault.daily_naming().is_none());
+        fs::write(&file, format!(r#"{{"format":"{}"}}"#, "X".repeat(17 * 1024))).unwrap();
+        assert!(vault.daily_naming().is_none());
+        #[cfg(unix)]
+        {
+            let outside = tempfile::tempdir().unwrap();
+            let outside_file = outside.path().join("daily-notes.json");
+            fs::write(&outside_file, r#"{"folder":"outside"}"#).unwrap();
+            fs::remove_file(&file).unwrap();
+            std::os::unix::fs::symlink(&outside_file, &file).unwrap();
+            assert!(vault.daily_naming().is_none());
+            fs::remove_file(&file).unwrap();
+            fs::remove_dir(file.parent().unwrap()).unwrap();
+            std::os::unix::fs::symlink(outside.path(), file.parent().unwrap()).unwrap();
+            assert!(vault.daily_naming().is_none());
+        }
     }
 
     fn link_edit(path: &str, expected: &str, text: &str) -> NoteEdit {

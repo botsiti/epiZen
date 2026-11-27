@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clip, dragged, drawn, lanes, shownHours } from './schedule';
+import { calendarHours, calendarHourLabel, DEFAULT_HOURS, clip, dragged, drawn, lanes, shownHours } from './schedule';
 
 const min = (h: number, m: number) => h * 60 + m;
 const hours = shownHours(false, false);
@@ -47,4 +47,14 @@ describe('the calendar’s layout', () => {
     expect(dragged(block, 'move', -900)).toEqual({ start: 0, end: 13 });
     expect(dragged({ start: min(21, 30), end: min(22, 30) }, 'move', 180)).toEqual({ start: min(22, 59), end: min(23, 59) });
   });
+});
+
+it('validates stored whole-hour bounds, including a full or one-hour day', () => {
+  expect(calendarHours({ first: 0, last: 1440 })).toEqual({ first: 0, last: 1440 });
+  expect(calendarHours({ first: 1380, last: 1440 })).toEqual({ first: 1380, last: 1440 });
+  for (const bounds of [null, { first: 451, last: 1200 }, { first: -60, last: 1440 }, { first: 480, last: 480 }, { first: 480, last: 1500 }]) {
+    expect(calendarHours(bounds)).toBe(DEFAULT_HOURS);
+  }
+  expect(shownHours(false, true, { first: 480, last: 1200 })).toEqual({ first: 480, last: 1440 });
+  expect(calendarHourLabel(1440)).toBe('24:00');
 });

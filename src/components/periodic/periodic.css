@@ -319,6 +319,15 @@
   color: var(--tone);
 }
 
+.metric-tile.is-sleep { container-type: inline-size; }
+.metric-tile.is-sleep .tile-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2em;
+  font-size: clamp(18px, 20cqi, 30px);
+}
+
 .of {
   color: var(--text-faint);
   font-size: 15px;
@@ -1345,6 +1354,7 @@ button.habit-pill:hover, .daily-habit-row:focus-within .habit-pill {
 }
 
 .day-rows {
+  overflow-x: auto;
   display: grid;
 }
 

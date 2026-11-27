@@ -12,6 +12,7 @@ import { useHabitActions } from './components/habits/useHabitActions';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { calendarZonePreference } from './lib/calendarZone';
+import { calendarHours, type Hours } from './lib/schedule';
 import { CalendarView } from './components/calendar/CalendarView';
 import { chime } from './components/calendar/chime';
 import { HabitPreferences } from './components/habits/HabitPreferences';
@@ -62,6 +63,10 @@ import { vaultAssistantSettings, assistantPreferencesPatch } from './lib/assista
 import { TabBar } from './components/workspace/TabBar';
 import { useLocalGraph } from './components/workspace/useLocalGraph';
 import { useScrollMemory } from './components/workspace/useScrollMemory';
+import { flushSync } from 'react-dom';
+import { FileFinder } from './components/workspace/FileFinder';
+import { readFileKeys } from './components/workspace/fileShortcuts';
+import type { SidebarCommands } from './components/Sidebar';
 import { useShortcuts } from './components/workspace/useShortcuts';
 import { useExplorer } from './components/workspace/useExplorer';
 import { useWorkspace } from './components/workspace/useWorkspace';
@@ -168,6 +173,9 @@ export function App() {
   const [assistantRequested, setAssistantOpen] = useState(false);
   const [assistantCalendar, setAssistantCalendar] = useState<{ time: number; token: number }>();
   const [assistantCbt, setAssistantCbt] = useState<{ path: string; token: number; start?: boolean }>();
+  const sidebar = useRef<SidebarCommands>(null);
+  const [finder, setFinder] = useState<'recent' | 'search'>();
+  const [revealedPath, setRevealedPath] = useState<string>();
   const [leftOpen, setLeftOpen] = useState(true);
   const [loads, setLoads] = useState(0);
   const [folderError, setFolderError] = useState<string>();
@@ -228,7 +236,7 @@ export function App() {
       setTexts(new Map(read.map((note) => [note.path, note.text])));
       setSettings(stored);
       // The tabs and the right sidebar as they were left in this vault, never a note that is gone.
-      if (next.state === 'open') restore(stored.workspace, { vault: next.root, notes: new Set(found.filter((file) => file.kind === 'note' || file.kind === 'base').map((file) => file.path)) });
+      if (next.state === 'open') restore(stored.workspace, { vault: next.root, notes: new Set(found.map((file) => file.path)) });
       setRight(parseRightSidebar(stored.rightSidebar));
       setLeftOpen(stored.leftSidebarOpen !== false);
       setSetup((previous) => previous === 'create' ? 'create' : undefined);
@@ -266,9 +274,12 @@ export function App() {
     return () => void stop.then((unlisten) => unlisten());
   }, []);
 
-  const tree = useMemo(() => buildTree(files, folders), [files, folders]);
+  const revealedFile = view.kind === 'note' && view.path === revealedPath ? revealedPath : undefined;
+  const tree = useMemo(() => buildTree(files, folders, revealedFile), [files, folders, revealedFile]);
+  const fileKeys = useMemo(() => readFileKeys(settings.fileKeys), [settings.fileKeys]);
   const notes = useMemo(() => files.filter((file) => file.kind === 'note').map((file) => file.path.replace(/\.md$/i, '')), [files]);
-  const preferences = useMemo(() => vaultPreferences(settings, status?.state === 'open' ? status.root : ''), [settings, status]);
+  const dailyNaming = status?.state === 'open' ? status.dailyNaming : undefined;
+  const preferences = useMemo(() => vaultPreferences(settings, vault ?? '', dailyNaming), [settings, vault, dailyNaming]);
   const persistLibraryFilters = useCallback((filters: LibraryFilters) => updateSettings({ libraryFilters: filters }).then(() => undefined), []);
   const savedLibraryFilters = useLibraryFilters(settings.libraryFilters, status?.state === 'open', preferences.complete, persistLibraryFilters);
   const periodic = preferences.periodic;
@@ -533,6 +544,19 @@ export function App() {
     setLeftOpen(!leftOpen);
     void updateSettings({ leftSidebarOpen: !leftOpen }).catch(() => undefined);
   };
+  const showFiles = (command: 'show' | 'reveal' | 'folder') => {
+    if (command === 'reveal' && !currentNote) return;
+    flushSync(() => {
+      setLeftOpen(true);
+      if (command === 'reveal' && currentNote) {
+        setRevealedPath(currentNote);
+        revealExplorerFolder(noteFolder(currentNote));
+      }
+    });
+    if (!leftOpen) void updateSettings({ leftSidebarOpen: true }).catch(() => undefined);
+    if (command === 'folder') sidebar.current?.newFolder();
+    else sidebar.current?.focusFiles(command === 'reveal');
+  };
   const newNote = () => go({ kind: 'new', folder: creationFolder(preferences.fileDefaults, 'note', view.kind === 'note' ? view.path : undefined) });
   const createExplorerFolder = async (path: string) => {
     if (!vault) throw new Error('The open vault is unavailable.');
@@ -550,6 +574,7 @@ export function App() {
       setStatus(undefined);
       reset();
       resetExplorer();
+      setRevealedPath(undefined); setFinder(undefined);
       setLoads((n) => n + 1);
     } catch (err) {
       // The vault that was open stays open.
@@ -620,6 +645,11 @@ export function App() {
     toggleLeftSidebar: toggleLeft,
     toggleRightSidebar: toggleRight,
     toggleAssistant: () => { if (plugins.spike) setAssistantOpen((open) => !open); else go({ kind: 'settings', section: 'plugins' }); },
+    newFolder: () => showFiles('folder'),
+    revealCurrent: () => showFiles('reveal'),
+    showExplorer: () => showFiles('show'),
+    recentFiles: () => setFinder('recent'),
+    searchFiles: () => setFinder('search'),
     collapseFolders: explorer.collapseAll,
     newNote,
     settings: () => { if (view.kind !== 'settings') go({ kind: 'settings' }); },
@@ -633,7 +663,7 @@ export function App() {
       const target = prev.tabs[Math.min(at, prev.tabs.length - 1)];
       return target ? activate(prev, target.id) : prev;
     }),
-  }, status?.state === 'open' && !setup && !fileBusy);
+  }, status?.state === 'open' && !setup && !fileBusy, fileKeys);
   // A link to a missing day, week or month creates that note, like the calendar; any other
   // missing note is only explained, never created.
   const openLink = useCallback(
@@ -685,8 +715,15 @@ export function App() {
   // Changes a day's note. A day without one gets built-in starting text with the change already
   // in: if the change can't be made (for example, if its Tasks heading is missing), no note is created.
   const changeDay = useCallback(
-    async (date: Date, edit: (text: string) => string | undefined): Promise<{ path: string; text: string }> => {
+    async (date: Date, edit: (text: string) => string | undefined, shownPath?: string): Promise<{ path: string; text: string }> => {
       if (!vault) throw new Error('No vault is open.');
+      if (shownPath) {
+        const text = await changeNote(shownPath, (current) => {
+          assertPeriodicNote(shownPath, current, 'day', date, periodic, recognition);
+          return edit(current);
+        });
+        return { path: shownPath, text };
+      }
       const existing = periodicNotes.get(periodKey('day', date));
       if (existing) return { path: existing, text: await changeNote(existing, edit) };
       if (catalog.matches.has(periodKey('day', date))) throw new Error('Choose the calendar note for this day in Settings → Existing notes before adding tasks.');
@@ -800,7 +837,7 @@ export function App() {
       const [snapshot, found, latest] = await Promise.all([readAllNotes(), listFiles(), getSettings()]);
       const source = snapshot.find((note) => note.path === path);
       if (!source) throw new Error('This note is no longer in the vault.');
-      const scoped = vaultPreferences(latest, vault);
+      const scoped = vaultPreferences(latest, vault, dailyNaming);
       const linkEdits = renameLinkEdits(scoped.fileDefaults.updateLinks ? snapshot : [source], found, path, destination);
       const patch = relocatedNoteSettings(latest, vault, path, destination, source.text, scoped.periodic, scoped.recognition);
       try {
@@ -836,7 +873,7 @@ export function App() {
       fileOperation.current = false;
       setFileBusy(false);
     }
-  }, [vault, timer.state.session, timer.state.pending, catalog, update, go, refresh, revealExplorerFolder]);
+  }, [vault, dailyNaming, timer.state.session, timer.state.pending, catalog, update, go, refresh, revealExplorerFolder]);
   const moveFromExplorer = (path: string, folder: string) => {
     if (fileOperation.current) return;
     setFileActionError(undefined);
@@ -862,6 +899,11 @@ export function App() {
   const saveCalendarTimeZone = async (zone: string | undefined) => {
     const saved = await updateSettings({ calendarTimeZone: zone ?? null });
     setSettings((current) => ({ ...current, calendarTimeZone: saved.calendarTimeZone }));
+  };
+  const dayHours = useMemo(() => calendarHours(settings.calendarHours), [settings.calendarHours]);
+  const saveDayHours = async (hours: Hours) => {
+    const saved = await updateSettings({ calendarHours: hours });
+    setSettings((current) => ({ ...current, calendarHours: saved.calendarHours }));
   };
   const planCalendars = useMemo(() => {
     const stored = settings.planCalendars;
@@ -977,7 +1019,8 @@ export function App() {
       onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
       onDrop={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}>
       {wallpaper && <LiveWallpaper item={wallpaper} still={appearance.wallpaperStill} />}
-      {leftOpen && <Sidebar
+      {finder && <FileFinder key={status.root} mode={finder} root={status.root} files={files} texts={texts} recent={ws.recentFiles ?? []} onClose={() => setFinder(undefined)} onOpen={(path) => { setFinder(undefined); openNote(path); }} />}
+      {leftOpen && <Sidebar ref={sidebar} revealedFile={revealedFile}
         plugins={plugins}
         vaultName={status.name}
         tree={tree}
@@ -1103,11 +1146,11 @@ export function App() {
                 media={mediaPage}
                 genreSuggestions={mediaPage ? genreCounts(library.get(mediaPage.spec.kind) ?? []).map(([name]) => name) : []}
                 onManageHabits={() => go({ kind: 'habits' })}
-                onMeasureHabit={habitActions.onMeasure}
+                onMeasureHabit={(date, habit, expected, value) => habitActions.onMeasure(date, habit, expected, value, view.path)}
                 onHabitToggle={async (date, id, expected) => {
                   const habit = habitCatalog.habits.find((h) => h.id === id);
                   if (!habit) throw new Error('This habit is no longer available. Reopen Habits.');
-                  await habitActions.onComplete(date, habit, expected, !expected);
+                  await habitActions.onComplete(date, habit, expected, !expected, view.path);
                 }}
                 onQuestToggle={onQuestToggle}
                 onQuestProgress={onQuestProgress}
@@ -1121,7 +1164,7 @@ export function App() {
               </BasesProvider>
             )}
             {view.kind === 'calendar' && (
-              <CalendarView onOpenLinkedNote={openNote} timeZone={calendarTimeZone} onSaveTimeZone={saveCalendarTimeZone} focusDate={assistantCalendar} onFocusDate={() => setAssistantCalendar(undefined)}
+              <CalendarView onOpenLinkedNote={openNote} dayHours={dayHours} onSaveDayHours={saveDayHours} weekNote={(date) => weekOf(date).path} timeZone={calendarTimeZone} onSaveTimeZone={saveCalendarTimeZone} focusDate={assistantCalendar} onFocusDate={() => setAssistantCalendar(undefined)}
                 timerEnabled={plugins.timer}
                 dayOf={dayOf}
                 textOf={textOf}
@@ -1168,7 +1211,10 @@ export function App() {
             {view.kind === 'new' && view.item === 'base' && <NewBase root={status.root} folder={view.folder} folders={folders} onCreated={async (path) => { await refresh(); openNote(path); }} />}
             {view.kind === 'new' && view.item !== 'base' && <NewNote key={tab.index} folders={folders} folder={view.folder} onCreate={create} />}
             {view.kind === 'graph' && <GraphView graph={graph} onOpen={openNote} />}
-            {view.kind === 'settings' && <SettingsScreen key={status.root}
+            {view.kind === 'settings' && <SettingsScreen key={status.root} fileKeys={fileKeys} onSaveFileKeys={async (keys) => {
+                await updateSettings({ fileKeys: keys });
+                setSettings((current) => ({ ...current, fileKeys: keys }));
+              }}
               menuBarNotice={menuBar.problem && <p className="preferences-error" role="alert">{menuBar.problem} <button type="button" className="quiet-button" onClick={menuBar.retry}>Retry menu bar</button></p>}
               habitSettings={<HabitPreferences habits={habitCatalog.habits} problems={habitCatalog.problems} days={recordedDays} today={todayNote.date} areas={rewards?.areas} onOpenNote={openNote} {...habitActions} />}
               timerSettings={() => <div className="settings-focus-timer"><TimerCard timer={timer} tasks={taskRefs(todayEntry, todayEntry.path ? texts.get(todayEntry.path) : undefined)} categories={categories}

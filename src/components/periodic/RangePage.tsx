@@ -3,6 +3,7 @@ import { metricColor, metricMean } from '../../lib/metricStatus';
 import { habitColor, METRICS } from '../../lib/categories';
 import { noteTitle } from '../../lib/links';
 import { addDays, addMonths, formatDate, isoWeek, monthGrid, sameDay, startOfMonth, startOfWeek, today } from '../../lib/dates';
+import { averageSleepMinutes } from '../../lib/sleep';
 import { formatMinutes } from '../../lib/day';
 import { rollup, spread, type DayEntry, type Rollup } from '../../lib/rollup';
 import { Donut, LineChart, Ring, Sparkline } from './charts';
@@ -211,8 +212,8 @@ function DoneRing({ value, label }: { value?: number; label: string }) {
 function Totals({ sum, spec, span }: { sum: Rollup; spec: PeriodicSpec; span: number }) {
   const { totals } = sum;
   const metrics = [
-    ...METRICS.map(({ key, label, color }) => ({ key, label, color, max: spec.scales[key] ?? 5, unit: '' })),
-    { key: 'sleep', label: 'Sleep', color: '#6fa5e6', max: 10, unit: 'h' },
+    ...METRICS.map(({ key, label, color }) => ({ key, label, color, max: spec.scales[key] ?? 5 })),
+    { key: 'sleep', label: 'Sleep', color: '#6fa5e6', max: 10 },
   ];
   return (
     <>
@@ -240,12 +241,12 @@ function Totals({ sum, spec, span }: { sum: Rollup; spec: PeriodicSpec; span: nu
         </Tile>
       </div>
       <div className="tiles is-metrics" data-testid="averages">
-        {metrics.filter(({ key }) => sum.average(key) !== undefined).map(({ key, label, max, unit }, i) => {
-          const value = sum.average(key);
+        {metrics.filter(({ key }) => sum.average(key) !== undefined).map(({ key, label, max }, i) => {
+          const value = key === 'sleep' ? averageSleepMinutes(sum.series(key)) : sum.average(key);
           const tone = metricColor(key, metricMean(sum.days, key), max);
           return (
-            <Tile key={key} label={label} i={6 + i} tone={tone} className="metric-tile" meta={<Sparkline values={sum.series(key)} max={max} color={tone} />}>
-              {value === undefined ? <span className="faint">—</span> : <CountUp value={value} format={(n) => `${n.toFixed(1)}${unit}`} />}
+            <Tile key={key} label={label} i={6 + i} tone={tone} className={key === 'sleep' ? 'metric-tile is-sleep' : 'metric-tile'} meta={<Sparkline values={sum.series(key)} max={max} color={tone} />}>
+              {value === undefined ? <span className="faint">—</span> : <CountUp value={value} format={key === 'sleep' ? formatMinutes : (n) => n.toFixed(1)} />}
               <span className="of"> avg</span>
             </Tile>
           );
@@ -373,8 +374,7 @@ function DayRows({ days, actions, scales }: { days: DayEntry[]; actions: Periodi
   const summary = rollup(days);
   const metrics = METRICS.filter(({ key }) => summary.average(key) !== undefined);
   const sleep = summary.average('sleep') !== undefined;
-  const count = metrics.length + (sleep ? 1 : 0);
-  const columns = `140px minmax(120px, 1fr) 64px${count ? ` repeat(${count}, 56px)` : ''}`;
+  const columns = `140px minmax(120px, 1fr) 64px${metrics.length ? ` repeat(${metrics.length}, 56px)` : ''}${sleep ? ' 72px' : ''}`;
   return (
     <div className="day-rows" style={{ '--day-columns': columns } as CSSProperties} data-testid="day-rows">
       <div className="day-row is-head" aria-hidden="true">
@@ -402,7 +402,7 @@ function DayRows({ days, actions, scales }: { days: DayEntry[]; actions: Periodi
                 {day?.numbers[key] || '—'}
               </span>
             ))}
-            {sleep && <span style={{ color: metricColor('sleep', day?.numbers.sleep) }}>{day?.numbers.sleep ?? '—'}</span>}
+            {sleep && <span style={{ color: metricColor('sleep', day?.numbers.sleep) }}>{day?.numbers.sleep === undefined ? '—' : formatMinutes(day.numbers.sleep * 60)}</span>}
           </button>
         );
       })}
@@ -536,6 +536,7 @@ function Weeks({ spec, actions }: { spec: PeriodicSpec; actions: PeriodicActions
     <div className="week-cards">
       {weeks.map(({ monday, sum, note, found }, i) => {
         const done = sum.average('done');
+        const sleep = averageSleepMinutes(sum.series('sleep'));
         return (
           <div key={monday.getTime()} className={note.path ? 'week-card glass rise' : 'week-card glass rise is-missing'} style={order(i)} data-testid="week-card">
             <div className="week-card-head">
@@ -553,7 +554,7 @@ function Weeks({ spec, actions }: { spec: PeriodicSpec; actions: PeriodicActions
               </button>
             </div>
             <p className="week-card-line">
-              {sum.noted} days · {formatMinutes(sum.totals.logged)} · {sum.totals.xp} XP · mood {sum.average('mood') ?? '—'} · sleep {sum.average('sleep') === undefined ? '—' : `${sum.average('sleep')}h`}
+              {sum.noted} days · {formatMinutes(sum.totals.logged)} · {sum.totals.xp} XP · mood {sum.average('mood') ?? '—'} · sleep {sleep === undefined ? '—' : formatMinutes(sleep)}
             </p>
             {found && WEEK_HEADINGS.some((heading) => found[heading]) && (
               <ul className="week-card-reflections">

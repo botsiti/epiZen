@@ -149,9 +149,11 @@ export function NoteView(props: ViewProps) {
           return;
         }
         change((text) => {
-          const target = parseTasks(text).find((t) => t.line === task.line && t.done === task.done);
+          const target = parseTasks(text).find((t) => t.line === task.line && t.done === task.done && t.habit === task.habit && t.text === task.text);
+          if (!target) throw new Error('That checkbox changed in the note.');
+          const updated = toggleTask(text, target);
           // Plan done follows the ticks: the same write updates the day's `done`.
-          return target && syncPlanDone(toggleTask(text, target));
+          return task.habit ? updated : syncPlanDone(updated);
         }, 'Nothing was ticked');
       },
       onSetProperty: (key, value) => new Promise((settled) => change((text) => setProperty(text, key, value), `${key} wasn't set`, undefined, settled)),

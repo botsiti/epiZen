@@ -22,12 +22,12 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'bas
  * The sidebar tree: notes only, folders before notes, natural sort order.
  * Folders that hold no notes (an `_attachments` folder of covers) are left out.
  */
-export function buildTree(files: VaultFile[], folders: string[] = []): TreeNode[] {
+export function buildTree(files: VaultFile[], folders: string[] = [], revealFile?: string): TreeNode[] {
   const root: FolderNode = { kind: 'folder', name: '', path: '', children: [] };
   // Preserve image-only folder hiding, while making newly created empty folders visible.
   const empty = folders.filter((path) => !files.some((file) => file.path.startsWith(`${path}/`)));
   for (const file of [...empty.map((path) => ({ path: `${path}/`, kind: 'folder' })), ...files]) {
-    if (file.kind === 'image' || file.kind === 'attachment') continue;
+    if ((file.kind === 'image' || file.kind === 'attachment') && file.path !== revealFile) continue;
     const parts = file.path.split('/');
     let folder = root;
     for (const part of parts.slice(0, -1)) {
@@ -39,7 +39,7 @@ export function buildTree(files: VaultFile[], folders: string[] = []): TreeNode[
       }
       folder = next;
     }
-    if (file.kind === 'note' || file.kind === 'base') folder.children.push({ kind: 'note', name: noteTitle(file.path), path: file.path });
+    if (file.kind !== 'folder') folder.children.push({ kind: 'note', name: noteTitle(file.path), path: file.path });
   }
   sortTree(root);
   return root.children;

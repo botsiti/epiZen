@@ -42,6 +42,12 @@ const TODAY = (() => {
   const now = new Date();
   return `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
 })();
+async function expectCalendarEventCount(count: number) {
+  await $('[data-testid="cal-activity"]').click();
+  await expect($('[data-testid="cal-planned"]')).toHaveText(`${count} events in Calendar`);
+  await $('button[aria-label="Close weekly activity"]').click();
+}
+
 const title = () => $('[data-testid="note-title"]');
 const ALBUM = 'Rating/music/Glasshouse Weather.md';
 const FILM = 'Rating/kino/The Lighthouse Accountant.md';
@@ -846,6 +852,27 @@ describe('the demo vault', () => {
     await expect(sidebar).not.toBeExisting();
   });
 
+  it('reveals a file from a hidden sidebar and opens a vault search result from the keyboard', async () => {
+    const before = snapshotVault(vaultCopy());
+    await startWithTabs([ALBUM]);
+    await pressCommand('3', { control: true });
+    await pressCommand('7');
+    await expect($('.sidebar')).not.toBeExisting();
+    await pressCommand('r', { shift: true });
+    await expect($(`[role="tree"] [data-path="${ALBUM}"]`)).toBeFocused();
+    await pressCommand('f', { shift: true });
+    const finder = $('[role="dialog"][aria-label="Search in all files"]');
+    try {
+      await finder.$('input[type="search"]').setValue('Lighthouse Accountant');
+      await screenshot('file-search-results');
+      await $(`button=${FILM}`).click();
+    } finally {
+      if (await finder.isExisting()) await finder.$('button[aria-label="Close"]').click();
+    }
+    await waitForNote(FILM);
+    expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
+  });
+
   it('workspace shortcuts: collapses folders, toggles sidebars and opens useful destinations', async () => {
     const before = snapshotVault(vaultCopy());
     await startWithTabs([ALBUM, FILM]);
@@ -1256,6 +1283,10 @@ describe('the demo vault', () => {
     await showTab('Habits');
     await expect($('[data-testid="habit-grid"]')).toBeDisplayed();
     await screenshot('30-week-habits');
+    await showTab('Days');
+    const friday = $('[data-testid="day-row"]*=Fri 14 Aug');
+    await expect(friday).toHaveText(expect.stringContaining('6h 6m'));
+    await screenshot('week-sleep-durations');
     await showTab('Stats');
     await screenshot('31-week-stats');
 
@@ -1395,7 +1426,7 @@ describe('the demo vault', () => {
     await expect($('[data-testid="cal-allday"]')).toHaveText(expect.stringContaining('Summer holiday'));
     // The time logged is the notes' minutes; the time blocks under their tasks aren't drawn.
     await expect($('[data-testid="cal-col"][data-date="2026-08-14"]')).not.toHaveText(expect.stringContaining('refactor the settings screen'));
-    await expect($('[data-testid="cal-planned"]')).toHaveText(expect.stringContaining('2 events in Calendar'));
+    await expectCalendarEventCount(2);
     await browser.waitUntil(() => browser.execute(() => {
       const pane = document.querySelector('.main');
       const late = document.querySelector('[data-testid="cal-fold-late"]');
@@ -1404,6 +1435,25 @@ describe('the demo vault', () => {
       return Math.abs(gap) <= 2 && pane.scrollHeight <= pane.clientHeight + 1;
     }), { timeoutMsg: 'the time grid must fill the calendar pane through the late-hours control' });
     await screenshot('44-calendar-week');
+    await $('[data-testid="cal-activity"]').click();
+    await expect($('dialog[aria-modal="true"]')).toHaveText(expect.stringContaining('Weekly activity'));
+    await screenshot('44-calendar-weekly-activity');
+    await $('button[aria-label="Close weekly activity"]').click();
+    const clock = $('[data-testid="cal-day-hours"]');
+    await clock.click();
+    await selectOption('.cal-hours-form label:first-child select', String(8 * 60));
+    await selectOption('.cal-hours-form label:last-child select', String(23 * 60));
+    await screenshot('44-calendar-day-hours');
+    await $('button=Save hours').click();
+    await expect(clock).toHaveAttribute('aria-label', 'Day hours, 08:00 to 23:00');
+    await $('[data-testid="sidebar-vault"]').click();
+    await $('[data-testid="open-calendar"]').click();
+    await expect(clock).toHaveAttribute('aria-label', 'Day hours, 08:00 to 23:00');
+    await clock.click();
+    await selectOption('.cal-hours-form label:first-child select', String(7 * 60));
+    await selectOption('.cal-hours-form label:last-child select', String(22 * 60));
+    await $('button=Save hours').click();
+    await expect(clock).toHaveAttribute('aria-label', 'Day hours, 07:00 to 22:00');
     // Noon UTC on Friday becomes 02:00 Saturday across the date line.
     await $('[data-testid="cal-time-zone"]').click();
     await $('[aria-label="Search time zones"]').setValue('Kiritimati');
@@ -1468,7 +1518,7 @@ describe('the demo vault', () => {
     await expect(plan).toHaveText(expect.stringContaining('sport'));
     await expect(plan).toHaveText(expect.stringContaining('evening run'));
     await expect(plan).toHaveAttribute('data-start', String(19 * 60));
-    await expect($('[data-testid="cal-planned"]')).toHaveText(expect.stringContaining('3 events in Calendar'));
+    await expectCalendarEventCount(3);
     await browser.execute(() => document.querySelector('[data-testid="cal-col"][data-date="2026-08-12"] [data-testid="cal-plan"]')?.scrollIntoView({ block: 'center' }));
     await screenshot('56-calendar-plans');
     const beforeEdit = snapshotVault(vaultCopy());
@@ -1479,7 +1529,7 @@ describe('the demo vault', () => {
     await $('[data-testid="edit-task-category"][data-category="routine"]').click();
     await $('[data-testid="edit-task-save"]').click();
     await expect(plan).toHaveText(expect.stringContaining('routine'));
-    expect(readFileSync(file, 'utf8')).toBe(added.replace('#daily/sport', '#daily/routine'));
+    expect(readFileSync(file, 'utf8')).toBe(added.replace('#daily/sport — evening run', '#daily/routine — evening run'));
     await plan.$('.cal-block-title').doubleClick();
     await expect($('[data-testid="edit-task-category"][data-category="routine"]')).toHaveAttribute('aria-checked', 'true');
     await $('[data-testid="edit-task-category"][data-category="sport"]').click();
@@ -2167,6 +2217,15 @@ describe('the demo vault', () => {
     await openNote(todayPath);
     await showTab('Habits');
     await expect($(`[data-habit-id="${id}"]`)).toBeDisplayed();
+    const order = () => browser.execute(() => [...document.querySelectorAll('.habit-pills .habit-label')].map((node) => node.textContent));
+    const beforeToggle = await order();
+    await $(`[data-habit-id="${id}"]`).click();
+    await expect($(`[data-habit-id="${id}"]`)).toHaveAttribute('aria-pressed', 'false');
+    expect(await order()).toEqual(beforeToggle);
+    await $(`[data-habit-id="${id}"]`).click();
+    await expect($(`[data-habit-id="${id}"]`)).toHaveAttribute('aria-pressed', 'true');
+    await showTab('CBT');
+    expect(await $('.tab-panel').getText()).not.toContain('[habit::');
     await showTab('Overview');
     const bands = [['Mood', 3, 'yellow'], ['Energy', 4, 'green'], ['Focus', 2, 'red'], ['Social', 3, 'yellow']] as const;
     for (const [label, value, status] of bands) {

@@ -1,6 +1,6 @@
-import { filePreferences, type FilePreferences } from './filePreferences';
+import { filePreferences, folderProblem, type FilePreferences } from './filePreferences';
 import type { NoteText, Settings } from './api';
-import { PERIODS, builtInPeriodicText, periodicPath, periodicSettings, recognitionSettings, type PeriodicRecognition, type PeriodicSettings } from './periodic';
+import { DEFAULT_PERIODIC, periodicNamingError, rememberPeriodic, PERIODS, builtInPeriodicText, periodicPath, periodicSettings, recognitionSettings, type PeriodicRecognition, type PeriodicSettings } from './periodic';
 
 const object = (value: unknown): Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
@@ -10,13 +10,24 @@ export const STARTER_PERIODIC: PeriodicSettings = {
   month: { folder: 'Calendar', format: 'YYYY/[months]/YYYY-MM', template: '' },
 };
 
-export function vaultPreferences(settings: Settings, root: string) {
+export function vaultPreferences(settings: Settings, root: string, dailyNaming?: { folder: string; format: string }) {
   const stored = object(object(settings.vaults)[root]);
   // Bind the former global setup to its first vault; never apply it to a second vault.
   const legacy = !Object.keys(stored).length && settings.periodic && settings.legacyPeriodicVault === root;
+  let periodic = periodicSettings(legacy ? settings : stored);
+  const day = periodic.day;
+  // Older setups persisted the root/ISO fallback even in configured Obsidian vaults.
+  // Explicit Epizen patterns and past choices take precedence.
+  if (dailyNaming && !day.folder && day.format === DEFAULT_PERIODIC.day.format && !day.history?.length
+      && !folderProblem(dailyNaming.folder)) {
+    const next = { ...day, folder: dailyNaming.folder, format: dailyNaming.format || DEFAULT_PERIODIC.day.format };
+    if (!periodicNamingError({ ...DEFAULT_PERIODIC, day: next })) {
+      periodic = rememberPeriodic(periodic, { ...periodic, day: next });
+    }
+  }
   return {
     complete: stored.complete === true || Boolean(legacy),
-    periodic: periodicSettings(legacy ? settings : stored),
+    periodic,
     fileDefaults: filePreferences(stored.fileDefaults),
     recognition: recognitionSettings(stored.recognition ?? { dateOrder: legacy && /^M/.test(periodicSettings(settings).day.format) ? 'mdy' : 'dmy' }),
   };

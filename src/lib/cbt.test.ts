@@ -1,3 +1,5 @@
+import { parseDay } from './day';
+
 import { describe, expect, it } from 'vitest';
 import { addRecord, deleteRecord, emotionOf, parseRecords, recordRow, updateRecord, type RecordInput } from './cbt';
 
@@ -117,4 +119,17 @@ describe('emotionOf', () => {
     expect(emotionOf('Calm')?.name).toBe('Peaceful');
     expect(emotionOf('guilt')).toBeUndefined();
   });
+});
+
+it('reads a legacy habit block beneath the stream without displaying it or swallowing later reflections', () => {
+  const block = '> [!habits]- Habits\n> - [x] Walk [habit::habit-walk-01]\n';
+  const original = '### stream of consc\nMy own words.\n\n' + block + '\n> Another quote.\n';
+  const changed = addRecord(original, INPUT, '08:00');
+  for (const source of [original, changed]) {
+    expect(parseDay(source).stream).toEqual(['My own words.', '> Another quote.']);
+    expect(parseDay(source).habits.map((r) => r.label)).toEqual(['Walk']);
+  }
+  expect(changed.indexOf('| **situation')).toBeLessThan(changed.indexOf(block));
+  expect(changed).toContain(block);
+  expect(parseRecords(changed)).toHaveLength(1);
 });

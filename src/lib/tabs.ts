@@ -30,8 +30,16 @@ export interface Tab {
   readonly pinned: boolean;
 }
 
+/** Keep the most recently viewed files across tab switches and closes. */
+export function rememberFrontFile(ws: Workspace): Workspace {
+  const path = notePath(currentView(activeTab(ws)));
+  if (!path || ws.recentFiles?.[0] === path) return ws;
+  return { ...ws, recentFiles: [path, ...(ws.recentFiles ?? []).filter((previous) => previous !== path)].slice(0, 50) };
+}
+
 /** The open tabs, pinned ones first, and the one in front. Never empty. */
 export interface Workspace {
+  readonly recentFiles?: readonly string[];
   readonly tabs: readonly Tab[];
   /** The id of the tab in front. */
   readonly active: number;
@@ -107,7 +115,7 @@ export function openTab(ws: Workspace, view: View): Workspace {
   const at = ws.tabs.findIndex((t) => t.id === ws.active);
   const tabs = [...ws.tabs];
   tabs.splice(at < 0 ? tabs.length : at + 1, 0, tab);
-  return { tabs: ordered(tabs), active: tab.id, next: ws.next + 1 };
+  return { ...ws, tabs: ordered(tabs), active: tab.id, next: ws.next + 1 };
 }
 
 /**
@@ -125,7 +133,7 @@ export function open(ws: Workspace, view: View, options: { newTab?: boolean } = 
 
 /** Every open and historical view of a renamed note follows its new path. */
 export function renameNoteViews(ws: Workspace, from: string, to: string): Workspace {
-  return { ...ws, tabs: ws.tabs.map((tab) => ({ ...tab, history: tab.history.map((view) => view.kind === 'note' && view.path === from ? { ...view, path: to } : view) })) };
+  return { ...ws, recentFiles: ws.recentFiles?.map((path) => path === from ? to : path), tabs: ws.tabs.map((tab) => ({ ...tab, history: tab.history.map((view) => view.kind === 'note' && view.path === from ? { ...view, path: to } : view) })) };
 }
 
 /** Changes the screen a tab shows in place, without a step in its history: the editor opening, the library's tab. */
@@ -174,7 +182,7 @@ export function close(ws: Workspace, id: number): Workspace {
   const at = ws.tabs.findIndex((tab) => tab.id === id);
   if (at < 0) return ws;
   const tabs = ws.tabs.filter((tab) => tab.id !== id);
-  if (!tabs.length) return { tabs: [{ id: ws.next, history: [HOME], index: 0, pinned: false }], active: ws.next, next: ws.next + 1 };
+  if (!tabs.length) return { ...ws, tabs: [{ id: ws.next, history: [HOME], index: 0, pinned: false }], active: ws.next, next: ws.next + 1 };
   const active = ws.active === id ? (tabs[Math.min(at, tabs.length - 1)] as Tab).id : ws.active;
   return { ...ws, tabs, active };
 }
@@ -243,6 +251,7 @@ export interface StoredTab {
 }
 
 export interface StoredWorkspace {
+  recentFiles?: readonly string[];
   /** The vault's folder: tabs only ever reopen in the vault they were open in. */
   vault: string;
   tabs: StoredTab[];
@@ -281,7 +290,7 @@ export function toStored(ws: Workspace, vault: string): StoredWorkspace {
     for (let i = tab.index; i >= 0 && !view; i -= 1) view = storable(tab.history[i] ?? HOME);
     return { view: view ?? HOME, pinned: tab.pinned };
   });
-  return { vault, tabs, active: Math.max(0, ws.tabs.findIndex((tab) => tab.id === ws.active)) };
+  return { vault, tabs, ...(ws.recentFiles?.length ? { recentFiles: ws.recentFiles } : {}), active: Math.max(0, ws.tabs.findIndex((tab) => tab.id === ws.active)) };
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -321,10 +330,14 @@ export function fromStored(value: unknown, context: { vault: string; notes: Read
     if (!view || !isObject(entry)) return;
     kept.push({ tab: { id: kept.length + 1, history: [view], index: 0, pinned: entry.pinned === true }, from });
   });
-  if (!kept.length) return newWorkspace();
+  const recentFiles = Array.isArray(value.recentFiles)
+    ? [...new Set(value.recentFiles.filter((path): path is string => typeof path === 'string' && context.notes.has(path)))].slice(0, 50)
+    : [];
+  const recent = recentFiles.length ? { recentFiles } : {};
+  if (!kept.length) return { ...newWorkspace(), ...recent };
   // The tab that was in front, or the nearest one left of it that is still here.
   const front = [...kept].reverse().find((k) => k.from <= wanted) ?? kept[0];
-  return { tabs: ordered(kept.map((k) => k.tab)), active: front?.tab.id ?? 1, next: kept.length + 1 };
+  return { ...recent, tabs: ordered(kept.map((k) => k.tab)), active: front?.tab.id ?? 1, next: kept.length + 1 };
 }
 
 // The right sidebar: open or not, and which of its panels are folded. Kept in the settings too.

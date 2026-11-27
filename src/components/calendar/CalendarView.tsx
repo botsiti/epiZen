@@ -4,11 +4,12 @@ import { addDays, formatDate, isoWeek, parseDate, sameDay, startOfWeek } from '.
 import { formatMinutes, parseDay } from '../../lib/day';
 import type { CalendarEvent } from '../../lib/api';
 import { allDayOn, calendarFor, planText, planTimes, plansOn, taskUrl, type PlanBlock, type TaskLink } from '../../lib/plans';
-import type { DayEntry } from '../../lib/rollup';
+import { rollup, type DayEntry } from '../../lib/rollup';
 import { calendarDay, calendarDayStart, calendarQueryRange, systemCalendarZone } from '../../lib/calendarZone';
 import { CalendarZonePicker } from './CalendarZonePicker';
 import { useNow } from './useNow';
-import { shownHours } from '../../lib/schedule';
+import { DEFAULT_HOURS, shownHours, type Hours } from '../../lib/schedule';
+import { CalendarActivity, CalendarDayHours } from './CalendarDetails';
 import { addTask, syncPlanDone } from '../../lib/edits';
 import { addTaskWithFocusId, deleteTask, editTask, focusIdOf, newTaskLabel, withFocusId, type TaskEdit } from '../../lib/timeblocks';
 import { dayKey } from '../../lib/timer';
@@ -32,6 +33,9 @@ interface Props {
   onFocusDate?: () => void;
   timerEnabled?: boolean;
   timeZone?: string;
+  dayHours?: Hours;
+  onSaveDayHours?: (hours: Hours) => Promise<void>;
+  weekNote?: (date: Date) => string | undefined;
   onSaveTimeZone?: (zone: string | undefined) => Promise<void>;
   /** The day behind a date: its note, if it has one, and what the note holds. */
   dayOf: (date: Date) => DayEntry;
@@ -64,8 +68,8 @@ type Mode = 'week' | 'day';
 // Where the calendar was, so coming back to it shows the same week or day. Kept for the session.
 let remembered: { mode: Mode; date?: string } = { mode: 'week' };
 
-function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], events: CalendarEvent[], taskOf: (link?: TaskLink) => DayTaskRef | undefined, zone: string, resolveLink?: (link: TaskLink) => TaskLink): Column {
-  const entry = dayOf(date);
+function column(entry: DayEntry, textOf: Props['textOf'], events: CalendarEvent[], taskOf: (link?: TaskLink) => DayTaskRef | undefined, zone: string, resolveLink?: (link: TaskLink) => TaskLink): Column {
+  const { date } = entry;
   const text = entry.path === undefined ? undefined : textOf(entry.path);
   const tasks = taskRefs(entry, text);
   const plans: PlanBlock[] = plansOn(events, date, zone);
@@ -90,7 +94,7 @@ function column(date: Date, dayOf: Props['dayOf'], textOf: Props['textOf'], even
  * Calendar, never minutes in the note. The note's time blocks aren't drawn: they are the timer's
  * record, and the minutes are what counts.
  */
-export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate, dayOf, textOf, resolveTaskPath, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onOpenLinkedNote, onWrite, onWriteTask, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
+export function CalendarView({ dayHours = DEFAULT_HOURS, onSaveDayHours, weekNote, timeZone, onSaveTimeZone, focusDate, onFocusDate, dayOf, textOf, resolveTaskPath, categories, timer, timerEnabled = true, onStartTimer, onOpenDay, onOpenLinkedNote, onWrite, onWriteTask, onTaskChanged, vault, planCalendars, onChooseCalendar, warning }: Props) {
   const display = usePluginDisplay('calendar');
   const [mode, setMode] = useState<Mode>(display.defaultView === 'Week' ? 'week' : display.defaultView === 'Day' ? 'day' : remembered.mode);
   const clock = useNow(true, 30_000);
@@ -108,6 +112,7 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
     setSeenFocus(focusDate.token); setDate(dayKey(date)); setMode('day');
   }
   useEffect(() => { if (focusDate?.token === seenFocus && focusDate !== undefined) onFocusDate?.(); }, [focusDate, seenFocus, onFocusDate]);
+  const [details, setDetails] = useState<{ panel: 'activity' | 'start' | 'end'; trigger: HTMLElement }>();
   const [early, setEarly] = useState(false);
   const [late, setLate] = useState(false);
   const [highlight, setHighlight] = useState<number>();
@@ -142,41 +147,36 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
     },
     [textOf, vault],
   );
-  const columns = useMemo(() => {
+  const entries = useMemo(() => {
     const day = new Date(time);
     const days = mode === 'week' ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(day), i)) : [day];
+    return days.map(dayOf);
+  }, [mode, time, dayOf]);
+  const columns = useMemo(() => {
     const follow = (link: TaskLink) => resolveTaskPath && link.vault === vault ? { ...link, note: resolveTaskPath(link.note, link.id) } : link;
-    return days.map((d) => column(d, dayOf, textOf, planEvents, taskOf, zone, follow));
-  }, [mode, time, dayOf, textOf, planEvents, taskOf, zone, resolveTaskPath, vault]);
+    return entries.map((entry) => column(entry, textOf, planEvents, taskOf, zone, follow));
+  }, [entries, textOf, planEvents, taskOf, zone, resolveTaskPath, vault]);
   const localDayKey = localToday.getTime();
-  const todayTasks = useMemo(() => column(new Date(localDayKey), dayOf, textOf, [], taskOf, zone).tasks, [dayOf, textOf, taskOf, localDayKey, zone]);
-  const total = columns.reduce((sum, col) => sum + col.total, 0);
-  // The period's minutes by category, most first, for the legend under the title.
-  const byCategory = useMemo(() => {
-    const totals = new Map<string, { color: string; minutes: number }>();
-    for (const col of columns) {
-      for (const { task } of col.tasks) {
-        if (!task.minutes) continue;
-        const name = task.category?.name ?? 'other';
-        const entry = totals.get(name) ?? { color: task.category?.color ?? 'var(--accent)', minutes: 0 };
-        totals.set(name, { ...entry, minutes: entry.minutes + task.minutes });
-      }
-    }
-    return [...totals].sort((a, b) => b[1].minutes - a[1].minutes || a[0].localeCompare(b[0]));
-  }, [columns]);
+  const todayTasks = useMemo(() => {
+    const entry = dayOf(new Date(localDayKey));
+    return taskRefs(entry, entry.path === undefined ? undefined : textOf(entry.path));
+  }, [dayOf, textOf, localDayKey]);
+  const summary = useMemo(() => rollup(entries), [entries]);
+  const total = summary.totals.logged;
   // Each event once, though one that spans days is on each of them.
   const events = new Set(columns.flatMap((col) => [...col.plans.map(({ event }) => `${event.id}@${event.start}`), ...col.allDay.map((event) => `${event.id}@${event.start}`)])).size;
-  const hours = shownHours(early, late);
+  const hours = shownHours(early, late, dayHours);
   const shown = columns.some((col) => sameDay(col.date, now));
 
   const end = addDays(monday, 6);
-  const kicker = mode === 'week' ? `Week ${isoWeek(monday).week} · ${formatDate(end, 'YYYY')}` : `${formatDate(date, 'dddd')} · Week ${isoWeek(date).week} · ${formatDate(date, 'YYYY')}`;
+  const kicker = mode === 'week' ? `Week ${isoWeek(monday).week} · ${isoWeek(monday).year}` : `${formatDate(date, 'dddd')} · Week ${isoWeek(date).week} · ${formatDate(date, 'YYYY')}`;
   const title =
     mode === 'day'
       ? formatDate(date, 'D MMMM')
       : monday.getMonth() === end.getMonth()
         ? `${monday.getDate()} – ${end.getDate()} ${formatDate(end, 'MMMM')}`
         : `${formatDate(monday, 'D MMM')} – ${formatDate(end, 'D MMM')}`;
+  const weekPath = mode === 'week' ? weekNote?.(monday) : undefined;
   const step = (by: number) => show(mode, addDays(mode === 'week' ? monday : date, by * (mode === 'week' ? 7 : 1)));
 
   // A plan: the task, given a focus-id (and added, when new), then its event in Calendar,
@@ -246,20 +246,18 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
       )}
       <div className="cal-top">
         <header className="cal-hero" data-testid="hero">
-          <div>
-            <div className="cal-hero-heading"><p className="kicker">{kicker}</p>
+          <div className="cal-heading">
+            <h1 className="cal-title" data-testid="cal-title">{title}</h1>
+            <div className="cal-heading-meta">
+              <button type="button" className="cal-activity-trigger" aria-haspopup="dialog" aria-label={`Show ${mode === 'week' ? 'weekly' : 'daily'} activity`}
+                onClick={(event) => setDetails({ panel: 'activity', trigger: event.currentTarget })} data-testid="cal-activity">
+                <span>{total ? <><strong>{formatMinutes(total)}</strong> logged</> : 'No time logged'}</span>
+                <span className="cal-activity-chevron" aria-hidden="true">›</span>
+              </button>
+              <span className="cal-period-label">{kicker}</span>
               {onSaveTimeZone && <CalendarZonePicker value={timeZone} instant={shown ? clock : calendarDayStart(first, zone)} onSave={async (next) => {
                 await onSaveTimeZone(next); setTimeError(undefined); setHighlight(undefined);
               }} />}
-            </div>
-            <div className="cal-hero-period">
-              <h1 className="cal-title" data-testid="cal-title">{title}</h1>
-              <p className="cal-summary">
-                {total ? <><CountUp value={total} format={formatMinutes} /> logged</> : 'Nothing logged yet'}
-                {plans.access === 'allowed' && (
-                  <span data-testid="cal-planned"> · {events} event{events === 1 ? '' : 's'} in Calendar</span>
-                )}
-              </p>
             </div>
           </div>
           <nav className="cal-toolbar" aria-label="Calendar controls">
@@ -276,7 +274,7 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
             )}
             {single && (
               <button type="button" className="nav-chip is-action" onClick={() => onOpenDay(single.date)} data-testid="cal-open-day">
-                Open the day’s page
+                Open daily note
               </button>
             )}
             <span className="nav-space" />
@@ -310,20 +308,17 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
               ))}
             </div>
           </nav>
-          {byCategory.length > 0 && (
-            <ul className="cal-legend" data-testid="cal-legend">
-              {byCategory.slice(0, 7).map(([name, { color, minutes }]) => (
-                <li key={name} style={{ '--tone': color } as CSSProperties}>
-                  <span className="chip-dot" />
-                  <span className="cal-legend-name">{name}</span>
-                  <span className="cal-legend-time">{formatMinutes(minutes)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
         </header>
         {timerEnabled && <TimerCard timeZone={zone} timer={timer} tasks={todayTasks} categories={categories} onStart={onStartTimer} />}
       </div>
+
+      {details?.panel === 'activity' && <CalendarActivity mode={mode} title={title} totals={summary} events={plans.access === 'allowed' ? events : undefined}
+        returnFocus={details.trigger} onClose={() => setDetails(undefined)} onOpenWeek={weekPath && onOpenLinkedNote ? () => onOpenLinkedNote(weekPath) : undefined} />}
+      {details && details.panel !== 'activity' && onSaveDayHours && <CalendarDayHours value={dayHours} focus={details.panel}
+        returnFocus={details.trigger} onClose={() => setDetails(undefined)} onSave={async (next) => {
+          await onSaveDayHours(next);
+          setEarly(false); setLate(false);
+        }} />}
 
       <div className={single ? 'cal-main is-day' : 'cal-main'}>
         <TimeGrid
@@ -333,6 +328,8 @@ export function CalendarView({ timeZone, onSaveTimeZone, focusDate, onFocusDate,
           now={clock}
           columns={columns}
           hours={hours}
+          dayHours={dayHours}
+          onDayHours={onSaveDayHours ? (panel, trigger) => setDetails({ panel, trigger }) : undefined}
           early={early}
           late={late}
           onFold={(edge) => (edge === 'early' ? setEarly((open) => !open) : setLate((open) => !open))}

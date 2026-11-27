@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import type { CalendarEvent, CalendarInfo } from '../../lib/api';
 import { formatDate } from '../../lib/dates';
 import { clock, formatMinutes } from '../../lib/day';
-import { clip, dragged, drawn, lanes, snapDown, type DragEdge, type Hours } from '../../lib/schedule';
+import { calendarHourLabel, clip, dragged, drawn, lanes, snapDown, type DragEdge, type Hours } from '../../lib/schedule';
 import { planText, type PlanBlock } from '../../lib/plans';
 import { dayKey, type Session } from '../../lib/timer';
 import { FocusMenu, type FocusHow } from './FocusMenu';
@@ -37,6 +37,8 @@ interface Props {
   focusEnabled?: boolean;
   columns: Column[];
   hours: Hours;
+  dayHours: Hours;
+  onDayHours?: (edge: 'start' | 'end', trigger: HTMLElement) => void;
   early: boolean;
   late: boolean;
   onFold: (edge: 'early' | 'late') => void;
@@ -84,7 +86,8 @@ const wordsOf = (plan: GridPlan) => plan.task
  * plan is drawn on empty time; events are moved, resized and deleted in place, in Calendar.
  */
 export function TimeGrid(props: Props) {
-  const { columns, hours, early, late, onFold, categories, session, wide, highlight, plans, calendarFor, onPlan, onMovePlan, onDeletePlan, onFocus, onEditPlan, onOpenDay, onHead } = props;
+  const hoursTrigger = useRef<HTMLButtonElement>(null);
+  const { columns, hours, dayHours, early, late, onFold, onDayHours, categories, session, wide, highlight, plans, calendarFor, onPlan, onMovePlan, onDeletePlan, onFocus, onEditPlan, onOpenDay, onHead } = props;
   const body = useRef<HTMLDivElement>(null);
   const [measuredHeight, setMeasuredHeight] = useState(0);
   useLayoutEffect(() => {
@@ -240,7 +243,11 @@ export function TimeGrid(props: Props) {
     <div className={wide ? 'cal-grid is-day' : 'cal-grid'} style={{ '--cols': columns.length, '--gutter': `${GUTTER}px` } as CSSProperties} data-testid="cal-grid">
       <div className="cal-days">
         <div className="cal-head">
-          <span className="cal-gutter" />
+          {onDayHours ? <button ref={hoursTrigger} type="button" className="cal-hours-trigger" onClick={(event) => onDayHours('start', event.currentTarget)}
+            aria-label={`Day hours, ${calendarHourLabel(dayHours.first)} to ${calendarHourLabel(dayHours.last)}`} aria-haspopup="dialog" title="Change day hours" data-testid="cal-day-hours">
+            <span className="cal-hours-clock" aria-hidden="true" />
+            <span>{dayHours.first / 60}–{dayHours.last / 60}</span>
+          </button> : <span />}
           {columns.map((col) => {
             const weekend = col.date.getDay() === 0 || col.date.getDay() === 6;
             return (
@@ -277,13 +284,14 @@ export function TimeGrid(props: Props) {
         )}
       </div>
 
-      <Fold edge="early" open={early} from={0} to={hours.first || 7 * 60} hidden={early ? [] : foldCounts('early')} onToggle={() => onFold('early')} />
+      {dayHours.first > 0 && <Fold edge="early" open={early} from={0} to={dayHours.first} hidden={early ? [] : foldCounts('early')}
+        onToggle={() => onFold('early')} onConfigure={onDayHours && ((trigger) => onDayHours('start', hoursTrigger.current ?? trigger))} />}
 
       <div className="cal-body" ref={body} style={{ minHeight: hourCount * MIN_HOUR_HEIGHT }}>
         <div className="cal-hours" aria-hidden="true">
           {hourMarks.map((minute) => (
             <span key={minute} className={minute % 180 === 0 ? 'cal-hour is-third' : 'cal-hour'} style={{ top: y(minute) }}>
-              {minute === 24 * 60 ? '24:00' : clock(minute)}
+              {calendarHourLabel(minute)}
             </span>
           ))}
         </div>
@@ -430,21 +438,23 @@ export function TimeGrid(props: Props) {
         )}
       </div>
 
-      <Fold edge="late" open={late} from={hours.last === 24 * 60 ? 22 * 60 : hours.last} to={24 * 60} hidden={late ? [] : foldCounts('late')} onToggle={() => onFold('late')} />
+      {dayHours.last < 24 * 60 && <Fold edge="late" open={late} from={dayHours.last} to={24 * 60} hidden={late ? [] : foldCounts('late')}
+        onToggle={() => onFold('late')} onConfigure={onDayHours && ((trigger) => onDayHours('end', hoursTrigger.current ?? trigger))} />}
     </div>
   );
 }
 
 /** The folded night above or below the hours: its hours, and a mark in each day for every block it hides. */
-function Fold({ edge, open, from, to, hidden, onToggle }: { edge: 'early' | 'late'; open: boolean; from: number; to: number; hidden: { key: string; tone: string }[][]; onToggle: () => void }) {
+function Fold({ edge, open, from, to, hidden, onToggle, onConfigure }: { edge: 'early' | 'late'; open: boolean; from: number; to: number; hidden: { key: string; tone: string }[][]; onToggle: () => void; onConfigure?: (trigger: HTMLElement) => void }) {
   const count = hidden.reduce((sum, blocks) => sum + blocks.length, 0);
-  const span = `${clock(from)}–${to === 24 * 60 ? '24:00' : clock(to)}`;
+  const span = `${calendarHourLabel(from)}–${calendarHourLabel(to)}`;
   const short = `${String(from / 60).padStart(2, '0')}–${String(to / 60).padStart(2, '0')}`;
   return (
     <button
       type="button"
       className={`cal-fold is-${edge}${open ? ' is-open' : ''}`}
       onClick={onToggle}
+      onContextMenu={onConfigure && ((event) => { event.preventDefault(); onConfigure(event.currentTarget); })}
       title={open ? `Fold ${span} away` : `Show ${span}${count ? `: ${count} block${count === 1 ? '' : 's'}` : ''}`}
       aria-expanded={open}
       data-testid={`cal-fold-${edge}`}

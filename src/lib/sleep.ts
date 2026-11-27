@@ -5,6 +5,12 @@ export function sleepParts(value?: number): { hours: string; minutes: string } {
   return { hours: String(Math.floor(total / 60)), minutes: String(total % 60) };
 }
 
+/** Average the recorded nights at the same minute precision as the daily editor. */
+export function averageSleepMinutes(hours: readonly (number | undefined)[]): number | undefined {
+  const nights = hours.filter((value): value is number => value !== undefined && Number.isFinite(value));
+  return nights.length ? nights.reduce((sum, value) => sum + Math.round(value * 60), 0) / nights.length : undefined;
+}
+
 export function sleepValue(hours: string, minutes: string): string {
   const h = hours.trim();
   const m = minutes.trim();

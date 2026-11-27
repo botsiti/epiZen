@@ -8,6 +8,7 @@ import { parseNote } from './frontmatter';
 import { addDays, formatDate, parseDate } from './dates';
 import { parseDay, type Day, type DayTask } from './day';
 import { toggleTask } from './dashboard';
+import { dailySections } from './dailySections';
 import { lineEnding } from './text';
 import type { DayEntry } from './rollup';
 
@@ -169,6 +170,10 @@ export function withHabits(day: Day, habits: Habit[], date: Date, today: Date): 
     return owner ? { ...record, habitId: owner.id, label: owner.name } : record;
   });
   for (const habit of habits) if (habitActive(habit, date) && !records.some((r) => habitMatches(habit, r))) records.push({ line: -1, offset: -1, text: habit.name, label: habit.name, done: false, habit: true, habitId: habit.id, blocks: [] });
+  // A scheduled habit keeps its place when its first check-in materializes in Markdown.
+  // Unmanaged checkboxes retain their relative order from the note.
+  const order = new Map(habits.map((habit, i) => [habit.id, i]));
+  records.sort((a, b) => (order.get(a.habitId ?? '') ?? -1) - (order.get(b.habitId ?? '') ?? -1));
   return { ...day, habits: records, totals: { ...day.totals, habits: records.length, habitsDone: records.filter((r) => r.done).length } };
 }
 
@@ -214,33 +219,17 @@ function appendHabitRecord(text: string, line: string): string {
   if (!eol) throw new Error('The daily note has mixed line endings.');
   if (parseNote(text).error) throw new Error('The daily note has unreadable frontmatter.');
   const lines = text.split(eol);
-  let start = 0;
-  if (/^\uFEFF?---[ \t]*$/.test(lines[0] ?? '')) {
-    const close = lines.findIndex((line, i) => i > 0 && /^---[ \t]*$/.test(line));
-    if (close < 0) throw new Error('Close the note’s frontmatter before adding a habit.');
-    start = close + 1;
+  const sections = dailySections(lines);
+  if (sections.frontmatter) throw new Error('Close the note’s frontmatter before adding a habit.');
+  if (sections.unfinished) throw new Error('Close the note’s code fence or comment before adding a habit.');
+  const existing = sections.habits[0];
+  if (existing) {
+    lines.splice(existing.end, 0, line);
+    return lines.join(eol);
   }
-  let fence: { char: string; length: number; depth: number } | undefined;
-  let comment = false; let existing = -1;
-  for (let i = start; i < lines.length; i++) {
-    const raw = lines[i]!; const depth = (/^\s*(?:>\s*)*/.exec(raw)?.[0].match(/>/g) ?? []).length;
-    if (fence && depth < fence.depth) fence = undefined;
-    if (comment) { if (raw.includes('-->')) comment = false; continue; }
-    const marker = /^\s*(?:>\s*)*(`{3,}|~{3,})(.*)$/.exec(raw);
-    if (marker) {
-      if (!fence) fence = { char: marker[1]![0]!, length: marker[1]!.length, depth };
-      else if (marker[1]![0] === fence.char && marker[1]!.length >= fence.length && !marker[2]!.trim()) fence = undefined;
-      continue;
-    }
-    if (fence) continue;
-    if (raw.includes('<!--')) { comment = raw.lastIndexOf('<!--') > raw.lastIndexOf('-->'); continue; }
-    if (existing < 0 && /^>\s*\[!habits\]/i.test(raw)) existing = i;
-  }
-  if (fence || comment) throw new Error('Close the note’s code fence or comment before adding a habit.');
-  if (existing >= 0) {
-    let end = existing + 1;
-    while (end < lines.length && /^>/.test(lines[end]!) && !/^>\s*\[!/.test(lines[end]!)) end++;
-    lines.splice(end, 0, line);
+  if (sections.stream >= 0) {
+    const separator = lines[sections.stream - 1]?.trim() ? [''] : [];
+    lines.splice(sections.stream, 0, ...separator, '> [!habits]- Habits', line, '');
     return lines.join(eol);
   }
   return `${text}${text.endsWith(eol + eol) ? '' : text.endsWith(eol) ? eol : eol + eol}> [!habits]- Habits${eol}${line}${eol}`;

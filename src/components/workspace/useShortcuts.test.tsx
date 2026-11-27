@@ -1,3 +1,5 @@
+import { DEFAULT_FILE_KEYS, FILE_COMMANDS } from './fileShortcuts';
+
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { onMenu, type MenuItemId } from '../../lib/api';
@@ -12,6 +14,7 @@ beforeEach(() => {
 });
 function actions(): ShortcutActions {
   return {
+    newFolder: vi.fn(), revealCurrent: vi.fn(), showExplorer: vi.fn(), recentFiles: vi.fn(), searchFiles: vi.fn(),
     newTab: vi.fn(), closeTab: vi.fn(), closeOthers: vi.fn(), editNote: vi.fn(), toggleLeftSidebar: vi.fn(), toggleRightSidebar: vi.fn(), toggleAssistant: vi.fn(), collapseFolders: vi.fn(),
     newNote: vi.fn(), settings: vi.fn(), home: vi.fn(), library: vi.fn(), today: vi.fn(), back: vi.fn(), forward: vi.fn(), cycle: vi.fn(), showTab: vi.fn(),
   };
@@ -131,4 +134,15 @@ describe('workspace shortcuts', () => {
     await Promise.resolve();
     expect(stop).toHaveBeenCalledOnce();
   });
+});
+
+it('dispatches the configured file shortcuts, keeps the two defaults, and routes all five menu items', () => {
+  const callbacks = actions();
+  renderHook(() => useShortcuts(callbacks, true, {
+    ...DEFAULT_FILE_KEYS, newFolder: ['⇧⌘N'], recentFiles: ['⌘O'], showExplorer: ['⇧⌘E'],
+  }));
+  for (const key of ['n', 'r', 'e', 'f']) command(key, { shiftKey: true });
+  command('щ', { code: 'KeyO' });
+  for (const name of ['new-folder', 'recent-files', 'reveal-current', 'show-explorer', 'search-files'] as const) menu(name);
+  for (const { id } of FILE_COMMANDS) expect(callbacks[id]).toHaveBeenCalledTimes(2);
 });
