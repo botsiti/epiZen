@@ -113,9 +113,8 @@ it('checks habits in the open copy of a duplicated day and refuses a replaced le
     + '\n> [!habits]- Habits\n> - [ ] Stretch\n';
   const { notes, user } = workspace([[copy, original]]);
   const preferred = notes.get(previous);
-  await screen.findByTestId('markdown-home');
-  command('f', true);
-  await user.type(await screen.findByRole('searchbox'), '25.11.2026.md{Enter}');
+  const home = within(await screen.findByTestId('markdown-home'));
+  await user.click(home.getByRole('button', { name: /25\.11\.2026/ }));
   await user.click(await screen.findByRole('tab', { name: 'Habits' }));
   await user.click(screen.getByRole('button', { name: 'Stretch' }));
   await waitFor(() => expect(notes.get(copy)).toBe(original.replace('[ ] Stretch', '[x] Stretch')));

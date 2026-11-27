@@ -861,9 +861,14 @@ describe('the demo vault', () => {
     await pressCommand('r', { shift: true });
     await expect($(`[role="tree"] [data-path="${ALBUM}"]`)).toBeFocused();
     await pressCommand('f', { shift: true });
-    await $('[aria-label="Search in all files"][type="search"]').setValue('Lighthouse Accountant');
-    await screenshot('file-search-results');
-    await $(`[role="dialog"] button*=${FILM}`).click();
+    const finder = $('[role="dialog"][aria-label="Search in all files"]');
+    try {
+      await finder.$('input[type="search"]').setValue('Lighthouse Accountant');
+      await screenshot('file-search-results');
+      await $(`button=${FILM}`).click();
+    } finally {
+      if (await finder.isExisting()) await finder.$('button[aria-label="Close"]').click();
+    }
     await waitForNote(FILM);
     expect(diffSnapshots(before, snapshotVault(vaultCopy()))).toEqual([]);
   });
@@ -1524,7 +1529,7 @@ describe('the demo vault', () => {
     await $('[data-testid="edit-task-category"][data-category="routine"]').click();
     await $('[data-testid="edit-task-save"]').click();
     await expect(plan).toHaveText(expect.stringContaining('routine'));
-    expect(readFileSync(file, 'utf8')).toBe(added.replace('#daily/sport', '#daily/routine'));
+    expect(readFileSync(file, 'utf8')).toBe(added.replace('#daily/sport — evening run', '#daily/routine — evening run'));
     await plan.$('.cal-block-title').doubleClick();
     await expect($('[data-testid="edit-task-category"][data-category="routine"]')).toHaveAttribute('aria-checked', 'true');
     await $('[data-testid="edit-task-category"][data-category="sport"]').click();
