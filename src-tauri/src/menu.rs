@@ -64,6 +64,12 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                 true,
                 &[
                     &MenuItem::with_id(app, NEW_NOTE, "New Note", true, Some("CmdOrCtrl+N"))?,
+                    &MenuItem::with_id(app, "new-folder", "New Folder…", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "reveal-current", "Reveal Current File in Navigation", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "show-explorer", "Show File Explorer", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "recent-files", "Open Recent Files…", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "search-files", "Search in All Files…", true, None::<&str>)?,
+                    &separator()?,
                     &MenuItem::with_id(app, NEW_TAB, "New Tab", true, Some("CmdOrCtrl+T"))?,
                     &separator()?,
                     &MenuItem::with_id(app, CLOSE_TAB, "Close Tab", true, Some("CmdOrCtrl+W"))?,
@@ -160,7 +166,7 @@ pub fn handle<R: Runtime>(app: &AppHandle<R>, id: &str) {
     }
     match id {
         NEW_TAB | CLOSE_TAB | CLOSE_OTHER_TABS | LEFT_SIDEBAR | RIGHT_SIDEBAR | SPIKE_SIDEBAR | COLLAPSE_FOLDERS | NEW_NOTE
-        | SETTINGS | HOME | LIBRARY | TODAY => {
+        | SETTINGS | HOME | LIBRARY | TODAY | "new-folder" | "reveal-current" | "show-explorer" | "recent-files" | "search-files" => {
             // A shortcut in the timer panel must not navigate the workspace behind it.
             if let Some(window) = app.get_webview_window("main")
                 && window.is_focused().unwrap_or(false)

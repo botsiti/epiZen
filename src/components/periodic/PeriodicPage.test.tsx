@@ -530,3 +530,19 @@ it('reveals saved CBT without opening an empty form and respects a disabled CBT 
   view.rerender(<PeriodicPage spec={{ ...base, startThoughtRecord: 11, features: { habits: true, thoughtRecords: false } }} path="d.md" text={DAY} actions={actions()} />);
   expect(screen.queryByTestId('thought-wizard')).not.toBeInTheDocument();
 });
+
+it.each(['week', 'month'] as const)('shows sleep in hours and minutes in %s averages and day rows', async (period) => {
+  const user = userEvent.setup();
+  const values = ['8.583333', '8.6'];
+  const range = { ...spec(period), dayOf: (date: Date): DayEntry => {
+    const hours = values[date.getDate() - 13];
+    return { date, day: hours ? parseDay(`---\nsleep: ${hours}\n---`) : undefined };
+  } };
+  render(<PeriodicPage spec={range} path="range.md" text="" actions={actions()} />);
+  await user.click(screen.getByRole('tab', { name: 'Overview' }));
+  expect(screen.getByTestId('averages')).toHaveTextContent('8h 36m avg');
+  await user.click(screen.getByRole('tab', { name: 'Days' }));
+  expect(screen.getByTestId('day-rows')).toHaveTextContent('8h 35m');
+  expect(screen.getByTestId('day-rows')).toHaveTextContent('8h 36m');
+  expect(screen.getByTestId('day-rows')).not.toHaveTextContent('8.583333');
+});

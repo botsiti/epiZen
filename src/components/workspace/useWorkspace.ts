@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { updateSettings } from '../../lib/api';
 import { flushBeforeClose } from '../../lib/saving';
-import { fromStored, newWorkspace, toStored, type Workspace } from '../../lib/tabs';
+import { fromStored, newWorkspace, rememberFrontFile, toStored, type Workspace } from '../../lib/tabs';
 
 /**
  * The open tabs (src/lib/tabs.ts), brought back from the app's settings when a vault opens and
@@ -38,7 +38,7 @@ export function useWorkspace() {
     const next = fromStored(value, context);
     vault.current = context.vault;
     stored.current = JSON.stringify(toStored(next, context.vault));
-    setWs(next);
+    setWs(rememberFrontFile(next));
   }, []);
   /** Another vault is opening: one home tab, and nothing stored until its own tabs are restored. */
   const reset = useCallback(() => {
@@ -46,5 +46,8 @@ export function useWorkspace() {
     setWs(newWorkspace());
   }, []);
 
-  return { ws, update: setWs, restore, reset };
+  const update = useCallback((change: (current: Workspace) => Workspace) => {
+    setWs((current) => rememberFrontFile(change(current)));
+  }, []);
+  return { ws, update, restore, reset };
 }

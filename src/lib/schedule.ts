@@ -48,9 +48,20 @@ export interface Hours {
   last: number;
 }
 
-export const DEFAULT_HOURS = { from: 7 * 60, to: 22 * 60 };
+export const DEFAULT_HOURS: Hours = { first: 7 * 60, last: 22 * 60 };
 
-export const shownHours = (early: boolean, late: boolean): Hours => ({ first: early ? 0 : DEFAULT_HOURS.from, last: late ? DAY_END : DEFAULT_HOURS.to });
+export function calendarHours(value: unknown): Hours {
+  if (typeof value !== 'object' || value === null) return DEFAULT_HOURS;
+  const { first, last } = value as Partial<Hours>;
+  if (typeof first !== 'number' || typeof last !== 'number' || !Number.isInteger(first / 60)
+      || !Number.isInteger(last / 60) || first < 0 || last > DAY_END || first >= last) return DEFAULT_HOURS;
+  return { first, last };
+}
+
+export const shownHours = (early: boolean, late: boolean, bounds = DEFAULT_HOURS): Hours =>
+  ({ first: early ? 0 : bounds.first, last: late ? DAY_END : bounds.last });
+
+export const calendarHourLabel = (minute: number) => `${String(minute / 60).padStart(2, '0')}:00`;
 
 /** The part of a block inside the hours on show, or `undefined` when it is all in a fold. */
 export function clip(block: { start: number; end: number }, hours: Hours): { start: number; end: number } | undefined {

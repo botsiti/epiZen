@@ -7,3 +7,14 @@
 .workspace-shortcut dt { font-size: 14px; }
 .workspace-shortcut dd { margin: 0; color: var(--text-muted); }
 .workspace-shortcut kbd { font: 13px var(--font-ui); white-space: nowrap; }
+
+.file-hotkey-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.file-hotkey-actions button { color: var(--text-muted); font: inherit; padding: 2px 6px; }
+.file-hotkey-actions button:hover { color: var(--accent); }
+.file-finder { display: grid; gap: 12px; }
+.file-finder input { width: 100%; }
+.file-finder-results { display: grid; max-height: min(50vh, 400px); overflow-y: auto; }
+.file-finder-results button { display: grid; gap: 4px; min-width: 0; padding: 8px; text-align: left; color: var(--text); }
+.file-finder-results button:hover, .file-finder-results button:focus-visible { background: var(--surface); }
+.file-finder-results span, .file-finder-results small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-finder-results small { color: var(--text-muted); }

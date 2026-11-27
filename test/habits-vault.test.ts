@@ -3,6 +3,8 @@ import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { expect, it } from 'vitest';
+import { addRecord } from '../src/lib/cbt';
+import { parseDay } from '../src/lib/day';
 import { changeHabit, newHabit, readHabit, setHabitValue, setHabitCompletion } from '../src/lib/habits';
 const snapshot = (root: string) => new Map(readdirSync(root, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => { const path = join(e.parentPath, e.name);return [relative(root, path), readFileSync(path).toString('base64')]; }));
 it('keeps every other file byte-identical during creation, completion and archive/reactivation', () => {
@@ -39,5 +41,31 @@ it('logs a partial daily goal on a copy and preserves every other file byte-for-
     const after = snapshot(root);
     expect([...after.keys()]).toEqual([...before.keys()]);
     expect([...after].filter(([key, bytes]) => before.get(key) !== bytes).map(([key]) => key)).toEqual([path]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it.each(['\n', '\r\n'])('adds a first habit outside the stream and preserves CBT prose and records through later edits (%j)', (eol) => {
+  const root = mkdtempSync(join(tmpdir(), 'epizen-habit-cbt-'));
+  try {
+    cpSync(new URL('../demo-vault', import.meta.url), root, { recursive: true });
+    const path = 'Calendar/2026/days 2026/25.11.2026.md';
+    const note = join(root, path);
+    const input = { situation: 'A test reflection', before: ['Worried'], distortions: [], balanced: 'One step.', after: [] };
+    const original = addRecord(['### Tasks', '', '### stream of consc', '> Keep this quote.', ''].join(eol), input, '12:05');
+    writeFileSync(note, original, { flag: 'wx' });
+    const before = snapshot(root);
+    const habit = { id: 'habit-walk-01', name: 'Walk', aliases: [], periods: [] };
+    const marked = setHabitCompletion(original, habit, false, true);
+    const block = ['> [!habits]- Habits', '> - [x] Walk [habit::habit-walk-01]', '', ''].join(eol);
+    expect(marked).toBe(original.replace('### stream of consc', block + '### stream of consc'));
+    writeFileSync(note, marked);
+    expect(parseDay(marked).stream).toEqual(['> Keep this quote.']);
+    expect(parseDay(marked).records.map((r) => r.raw)).toEqual(parseDay(original).records.map((r) => r.raw));
+    const second = addRecord(marked, input, '12:15');
+    const unchecked = setHabitCompletion(second, habit, true, false);
+    expect(unchecked).toBe(second.replace('[x] Walk', '[ ] Walk'));
+    expect(parseDay(unchecked).records.map((r) => r.time)).toEqual(['12:05', '12:15']);
+    writeFileSync(note, unchecked);
+    expect([...snapshot(root)].filter(([key, bytes]) => bytes !== before.get(key)).map(([key]) => key)).toEqual([path]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

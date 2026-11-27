@@ -26,6 +26,20 @@ describe('vault setup and notes from other apps', () => {
     await screenshot('112-optional-homepage');
   });
 
+  it('uses Obsidian daily naming for a missing date after a root-default setup', async () => {
+    const config = join(root, '.obsidian');
+    mkdirSync(config, { recursive: true });
+    writeFileSync(join(config, 'daily-notes.json'), JSON.stringify({ folder: 'Calendar', format: 'YYYY/[days ]YYYY/DD.MM.YYYY' }), { flag: 'wx' });
+    const before = snapshotVault(root);
+    await browser.refresh();
+    await prepareWindow();
+    await showMonth('January 2027');
+    await $('[data-testid="calendar-day"][data-date="2027-01-02"]').click();
+    const path = 'Calendar/2027/days 2027/02.01.2027.md';
+    await expect($('[data-testid="periodic"]')).toHaveAttribute('data-path', path);
+    expect(diffSnapshots(before, snapshotVault(root))).toEqual([`added: ${path}`]);
+  });
+
   it('reuses mixed old names, preserves prose and uses the new pattern only for new notes', async () => {
     const folder = 'Calendar/2025/days';
     mkdirSync(join(root, folder), { recursive: true });

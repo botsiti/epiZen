@@ -22,6 +22,7 @@ import { DEFAULT_RECOGNITION, periodicNamingError, type Period, type PeriodicRec
 import type { VaultFile } from '../../lib/api';
 import { PeriodicFolders, PeriodicRecognitionFields } from '../periodic/PeriodicPreferences';
 import { type PodcastSettings } from '../../lib/podcasts';
+import type { FileKeys } from '../workspace/fileShortcuts';
 import { ShortcutReference } from '../workspace/ShortcutReference';
 import { DEFAULT_SOURCES, type LibrarySources } from '../../lib/librarySources';
 import { DEFAULT_FILE_PREFERENCES, folderProblem, type FilePreferences } from '../../lib/filePreferences';
@@ -49,6 +50,8 @@ export interface SettingsDraft {
   fileDefaults: FilePreferences;
 }
 interface Props {
+  fileKeys?: FileKeys;
+  onSaveFileKeys?: (keys: FileKeys) => Promise<void>;
   wallpaperLibrary?: WallpaperLibrary;
   calendarTimeZone?: string;
   rewardDocument?: QuestRulesDocument;
@@ -79,7 +82,7 @@ interface Props {
   onSave: (settings: SettingsDraft) => Promise<void>;
 }
 
-export function SettingsScreen({ menuBarNotice, habitSettings, timerSettings, wallpaperLibrary, calendarTimeZone, rewardDocument, rewardError, retryRewards, rewardDate, observedTags = [], appearance, onSaveAppearance, appearanceError, spikeSettings, periodic, birthDate, lifetimeYears = DEFAULT_LIFETIME_YEARS, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
+export function SettingsScreen({ fileKeys, onSaveFileKeys, menuBarNotice, habitSettings, timerSettings, wallpaperLibrary, calendarTimeZone, rewardDocument, rewardError, retryRewards, rewardDate, observedTags = [], appearance, onSaveAppearance, appearanceError, spikeSettings, periodic, birthDate, lifetimeYears = DEFAULT_LIFETIME_YEARS, podcasts, features, folders, recognition, plugins, pluginDisplay, initialSection, homeSections = DEFAULT_HOME_SECTIONS, sources = DEFAULT_SOURCES, fileDefaults = DEFAULT_FILE_PREFERENCES, files = [], texts = new Map(), onSave }: Props) {
   const id = useId();
   const heading = useRef<HTMLElement>(null);
   const [section, setSection] = useState<Section>(initialSection ?? (plugins ? 'plugins' : 'periodic'));
@@ -174,7 +177,7 @@ export function SettingsScreen({ menuBarNotice, habitSettings, timerSettings, wa
       {liveSettings ? <PluginSurface id={section}>{running[section] && (!plugins || effectivePlugins(plugins)[section])
         ? section === 'habits' ? habitSettings : timerSettings?.()
         : <p className="preferences-footnote">Enable {active.title} and save changes to use these controls.</p>}</PluginSurface>
-        : section === 'appearance' && appearance && onSaveAppearance ? <AppearancePreferences library={wallpaperLibrary} value={appearanceDraft ?? appearance} onChange={setAppearanceDraft} onSave={async (next) => { await onSaveAppearance(next); setAppearanceDraft(undefined); }} nativeError={appearanceError} /> : section === 'spike' ? null : section === 'hotkeys' ? <ShortcutReference /> : <form id={id} className="preferences-form" onSubmit={(event) => void save(event)}>
+        : section === 'appearance' && appearance && onSaveAppearance ? <AppearancePreferences library={wallpaperLibrary} value={appearanceDraft ?? appearance} onChange={setAppearanceDraft} onSave={async (next) => { await onSaveAppearance(next); setAppearanceDraft(undefined); }} nativeError={appearanceError} /> : section === 'spike' ? null : section === 'hotkeys' ? <ShortcutReference fileKeys={fileKeys} onSave={onSaveFileKeys} /> : <form id={id} className="preferences-form" onSubmit={(event) => void save(event)}>
         <fieldset className="preferences-fields" disabled={saving}>
           {section === 'plugins' && menuBarNotice}
           {section === 'plugins' && <PluginPreferences value={pluginDraft} onChange={(next) => { setPluginDraft(next); changed(); }} onSetup={navigate}

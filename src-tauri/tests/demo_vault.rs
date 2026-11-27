@@ -266,3 +266,22 @@ fn deleting_a_habit_changes_only_its_checkins_and_moves_its_definition() {
     expected.insert(PathBuf::from(day), edit.text.into_bytes());
     assert_eq!(snapshot(&copy), expected);
 }
+
+#[test]
+fn reads_obsidian_daily_naming_and_creates_only_the_new_calendar_note() {
+    let (_dir, copy) = copy_of_demo_vault();
+    let config = copy.join(".obsidian/daily-notes.json");
+    fs::create_dir_all(config.parent().unwrap()).unwrap();
+    fs::write(&config, r#"{"folder":"Calendar","format":"YYYY/[days ]YYYY/DD.MM.YYYY","template":"Templates/Daily"}"#).unwrap();
+    let mut expected = snapshot(&copy);
+    let vault = Vault::open(&copy).unwrap();
+    let naming = vault.daily_naming().unwrap();
+    assert_eq!(naming.folder, "Calendar");
+    assert_eq!(naming.format, "YYYY/[days ]YYYY/DD.MM.YYYY");
+    let path = "Calendar/2027/days 2027/01.01.2027.md";
+    let text = "---\nperiod: day\ndate: 2027-01-01\n---\n";
+    vault.create_note(path, text).unwrap();
+    assert!(vault.create_note(path, "replacement").is_err());
+    expected.insert(PathBuf::from(path), text.as_bytes().to_vec());
+    assert_eq!(snapshot(&copy), expected);
+}

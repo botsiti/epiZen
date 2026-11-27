@@ -239,17 +239,23 @@ draft recoverable and leaves any newly copied attachment available in the vault.
 Apple Calendar, on a week or a day, as Calendar and Senioro show it, with Senioro's focus timer. It
 opens from "Calendar" in the sidebar. A single toolbar sits above an edge-to-edge schedule.
 
-- **Top**: a compact header with the week's dates (or the day's) in the serif display face, the ISO week, the
-  minutes the daily notes log counting up with their categories, how many events Calendar has on
-  show, ‹ › and Today, and a Week | Day switch. The timer sits alongside the date controls. Until Epizen may use
-  Calendar, a chip asks for it (or opens System Settings once it was refused).
-- **Time zone**: the city and UTC offset beside the date open a searchable zone picker. The app follows the Mac by default. A saved zone applies to timed events, scheduling and the current-time line across vaults. All-day entries stay on their calendar dates and daily tasks stay with their Markdown notes.
-- **Grid**: hours down, 07–22, with the night before and after folded into a thin striped band that
-  unfolds on a click and marks each event it hides. All-day events sit in a row above the hours. A
-  hairline every hour, a slightly stronger one every three hours, small mono hour labels. Today's
-  column is faintly lit, and a glowing sage line with a dot marks now. Hour heights follow the
-  available height of the workspace below the toolbar. In a short window or with night hours
-  expanded, the hours scroll inside the grid with the dates and late-hours control pinned.
+- **Top**. Baskerville gives the Calendar’s date headings a distinct display face. SF Pro uses
+  tabular figures for times and durations. A single underlined logged-time control opens the
+  period’s activity, including productive time, recovery, completed tasks, events and every
+  category. A weekly summary links to the existing weekly note when available. The toolbar
+  keeps date navigation, Week and Day, New task and the timer close to the schedule.
+- **Time zone**. The city and UTC offset beside the date open a searchable zone picker. The app
+  follows the Mac by default. A saved zone applies to timed events, scheduling and the
+  current-time line across vaults. All-day entries stay on their calendar dates and daily
+  tasks stay with their Markdown notes.
+- **Grid**. The clock above the hour labels sets the daily start and end across vaults in
+  whole hours. Right-click a folded band to open the corresponding setting. The default
+  range is 07:00 to 22:00. A click expands the earlier or later band for the current visit.
+  Each band marks the events it folds away. All-day events sit above the hours. The grid
+  marks each hour with a hairline, with stronger marks every three hours. Today’s column is
+  faintly lit and a line marks the current time. Hour heights follow the available workspace.
+  In a short window or when night hours expand, the grid scrolls with the dates and
+  late-hours control pinned.
 - **Events**: soft rounded fills in their calendar's colour with a solid rail down the left, side by
   side where they overlap: the title and time on one line, the notes under them (Senioro puts the
   task's words there). Even a short event gets one line for its title. When labels would overlap,
@@ -478,13 +484,18 @@ In the editor ⌘B and ⌘I format the selection, ⌘K starts a Markdown link, �
 ⌥⌘C marks inline code, ⌘S saves, and ⌘Return saves and leaves editing. Workspace commands
 pause in modal dialogs. Settings includes a searchable shortcut reference with macOS key symbols.
 
+The File menu includes Create new folder, Reveal current file in navigation (⇧⌘R), Show file explorer,
+Open recent files and Search in all files (⇧⌘F). Settings → Hotkeys can add, remove or reset
+bindings for each command. Search matches vault filenames, Markdown and base text.
+
 ### Sleep entry
 
 The daily check-in edits sleep as two labelled fields, hours and minutes. The pair saves together
 on Enter or when focus leaves both fields. Minutes are whole numbers from 0 to 59; the total
 cannot exceed 24 hours. Empty fields clear the value, while zero remains a recorded duration.
 Invalid or failed saves retain the draft for correction or retry. The note keeps its existing
-decimal-hour `sleep` property, so older notes and averages remain compatible.
+decimal-hour `sleep` property. Weekly and monthly day rows and averages display whole hours and
+minutes. Each recorded night contributes its duration in minutes, including a recorded zero.
 
 ## Checking a UI change
 
@@ -784,6 +795,12 @@ dependencies. Workspace routes consult the active vault's effective plugins on e
 including when a tab is restored or revisited. Disabling a dependency pauses its dependents
 and keeps their saved settings. Markdown editing, the file explorer and workspace navigation
 are host services. Built-in plugins ship with Epizen.
+
+The vault’s Obsidian Daily Notes folder and filename pattern supply the initial daily destination,
+including for older setups with the root/ISO default. Epizen naming overrides take precedence.
+New days use the usual built-in Markdown. When a habit is first logged, its row keeps its place
+in the daily list. A new habit callout goes before the CBT stream. The stream also recognizes
+callouts already stored among older reflections.
 
 **Habits.** Configure Habits → Manage tracked habits opens the routine in Settings. Adding,
 archiving, reactivating and continuing an older habit use the same schedule editor and Markdown

@@ -7,7 +7,7 @@ import { listen } from '@tauri-apps/api/event';
 export type VaultStatus =
   | { state: 'none' }
   /** `root` is the vault's canonical folder, which tells two vaults with one name apart. */
-  | { state: 'open'; name: string; root: string }
+  | { state: 'open'; name: string; root: string; dailyNaming?: { folder: string; format: string } }
   | { state: 'error'; message: string };
 
 /** Mirrors `VaultFile` in src-tauri/src/vault.rs. Paths are vault-relative with `/`. */
@@ -176,7 +176,7 @@ export const hideTray = () => invoke<void>('tray_hide');
 export const quitApp = () => invoke<void>('tray_quit');
 
 /** An item of the menu bar the page acts on (src-tauri/src/menu.rs). */
-export type MenuItemId = 'new-tab' | 'close-tab' | 'close-other-tabs' | 'left-sidebar' | 'right-sidebar' | 'spike-sidebar' | 'collapse-folders' | 'new-note' | 'settings' | 'home' | 'library' | 'today';
+export type MenuItemId = 'new-folder' | 'reveal-current' | 'show-explorer' | 'recent-files' | 'search-files' | 'new-tab' | 'close-tab' | 'close-other-tabs' | 'left-sidebar' | 'right-sidebar' | 'spike-sidebar' | 'collapse-folders' | 'new-note' | 'settings' | 'home' | 'library' | 'today';
 
 /** Calls `handler` when one of those items is chosen. Returns a function that stops listening. */
 export async function onMenu(handler: (item: MenuItemId) => void): Promise<() => void> {

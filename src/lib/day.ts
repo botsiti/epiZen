@@ -3,6 +3,7 @@ import type { ExactXp } from './xp';
 import { category, type Category } from './categories';
 import { parseRecords, type ThoughtRecord } from './cbt';
 import { parseTasks, type Task } from './dashboard';
+import { dailySections } from './dailySections';
 import { parseNote } from './frontmatter';
 
 /** A stretch of logged time under a task, like `    - 10:56–11:09`, in minutes since midnight. */
@@ -121,20 +122,16 @@ const summaryOf = (text: string | undefined) => (text && text.trim().toLowerCase
 /** The share of tasks ticked, as a whole percentage; 0 when there are none. */
 export const planDone = (tasks: { done: boolean }[]) => (tasks.length ? Math.round((tasks.filter((task) => task.done).length / tasks.length) * 100) : 0);
 
-/** The lines under the first heading that matches, up to the next heading. */
-function section(lines: string[], heading: RegExp): string[] {
-  const start = lines.findIndex((line) => /^#{1,6}\s/.test(line) && heading.test(line.replace(/^#{1,6}\s+/, '')));
-  if (start < 0) return [];
-  const end = lines.findIndex((line, i) => i > start && /^#{1,6}\s/.test(line));
-  return lines.slice(start + 1, end < 0 ? undefined : end);
-}
-
 // Prompts the vault's daily template writes into the stream; they aren't the day's own words.
 const PROMPTS = [/^reflection on good thoughts:?$/i, /^recognise irrational thoughts/i];
 
 /** The stream of consciousness as paragraphs: its own words, not the template's prompts or the thought-record table. */
 function stream(lines: string[]): string[] {
-  return section(lines, /^stream of consc/i)
+  const sections = dailySections(lines);
+  if (sections.stream < 0) return [];
+  const end = lines.findIndex((line, i) => i > sections.stream && /^#{1,6}\s/.test(line));
+  return lines.filter((_, i) => i > sections.stream && (end < 0 || i < end)
+    && !sections.habits.some((block) => i >= block.start && i < block.end))
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith('|') && !PROMPTS.some((prompt) => prompt.test(line)));
 }

@@ -26,6 +26,7 @@ import {
   tabTitle,
   toStored,
   renameNoteViews,
+  rememberFrontFile,
   type View,
   type Workspace,
 } from './tabs';
@@ -304,4 +305,17 @@ describe('the right sidebar', () => {
     expect(parseRightSidebar({ open: true, closed: 'backlinks' })).toEqual({ open: true, closed: [] });
     expect(parseRightSidebar([true])).toEqual({ open: false, closed: [] });
   });
+});
+
+it('keeps recent files in visit order across closed tabs, renames and a workspace restore', () => {
+  let ws = rememberFrontFile(open(newWorkspace(), note(DAY)));
+  ws = rememberFrontFile(openTab(ws, note(ALBUM)));
+  ws = rememberFrontFile(activate(ws, 1));
+  expect(ws.recentFiles).toEqual([DAY, ALBUM]);
+  ws = renameNoteViews(ws, DAY, INBOX);
+  ws = close(close(ws, 2), 1);
+  expect(ws.recentFiles).toEqual([INBOX, ALBUM]);
+  const stored = toStored(ws, '/copy');
+  expect(fromStored(stored, { vault: '/copy', notes: new Set([ALBUM]) }).recentFiles).toEqual([ALBUM]);
+  expect(fromStored(stored, { vault: '/other', notes: new Set([ALBUM]) }).recentFiles).toBeUndefined();
 });

@@ -99,7 +99,8 @@ export function periodOf(path: string, settings: PeriodicSettings, text = '', re
     return parent && path.startsWith(`${parent}/`);
   }).map(({ period }) => period))] : [];
   if (metadata && (kinds.length === 1 || metadataFolders.length === 1 || hinted || !path.includes('/'))) {
-    const period = declared ?? (kinds.length === 1 ? kinds[0] : metadataFolders.length === 1 ? metadataFolders[0] : hinted?.period ?? 'day');
+    const namedPeriod = locations.some(({ period }) => period === hinted?.period) ? hinted?.period : undefined;
+    const period = declared ?? (metadataFolders.length === 1 ? metadataFolders[0] : namedPeriod ?? (kinds.length === 1 ? kinds[0] : 'day'));
     if (period) return { period, date: startOfPeriod(period, metadata) };
   }
   for (const { period, folder, format } of locations) {
@@ -134,8 +135,12 @@ export function rememberPeriodic(previous: PeriodicSettings, next: PeriodicSetti
 
 /** Which day, week or month a link's target names, wherever that note is or would be. */
 export function periodOfName(name: string, settings: PeriodicSettings): { period: Period; date: Date } | undefined {
+  const target = name.trim().replace(/\.md$/i, '');
   for (const period of PERIODS) {
-    const date = parseDate(name.trim(), settings[period].format);
+    const { folder, format } = settings[period];
+    const prefix = cleanFolder(folder);
+    const relative = prefix && target.startsWith(`${prefix}/`) ? target.slice(prefix.length + 1) : target;
+    const date = parseDate(relative, format) ?? (!target.includes('/') && format.includes('/') ? parseDate(target, format.split('/').at(-1)!) : undefined);
     if (date) return { period, date: startOfPeriod(period, date) };
   }
   return undefined;

@@ -1,5 +1,6 @@
 import type { Habit } from '../../lib/habits';
 import type { RecordInput, ThoughtRecord } from '../../lib/cbt';
+import type { DayTask } from '../../lib/day';
 import type { FocusHow } from '../calendar/FocusMenu';
 import type { MediaItem } from '../../lib/media';
 import type { Period, PeriodicFeatures } from '../../lib/periodic';
@@ -48,7 +49,7 @@ export interface PeriodicActions {
   onOpenNote: (path: string) => void;
   onEdit: () => void;
   /** Ticks or unticks the task or habit on that line, if it is still as it was shown. */
-  onToggle: (task: { line: number; done: boolean; habitId?: string }) => void;
+  onToggle: (task: DayTask) => void;
   onMeasureHabit?: (date: Date, habit: Habit, expected: number | undefined, value: number) => Promise<void>;
   onManageHabits?: () => void;
   /** Settles with a problem on failure, so a field can retain its unsaved draft. */

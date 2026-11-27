@@ -144,3 +144,23 @@ describe('measured habits', () => {
     expect(() => definition({ kind: 'goal', unit: 'cups', target: 0 })).toThrow('positive daily target');
   });
 });
+
+it('keeps scheduled, recorded and legacy habits in the same positions through first check-in and unchecking', () => {
+  const walk = make('Walk', '2026-11-01', 'habit-walk-01');
+  const meditate = make('Meditation', '2026-11-01', 'habit-meditation');
+  const definitions = [walk, meditate];
+  const day = date('2026-11-25');
+  const labels = (source: string) => withHabits(parseDay(source), definitions, day, day).habits.map((r) => r.label);
+  const original = '> [!habits]\n> - [ ] Legacy\n\n### stream of consc\n> Quoted reflection.';
+  const checked = setHabitCompletion(original, meditate, false, true);
+  expect(labels(original)).toEqual(['Legacy', 'Walk', 'Meditation']);
+  expect(labels(checked)).toEqual(labels(original));
+  expect(labels(setHabitCompletion(checked, meditate, true, false))).toEqual(labels(original));
+});
+
+it('separates a new habit callout from a quote immediately before the CBT heading', () => {
+  const source = '> [!note] Remember\n> My words.\n### stream of consc\nMore words.';
+  const marked = setHabitCompletion(source, make(), false, true);
+  expect(marked).toContain('> My words.\n\n> [!habits]- Habits');
+  expect(parseDay(marked).stream).toEqual(['More words.']);
+});
